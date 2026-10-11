@@ -139,6 +139,11 @@ export class McpRegistry {
     return server
   }
 
+  /** Existence check that does not throw, so registration can be idempotent. */
+  hasServer(id) {
+    return this.servers.has(id)
+  }
+
   describeServer(id) {
     const server = this.#server(id)
     return {

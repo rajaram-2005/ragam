@@ -1,0 +1,22 @@
+{
+  "name": "@aetheris/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Aetheris Omni web app — exactly five product areas",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "5.4.11"
+  }
+}

@@ -213,6 +213,15 @@ export class PluginRegistry {
     return this.publicView(record)
   }
 
+  /**
+   * Existence check that does not throw. `require`/`get` are for callers that expect
+   * the plugin to be there; registration paths need a plain boolean so they can be
+   * idempotent instead of failing on a second call.
+   */
+  has(pluginId) {
+    return this.plugins.has(pluginId)
+  }
+
   require(pluginId) {
     const record = this.plugins.get(pluginId)
     if (!record) throw new Error(`unknown plugin '${pluginId}'`)

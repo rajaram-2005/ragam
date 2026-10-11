@@ -514,8 +514,18 @@ test('Plugins: install, list, preflight and permission enforcement', async () =>
 
     const list = await core.get('/api/plugins')
     assert.equal(list.status, 200)
-    assert.equal(list.json.plugins.length, 1)
-    assert.equal(list.json.plugins[0].id, 'acme.repo-inspector')
+    // The registry is no longer empty at boot: two built-in plugins ship with the
+    // product. Assert about the plugin this test installed, and separately that the
+    // built-ins are present and enabled, instead of an incidental global count.
+    const installedPlugin = list.json.plugins.find((entry) => entry.id === 'acme.repo-inspector')
+    assert.ok(installedPlugin, 'the plugin installed over HTTP must appear in the list')
+    assert.equal(installedPlugin.state, 'installed')
+    assert.equal(installedPlugin.builtin, false)
+    const builtins = list.json.plugins.filter((entry) => entry.builtin)
+    assert.deepEqual(builtins.map((entry) => entry.id).sort(), ['aetheris.insight', 'aetheris.knowledge'])
+    assert.ok(builtins.every((entry) => entry.state === 'enabled'), 'built-ins are enabled at boot')
+    assert.ok(builtins.every((entry) => entry.capabilities.every((capability) => capability.bound)), 'every built-in capability has a real handler bound')
+    assert.equal(list.json.plugins.length, builtins.length + 1)
 
     const preflight = await core.post('/api/plugins/acme.repo-inspector/preflight', { capability: 'summarize' })
     assert.equal(preflight.status, 200)
@@ -553,11 +563,24 @@ test('Plugins: install, list, preflight and permission enforcement', async () =>
     assert.equal(uninstalled.json.state, 'uninstalled')
 
     const everything = await core.get('/api/plugins')
-    assert.equal(everything.json.plugins.length, 1, 'the history record is retained')
-    assert.equal(everything.json.plugins[0].state, 'uninstalled')
+    const retained = everything.json.plugins.find((entry) => entry.id === 'acme.repo-inspector')
+    assert.ok(retained, 'the history record is retained')
+    assert.equal(retained.state, 'uninstalled')
+    // Built-ins survive an unrelated uninstall and stay enabled.
+    assert.deepEqual(
+      everything.json.plugins.filter((entry) => entry.builtin).map((entry) => entry.state),
+      ['enabled', 'enabled'],
+    )
 
     const enabledOnly = await core.get('/api/plugins?state=enabled')
-    assert.deepEqual(enabledOnly.json.plugins, [], 'the state filter must actually filter')
+    assert.ok(enabledOnly.json.plugins.every((entry) => entry.builtin), 'the state filter must actually filter')
+    assert.ok(
+      !enabledOnly.json.plugins.some((entry) => entry.id === 'acme.repo-inspector'),
+      'an uninstalled plugin must not be listed as enabled',
+    )
+
+    const uninstalledOnly = await core.get('/api/plugins?state=uninstalled')
+    assert.deepEqual(uninstalledOnly.json.plugins.map((entry) => entry.id), ['acme.repo-inspector'])
 
     // It is no longer offered as a capability, and its handlers are gone.
     const capabilities = await core.get('/api/plugins/capabilities')
@@ -565,6 +588,12 @@ test('Plugins: install, list, preflight and permission enforcement', async () =>
 
     const afterUninstall = await core.post('/api/plugins/acme.repo-inspector/invoke', { capability: 'summarize', input: { path: '/repo' } })
     assert.ok(afterUninstall.status >= 400, 'an uninstalled plugin must not be invocable')
+
+    // Built-ins ship with the product: the refusal is explicit and audited, so the
+    // interface disables the button rather than the user discovering a 4xx.
+    const builtinUninstall = await core.post('/api/plugins/aetheris.insight/uninstall', {})
+    assert.ok(builtinUninstall.status >= 400, `a builtin must not be uninstallable, got ${builtinUninstall.status}`)
+    assert.match(builtinUninstall.text, /builtin/)
   } finally {
     await core.close()
   }
@@ -601,12 +630,26 @@ test('MCP: a registered server is discoverable and its tool validates arguments'
 
     const servers = await core.get('/api/mcp/servers')
     assert.equal(servers.status, 200)
-    assert.equal(servers.json.servers.length, 1)
+    // The in-process built-in server is registered at boot, so filter to the server
+    // this test registered and assert the built-in separately.
+    const workspace = servers.json.servers.find((entry) => entry.id === 'workspace')
+    assert.ok(workspace, 'the registered server must be discoverable')
+    assert.equal(workspace.tools.length, 1)
+    const builtinServer = servers.json.servers.find((entry) => entry.id === 'aetheris.local')
+    assert.ok(builtinServer, 'the built-in in-process server is registered at boot')
+    assert.equal(builtinServer.kind, SERVER_KINDS.IN_PROCESS)
+    assert.equal(servers.json.servers.length, 2)
 
     const tools = await core.get('/api/mcp/tools')
     assert.equal(tools.status, 200)
-    assert.equal(tools.json.tools.length, 1)
-    assert.equal(tools.json.tools[0].name, 'read_file')
+    const workspaceTools = tools.json.tools.filter((entry) => entry.serverId === 'workspace')
+    assert.equal(workspaceTools.length, 1)
+    assert.equal(workspaceTools[0].name, 'read_file')
+    // Discovery can be scoped to one server, which is how the five areas avoid
+    // mixing built-in tools with a caller's own.
+    const scoped = await core.get('/api/mcp/tools?server=workspace')
+    assert.equal(scoped.status, 200)
+    assert.equal(scoped.json.tools.length, 1)
 
     const preflight = await core.post('/api/mcp/preflight', { server: 'workspace', tool: 'read_file' })
     assert.equal(preflight.status, 200)

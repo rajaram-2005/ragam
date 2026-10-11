@@ -23,6 +23,7 @@ import { PluginRegistry } from './plugins/registry.mjs'
 import { validateManifest, SCOPES, ELEVATED_SCOPES } from './plugins/manifest.mjs'
 import { McpRegistry, RISK, SERVER_KINDS } from './mcp/layer.mjs'
 import { GodCore, TASK_STATES, LIFECYCLE } from './godcore/lifecycle.mjs'
+import { registerBuiltins } from './builtins.mjs'
 import { publicConfig, redactUrl } from './config.mjs'
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024
@@ -116,6 +117,13 @@ export class AetherisOmniApp {
       outcome: AUDIT_OUTCOMES.INFO,
       detail: { policy: config.policy, hardware: this.hardware, warnings: config.warnings },
     })
+
+    // --- built-in plugins and the in-process MCP server ---------------------
+    // Registered last so the ledger reads startup -> registration, and so a
+    // built-in handler can call readiness() on a fully constructed app. Without
+    // these the Plugins and MCP areas would have nothing real to inspect: a
+    // browser cannot bind a local_tool handler, so they must be bound in code.
+    this.builtins = registerBuiltins(this)
   }
 
   // --- wiring -------------------------------------------------------------
