@@ -457,15 +457,15 @@ test('the status doc reports the real test totals', () => {
   // 11 includes this file. If a suite file is added or removed, the counts in
   // docs/03-status.md and README.md have to move with it.
   assert.equal(count('services/core/test', /\.test\.mjs$/), 11)
-  assert.equal(count('apps/web/test', /\.test\.mjs$/), 3)
+  assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 9)
 
   const status = squash(doc.status())
   assert.ok(status.includes('**260 / 260**'), 'core total must be stated')
   assert.ok(status.includes('**256 / 256**'), 'fabric total must be stated')
-  assert.ok(status.includes('**39 / 39**'), 'web total must be stated')
-  assert.ok(status.includes('555 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('555 tests: core 260, web 39, fabric 256'),
+  assert.ok(status.includes('**54 / 54**'), 'web total must be stated')
+  assert.ok(status.includes('570 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('570 tests: core 260, web 54, fabric 256'),
     'README must state the same totals')
   assert.ok(status.includes('(11 files'), 'the file count must move with the suite')
 })

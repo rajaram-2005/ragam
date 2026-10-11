@@ -1,8 +1,14 @@
 import React from 'react'
 import { Chip } from './ui.jsx'
 // The area list lives in a plain .js module so the structural tests can import it
-// (Node cannot parse JSX); re-exported here because the shell owns the navigation.
-export { AREAS, AREA_IDS } from '../areas.js'
+// (Node cannot parse JSX). It must be IMPORTED here, not only re-exported: a
+// re-export (`export { X } from '...'`) forwards the binding to importers but does
+// not create one in this module's scope, so the AREAS.map() in the navigation below
+// would throw "AREAS is not defined" at render time. The re-export is kept as well,
+// because existing importers read the list from the shell.
+import { AREAS, AREA_IDS } from '../areas.js'
+
+export { AREAS, AREA_IDS }
 
 // ---------------------------------------------------------------------------
 // Application shell.

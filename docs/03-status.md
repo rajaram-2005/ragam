@@ -9,14 +9,14 @@ pytest 8.3.4. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 555 passing, 0 failing.**
+**Test totals: 570 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
 | `services/core` | `node --test test/*.test.mjs` | **260 / 260** (11 files, ~22 s) |
 | `services/fabric` | `pytest -q` | **256 / 256** (9 files, ~6 s) |
-| `apps/web` | `node --test test/*.test.mjs` | **39 / 39** (3 files, <1 s) |
-| `apps/web` build | `vite build` | 218.9 kB → **66.8 kB gzip**, single chunk, no warnings |
+| `apps/web` | `node --test test/*.test.mjs` | **54 / 54** (4 files, ~1 s) |
+| `apps/web` build | `vite build` | 218.97 kB → **66.82 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as four jobs split so a
@@ -60,7 +60,7 @@ instead.
 |---|---|---|---|
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
-| 3 | Unified app, five areas | **Complete** | `apps/web`; 39 tests including "exactly five areas" and "no internal service is a navigation entry" |
+| 3 | Unified app, five areas | **Complete** | `apps/web`; 54 tests including "exactly five areas", "no internal service is a navigation entry", and server-rendered markup for all five areas |
 | 4 | Local inference with ≥1 real local LM | **Blocked — requires weights** | Adapter implemented and tested against a real loopback server; no LM is installed on this host |
 | 5 | FreeLLMAPI online integration | **Implemented — requires external credentials** | Client written to contracts read from source; no key here |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
@@ -163,7 +163,7 @@ experiment ledger (baseline → experiment → verdict), metrics with a latency 
 floor, DataForge, the Node↔Python text-parity fixture, model cards, and the HTTP
 server (23 tests).
 
-### `apps/web` — Implemented and tested (39 tests)
+### `apps/web` — Implemented and tested (54 tests)
 
 | Area | Status |
 |---|---|
@@ -173,16 +173,43 @@ server (23 tests).
 | Plugins | **Implemented and tested** — manifest validation, install, preflight, invoke, approvals |
 | MCP | **Implemented and tested** — servers, tools, risk gates, elevated-scope approvals |
 
-Component rendering itself is **not** covered by automated tests: there is no DOM
-or browser in this environment, and adding `jsdom` would have meant a new
-dependency tree for tests that assert markup strings. Instead the tests cover what
-can be verified without a browser — the API client and its error normalisation,
-the SSE parser, the tone/format logic, and the structural invariants (five areas,
-no absolute hosts, design tokens preserved, dependency discipline). Verification
-that the app actually renders was done by building it and by confirming all
-fourteen modules transform and serve through the dev server, with `/api` proxied
-to a live core reporting `degraded`. **That is "implemented, not fully tested" for
-the rendering layer, and it is stated as such rather than implied to be covered.**
+**Rendering is covered** by `test/render.test.mjs` (15 tests), added after an
+earlier revision of this document recorded the rendering layer as "implemented, not
+fully tested". There is no browser here, and adding `jsdom` would have meant a new
+dependency tree — so instead the test bundles the JSX with `esbuild` (already a Vite
+dependency) and renders it with `react-dom/server` (already a `react-dom`
+dependency). **No new dependency**, and no DOM required. `renderToStaticMarkup`
+does not run effects, so nothing hits the network: every component is rendered in
+its pre-fetch state, which is what a user sees first and the state most likely to
+crash on a missing field.
+
+What it covers: all five areas in three states each (degraded readiness, ready
+readiness, and `null` — the actual first-paint value); `App` and the shell;
+`StatusCard` in all three of its branches; all sixteen shared UI primitives with
+their real prop signatures; fixture labelling; that the policy is never rendered as
+an input; and that MCP's empty state does not invent servers or tools.
+
+**Writing this test found a real bug that nothing else had caught.** `Shell.jsx`
+contained
+
+```js
+export { AREAS, AREA_IDS } from '../areas.js'
+```
+
+and then called `AREAS.map(...)` in the navigation. A re-export forwards a binding
+to *importers*; it does not create one in the module's own scope. So the shell
+threw `AREAS is not defined` on render — **the entire interface was broken**, and
+it had been since `AREAS` moved out of `Shell.jsx` into `areas.js`. Fixed by
+importing the list as well as re-exporting it.
+
+This is worth recording precisely because of what did *not* catch it. All fourteen
+modules transformed and served HTTP 200 through the dev server; `/` returned 200;
+the production build succeeded with no warnings; and 39 tests passed. Every one of
+those checks is about *compilation*, and the defect was at *runtime*. A module can
+be perfectly valid JavaScript and still throw the first time React renders it. The
+"modules return 200" verification recorded in an earlier revision of this document
+was real but was not evidence that the app rendered, and it should not have been
+treated as near-enough.
 
 ---
 
@@ -280,6 +307,11 @@ control-flow errors. Always instantiate and exercise.
   parameter implied filtering that does not happen. Removed.
 - The lifecycle renderer checked for step status `'completed'`; the real value is
   `'complete'`, which would have shown every finished phase as idle.
+- **`Shell.jsx` re-exported `AREAS` without importing it**, so the navigation's
+  `AREAS.map(...)` threw `AREAS is not defined` and the whole interface was broken.
+  A re-export forwards a binding to importers; it does not create one locally. Found
+  only by the render test — every module compiled, served 200 and built cleanly,
+  because those are compile-time checks and this was a runtime defect. See §4.
 - The MCP console exposed `grantedScopes` but not the **separate** elevated-scope
   approval, so an ingest call could never have succeeded from the UI.
 
@@ -302,8 +334,13 @@ Ordered by how much it blocks the acceptance criteria.
    unknown and is recorded as a limitation on the model card.
 4. **Build a failure corpus** so `historicalFailures` can be measured. It is
    currently the one soft failure on the release card.
-5. **Component-level UI tests.** Would need a DOM; deferred deliberately rather
-   than half-done. See §4.
+5. ~~**Component-level UI tests.**~~ **Done** — `apps/web/test/render.test.mjs`
+   server-renders all five areas, the shell, the status card and every shared
+   primitive using `esbuild` and `react-dom/server`, both already installed, so no
+   DOM or new dependency was needed. It found the `AREAS` re-export defect (§4).
+   What is still absent is *interaction* testing: nothing clicks a button, submits
+   a form or follows an effect-driven fetch, because that needs a DOM. The initial
+   render path is covered; the post-interaction paths are not.
 6. **SFT / preference optimization / distillation** (Phase 10). All three need
    weights and, for the first and third, a GPU. Not achievable on this host and
    not faked.

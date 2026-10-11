@@ -93,7 +93,7 @@ npm install          # 62 packages, ~12 s
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 39 tests
+npm test             # 54 tests
 ```
 
 | Variable | Default | Purpose |
@@ -145,9 +145,9 @@ aetheris-fabric listening
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (555 tests)
+npm test                  # all three suites (570 tests)
 npm run test:core         # 260
-npm run test:web          # 39
+npm run test:web          # 54
 npm run test:fabric       # 256 — needs numpy + pytest on the interpreter
 ```
 
@@ -187,7 +187,7 @@ broke instead of surfacing as one red check:
 |---|---|
 | **Core service** | 260 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
 | **Fabric** | 256 tests pass; `torch` is **not** importable; and the release gate is exercised end to end in both directions |
-| **Web app** | `npm ci`, 39 tests, production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Web app** | `npm ci`, 54 tests, production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 21-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 
 The Fabric job's release-gate step is the one worth reading, because it asserts the

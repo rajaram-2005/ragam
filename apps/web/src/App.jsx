@@ -35,6 +35,11 @@ const AREA_COPY = {
 const HASH_AREAS = new Set(AREAS.map((area) => area.id))
 
 function areaFromLocation() {
+  // Runs as a lazy useState initializer, i.e. during render. In the browser there is
+  // always a location, but guarding it keeps the component renderable outside a DOM
+  // (server-side render, and the render tests) instead of throwing. Behaviour in the
+  // browser is unchanged: same hash parsing, same 'chat' fallback.
+  if (typeof window === 'undefined' || !window.location) return 'chat'
   const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0]
   return HASH_AREAS.has(hash) ? hash : 'chat'
 }

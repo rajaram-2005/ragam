@@ -50,11 +50,11 @@ Requirements: **Node ≥ 22.5** (for `node:sqlite`) and, for the training servic
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 555 tests: core 260, web 39, fabric 256
+npm test          # 570 tests: core 260, web 54, fabric 256
 npm run train     # in-process training run
 ```
 
-All 555 run in CI on every push and pull request
+All 570 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -112,11 +112,11 @@ Status of every acceptance criterion, with evidence:
 
 ## Components
 
-| Component | Stack | Lines | Dependencies | Tests |
-|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 7,380 | **zero npm packages** | 260 |
-| `services/fabric` | Python 3.11 | 8,142 | NumPy only | 256 |
-| `apps/web` | React 18 + Vite | 3,811 | react, react-dom | 39 |
+| Component | Stack | Source lines | Test lines | Dependencies | Tests |
+|---|---|---|---|---|---|
+| `services/core` | Node 22 ESM | 7,380 | 5,237 | **zero npm packages** | 260 |
+| `services/fabric` | Python 3.11 | 5,331 | 2,860 | NumPy only | 256 |
+| `apps/web` | React 18 + Vite | 3,486 | 1,100 | react, react-dom | 54 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

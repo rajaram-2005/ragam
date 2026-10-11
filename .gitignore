@@ -74,3 +74,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 yarn-error.log*
+
+# --- test scratch ---------------------------------------------------------
+# apps/web/test/render.test.mjs bundles the JSX components with esbuild (already a
+# Vite dependency) so they can be server-rendered under `node --test`, which cannot
+# parse JSX itself. The bundle is generated, never committed.
+apps/web/test/.render-build/

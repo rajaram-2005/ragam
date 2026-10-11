@@ -129,7 +129,7 @@ audited refusal with an explicit limitation.
 
 ## 2. Runtime dependencies (shipped in the browser bundle)
 
-Only these reach production. The bundle is 218.9 kB (66.8 kB gzipped), a single
+Only these reach production. The bundle is 218.97 kB (66.82 kB gzipped), a single
 chunk, and `apps/web/test/structure.test.mjs` fails if it grows past 400 kB.
 
 | Package | Version | Licence | In the bundle? | Copyright |
