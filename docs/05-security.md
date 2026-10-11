@@ -467,10 +467,24 @@ Stated plainly, because an unstated gap is worse than a stated one.
    even when the installed copy happens to be safe. All 256 Fabric tests were
    verified green under pytest 9.1.1 before the floor moved.
 
-   **What is still open:** scanning here was a manual, one-off run. CI does not
-   execute `npm audit` or query the advisory database, so a newly published
-   advisory would not fail the build. Adding a scheduled audit job is the obvious
-   next step and has not been done.
+   **Scanning is now enforced in CI, not just run once by hand.** The `web` job
+   executes two audits with deliberately different bars:
+
+   | Scope | Command | Policy |
+   |---|---|---|
+   | Production dependencies | `npm audit --omit=dev --audit-level=low` | fails on **any** severity — this is what ships to a browser |
+   | Full tree | `npm audit --audit-level=high` | fails on **high/critical**; the full report is printed either way so moderate findings stay visible instead of being silently tolerated |
+
+   Build-tooling advisories are overwhelmingly about the dev server, so a moderate
+   one should not block a merge, but a vulnerable shipped artifact always should.
+   Both commands were verified against a known-vulnerable tree before being added:
+   at `vite@5.4.11` the full-tree audit exits 1, and at `vite@8.3.4` both exit 0. An
+   audit step that cannot fail is worse than no audit step.
+
+   **What is still open:** the Python side is not scanned in CI. numpy and the test
+   tooling were checked by hand against the GitHub Advisory Database, but there is no
+   equivalent automated gate, and `pip-audit` is not installed here. A newly published
+   numpy advisory would not fail the build.
 6. **FreeLLMAPI was never exercised live.** No key was available, so its error
    handling is code-complete and contract-derived, not integration-tested.
 7. **Model-weight licences for any future fine-tuned base are unassessed.** No

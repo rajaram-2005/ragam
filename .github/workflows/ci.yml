@@ -142,6 +142,30 @@ jobs:
         working-directory: apps/web
         run: node --test test/*.test.mjs
 
+      - name: Audit dependencies for known vulnerabilities
+        working-directory: apps/web
+        run: |
+          # Two different policies, because two different things are at stake.
+          #
+          # Production dependencies are what actually ships to a user's browser, so
+          # ANY known vulnerability there is a release blocker at any severity.
+          echo "== production dependencies (must be clean at every severity) =="
+          npm audit --omit=dev --audit-level=low
+          #
+          # The full tree includes build tooling whose advisories are mostly about
+          # the dev server. Those are worth failing on when severe, but a moderate
+          # dev-server issue should not block a merge, so the bar is high/critical.
+          # The full report is printed either way, so moderate findings stay visible
+          # in the log instead of being silently tolerated.
+          echo "== full tree (fails on high/critical; full report printed) =="
+          npm audit || true
+          npm audit --audit-level=high
+          #
+          # Both commands were verified against a known-vulnerable tree before being
+          # committed here: at vite@5.4.11 the second exits 1 (thirteen Vite
+          # advisories plus GHSA-67mh-4wv8-2f99 in esbuild) and at vite@8.3.4 both
+          # exit 0. An audit step that cannot fail is worse than no audit step.
+
       - name: Build
         working-directory: apps/web
         run: npm run build

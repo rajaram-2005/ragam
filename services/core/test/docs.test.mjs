@@ -658,6 +658,19 @@ test('CI exists, covers all three components, and is documented', () => {
   // different revision, which a depth-1 checkout cannot support.
   assert.ok(workflow.includes('fetch-depth: 0'))
 
+  // Dependency scanning is enforced, not merely run once by hand. Two gates with
+  // different bars: anything vulnerable in the shipped artifact blocks at any
+  // severity, while build-tooling advisories (mostly dev-server issues) block only
+  // when high or critical.
+  assert.ok(workflow.includes('npm audit --omit=dev --audit-level=low'),
+    'CI must fail on ANY known vulnerability in the production dependencies')
+  assert.ok(workflow.includes('npm audit --audit-level=high'),
+    'CI must fail on high/critical vulnerabilities anywhere in the tree')
+  // The full report is printed even when it does not fail the build, so moderate
+  // findings stay visible in the log rather than being silently tolerated.
+  assert.ok(workflow.includes('npm audit || true'),
+    'CI must print the full audit report even when it is not a blocking failure')
+
   // And the workflow must be reachable from the documentation.
   assert.ok(doc.readme().includes('.github/workflows/ci.yml'), 'README must link the workflow')
   assert.ok(doc.status().includes('.github/workflows/ci.yml'), 'docs/03 must link the workflow')
