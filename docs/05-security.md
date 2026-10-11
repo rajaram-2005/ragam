@@ -481,10 +481,31 @@ Stated plainly, because an unstated gap is worse than a stated one.
    at `vite@5.4.11` the full-tree audit exits 1, and at `vite@8.3.4` both exit 0. An
    audit step that cannot fail is worse than no audit step.
 
-   **What is still open:** the Python side is not scanned in CI. numpy and the test
-   tooling were checked by hand against the GitHub Advisory Database, but there is no
-   equivalent automated gate, and `pip-audit` is not installed here. A newly published
-   numpy advisory would not fail the build.
+   The Python tree is gated symmetrically. `pip` ships no audit command and
+   `pip-audit` is not installed here, so
+   `services/fabric/scripts/audit_python_deps.py` queries the GitHub Advisory
+   Database directly using only the standard library plus `packaging` — which pytest
+   already depends on, so nothing is added for the sake of the check. It filters on
+   the `pip`/`PyPI` ecosystem, so an unrelated package sharing a name cannot produce
+   a false finding, and it distinguishes *"no advisory is recorded for this package"*
+   from *"advisories exist but none covers this version"* — numpy is in the second
+   category, with eight recorded advisories all bounded at ≤ 1.22.
+
+   Its exit codes are the point: **0** clean, **1** a known-vulnerable version is
+   installed, **2** the database could not be consulted. Exit 2 fails the build
+   deliberately. A dependency gate that cannot reach the database has verified
+   nothing, and reporting green in that state is the same failure mode as the
+   environment-variable inventory test that once matched none of the secret forms and
+   the copyleft test whose regex happened to omit MPL — both of which passed while
+   checking nothing. All three failure paths (unreachable database, malformed
+   argument, no resolvable target) were confirmed to exit 2, and the scanner was
+   confirmed to exit 1 against `pytest==8.3.4`, naming GHSA-6w46-j5rx-g56g.
+
+   **What is still open:** the advisory database is only as current as its
+   publication lag, and neither gate covers a vulnerability that has not yet been
+   assigned an identifier. Both gates also run on push and pull request only — there
+   is no scheduled job, so an advisory published against an already-merged commit is
+   caught on the next build rather than proactively.
 6. **FreeLLMAPI was never exercised live.** No key was available, so its error
    handling is code-complete and contract-derived, not integration-tested.
 7. **Model-weight licences for any future fine-tuned base are unassessed.** No

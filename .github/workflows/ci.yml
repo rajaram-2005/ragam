@@ -82,6 +82,28 @@ jobs:
           fi
           echo "no torch present, as intended"
 
+      - name: Audit Python dependencies for known advisories
+        working-directory: services/fabric
+        env:
+          # The advisory API is public, but a runner's shared egress IP can hit the
+          # unauthenticated rate limit. The token Actions already provides lifts it.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # npm audit covers the web tree; pip has no equivalent, so this queries the
+          # GitHub Advisory Database directly. Standard library plus `packaging`,
+          # which pytest already depends on — no dependency added for the check.
+          #
+          # Exit codes are deliberate: 0 clean, 1 a known-vulnerable version is
+          # installed, 2 the database could not be consulted. Exit 2 fails the build
+          # on purpose, because a dependency gate that cannot reach the database has
+          # verified nothing and must not report green.
+          #
+          # Verified in both directions before being added: against numpy 2.1.3 and
+          # pytest 9.1.1 it exits 0, and against pytest==8.3.4 it exits 1 naming
+          # GHSA-6w46-j5rx-g56g / CVE-2025-71176. The unreachable-database,
+          # malformed-argument and no-target paths were each confirmed to exit 2.
+          python scripts/audit_python_deps.py
+
       - name: Test (256 tests)
         working-directory: services/fabric
         run: python -m pytest
@@ -206,7 +228,7 @@ jobs:
         working-directory: apps/web
         run: npm ci
 
-      - name: Docs accuracy suite (21 tests)
+      - name: Docs accuracy suite (23 tests)
         working-directory: services/core
         run: node --test test/docs.test.mjs
 

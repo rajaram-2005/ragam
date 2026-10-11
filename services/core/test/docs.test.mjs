@@ -671,6 +671,14 @@ test('CI exists, covers all three components, and is documented', () => {
   assert.ok(workflow.includes('npm audit || true'),
     'CI must print the full audit report even when it is not a blocking failure')
 
+  // The Python tree is covered symmetrically. pip has no audit command, so CI runs a
+  // script that queries the GitHub Advisory Database directly. Without this the web
+  // tree would be gated and the training service would not be.
+  assert.ok(workflow.includes('python scripts/audit_python_deps.py'),
+    'CI must audit the Python dependencies against the advisory database')
+  assert.ok(workflow.includes('GITHUB_TOKEN'),
+    'the advisory query must be authenticated so a shared runner IP cannot exhaust the limit')
+
   // And the workflow must be reachable from the documentation.
   assert.ok(doc.readme().includes('.github/workflows/ci.yml'), 'README must link the workflow')
   assert.ok(doc.status().includes('.github/workflows/ci.yml'), 'docs/03 must link the workflow')
