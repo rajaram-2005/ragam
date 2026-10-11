@@ -50,9 +50,15 @@ Requirements: **Node ≥ 22.5** (for `node:sqlite`) and, for the training servic
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 553 tests: core 258, web 39, fabric 256
+npm test          # 555 tests: core 260, web 39, fabric 256
 npm run train     # in-process training run
 ```
+
+All 555 run in CI on every push and pull request
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
+component, plus one that fails if this documentation stops matching the code. The
+Fabric job asserts the release gate in **both** directions: a trained model must
+release, and an undertrained one must fail *and* must not become the current model.
 
 Full instructions, environment variables and troubleshooting:
 [`docs/04-setup.md`](docs/04-setup.md).
@@ -108,7 +114,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Lines | Dependencies | Tests |
 |---|---|---|---|---|
-| `services/core` | Node 22 ESM | 7,380 | **zero npm packages** | 258 |
+| `services/core` | Node 22 ESM | 7,380 | **zero npm packages** | 260 |
 | `services/fabric` | Python 3.11 | 8,142 | NumPy only | 256 |
 | `apps/web` | React 18 + Vite | 3,811 | react, react-dom | 39 |
 

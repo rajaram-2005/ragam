@@ -461,11 +461,11 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 9)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**258 / 258**'), 'core total must be stated')
+  assert.ok(status.includes('**260 / 260**'), 'core total must be stated')
   assert.ok(status.includes('**256 / 256**'), 'fabric total must be stated')
   assert.ok(status.includes('**39 / 39**'), 'web total must be stated')
-  assert.ok(status.includes('553 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('553 tests: core 258, web 39, fabric 256'),
+  assert.ok(status.includes('555 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('555 tests: core 260, web 39, fabric 256'),
     'README must state the same totals')
   assert.ok(status.includes('(11 files'), 'the file count must move with the suite')
 })
@@ -587,4 +587,74 @@ test('the Markdown model card keeps the two limitation lists distinct', () => {
   // And so does the losing condition, with the exact measured numbers.
   assert.ok(text.includes('under a held-out-TOPIC split'))
   assert.ok(text.includes('MRR 0.093673 against BM25 0.382011'))
+})
+
+// ---------------------------------------------------------------------------
+// CI: the gate that keeps every number above honest
+// ---------------------------------------------------------------------------
+
+test('CI exists, covers all three components, and is documented', () => {
+  const workflow = read('.github/workflows/ci.yml')
+
+  // Four jobs, one per independently-failable property. A single job would report
+  // one red check without naming the component that broke.
+  for (const job of ['core:', 'fabric:', 'web:', 'docs:']) {
+    assert.ok(new RegExp(`^  ${job}$`, 'm').test(workflow), `CI must define a ${job.replace(':', '')} job`)
+  }
+
+  // The zero-dependency property of services/core is asserted in CI, not just here.
+  assert.ok(workflow.includes('services/core declares zero dependencies'))
+  assert.ok(workflow.includes('services/core/node_modules'), 'CI must reject an install step appearing in core')
+
+  // Nothing may install torch: services/fabric is NumPy-only by design, and on a
+  // GPU-less runner pip resolves torch to the CUDA build.
+  assert.ok(!/pip(3)? install[^\n]*\btorch\b/.test(workflow), 'CI must never install torch')
+  assert.ok(workflow.includes('import torch'), 'CI must fail if torch becomes importable')
+
+  // The release gate is asserted in BOTH directions. Only testing the positive case
+  // would pass even if the gate stopped refusing junk.
+  assert.ok(workflow.includes('assert record.status == "partial"'), 'CI must pin the honest partial status')
+  assert.ok(workflow.includes('assert weak_record.status == "failed"'), 'CI must pin the undertrained failure')
+  assert.ok(workflow.includes('weak.registry.current() is None'),
+    'CI must assert an undertrained run cannot become the released model')
+
+  // Least privilege, and superseded runs are cancelled.
+  assert.ok(workflow.includes('contents: read'))
+  assert.ok(workflow.includes('cancel-in-progress: true'))
+
+  // The docs job needs history: the model card asserts a real SHA re-verified at a
+  // different revision, which a depth-1 checkout cannot support.
+  assert.ok(workflow.includes('fetch-depth: 0'))
+
+  // And the workflow must be reachable from the documentation.
+  assert.ok(doc.readme().includes('.github/workflows/ci.yml'), 'README must link the workflow')
+  assert.ok(doc.status().includes('.github/workflows/ci.yml'), 'docs/03 must link the workflow')
+  assert.ok(squash(doc.setup()).includes('## 5. Continuous integration'), 'docs/04 must document CI')
+})
+
+test('the CI workflow is valid YAML with the structure it claims', () => {
+  const workflow = read('.github/workflows/ci.yml')
+
+  // No YAML parser is available to the core service (zero dependencies), so check the
+  // structural invariants that would break a run: tabs, duplicate job keys, and the
+  // trigger configuration.
+  assert.ok(!workflow.includes('\t'), 'YAML must not contain tabs')
+  assert.ok(workflow.startsWith('name: CI'), 'the workflow must be named')
+  assert.ok(/^on:/m.test(workflow), 'the workflow must declare triggers')
+  assert.ok(workflow.includes('pull_request'), 'CI must run on pull requests')
+  assert.ok(workflow.includes('jobs:'), 'the workflow must declare jobs')
+
+  // Scope to the jobs: block. The on: trigger block is indented the same way, so an
+  // unscoped /^  ([a-z]+):$/ also matched 'push:' and reported five jobs.
+  const jobsBlock = workflow.slice(workflow.indexOf('\njobs:'))
+  const jobs = [...jobsBlock.matchAll(/^  ([a-z]+):$/gm)].map((m) => m[1])
+  assert.deepEqual(jobs, ['core', 'fabric', 'web', 'docs'], `unexpected job list: ${jobs.join(', ')}`)
+
+  // Every job must check the code out before doing anything with it.
+  const perJob = jobsBlock.split(/^  [a-z]+:$/m).slice(1)
+  assert.equal(perJob.length, 4)
+  for (const [index, body] of perJob.entries()) {
+    assert.ok(body.includes('actions/checkout@'), `job ${jobs[index]} must check out the repository`)
+    assert.ok(body.includes('run:'), `job ${jobs[index]} must actually run something`)
+  }
 })

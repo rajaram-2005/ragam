@@ -15,7 +15,7 @@ Every command below was run on the host described in
 | Tests | `pytest` for Fabric; nothing extra for core or web | pytest 8.3.4 |
 
 No GPU is required for anything in this repository. No model weights are
-downloaded, and none are needed to run the platform — see §6 for what that means
+downloaded, and none are needed to run the platform — see §7 for what that means
 in practice.
 
 > **Do not `pip install torch`.** Nothing here imports it. On a GPU-less host pip
@@ -145,8 +145,8 @@ aetheris-fabric listening
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (553 tests)
-npm run test:core         # 258
+npm test                  # all three suites (555 tests)
+npm run test:core         # 260
 npm run test:web          # 39
 npm run test:fabric       # 256 — needs numpy + pytest on the interpreter
 ```
@@ -177,7 +177,43 @@ tokeniser changes.
 
 ---
 
-## 5. Training a model
+## 5. Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and `arena/**`, and on every
+pull request against `main`. Four jobs, split so a failure names the component that
+broke instead of surfacing as one red check:
+
+| Job | What it proves |
+|---|---|
+| **Core service** | 260 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Fabric** | 256 tests pass; `torch` is **not** importable; and the release gate is exercised end to end in both directions |
+| **Web app** | `npm ci`, 39 tests, production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Docs** | The 21-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
+
+The Fabric job's release-gate step is the one worth reading, because it asserts the
+negative case as well as the positive one:
+
+```python
+assert record.status == "partial"          # 3 of 8 stages cannot run here
+assert card.base_checkpoint is None        # trained from scratch, not a fine-tune
+assert card.metrics["mrr"] >= 0.60         # clears the release floor
+
+weak = Pipeline(PipelineConfig(epochs=3, evaluate_topic_split=False))
+assert weak.run().status == "failed"       # undertrained must fail
+assert weak.registry.current() is None     # and must NOT become the released model
+```
+
+Without the last two lines the job would pass even if the release gate stopped
+refusing junk — which is the failure mode that matters.
+
+Both bundle regexes were verified against planted secrets before being committed,
+because a grep that cannot match anything is worse than no grep.
+
+Nothing in CI installs torch.
+
+---
+
+## 6. Training a model
 
 ```bash
 npm run train            # in-process; prints "partial run-<id>"
@@ -205,7 +241,7 @@ Deterministic apart from `latencyMs`. Seeds: data `1`, model `7`. See the
 
 ---
 
-## 6. Making chat actually work
+## 7. Making chat actually work
 
 Out of the box there is no language model, so `/api/chat` returns
 `no_model_available` with the router's explanation. That is honest, and it is the
@@ -247,7 +283,7 @@ are rejected without opening a socket or resolving DNS.
 
 ---
 
-## 7. Enabling the online gateway
+## 8. Enabling the online gateway
 
 Optional, and off unless both a key and a base URL are present.
 
@@ -285,7 +321,7 @@ bundle.
 
 ---
 
-## 8. Data locations
+## 9. Data locations
 
 | Path | Contents | In git? |
 |---|---|---|
@@ -307,16 +343,16 @@ record rather than leaving an unexplained gap.
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `no_model_available` on every chat | No LM installed or not probed | §6, then re-probe |
+| `no_model_available` on every chat | No LM installed or not probed | §7, then re-probe |
 | Web UI shows "Core service unreachable" | Core not running, or the proxy target is wrong | Start the core; check `AETHERIS_CORE_URL` |
 | UI works locally but not behind a proxy | Dev server rejecting the host | Already handled: `allowedHosts: true`. Check the proxy forwards `/api` |
 | `No module named pytest` | System interpreter has no pytest | `AETHERIS_PYTHON=/path/to/venv/bin/python` |
 | `Database opened` / sqlite errors | Node < 22.5 | Upgrade Node; `node:sqlite` is required |
-| Image/video refuse with `capability_unavailable` | No provider under the current policy | Expected. §7 to enable the gateway, or accept the refusal |
+| Image/video refuse with `capability_unavailable` | No provider under the current policy | Expected. §8 to enable the gateway, or accept the refusal |
 | Video refuses with `needs_hardware` | No local video runtime | Expected on this hardware class. The refusal never substitutes a still image |
 | Fabric `POST /pipeline/run` returns `failed` | Trained MRR below the 0.60 release floor | Correct behaviour. Raise `epochs`; see the model card's release requirements |
 | Fabric returns 413 | Body over 1 MB | Expected; this service takes small JSON commands, not datasets |

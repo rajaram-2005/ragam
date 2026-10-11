@@ -54,7 +54,7 @@ jobs:
             exit 1
           fi
 
-      - name: Test (258 tests)
+      - name: Test (260 tests)
         working-directory: services/core
         run: node --test test/*.test.mjs
 

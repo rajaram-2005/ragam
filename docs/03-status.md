@@ -9,14 +9,21 @@ pytest 8.3.4. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 553 passing, 0 failing.**
+**Test totals: 555 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **258 / 258** (11 files, ~22 s) |
+| `services/core` | `node --test test/*.test.mjs` | **260 / 260** (11 files, ~22 s) |
 | `services/fabric` | `pytest -q` | **256 / 256** (9 files, ~6 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **39 / 39** (3 files, <1 s) |
 | `apps/web` build | `vite build` | 218.9 kB → **66.8 kB gzip**, single chunk, no warnings |
+
+All three suites run in CI on every push and pull request
+([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as four jobs split so a
+failure names the component that broke. The CI run also asserts two properties that
+are easy to lose silently: that `services/core` still declares **zero** npm
+dependencies, and that the Fabric release gate refuses an undertrained model rather
+than merely accepting a trained one.
 
 No test was removed or relaxed to obtain this. Two existing assertions in
 `services/core/test/http.test.mjs` were rewritten when built-in plugins arrived —
@@ -117,7 +124,7 @@ real inference — that is the design, and the loopback test is its evidence.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (258 tests)
+### `services/core` — Implemented and tested (260 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|

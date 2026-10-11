@@ -178,7 +178,7 @@ Honest baseline: **14 pass / 1 fail**. The failure is a missing-dependency path,
 and the fallback it tries to take is itself described in-code as a *"numpy mock
 encoder"*. Only 4 test files exist (`test_faisanth.py`, `test_premsoth.py`,
 `test_rajaram.py`, `test_saram.py`) — all named after people, not subsystems.
-There is **no CI workflow** in this repository.
+There is **no CI workflow** in the sparsiz repository. (Aetheris Omni has one; see [`04-setup.md`](./04-setup.md) §5.)
 
 ### 2.2 The decisive finding: the training stack is randomised simulation
 
