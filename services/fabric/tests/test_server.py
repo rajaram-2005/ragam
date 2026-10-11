@@ -14,7 +14,14 @@ from urllib.request import Request, urlopen
 import pytest
 
 from fabric.pipeline import STAGE_NAMES
-from fabric.server import MAX_BODY_BYTES, FabricService, create_server
+from fabric.server import (
+    DEFAULT_HOST,
+    LOOPBACK_HOSTS,
+    MAX_BODY_BYTES,
+    FabricService,
+    create_server,
+    main,
+)
 
 
 @pytest.fixture()
@@ -288,3 +295,37 @@ def test_concurrent_runs_are_serialised(client):
     assert len(body["runs"]) == 2
     ids = {run["runId"] for run in body["runs"]}
     assert len(ids) == 2, "each run must keep its own record"
+
+
+# ---------------------------------------------------------------------------
+# Binding: this service performs no authentication, so the default must be safe.
+# ---------------------------------------------------------------------------
+
+
+def test_the_default_bind_address_is_loopback():
+    # /status advises "loopback or private network only". A default of 0.0.0.0 would
+    # contradict the service's own advice and expose an unauthenticated training
+    # endpoint to the network by accident, so the default is pinned here.
+    assert DEFAULT_HOST == "127.0.0.1"
+    assert DEFAULT_HOST in LOOPBACK_HOSTS
+    assert "0.0.0.0" not in LOOPBACK_HOSTS
+
+
+def test_main_reads_the_bind_address_from_the_environment(monkeypatch, capsys):
+    # --help exits before binding, so this exercises the argument path without
+    # needing a socket. The env vars are read inside main().
+    monkeypatch.setenv("AETHERIS_FABRIC_HOST", DEFAULT_HOST)
+    monkeypatch.setenv("AETHERIS_FABRIC_PORT", "0")
+    assert main(["--help"]) == 0
+    out = capsys.readouterr().out
+    assert "Aetheris Fabric" in out
+
+
+def test_a_non_loopback_bind_is_reported_as_unauthenticated():
+    # The service cannot stop an operator from binding widely; it can refuse to be
+    # quiet about it. /status carries the recommendation independently of the bind.
+    service = FabricService()
+    status = service.status()
+    assert status["security"]["acceptsCredentials"] is False
+    assert "no authentication" in status["security"]["bindRecommendation"]
+    assert "loopback" in status["security"]["bindRecommendation"]

@@ -30,7 +30,7 @@ is deliberate — see *What cannot run here* below.
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -e '.[dev]'
-pytest                     # 253 tests
+pytest                     # 256 tests
 python -m fabric.server    # http://127.0.0.1:8791
 ```
 

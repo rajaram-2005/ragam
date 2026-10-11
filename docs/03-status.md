@@ -1,0 +1,306 @@
+# 03 — Implementation status
+
+Every claim below is tied to a test, a measurement or a named limitation. Where
+something does not work, it says so and says why.
+
+**Host used for all of this work:** 2 CPUs · 3.85 GB RAM · **no GPU** ·
+Node v22.22.3 (`node:sqlite` verified) · Python 3.11.2 · NumPy 2.1.3 ·
+pytest 8.3.4. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
+`registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
+`download.pytorch.org`, `huggingface.co`.**
+
+**Test totals: 553 passing, 0 failing.**
+
+| Suite | Command | Result |
+|---|---|---|
+| `services/core` | `node --test test/*.test.mjs` | **258 / 258** (11 files, ~22 s) |
+| `services/fabric` | `pytest -q` | **256 / 256** (9 files, ~6 s) |
+| `apps/web` | `node --test test/*.test.mjs` | **39 / 39** (3 files, <1 s) |
+| `apps/web` build | `vite build` | 218.9 kB → **66.8 kB gzip**, single chunk, no warnings |
+
+No test was removed or relaxed to obtain this. Two existing assertions in
+`services/core/test/http.test.mjs` were rewritten when built-in plugins arrived —
+they had counted absolute registry size, and now assert about the plugin the test
+installed *and* separately verify the built-ins are present, enabled and bound.
+That is a stronger claim than the count it replaced.
+
+---
+
+## 1. Status vocabulary
+
+Used consistently throughout, per the reporting requirement:
+
+| Status | Meaning |
+|---|---|
+| **Implemented and tested** | Code exists and a test exercises it in this repository |
+| **Implemented, not fully tested** | Code exists; coverage is partial or indirect |
+| **Prototype / simulation only** | Runs, but does not do the real thing |
+| **Requires external credentials** | Cannot be exercised here without a secret |
+| **Requires weights or hardware** | Cannot be exercised here without a download or a GPU |
+| **Planned, not implemented** | Designed, no code |
+| **Blocked by permissions/infrastructure** | Environment prevents it |
+
+There is **nothing in the "prototype / simulation only" category**. Upstream
+Aetheris's in-browser simulation layer was not ported, and no substitute was
+written. Where a capability cannot be real on this host it reports a limitation
+instead.
+
+---
+
+## 2. The twelve phases
+
+| # | Phase | Status | Evidence |
+|---|---|---|---|
+| 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
+| 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
+| 3 | Unified app, five areas | **Complete** | `apps/web`; 39 tests including "exactly five areas" and "no internal service is a navigation entry" |
+| 4 | Local inference with ≥1 real local LM | **Blocked — requires weights** | Adapter implemented and tested against a real loopback server; no LM is installed on this host |
+| 5 | FreeLLMAPI online integration | **Implemented — requires external credentials** | Client written to contracts read from source; no key here |
+| 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
+| 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
+| 8 | Multimodal pipelines | **Complete** | Job queue, validation, video genuineness check |
+| 9 | Sparsiz integration | **Complete** | Responsibility defined; taxonomies and `Q(x)` adopted, scoring replaced |
+| 10 | Aetheris Lite experiments | **Partial** | One real trained retriever; 3 of 8 stages blocked |
+| 11 | Competitive benchmark cycle | **Partial** | Real, reproducible BM25 comparison; **no** Mistral/Qwen/Llama/Gemma/DeepSeek comparison possible |
+| 12 | Release readiness docs | **Complete** | This document plus 04, 05, 06 and the model card |
+
+### Phase 4 in detail — the most important limitation
+
+`services/core/src/providers/local.mjs` implements the Ollama and
+OpenAI-compatible (llama.cpp) protocols for real. `offline.test.mjs` starts a
+**real `node:http` server on loopback speaking the Ollama wire protocol** and
+completes a genuine chat round-trip under `strict_offline` — the response carries
+`sentExternally: false` and `modelId: 'ollama:tiny-local:latest'`.
+
+What that proves is the **plumbing**: routing, policy, provider adaptation,
+streaming, audit. What it does **not** prove is that a language model is
+installed, because none is. `huggingface.co` is unreachable and there is no
+`ollama` binary on this host, so no weights could be obtained.
+
+The startup banner states this rather than hiding it:
+
+```
+readiness     degraded
+local models  0 ready
+limitation    no local chat model is installed; /api/chat will return no_model_available
+limitation    no video generation model is available; /api/video will refuse rather
+              than substitute a still image
+```
+
+`/api/ready` returns `capabilities.chat = false`, and the web UI renders a
+`no model ready` chip and an empty model table. **No model is invented anywhere.**
+Install Ollama and pull any model, then re-probe, and the same code path serves
+real inference — that is the design, and the loopback test is its evidence.
+
+---
+
+## 3. Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Five areas work in one app | **Met** | `apps/web`; `structure.test.mjs` fails if a sixth appears |
+| Local chat inference with an actually installed model | **Not met — requires weights** | Adapter tested against a real loopback server; no LM installed here. Reported as `degraded`, never faked |
+| Strict offline mode verifiably blocks network | **Met** | Recording-`fetch` spy: 4 external hosts rejected, call log empty, no socket, no DNS. Guard also installed over `globalThis.fetch` |
+| Hybrid sends only authorized requests externally | **Met** | Exact-host allowlist + classification ceiling; `confidential`/`restricted` need explicit authorization |
+| FreeLLMAPI uses supported endpoints and handles provider failure | **Met in code — requires credentials to exercise live** | Contracts read from source; error envelope and status clamping handled; images JSON vs video raw binary distinguished |
+| Private knowledge indexed / retrieved / cited / managed locally | **Met** | Ingest, content-hash dedupe, chunk, BM25, cited grounding, ACL, purge, audit |
+| Plugin + MCP enforce capability permissions | **Met** | Scope allowlist, elevated-scope approvals, forbidden scopes, risk-tier gates, schema validation of arguments and output |
+| God Mode tasks observable / pausable / resumable / cancellable / verifiable | **Met** | All five exercised by tests; pause→resume checkpoints at `phaseIndex=1` (2 → 9 steps) |
+| Image + video use real adapters when advertised | **Met** | Magic-byte validation; `assertGenuineVideo` rejects a still image and sub-8 KB payloads; refusal carries an explicit limitation |
+| Sparsiz integration has a defined responsibility + reproducible tests | **Met** | [`02-architecture.md`](./02-architecture.md) §2; taxonomy/formula adopted, scoring replaced |
+| ≥1 first-party Aetheris Lite model with versioned reproducible eval | **Met** | `aetheris-lite-retriever@0.1.0`; [model card](./model-cards/aetheris-lite-retriever-0.1.0.md) + machine-readable JSON |
+| Benchmark comparisons identify exact models / configs / hardware / procedures | **Met for what was comparable** | [`06-benchmarks.md`](./06-benchmarks.md); every row records corpus, split, seeds, hardware and reproduction command |
+| Unvalidated weights cannot silently replace stable releases | **Met** | `ModelReleaseManager.release()` validates first; a 3-epoch run yields MRR 0.3045 < 0.60 floor → `release` fails, run status `failed`, `released is null` |
+| Docs match implementation | **Met** | Route table, env vars, licence texts and benchmark numbers were re-derived from source and re-measured, not transcribed from memory |
+
+---
+
+## 4. Component status
+
+### `services/core` — Implemented and tested (258 tests)
+
+| Subsystem | Status | Notes |
+|---|---|---|
+| Egress policy & guard | **Implemented and tested** | Three policies; fails safe to `strict_offline` on a blank/invalid value |
+| Data classification & redaction | **Implemented and tested** | Whole-identifier patterns catch `AWS_SECRET_ACCESS_KEY`-style names |
+| Audit ledger | **Implemented and tested** | Append-only SQLite; refusals audited; NDJSON export; subject purge |
+| Model registry & router | **Implemented and tested** | Capability gating before scoring; unknown latency scores 0.5, not 0 |
+| Ollama / llama.cpp providers | **Implemented and tested against a fixture server** | Real protocol handling; no real LM installed here |
+| FreeLLMAPI provider | **Implemented — requires external credentials** | Never exercised against the live service |
+| Knowledge pipeline | **Implemented and tested** | SQLite + filesystem + in-memory rebuildable BM25 |
+| Media queue & validation | **Implemented and tested** | Progress, cancellation, timeouts, retry-after, state history |
+| Plugin registry & manifests | **Implemented and tested** | Preflight vs invoke distinction; uninstall keeps a record |
+| MCP layer & schema validator | **Implemented and tested** | Risk tiers, approval gates, output neutralisation, per-tool timeouts |
+| God Core lifecycle | **Implemented and tested** | Eight phases, budgets, retries, checkpoints, verification |
+| Built-in plugins & MCP server | **Implemented and tested** | 18 tests; see §5 |
+| HTTP layer | **Implemented and tested** | 31 literal routes + segment routes; accurate error statuses |
+| Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
+| Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
+
+### `services/fabric` — Implemented and tested (256 tests)
+
+| Stage | Status |
+|---|---|
+| data_validation | **Implemented and tested** |
+| base_selection | **Implemented and tested** — compares candidate widths by held-out MRR; a language-model base is *not* selected ("no weights available on this host") |
+| domain_training | **Implemented and tested** — hand-written Adam; all 5 parameter gradients match central finite differences to ~3e-10 |
+| sft | **Blocked — requires weights** |
+| preference_optimization | **Blocked — requires weights, data and a reward signal** |
+| distillation | **Blocked — requires a teacher model** |
+| evaluation | **Implemented and tested** |
+| release | **Implemented and tested** — validates before releasing; rollback restores a prior version |
+
+Overall run status is therefore **`partial`**, never `completed`. Supporting
+pieces all tested: failure taxonomy, failure memory (`E_{t+1} = E_t ∪ F_t`),
+experiment ledger (baseline → experiment → verdict), metrics with a latency noise
+floor, DataForge, the Node↔Python text-parity fixture, model cards, and the HTTP
+server (23 tests).
+
+### `apps/web` — Implemented and tested (39 tests)
+
+| Area | Status |
+|---|---|
+| Chat | **Implemented and tested** — streaming SSE, routing panel, knowledge ingest/search/citations, task lifecycle |
+| Image | **Implemented** — job queue, validation display; generation refuses on this host |
+| Video | **Implemented** — as above, plus the genuineness rule |
+| Plugins | **Implemented and tested** — manifest validation, install, preflight, invoke, approvals |
+| MCP | **Implemented and tested** — servers, tools, risk gates, elevated-scope approvals |
+
+Component rendering itself is **not** covered by automated tests: there is no DOM
+or browser in this environment, and adding `jsdom` would have meant a new
+dependency tree for tests that assert markup strings. Instead the tests cover what
+can be verified without a browser — the API client and its error normalisation,
+the SSE parser, the tone/format logic, and the structural invariants (five areas,
+no absolute hosts, design tokens preserved, dependency discipline). Verification
+that the app actually renders was done by building it and by confirming all
+fourteen modules transform and serve through the dev server, with `/api` proxied
+to a live core reporting `degraded`. **That is "implemented, not fully tested" for
+the rendering layer, and it is stated as such rather than implied to be covered.**
+
+---
+
+## 5. Built-in plugins and the in-process MCP server
+
+Added because the Plugins and MCP areas were otherwise unfillable: a browser
+cannot bind a `local_tool` handler, so handlers must be bound in code at boot.
+
+| Component | Capabilities | Risk / scopes |
+|---|---|---|
+| `aetheris.insight@1.0.0` | `system.hardware`, `system.readiness`, `audit.tail`, `media.jobs` | all read-only, **no scopes** |
+| `aetheris.knowledge@1.0.0` | `knowledge.search`, `knowledge.stats`, `knowledge.documents` | read-only, `knowledge.read` (not elevated) |
+| `aetheris.local` (MCP) | `aetheris.hardware`, `aetheris.knowledge.search` | `read_only` |
+| | `aetheris.knowledge.ingest` | `write` + elevated `knowledge.write` |
+| | `aetheris.task.cancel` | `destructive`, always needs approval |
+| | resource `aetheris://status`, prompt `grounded_answer` | — |
+
+`system` and `external` risk tiers are **deliberately absent**: `system` is
+refused by this build's `allowedRisks`, and no external endpoint is configured.
+Neither is stubbed to look complete, and `builtins.test.mjs` asserts their
+absence.
+
+Tested beyond "registers and returns data": every capability has a genuinely bound
+handler; schemas are enforced against the built-ins themselves; granting a scope
+at installation level is *not* consent to use it (an approval must name the
+scope); disabling a built-in stops it being invocable; a built-in cannot be
+uninstalled and the refusal is audited; **invoking every built-in capability opens
+no network connection at all**; and handler output is plain serialisable data,
+never a live internal reference.
+
+Verified live over HTTP through the dev-server proxy: plugin invoke returns real
+hardware data, a missing required argument yields **403 `plugin_permission_denied`**,
+and an unapproved destructive MCP call yields **409 `approval_required`**.
+
+---
+
+## 6. Known defects found and fixed
+
+Recorded because the classes of bug matter more than the individual fixes.
+
+**Core service**
+
+- `publicView()` returned live references → deep-copied via `cloneValue()`.
+- `this[\`#${phase}\`]` was always `undefined`, and a `continue` inside `for...of`
+  skipped the retried phase → index-based loop.
+- `resume()` sliced from `fromIndex + 1`, skipping the paused phase.
+- Budget was spent inside builtin handlers, so a custom handler could bypass it →
+  moved to `#accountPhase` in the run loop.
+- Domain errors fell through to **HTTP 500**, making a policy refusal
+  indistinguishable from a crash → `ERROR_STATUS`/`statusForError`.
+- **Capability refusals were not audited** — the most security-relevant events were
+  the ones missing → `#refuse()`.
+- The secret classifier missed env-var-style credentials, so such a prompt
+  classified `public` and could have left the machine in hybrid mode.
+
+Lesson recorded: `node --check` catches neither private-member misuse nor
+control-flow errors. Always instantiate and exercise.
+
+**Fabric**
+
+- `math.sqrt` applied to a NumPy array in the Adam step.
+- The backward pass concatenated *embedding matrices* along axis 1 instead of
+  building the `[B, B+1]` logit matrix — hard negatives are a rowwise dot product,
+  not shared candidates. All five gradients now verified against finite differences.
+- `RecordMixin(dict)` mixed into a `@dataclass` made attribute-only records
+  **falsy**, so `if card.provenance` was always False and provenance serialised to
+  `null`.
+- `base_selection` recorded the baseline before measuring latency, then mutated the
+  frozen baseline.
+- `MetricSpec.improved` accepted a *flat* result as an improvement.
+
+**Fabric HTTP server** (found by `tests/test_server.py`)
+
+- `/models/current` was registered under `do_POST`, so reading a release 404'd.
+- Refusing an oversized body without consuming it left the client writing →
+  `Broken pipe` instead of a clean 413.
+
+**Benchmark design — two rounds of self-correction**
+
+1. The first dataset gave BM25 **exactly 0.0 on every metric**: a rigged comparison
+   proving nothing. Fixed by labelling half the queries with a topic word →
+   BM25 MRR 0.335 (low overlap) / 0.767 (high).
+2. The held-out set was always query index 0, which is always the labelled
+   phrasing — systematically favouring BM25. Fixed with per-topic random selection,
+   recording `evaluationLabelledFraction` in `meta`.
+3. A 5% relative latency tolerance rejected the dense retriever because 0.0216 ms
+   vs 0.0549 ms is a difference smaller than a scheduler quantum. Fixed with a
+   1.0 ms noise floor, documented, with the absolute ceiling on the model card.
+
+**Web app**
+
+- The artifact URL was written as `/api/media/:id`; the real route is
+  `/api/media/artifact/:id`. Caught by reading the router rather than by a browser.
+- `/api/media/jobs` does not filter by `kind` server-side, so sending a `kind`
+  parameter implied filtering that does not happen. Removed.
+- The lifecycle renderer checked for step status `'completed'`; the real value is
+  `'complete'`, which would have shown every finished phase as idle.
+- The MCP console exposed `grantedScopes` but not the **separate** elevated-scope
+  approval, so an ingest call could never have succeeded from the UI.
+
+---
+
+## 7. What remains
+
+Ordered by how much it blocks the acceptance criteria.
+
+1. **Install a real local LM** (Phase 4). `ollama pull <model>` on a host with
+   network access to a registry, then re-probe. No code change is expected — that
+   is the claim the loopback test supports, and it is the single largest gap
+   between this repository and a usable product.
+2. **Configure FreeLLMAPI** (Phase 5) with a key via `FREELLMAPI_API_KEY_FILE`,
+   policy `hybrid`, and the gateway's host on `AETHERIS_ONLINE_ALLOWLIST`. Then
+   exercise image and video generation live. Until then those paths are
+   code-complete but unexercised against the real service.
+3. **Run the pipeline against a real corpus.** The fixture corpus is generated
+   engineering documentation; retrieval quality on real company documents is
+   unknown and is recorded as a limitation on the model card.
+4. **Build a failure corpus** so `historicalFailures` can be measured. It is
+   currently the one soft failure on the release card.
+5. **Component-level UI tests.** Would need a DOM; deferred deliberately rather
+   than half-done. See §4.
+6. **SFT / preference optimization / distillation** (Phase 10). All three need
+   weights and, for the first and third, a GPU. Not achievable on this host and
+   not faked.
+7. **A competitive benchmark against named open models** (Phase 11). Requires
+   downloads that are blocked here. Until it exists, **no superiority claim over
+   Mistral, Qwen, Llama, Gemma or DeepSeek is made or implied anywhere in this
+   repository.**
