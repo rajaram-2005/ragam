@@ -1,0 +1,76 @@
+# --- runtime data (never committed) ---------------------------------------
+# The core service writes its SQLite stores, media artifacts and indexes here.
+# Data is created at $AETHERIS_DATA_DIR (default: services/core/.aetheris-data).
+.aetheris-data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# --- secrets ---------------------------------------------------------------
+# Credentials are read from the environment or from *_FILE paths only. A .env
+# that exists locally must never be committed.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# --- dependencies ----------------------------------------------------------
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- build output ----------------------------------------------------------
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.vite/
+.parcel-cache/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# --- model artifacts -------------------------------------------------------
+# Weights are never redistributed through this repository. Aetheris Lite
+# checkpoints are produced by services/fabric and referenced by hash in a model
+# card; the bytes stay outside Git.
+*.gguf
+*.safetensors
+*.bin
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.lora
+checkpoints/
+artifacts/
+
+# --- generated media -------------------------------------------------------
+# Development fixtures under apps/web/public/media ARE committed and marked as
+# fixtures. Everything below is generated output.
+generated-media/
+*.tmp.mp4
+*.tmp.png
+
+# --- editors / OS ----------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- logs ------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-error.log*
