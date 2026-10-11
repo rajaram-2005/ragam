@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aetheris-fabric"
+version = "0.1.0"
+description = "Training, evaluation and experiment control for Aetheris Omni (Sparsiz lineage)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "RAJARAM K" }]
+
+# NumPy is the only runtime dependency, deliberately.
+#
+# This host has no GPU and no access to download.pytorch.org, so a real
+# LoRA/QLoRA or distillation run cannot be executed here. Rather than depend on
+# a framework that cannot run, the one model family this service actually trains
+# (the Aetheris Lite dual-encoder retriever) is implemented from scratch on
+# NumPy, where every gradient can be checked and every result reproduced on two
+# CPU cores. Stages that genuinely need weights or a GPU report that honestly
+# instead of pretending; see fabric/pipeline.py.
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+aetheris-fabric = "fabric.server:main"
+
+[tool.setuptools.packages.find]
+include = ["fabric*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
