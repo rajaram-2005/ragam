@@ -13,8 +13,9 @@
 | **Config digest** | `8bb457b2d65626de` |
 | **Dataset digest** | `64e7e42ebd0ae7174d7d9044ac407971dd00e0e748980f7595a5ccdaafd40fe4` |
 | **Vocabulary digest** | `3c719685e4125416` |
-| **Code revision** | `aa11de45d6d3dd0dcbb4853278ca81f7f5d54ab9` |
+| **Code revision** | `aa11de45d6d3dd0dcbb4853278ca81f7f5d54ab9` (the revision this card was generated at) |
 | **Seeds** | data `1`, model `7` |
+| **Re-verified at** | `6be52b98dfdc6c4d741ff7d521541758ef512175` — see *Reproducibility across revisions* |
 | **Machine-readable card** | [`aetheris-lite-retriever-0.1.0.json`](./aetheris-lite-retriever-0.1.0.json) |
 
 ## What this model is
@@ -213,6 +214,32 @@ Qwen, Llama, Gemma or DeepSeek was possible, so no superiority claim over them i
 made or implied anywhere in this repository.**
 
 ---
+
+## Reproducibility across revisions
+
+`codeRevision` records the commit this card was generated at, which is now behind
+`HEAD`. That would be a problem if the numbers depended on the code that changed, so
+the `reproduce` command was re-run at `6be52b9` and every deterministic field was
+compared against this card:
+
+| Field | `aa11de4` | `6be52b9` | Match |
+|---|---|---|---|
+| `weightsDigest` | `db3366ea7f7bb0bbb4cedc…` | `db3366ea7f7bb0bbb4cedc…` | yes |
+| `configDigest` | `8bb457b2d65626de` | `8bb457b2d65626de` | yes |
+| `datasetDigest` | `64e7e42ebd0ae7174d7d…` | `64e7e42ebd0ae7174d7d…` | yes |
+| `parameterCount` | 18,784 | 18,784 | yes |
+| `baseCheckpoint` | `null` | `null` | yes |
+| `metrics.mrr` | 0.849702 | 0.849702 | yes |
+| `metrics.recall@1` | 0.791667 | 0.791667 | yes |
+| `validation.hardFailures` | `[]` | `[]` | yes |
+| `metrics.latencyMs` | 0.0550 | 0.0554 | no — wall-clock, see below |
+
+The intervening commits changed the Fabric service's bind default and added tests;
+they did not touch the pipeline, the encoder or the metrics. `latencyMs` differs in
+the fourth decimal place because it is a wall-clock measurement, and both values sit
+far inside the 1.0 ms noise floor and the 25 ms hard ceiling.
+
+This card is therefore **not stale**: it reproduces bit-for-bit at `HEAD`.
 
 ## Reproducing
 

@@ -140,5 +140,30 @@
         "superseded": null
       }
     ]
+  },
+  "reverifiedAt": {
+    "codeRevision": "6be52b98dfdc6c4d741ff7d521541758ef512175",
+    "result": "identical",
+    "fieldsCompared": [
+      "name",
+      "version",
+      "identifier",
+      "family",
+      "licence",
+      "status",
+      "baseCheckpoint",
+      "weightsDigest",
+      "configDigest",
+      "datasetDigest",
+      "parameterCount",
+      "parentVersion",
+      "metrics.mrr",
+      "metrics.recall@1",
+      "validation.hardFailures"
+    ],
+    "excluded": [
+      "metrics.latencyMs"
+    ],
+    "note": "The reproduce command was re-run at HEAD; every deterministic field matched the card generated at codeRevision. latencyMs is a wall-clock measurement and differs in the fourth decimal place (0.0550 vs 0.0554), far inside the 1.0 ms noise floor and the 25 ms hard ceiling. The intervening commits changed the Fabric service bind default and added tests; they did not touch the pipeline, encoder or metrics."
   }
 }

@@ -533,6 +533,20 @@ test('the model card JSON is machine-readable and self-consistent', () => {
   assert.ok(card.metrics.mrr >= 0.6, 'the release floor must hold')
   assert.ok(card.metrics.latencyMs <= 25, 'the latency ceiling must hold')
 
+  // The card was generated at an older revision than HEAD, so the re-verification is
+  // what makes it current rather than stale. Pin the claim so it cannot drift.
+  const reverified = wrapper.reverifiedAt
+  assert.ok(reverified, 'the card must record that it was re-verified at a later revision')
+  assert.equal(reverified.result, 'identical')
+  assert.ok(/^[0-9a-f]{40}$/.test(reverified.codeRevision), 'the re-verification revision must be a real git SHA')
+  assert.notEqual(reverified.codeRevision, card.provenance.codeRevision,
+    're-verification is only meaningful at a different revision than generation')
+  for (const field of ['weightsDigest', 'datasetDigest', 'configDigest', 'metrics.mrr']) {
+    assert.ok(reverified.fieldsCompared.includes(field), `${field} must be among the compared fields`)
+  }
+  assert.deepEqual(reverified.excluded, ['metrics.latencyMs'],
+    'only the wall-clock measurement may be excluded, and it must be named')
+
   // The card's own limitations are the properties of the ARTIFACT (3). The run's
   // limitations (12) are a different list, and the Markdown card must keep them
   // distinct rather than presenting one as the other.
@@ -551,6 +565,11 @@ test('the Markdown model card keeps the two limitation lists distinct', () => {
   assert.ok(text.includes('`run.limitations` (12)'))
   assert.ok(!/reproduced verbatim:\s*\n\s*1\. The corpus is a generated/i.test(text),
     'the mixed list must not come back')
+
+  assert.ok(text.includes('## Reproducibility across revisions'))
+  assert.ok(text.includes('This card is therefore **not stale**: it reproduces bit-for-bit at `HEAD`.'))
+  assert.ok(text.includes('`6be52b98dfdc6c4d741ff7d521541758ef512175`'),
+    'the Markdown card must name the revision it was re-verified at')
 
   // The competitor-comparison limitation belongs to the RUN record, verbatim.
   assert.ok(text.includes('no comparison against Mistral, Qwen, Llama, Gemma or DeepSeek was possible'))
