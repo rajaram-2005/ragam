@@ -5,7 +5,7 @@ something does not work, it says so and says why.
 
 **Host used for all of this work:** 2 CPUs · 3.85 GB RAM · **no GPU** ·
 Node v22.22.3 (`node:sqlite` verified) · Python 3.11.2 · NumPy 2.1.3 ·
-pytest 8.3.4. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
+pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
@@ -16,7 +16,7 @@ pytest 8.3.4. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 | `services/core` | `node --test test/*.test.mjs` | **260 / 260** (11 files, ~22 s) |
 | `services/fabric` | `pytest -q` | **256 / 256** (9 files, ~6 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **56 / 56** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 218.97 kB → **66.82 kB gzip**, single chunk, no warnings |
+| `apps/web` build | `vite build` | 217.28 kB → **65.53 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as four jobs split so a
@@ -176,7 +176,7 @@ server (23 tests).
 **Rendering is covered** by `test/render.test.mjs` (15 tests), added after an
 earlier revision of this document recorded the rendering layer as "implemented, not
 fully tested". There is no browser here, and adding `jsdom` would have meant a new
-dependency tree — so instead the test bundles the JSX with `esbuild` (already a Vite
+dependency tree — so instead the test bundles the JSX with `rolldown` (already a Vite 8
 dependency) and renders it with `react-dom/server` (already a `react-dom`
 dependency). **No new dependency**, and no DOM required. `renderToStaticMarkup`
 does not run effects, so nothing hits the network: every component is rendered in
@@ -336,7 +336,7 @@ Ordered by how much it blocks the acceptance criteria.
    currently the one soft failure on the release card.
 5. ~~**Component-level UI tests.**~~ **Done** — `apps/web/test/render.test.mjs`
    server-renders all five areas, the shell, the status card and every shared
-   primitive using `esbuild` and `react-dom/server`, both already installed, so no
+   primitive using `rolldown` and `react-dom/server`, both already installed, so no
    DOM or new dependency was needed. It found the `AREAS` re-export defect (§4).
    What is still absent is *interaction* testing: nothing clicks a button, submits
    a form or follows an effect-driven fetch, because that needs a DOM. The initial

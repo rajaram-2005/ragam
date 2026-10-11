@@ -46,7 +46,9 @@ node services/core/src/server.mjs        # core API on :8790
 cd apps/web && npm install && npm run dev # UI, proxies /api to core
 ```
 
-Requirements: **Node ≥ 22.5** (for `node:sqlite`) and, for the training service,
+Requirements: **Node ≥ 22.12** — the core service needs ≥ 22.5 for `node:sqlite`
+and the web app's build tooling (Vite 8) needs ≥ 22.12, so the higher bound
+applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash

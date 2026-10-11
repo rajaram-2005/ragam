@@ -11,8 +11,8 @@ Every command below was run on the host described in
 |---|---|---|
 | `services/core` | **Node ≥ 22.5.0** (for `node:sqlite`). Zero npm dependencies | Node v22.22.3 |
 | `services/fabric` | **Python ≥ 3.11** + **NumPy** | Python 3.11.2, NumPy 2.1.3 |
-| `apps/web` | Node ≥ 18 and npm (for Vite). 2 runtime packages, 62 installed in total | Vite 5.4.11, React 18.3.1 |
-| Tests | `pytest` for Fabric; nothing extra for core or web | pytest 8.3.4 |
+| `apps/web` | Node ≥ 20.19 or ≥ 22.12 and npm (for Vite 8). 2 runtime packages, 23 installed in total | Vite 8.3.4, React 18.3.1 |
+| Tests | `pytest` for Fabric; nothing extra for core or web | pytest 9.1.1 |
 
 No GPU is required for anything in this repository. No model weights are
 downloaded, and none are needed to run the platform — see §7 for what that means

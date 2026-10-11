@@ -23,7 +23,12 @@ authors = [{ name = "RAJARAM K" }]
 dependencies = ["numpy>=1.26"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+# Floor is 9.0.3, not 8.0: CVE-2025-71176 / GHSA-6w46-j5rx-g56g (medium) affects
+# every pytest below 9.0.3, where the /tmp/pytest-of-{user} temp directory can be
+# pre-created or symlinked by another local user on a shared UNIX host. Test-only
+# and never redistributed, but the declared range should not permit a known-bad
+# version. The fabric suite (256 tests) was verified green under pytest 9.1.1.
+dev = ["pytest>=9.0.3"]
 
 [project.scripts]
 aetheris-fabric = "fabric.server:main"

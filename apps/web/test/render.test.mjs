@@ -7,10 +7,16 @@
  * There is no browser here, and adding jsdom would mean a new dependency tree for
  * tests that mostly assert markup strings.
  *
- * `react-dom/server` is already a dependency of `react-dom`, and `esbuild` is
- * already a dependency of Vite — so this bundles the JSX with esbuild (which
- * `node --test` cannot parse itself) and renders it to static markup. No new
- * dependency, and no DOM required.
+ * `react-dom/server` is already a dependency of `react-dom`, and `rolldown` is
+ * already a dependency of Vite 8 (it replaced esbuild there) — so this bundles the
+ * JSX with rolldown, which `node --test` cannot parse itself, and renders it to
+ * static markup. No dependency is added for the sake of the test, and no DOM is
+ * required.
+ *
+ * This test originally bundled with esbuild, on the reasoning that it was already
+ * present as a Vite dependency. Vite 8 dropped esbuild for oxc/rolldown, so the
+ * bundler was switched rather than esbuild re-added: re-adding it would have
+ * reintroduced GHSA-67mh-4wv8-2f99, the very advisory the upgrade removed.
  *
  * `renderToStaticMarkup` does not run effects, so nothing here hits the network:
  * every component is rendered in its pre-fetch state, which is exactly the state a
@@ -19,10 +25,10 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { build } from 'esbuild'
+import { rolldown } from 'rolldown'
 import { renderToStaticMarkup } from 'react-dom/server'
 import React from 'react'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -74,33 +80,43 @@ async function loadComponents() {
   rmSync(OUT_DIR, { recursive: true, force: true })
   mkdirSync(OUT_DIR, { recursive: true })
 
-  await build({
-    stdin: {
-      contents: [
-        "export { default as ChatArea } from '../src/areas/ChatArea.jsx'",
-        "export { default as ImageArea } from '../src/areas/ImageArea.jsx'",
-        "export { default as VideoArea } from '../src/areas/VideoArea.jsx'",
-        "export { default as PluginsArea } from '../src/areas/PluginsArea.jsx'",
-        "export { default as McpArea } from '../src/areas/McpArea.jsx'",
-        "export { default as App } from '../src/App.jsx'",
-        "export { Shell, StatusCard } from '../src/components/Shell.jsx'",
-        "export { JobTable, JobDetail } from '../src/components/Jobs.jsx'",
-        "export * as ui from '../src/components/ui.jsx'",
-      ].join('\n'),
-      resolveDir: HERE,
-      loader: 'jsx',
-      sourcefile: 'entry.jsx',
-    },
-    bundle: true,
-    outfile: OUT_FILE,
-    format: 'esm',
-    platform: 'node',
-    jsx: 'transform',
+  // rolldown takes a real entry file rather than stdin, so write one into the
+  // scratch directory. It lives under test/, so '../src/...' resolves as before.
+  const entry = resolve(OUT_DIR, 'entry.jsx')
+  writeFileSync(entry, [
+    "export { default as ChatArea } from '../../src/areas/ChatArea.jsx'",
+    "export { default as ImageArea } from '../../src/areas/ImageArea.jsx'",
+    "export { default as VideoArea } from '../../src/areas/VideoArea.jsx'",
+    "export { default as PluginsArea } from '../../src/areas/PluginsArea.jsx'",
+    "export { default as McpArea } from '../../src/areas/McpArea.jsx'",
+    "export { default as App } from '../../src/App.jsx'",
+    "export { Shell, StatusCard } from '../../src/components/Shell.jsx'",
+    "export { JobTable, JobDetail } from '../../src/components/Jobs.jsx'",
+    "export * as ui from '../../src/components/ui.jsx'",
+  ].join('\n'))
+
+  const bundle = await rolldown({
+    input: entry,
     // Keep React external so the bundle shares one instance with this test file;
     // two copies of React would make hooks throw.
     external: ['react', 'react-dom', 'react-dom/server'],
-    logLevel: 'silent',
+    resolve: { extensions: ['.jsx', '.js', '.mjs'] },
+    onwarn() {}, // rolldown warns about the CJS interop shim; it is expected here
   })
+  const { output } = await bundle.generate({ format: 'esm' })
+
+  // React is CommonJS. Marking it external makes rolldown emit a bare
+  // `require("react")` into an ESM bundle, where `require` does not exist. Prepend
+  // the standard Node shim so the external CJS import resolves. This is the
+  // documented remedy (rolldown.rs/in-depth/bundling-cjs#require-external-modules)
+  // and it keeps React external, which matters: two copies of React make hooks throw.
+  const shim = [
+    "import { createRequire as __aetherisCreateRequire } from 'node:module';",
+    'const require = __aetherisCreateRequire(import.meta.url);',
+    '',
+  ].join('\n')
+  writeFileSync(OUT_FILE, shim + output[0].code)
+  await bundle.close()
 
   return import(pathToFileURL(OUT_FILE).href)
 }

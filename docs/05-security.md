@@ -421,9 +421,56 @@ Stated plainly, because an unstated gap is worse than a stated one.
    not an authn mechanism.
 4. **No rate limiting.** A local client can exhaust the media queue or the God Core
    budget. Budgets bound a single task, not aggregate load.
-5. **No dependency vulnerability scanning** was run. All 62 web packages are
-   permissively licensed (§ [NOTICES](../third-party/NOTICES.md)), but licence
-   compatibility is not the same as CVE status.
+5. **Dependency vulnerability scanning has been run, but it is not automated.**
+   Results, and what they cost:
+
+   | Tree | Tool | Result |
+   |---|---|---|
+   | `apps/web` production deps | `npm audit --omit=dev` | **0 vulnerabilities** |
+   | `apps/web` all deps | `npm audit` | **0 vulnerabilities** |
+   | `services/core` | — | no npm dependencies at all, so nothing to scan |
+   | `services/fabric` runtime | GitHub Advisory Database | numpy 2.1.3: 8 advisories exist for numpy, every one bounded at ≤ 1.22 or below — **none covers 2.1.3** |
+   | `services/fabric` test tooling | GitHub Advisory Database | pytest **was affected**; pluggy, iniconfig, packaging clean |
+
+   Getting the web tree to zero was not free. At `vite@5.4.11` `npm audit` reported
+   **2 vulnerabilities (1 high, 1 moderate)**: thirteen advisories against Vite —
+   `server.fs.deny` bypasses, path traversal in optimized-deps `.map` handling,
+   dev-server request forgery — and one against esbuild's dev server
+   (GHSA-67mh-4wv8-2f99). A patch bump to `5.4.21` cleared ten of the thirteen;
+   the remaining three needed `vite@8.3.4`, a major upgrade, plus
+   `@vitejs/plugin-react@6.1.2`.
+
+   Two consequences of that upgrade are recorded rather than glossed over:
+
+   - **Weak copyleft entered the build tree.** Vite 8 pulls in `lightningcss`,
+     which is MPL-2.0 — twelve entries. All twelve are development dependencies and
+     none is redistributed; the five production entries are all MIT. CI asserts that
+     any weak-copyleft package stays `dev: true`. See
+     § [NOTICES](../third-party/NOTICES.md) §3 and §5. Before the upgrade the tree
+     contained no copyleft of any kind, so this is a real change in kind, not only in
+     count.
+   - **The render test lost its bundler.** It bundled JSX with esbuild on the grounds
+     that esbuild was already a Vite dependency; Vite 8 removed esbuild for
+     oxc/rolldown. Re-adding esbuild would have reintroduced the very advisory the
+     upgrade removed, so the test was switched to `rolldown` instead.
+
+   Vite 8 also produced a smaller, faster build: 217.28 kB (65.53 kB gzip) against
+   218.97 kB (66.82 kB), in 145 ms against 1.13 s.
+
+   For pytest, CVE-2025-71176 / GHSA-6w46-j5rx-g56g (medium) affects every version
+   below 9.0.3: the `/tmp/pytest-of-{user}` directory can be pre-created or
+   symlinked by another local user on a shared UNIX host, allowing denial of service
+   or privilege gain. It is test-only tooling and is never redistributed, and
+   exploiting it needs a second local account. `services/fabric/pyproject.toml`
+   nonetheless raised its floor from `pytest>=8.0` to `pytest>=9.0.3`, because a
+   declared range that permits a known-bad version is a defect in the declaration
+   even when the installed copy happens to be safe. All 256 Fabric tests were
+   verified green under pytest 9.1.1 before the floor moved.
+
+   **What is still open:** scanning here was a manual, one-off run. CI does not
+   execute `npm audit` or query the advisory database, so a newly published
+   advisory would not fail the build. Adding a scheduled audit job is the obvious
+   next step and has not been done.
 6. **FreeLLMAPI was never exercised live.** No key was available, so its error
    handling is code-complete and contract-derived, not integration-tested.
 7. **Model-weight licences for any future fine-tuned base are unassessed.** No

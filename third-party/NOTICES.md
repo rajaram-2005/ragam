@@ -129,7 +129,7 @@ audited refusal with an explicit limitation.
 
 ## 2. Runtime dependencies (shipped in the browser bundle)
 
-Only these reach production. The bundle is 218.97 kB (66.82 kB gzipped), a single
+Only these reach production. The bundle is 217.28 kB (65.53 kB gzipped), a single
 chunk, and `apps/web/test/structure.test.mjs` fails if it grows past 400 kB.
 
 | Package | Version | Licence | In the bundle? | Copyright |
@@ -161,8 +161,10 @@ only, including `node:sqlite`.
 
 ## 3. Development and build dependencies (not shipped)
 
-All but the five packages in §2 are build-time tooling: Vite, Rollup, esbuild,
-Babel, PostCSS and their transitive dependencies.
+All but the five packages in §2 are build-time tooling. Since the Vite 8 upgrade
+the chain is **Vite 8 → rolldown (bundler) → oxc (JSX/TS transform) → lightningcss
+(CSS)**, plus PostCSS. Vite 5 used Rollup, esbuild and Babel; those are gone, which
+is why the entry count below is less than half what it was.
 
 ### How many packages there are
 
@@ -171,33 +173,33 @@ inventory becomes wrong on someone else's machine.
 
 | Measure | Count | Portable? |
 |---|---|---|
-| Entries in the committed `package-lock.json` | **109** | yes |
-| …of which platform-independent | 59 | yes |
-| …of which platform-specific native binaries | 50 | yes |
-| Actually installed on this host (linux/x64, glibc) | 62 | **no** |
+| Entries in the committed `package-lock.json` | **46** | yes |
+| …of which platform-independent | 19 | yes |
+| …of which platform-specific native binaries | 27 | yes |
+| Actually installed on this host (linux/x64, glibc) | 23 | **no** |
 
-The installed figure is host-specific because 50 entries are per-platform native
-binaries (`@esbuild/darwin-arm64`, `@rollup/rollup-win32-x64-msvc`, …) and npm
-selects among them at install time. Four match linux/x64:
-`@esbuild/linux-x64`, `@napi-rs/lzma-linux-x64-gnu`,
-`@rollup/rollup-linux-x64-gnu` and `@rollup/rollup-linux-x64-musl`. The lockfile
+The installed figure is host-specific because 27 entries are per-platform native
+binaries (`@rolldown/binding-darwin-arm64`, `lightningcss-win32-x64-msvc`, …) and
+npm selects among them at install time. Four match linux/x64:
+`@rolldown/binding-linux-x64-gnu`, `@rolldown/binding-linux-x64-musl`,
+`lightningcss-linux-x64-gnu` and `lightningcss-linux-x64-musl`. The lockfile
 carries `os` and `cpu` fields but **no `libc` field**, so npm cannot exclude the
-musl variant from the lockfile alone and resolves it by probing the system. A
-glibc host installs 62; a host where npm cannot distinguish the two may install
-63. The lockfile counts are therefore the ones stated as fact, and the installed
-count is stated as a property of this machine.
+musl variant from the lockfile alone and resolves it by probing the system. Here
+both gnu and musl variants of each are installed; a different host may install a
+different subset. The lockfile counts are therefore the ones stated as fact, and
+the installed count is stated as a property of this machine.
 
 ### Licence distribution
 
-Across all **109** lockfile entries, read from each package's own metadata — so it
+Across all **46** lockfile entries, read from each package's own metadata — so it
 covers packages that are not installed on this host but would be on another:
 
-| Licence | Count | Examples |
+| Licence | Count | Packages |
 |---|---|---|
-| MIT | 101 | vite, rollup, esbuild, postcss, @babel/*, @vitejs/plugin-react, browserslist, debug, json5, nanoid, ms, jsesc, react-refresh, … |
-| ISC | 5 | electron-to-chromium, lru-cache, picocolors, semver, yallist |
-| Apache-2.0 | 1 | baseline-browser-mapping |
-| CC-BY-4.0 | 1 | caniuse-lite (**data**, not code) |
+| MIT | 31 | vite, rolldown, @rolldown/binding-* (16), @rolldown/pluginutils, @oxc-project/types, @vitejs/plugin-react, postcss, react, react-dom, scheduler, loose-envify, js-tokens, nanoid, picomatch, fdir, tinyglobby, fsevents |
+| **MPL-2.0** | **12** | **lightningcss** and its 11 platform binaries |
+| Apache-2.0 | 1 | detect-libc |
+| ISC | 1 | picocolors |
 | BSD-3-Clause | 1 | source-map-js |
 
 Every entry declares a licence; none is unknown. Reproduce this table from the
@@ -210,18 +212,37 @@ const e=Object.entries(l.packages).filter(([k])=>k!=='');
 const by={};
 for(const [k,v] of e){const x=v.license||'(none)';(by[x]??=[]).push(k.replace('node_modules/',''))}
 for(const [x,n] of Object.entries(by).sort((a,b)=>b[1].length-a[1].length))
-  console.log(x.padEnd(12), String(n.length).padStart(3), '|', n.slice(0,6).join(', '));
+  console.log(x.padEnd(13), String(n.length).padStart(3), '|', n.slice(0,6).join(', '));
 console.log('total:', e.length,
   '| platform-specific:', e.filter(([,v])=>v.os||v.cpu).length)"
 ```
 
 `services/core/test/docs.test.mjs` runs the equivalent assertions in CI, including
-that no entry anywhere in the lockfile carries a copyleft licence and that none is
-missing a licence declaration.
+that no entry carries a **strong** copyleft licence, that any weak-copyleft entry
+is development-only, and that none is missing a licence declaration.
 
-`caniuse-lite` is CC-BY-4.0 **data** consumed by `browserslist` at build time to
-select transpilation targets. It is not redistributed in the bundle and no caniuse
-data appears in the shipped output. Attribution is recorded here in any case.
+### MPL-2.0 in the build toolchain
+
+**This is weak (file-level) copyleft and it is disclosed rather than buried.** The
+twelve MPL-2.0 entries are all `lightningcss`, which Vite 8 uses to transform CSS.
+Three things make it acceptable here:
+
+1. **Every one of the twelve is a development dependency** (`"dev": true` in the
+   lockfile). CI asserts this, so it cannot silently become a runtime dependency.
+2. **Nothing MPL reaches the distributed artifact.** The five non-dev entries are
+   `react`, `react-dom`, `scheduler`, `loose-envify` and `js-tokens` — all MIT —
+   and the built bundle contains only react, react-dom and scheduler (verified in
+   CI by scanning `dist/`). The shipped CSS is this project's own stylesheet after
+   transformation, not lightningcss source.
+3. MPL-2.0 obligations attach to *distributing the covered files*, which this
+   project does not do.
+
+**No GPL, AGPL or LGPL code is present anywhere in the dependency tree.** That
+sentence was true before the Vite 8 upgrade and remains true after it: the upgrade
+introduced weak copyleft in build tooling, not strong copyleft anywhere.
+
+`caniuse-lite` (CC-BY-4.0 **data**) was present under Vite 5 via `browserslist`.
+Vite 8 does not depend on it and it is no longer in the tree.
 
 ### Other components
 
@@ -239,7 +260,7 @@ Python test tooling (development only, not redistributed):
 
 | Package | Version | Licence |
 |---|---|---|
-| pytest | 8.3.4 | MIT |
+| pytest | 9.1.1 | MIT |
 | pluggy | 1.6.0 | MIT |
 | iniconfig | 2.3.1 | MIT |
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
@@ -391,11 +412,25 @@ This repository (`ragam`) is MIT, "Copyright (c) 2026 RAJARAM K".
 - MIT ← BSD-3-Clause: compatible, notice preserved above.
 - MIT ← Apache-2.0 (build-time only, not redistributed): compatible for build
   tooling; no Apache-2.0 code is distributed in any artifact.
-- CC-BY-4.0 (build-time data only, not redistributed): attribution recorded.
+- MIT ← MPL-2.0 (build-time only, not redistributed): compatible. MPL-2.0 is
+  file-level copyleft and its obligations attach to distributing the covered
+  files. All twelve MPL-2.0 entries are `lightningcss` and its platform binaries,
+  every one a development dependency, and none is redistributed. See §3.
 
 **No GPL, AGPL or LGPL code is present anywhere in the dependency tree.** No
-copyleft obligation is triggered by building, running or redistributing this
-project.
+*strong* copyleft obligation is triggered by building, running or redistributing
+this project.
+
+Weak copyleft (MPL-2.0) entered the tree with the Vite 8 upgrade, in build tooling
+only. It triggers no obligation here because the covered files are never
+distributed: the shipped bundle contains react, react-dom and scheduler, all MIT.
+This is stated explicitly rather than left to the "no GPL" sentence above, because
+"no strong copyleft" and "no copyleft" are different claims and only the first is
+true of this tree.
+
+`caniuse-lite` (CC-BY-4.0 data) was consumed at build time by `browserslist` under
+Vite 5 and is no longer in the tree under Vite 8; the attribution note in §3 is
+kept for the record of what the earlier revision depended on.
 
 ---
 

@@ -329,9 +329,11 @@ test('the documented dependency counts match the committed lockfile', () => {
   const entries = lockfileEntries()
   const platformSpecific = entries.filter(([, entry]) => entry.os || entry.cpu)
 
-  assert.equal(entries.length, 109, 'lockfile entries changed')
-  assert.equal(platformSpecific.length, 50, 'platform-specific binaries changed')
-  assert.equal(entries.length - platformSpecific.length, 59, 'platform-independent count changed')
+  // Vite 8 replaced Rollup/esbuild/Babel with rolldown/oxc/lightningcss, which cut
+  // the tree by more than half. These are the measured figures for that tree.
+  assert.equal(entries.length, 46, 'lockfile entries changed')
+  assert.equal(platformSpecific.length, 27, 'platform-specific binaries changed')
+  assert.equal(entries.length - platformSpecific.length, 19, 'platform-independent count changed')
 
   const manifest = JSON.parse(readFileSync(resolve(REPO, 'apps/web/package.json'), 'utf8'))
   assert.deepEqual(Object.keys(manifest.dependencies).sort(), ['react', 'react-dom'],
@@ -340,7 +342,7 @@ test('the documented dependency counts match the committed lockfile', () => {
   // NOTICES must present the portable numbers as fact and the installed number as a
   // property of one machine, or a reader on another host gets a wrong inventory.
   const notices = squash(doc.notices())
-  for (const claim of ['| **109** | yes |', '59 | yes', '50 | yes', '**no** |']) {
+  for (const claim of ['| **46** | yes |', '19 | yes', '27 | yes', '**no** |']) {
     assert.ok(notices.includes(claim), `NOTICES must state ${claim}`)
   }
   assert.ok(notices.includes('no `libc` field'),
@@ -348,17 +350,47 @@ test('the documented dependency counts match the committed lockfile', () => {
   assert.ok(notices.includes('**No GPL, AGPL or LGPL code is present anywhere in the dependency tree.**'))
 })
 
-test('no dependency carries a copyleft licence', () => {
+test('no dependency carries strong copyleft, and weak copyleft is dev-only', () => {
   // Scans every lockfile entry, including other-platform binaries that are not
   // installed here: a licence obligation follows the dependency tree, and a Windows
   // or macOS build would install them.
   const entries = lockfileEntries()
-  assert.ok(entries.length > 62, 'the lockfile should list more entries than any one host installs')
+  // 23 install on a linux/x64 glibc host; the lockfile must list more than any one
+  // host installs, or the scan is silently narrower than the tree it claims to cover.
+  assert.ok(entries.length > 23, 'the lockfile should list more entries than any one host installs')
 
-  const copyleft = entries
+  // STRONG copyleft would be incompatible with relicensing this MIT project.
+  const strong = entries
     .filter(([, entry]) => /GPL|AGPL|LGPL|SSPL|BUSL|Commons Clause/i.test(String(entry.license || '')))
     .map(([key, entry]) => `${key}: ${entry.license}`)
-  assert.deepEqual(copyleft, [], `copyleft dependencies would break MIT compatibility: ${copyleft.join(', ')}`)
+  assert.deepEqual(strong, [], `strong-copyleft dependencies would break MIT compatibility: ${strong.join(', ')}`)
+
+  // WEAK (file-level) copyleft is present: lightningcss, pulled in by Vite 8. It is
+  // acceptable only while it stays out of the distributed artifact, so pin that.
+  // This replaces a test that claimed "no copyleft anywhere" — which passed only
+  // because its regex happened not to include MPL. A claim true by omission is not
+  // a claim worth making.
+  const weak = entries.filter(([, entry]) => /MPL|EPL|CDDL/i.test(String(entry.license || '')))
+  assert.ok(weak.length > 0, 'lightningcss is MPL-2.0; if this is empty the scan has stopped matching')
+  const weakNonDev = weak
+    .filter(([, entry]) => entry.dev !== true)
+    .map(([key, entry]) => `${key}: ${entry.license}`)
+  assert.deepEqual(weakNonDev, [],
+    `weak-copyleft packages must be development-only, never redistributed: ${weakNonDev.join(', ')}`)
+
+  // And it must be disclosed in the notices, not merely tolerated by a test.
+  const notices = squash(doc.notices())
+  assert.ok(notices.includes('MPL-2.0'), 'NOTICES must disclose the MPL-2.0 dependency')
+  assert.ok(notices.includes('### MPL-2.0 in the build toolchain'),
+    'NOTICES must explain why weak copyleft in build tooling is acceptable')
+
+  // Every production dependency must be permissive, since those are what ship.
+  const production = entries.filter(([, entry]) => entry.dev !== true)
+  assert.ok(production.length >= 5, `expected the runtime tree, found ${production.length}`)
+  for (const [key, entry] of production) {
+    assert.match(String(entry.license), /^(MIT|BSD-\d+-Clause|ISC|Apache-2\.0|Unlicense|0BSD)$/,
+      `${key} ships to users and must carry a permissive licence, got ${entry.license}`)
+  }
 
   const unlicensed = entries.filter(([, entry]) => !entry.license).map(([key]) => key)
   assert.deepEqual(unlicensed, [], `every dependency must declare a licence: ${unlicensed.join(', ')}`)
