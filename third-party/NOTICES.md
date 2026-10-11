@@ -161,36 +161,79 @@ only, including `node:sqlite`.
 
 ## 3. Development and build dependencies (not shipped)
 
-`apps/web` installs 62 packages in total; all but the five above are build-time
-tooling (Vite, Rollup, esbuild, Babel, PostCSS and their transitive dependencies).
-Licence distribution across the full installed tree, read from each package's own
-metadata:
+All but the five packages in §2 are build-time tooling: Vite, Rollup, esbuild,
+Babel, PostCSS and their transitive dependencies.
 
-| Licence | Count | Packages |
+### How many packages there are
+
+Two different numbers are correct, and conflating them is how a dependency
+inventory becomes wrong on someone else's machine.
+
+| Measure | Count | Portable? |
 |---|---|---|
-| MIT | 50 | vite, rollup, esbuild, postcss, @babel/*, @vitejs/plugin-react, browserslist, debug, json5, nanoid, ms, jsesc, react-refresh, … |
-| ISC | 6 | semver, picocolors, lru-cache, yallist, electron-to-chromium, … |
-| Apache-2.0 | 1 | baseline-browser-mapping |
-| BSD-3-Clause | 1 | source-map-js |
-| CC-BY-4.0 | 1 | caniuse-lite (**data**, not code) |
+| Entries in the committed `package-lock.json` | **109** | yes |
+| …of which platform-independent | 59 | yes |
+| …of which platform-specific native binaries | 50 | yes |
+| Actually installed on this host (linux/x64, glibc) | 62 | **no** |
 
-Reproduce this table with:
+The installed figure is host-specific because 50 entries are per-platform native
+binaries (`@esbuild/darwin-arm64`, `@rollup/rollup-win32-x64-msvc`, …) and npm
+selects among them at install time. Four match linux/x64:
+`@esbuild/linux-x64`, `@napi-rs/lzma-linux-x64-gnu`,
+`@rollup/rollup-linux-x64-gnu` and `@rollup/rollup-linux-x64-musl`. The lockfile
+carries `os` and `cpu` fields but **no `libc` field**, so npm cannot exclude the
+musl variant from the lockfile alone and resolves it by probing the system. A
+glibc host installs 62; a host where npm cannot distinguish the two may install
+63. The lockfile counts are therefore the ones stated as fact, and the installed
+count is stated as a property of this machine.
+
+### Licence distribution
+
+Across all **109** lockfile entries, read from each package's own metadata — so it
+covers packages that are not installed on this host but would be on another:
+
+| Licence | Count | Examples |
+|---|---|---|
+| MIT | 101 | vite, rollup, esbuild, postcss, @babel/*, @vitejs/plugin-react, browserslist, debug, json5, nanoid, ms, jsesc, react-refresh, … |
+| ISC | 5 | electron-to-chromium, lru-cache, picocolors, semver, yallist |
+| Apache-2.0 | 1 | baseline-browser-mapping |
+| CC-BY-4.0 | 1 | caniuse-lite (**data**, not code) |
+| BSD-3-Clause | 1 | source-map-js |
+
+Every entry declares a licence; none is unknown. Reproduce this table from the
+committed lockfile — no install step, so the result is identical on any host:
 
 ```bash
-cd apps/web && npm install && node -e "
-const fs=require('fs'),path=require('path');const out=[];
-(function scan(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){if(!e.isDirectory())continue;
-const p=path.join(d,e.name);if(e.name.startsWith('@')){scan(p);continue}
-const f=path.join(p,'package.json');if(fs.existsSync(f)){const j=JSON.parse(fs.readFileSync(f,'utf8'));
-out.push([j.name,j.version,j.license||'(none)'])}}})('node_modules');
-const by={};for(const[n,v,l]of out){(by[l]??=[]).push(n)}
-for(const[l,ns]of Object.entries(by).sort())console.log(l,ns.length)"
+node -e "
+const l=require('./apps/web/package-lock.json');
+const e=Object.entries(l.packages).filter(([k])=>k!=='');
+const by={};
+for(const [k,v] of e){const x=v.license||'(none)';(by[x]??=[]).push(k.replace('node_modules/',''))}
+for(const [x,n] of Object.entries(by).sort((a,b)=>b[1].length-a[1].length))
+  console.log(x.padEnd(12), String(n.length).padStart(3), '|', n.slice(0,6).join(', '));
+console.log('total:', e.length,
+  '| platform-specific:', e.filter(([,v])=>v.os||v.cpu).length)"
 ```
 
+`services/core/test/docs.test.mjs` runs the equivalent assertions in CI, including
+that no entry anywhere in the lockfile carries a copyleft licence and that none is
+missing a licence declaration.
+
 `caniuse-lite` is CC-BY-4.0 **data** consumed by `browserslist` at build time to
-select transpilation targets. It is not redistributed in the bundle and no
-caniuse data appears in the shipped output. Attribution is recorded here in any
-case.
+select transpilation targets. It is not redistributed in the bundle and no caniuse
+data appears in the shipped output. Attribution is recorded here in any case.
+
+### Other components
+
+`services/core` has **zero** npm dependencies. It runs on Node's standard library
+only, including `node:sqlite`. CI asserts this property, because it is what keeps
+the core auditable and free of a supply chain.
+
+`services/fabric` has **one** runtime dependency:
+
+| Package | Version | Licence | Copyright |
+|---|---|---|---|
+| numpy | 2.1.3 | BSD-3-Clause | Copyright (c) 2005-2024, NumPy Developers |
 
 Python test tooling (development only, not redistributed):
 

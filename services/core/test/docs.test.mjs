@@ -85,25 +85,26 @@ function varsReadByCode() {
 }
 
 /**
- * Packages actually present on disk. The lockfile lists 109 entries, 50 of which are
- * other-platform binaries (@esbuild/darwin-arm64, @rollup/rollup-win32-x64-msvc, …)
- * that npm records but does not install here. Counting lockfile entries would report
- * a number that is true of the lockfile and false of the machine.
+ * Dependency counts derived from the COMMITTED lockfile.
+ *
+ * The first version of this counted directories under apps/web/node_modules and
+ * asserted 62. That broke CI for two separate reasons, and both were real defects
+ * in the test rather than in the code:
+ *
+ *  1. The `core` job has no install step — services/core has zero npm dependencies
+ *     and asserting that property is the point of the job — so node_modules did not
+ *     exist and readdirSync threw ENOENT. A test of the core service must not
+ *     require the web app to be installed.
+ *  2. The installed count is host-specific anyway. 50 lockfile entries are
+ *     per-platform native binaries; four match linux/x64, and the lockfile carries
+ *     `os` and `cpu` but NO `libc` field, so npm resolves glibc-vs-musl by probing
+ *     the system. A glibc host installs 62, another may install 63.
+ *
+ * So the portable facts are the lockfile's own, and those are what is asserted.
  */
-function installedPackages() {
-  const root = resolve(REPO, 'apps/web/node_modules')
-  let count = 0
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    if (entry.name.startsWith('.')) continue
-    if (entry.name.startsWith('@')) {
-      for (const inner of readdirSync(resolve(root, entry.name), { withFileTypes: true })) {
-        if (!inner.name.startsWith('.')) count += 1
-      }
-    } else if (entry.isDirectory()) {
-      count += 1
-    }
-  }
-  return count
+function lockfileEntries() {
+  const lock = JSON.parse(readFileSync(resolve(REPO, 'apps/web/package-lock.json'), 'utf8'))
+  return Object.entries(lock.packages).filter(([key]) => key !== '')
 }
 
 // ---------------------------------------------------------------------------
@@ -324,15 +325,26 @@ test('the Fabric service binds loopback by default, as documented', () => {
 // Dependency and licence facts
 // ---------------------------------------------------------------------------
 
-test('the documented web dependency count matches what is installed', () => {
-  assert.equal(installedPackages(), 62, 'installed package count changed')
+test('the documented dependency counts match the committed lockfile', () => {
+  const entries = lockfileEntries()
+  const platformSpecific = entries.filter(([, entry]) => entry.os || entry.cpu)
+
+  assert.equal(entries.length, 109, 'lockfile entries changed')
+  assert.equal(platformSpecific.length, 50, 'platform-specific binaries changed')
+  assert.equal(entries.length - platformSpecific.length, 59, 'platform-independent count changed')
 
   const manifest = JSON.parse(readFileSync(resolve(REPO, 'apps/web/package.json'), 'utf8'))
   assert.deepEqual(Object.keys(manifest.dependencies).sort(), ['react', 'react-dom'],
     'only react and react-dom may be runtime dependencies')
 
+  // NOTICES must present the portable numbers as fact and the installed number as a
+  // property of one machine, or a reader on another host gets a wrong inventory.
   const notices = squash(doc.notices())
-  assert.ok(notices.includes('installs 62 packages in total'), 'NOTICES must state the real installed count')
+  for (const claim of ['| **109** | yes |', '59 | yes', '50 | yes', '**no** |']) {
+    assert.ok(notices.includes(claim), `NOTICES must state ${claim}`)
+  }
+  assert.ok(notices.includes('no `libc` field'),
+    'NOTICES must explain why the installed count is host-specific')
   assert.ok(notices.includes('**No GPL, AGPL or LGPL code is present anywhere in the dependency tree.**'))
 })
 
@@ -340,9 +352,8 @@ test('no dependency carries a copyleft licence', () => {
   // Scans every lockfile entry, including other-platform binaries that are not
   // installed here: a licence obligation follows the dependency tree, and a Windows
   // or macOS build would install them.
-  const lock = JSON.parse(readFileSync(resolve(REPO, 'apps/web/package-lock.json'), 'utf8'))
-  const entries = Object.entries(lock.packages).filter(([key]) => key !== '')
-  assert.ok(entries.length > 62, 'the lockfile should list more entries than are installed here')
+  const entries = lockfileEntries()
+  assert.ok(entries.length > 62, 'the lockfile should list more entries than any one host installs')
 
   const copyleft = entries
     .filter(([, entry]) => /GPL|AGPL|LGPL|SSPL|BUSL|Commons Clause/i.test(String(entry.license || '')))
