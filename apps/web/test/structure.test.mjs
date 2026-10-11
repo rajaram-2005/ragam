@@ -256,3 +256,72 @@ test('the built bundle stays small enough that a hidden dependency would show', 
   const bytes = readFileSync(join(dist, scripts[0])).byteLength
   assert.ok(bytes < 400 * 1024, `bundle grew to ${(bytes / 1024).toFixed(0)} KB — an unplanned dependency is likely`)
 })
+
+// ---------------------------------------------------------------------------
+// A re-export is not an import.
+//
+// `export { X } from './x.js'` forwards a binding to IMPORTERS; it does not create
+// one in this module's scope. Shell.jsx did exactly that and then called
+// AREAS.map(...), so the whole interface threw "AREAS is not defined" on render.
+//
+// The test above ("the navigation renders AREAS and nothing else") passed while the
+// app was broken, because it asserted shell.includes("from '../areas.js'") — and a
+// re-export line contains that string too. Compile-time and source-text checks
+// cannot see this class of bug; only rendering can. render.test.mjs catches the
+// instance, and this catches the class, so a new one cannot be introduced silently.
+// ---------------------------------------------------------------------------
+
+function sourceFiles(dir) {
+  const out = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...sourceFiles(path))
+    else if (/\.(js|jsx|mjs)$/.test(entry.name)) out.push(path)
+  }
+  return out
+}
+
+test('no module re-exports a name it also uses locally', () => {
+  const offenders = []
+
+  for (const path of sourceFiles(srcDir)) {
+    const text = readFileSync(path, 'utf8')
+
+    // Names forwarded by `export { A, B as C } from '...'` — these have no local binding.
+    const forwarded = new Set()
+    for (const match of text.matchAll(/^export \{([^}]*)\} from/gm)) {
+      for (const part of match[1].split(',')) {
+        const name = part.trim()
+        if (name) forwarded.add(name.split(/\s+as\s+/).pop().trim())
+      }
+    }
+    if (forwarded.size === 0) continue
+
+    // Everything except the re-export lines: this is where a local use would appear.
+    const body = text.replace(/^export \{[^}]*\} from.*$/gm, '')
+
+    for (const name of forwarded) {
+      // A local import of the same name makes the use legal, so only flag names that
+      // are forwarded and referenced but never imported or declared.
+      const imported = new RegExp(`^import\\s[^\\n]*\\b${name}\\b`, 'm').test(body)
+      const declared = new RegExp(`^(?:const|let|var|function|class)\\s+${name}\\b`, 'm').test(body)
+      const used = new RegExp(`\\b${name}\\b`).test(body)
+      if (used && !imported && !declared) {
+        offenders.push(`${path.replace(srcDir + '/', '')} re-exports '${name}' but also uses it locally`)
+      }
+    }
+  }
+
+  assert.deepEqual(offenders, [], offenders.join('\n'))
+})
+
+test('Shell.jsx imports the area list, not only re-exports it', () => {
+  // The specific regression, pinned directly: the navigation calls AREAS.map, so
+  // AREAS must be bound in this module's own scope.
+  const shell = read('components/Shell.jsx')
+  assert.ok(
+    /^import \{[^}]*\bAREAS\b[^}]*\} from '\.\.\/areas\.js'/m.test(shell),
+    'Shell.jsx must IMPORT AREAS; a re-export alone leaves AREAS.map() unbound at render time',
+  )
+  assert.ok(shell.includes('AREAS.map'), 'the navigation must still be generated from AREAS')
+})

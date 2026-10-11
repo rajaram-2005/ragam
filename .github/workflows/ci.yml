@@ -138,7 +138,7 @@ jobs:
         working-directory: apps/web
         run: npm ci
 
-      - name: Test (54 tests)
+      - name: Test (56 tests)
         working-directory: apps/web
         run: node --test test/*.test.mjs
 

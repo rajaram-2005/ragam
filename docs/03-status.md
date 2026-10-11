@@ -9,13 +9,13 @@ pytest 8.3.4. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 570 passing, 0 failing.**
+**Test totals: 572 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
 | `services/core` | `node --test test/*.test.mjs` | **260 / 260** (11 files, ~22 s) |
 | `services/fabric` | `pytest -q` | **256 / 256** (9 files, ~6 s) |
-| `apps/web` | `node --test test/*.test.mjs` | **54 / 54** (4 files, ~1 s) |
+| `apps/web` | `node --test test/*.test.mjs` | **56 / 56** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 218.97 kB → **66.82 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
@@ -60,7 +60,7 @@ instead.
 |---|---|---|---|
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
-| 3 | Unified app, five areas | **Complete** | `apps/web`; 54 tests including "exactly five areas", "no internal service is a navigation entry", and server-rendered markup for all five areas |
+| 3 | Unified app, five areas | **Complete** | `apps/web`; 56 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
 | 4 | Local inference with ≥1 real local LM | **Blocked — requires weights** | Adapter implemented and tested against a real loopback server; no LM is installed on this host |
 | 5 | FreeLLMAPI online integration | **Implemented — requires external credentials** | Client written to contracts read from source; no key here |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
@@ -163,7 +163,7 @@ experiment ledger (baseline → experiment → verdict), metrics with a latency 
 floor, DataForge, the Node↔Python text-parity fixture, model cards, and the HTTP
 server (23 tests).
 
-### `apps/web` — Implemented and tested (54 tests)
+### `apps/web` — Implemented and tested (56 tests)
 
 | Area | Status |
 |---|---|

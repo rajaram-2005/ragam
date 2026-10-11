@@ -463,9 +463,9 @@ test('the status doc reports the real test totals', () => {
   const status = squash(doc.status())
   assert.ok(status.includes('**260 / 260**'), 'core total must be stated')
   assert.ok(status.includes('**256 / 256**'), 'fabric total must be stated')
-  assert.ok(status.includes('**54 / 54**'), 'web total must be stated')
-  assert.ok(status.includes('570 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('570 tests: core 260, web 54, fabric 256'),
+  assert.ok(status.includes('**56 / 56**'), 'web total must be stated')
+  assert.ok(status.includes('572 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('572 tests: core 260, web 56, fabric 256'),
     'README must state the same totals')
   assert.ok(status.includes('(11 files'), 'the file count must move with the suite')
 })
