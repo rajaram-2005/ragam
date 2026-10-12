@@ -22,6 +22,7 @@ from fabric.lm.card import (
     build_provenance,
     candidate_from_report,
     limitations_from_report,
+    model_limitations,
     metrics_from_report,
     register_from_report,
     requirements_for_language_model,
@@ -254,8 +255,31 @@ def test_provenance_records_the_conditions_the_metrics_came_from():
     assert payload["status"] == "completed"
 
 
+def test_the_card_itself_lists_limitations_not_only_the_provenance():
+    """A card with an empty `limitations` field reads as "there are none", and the
+    card is where a reader looks. The model-level list must be on the card, and the
+    evaluation-level list on the provenance -- as the retriever card does it."""
+    manager = ModelReleaseManager()
+    card, _ = candidate_from_report(make_report(), manager, version="0.1.0")
+    assert len(card.limitations) >= 4, card.limitations
+    joined = " ".join(card.limitations).lower()
+    assert "not derived from any pretrained base model" in joined
+    assert "/api/chat" in joined
+    assert card.provenance.limitations, "the provenance must still carry its own list"
+    assert not set(card.limitations) & set(card.provenance.limitations), "the two lists overlap"
+
+
+def test_the_model_limitations_are_derived_from_the_report():
+    """They must move with the artifact, not be a fixed paragraph."""
+    small = " ".join(model_limitations(make_report(parameters=17_056)))
+    large = " ".join(model_limitations(make_report(parameters=359_136)))
+    assert "17,056" in small
+    assert "359,136" in large
+    assert small != large
+
+
 def test_the_card_carries_the_limits_of_the_experiment():
-    """A card that lists no limitations for a 248K-parameter from-scratch model
+    """A card that lists no limitations for a 359K-parameter from-scratch model
     would be misleading by omission."""
     limitations = limitations_from_report(make_report())
     joined = " ".join(limitations).lower()

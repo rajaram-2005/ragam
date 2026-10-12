@@ -14,7 +14,7 @@ five product areas, never presented as one of them.
 | `fabric/dataforge.py` | Deterministic data quality scoring, dedupe, splitting, contamination checking |
 | `fabric/dataset.py` | Generated retrieval corpus with BM25-mined hard negatives |
 | `fabric/dual_encoder.py` | The Aetheris Lite retriever, trained from scratch on NumPy |
-| `fabric/lm/model.py` | A decoder-only transformer with a hand-derived backward pass, in pure NumPy |
+| `fabric/lm/model.py` | A 359K-parameter decoder-only transformer with a hand-derived backward pass, in pure NumPy |
 | `fabric/lm/train.py` | AdamW, warmup+cosine, gradient clipping, and the provenance a run needs to be re-derived |
 | `fabric/lm/evaluate.py` | Held-out perplexity against computed uniform/unigram/bigram baselines |
 | `fabric/lm/card.py` | The Aetheris Lite release policy, driven through the existing `ModelReleaseManager` |

@@ -9,6 +9,17 @@ table.
 
 ---
 
+## A note on the language model
+
+`fabric/lm/` trains a character-level language model and evaluates it with the same
+discipline used here: uniform, unigram and bigram baselines are **computed from the
+same training statistics** and scored on the **same held-out tokens**, and the
+verdict (`perplexityVsBigram`) is calculated rather than asserted. Nothing in this
+document's retrieval results involves that model, and no cross-comparison between
+them is made or implied. See [`08-aetheris-lite.md`](./08-aetheris-lite.md).
+
+---
+
 ## 0. The claim this document does *not* make
 
 > **No comparison against Mistral, Qwen, Llama, Gemma or DeepSeek was possible, so

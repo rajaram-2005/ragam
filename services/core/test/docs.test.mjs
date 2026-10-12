@@ -51,6 +51,8 @@ const doc = {
   setup: () => read('docs/04-setup.md'),
   status: () => read('docs/03-status.md'),
   benchmarks: () => read('docs/06-benchmarks.md'),
+  lite: () => read('docs/08-aetheris-lite.md'),
+  lmCard: () => read('docs/model-cards/aetheris-lite-lm-0.1.0.json'),
   cycle: () => read('docs/07-improvement-cycle.md'),
   readme: () => read('README.md'),
   env: () => read('.env.example'),
@@ -494,11 +496,11 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 19)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**266 / 266**'), 'core total must be stated')
-  assert.ok(status.includes('**440 / 440**'), 'fabric total must be stated')
+  assert.ok(status.includes('**267 / 267**'), 'core total must be stated')
+  assert.ok(status.includes('**442 / 442**'), 'fabric total must be stated')
   assert.ok(status.includes('**56 / 56**'), 'web total must be stated')
-  assert.ok(status.includes('762 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('762 tests: core 266, web 56, fabric 440'),
+  assert.ok(status.includes('765 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('765 tests: core 267, web 56, fabric 442'),
     'README must state the same totals')
   assert.ok(status.includes('(11 files'), 'the file count must move with the suite')
 
@@ -511,14 +513,70 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(266), `core heading must say 266, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(440), `fabric heading must say 440, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(267), `core heading must say 267, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(442), `fabric heading must say 442, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(56), `web heading must say 56, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    762,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 762`,
+    765,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 765`,
+  )
+})
+
+test('the documented language-model results match its committed model card', () => {
+  // docs/08 states a perplexity, a baseline and a weights digest. The card JSON is
+  // the artifact of record, generated from the run report. If the two disagree, one
+  // of them is wrong and there is no way to tell which from reading either alone.
+  const card = JSON.parse(doc.lmCard())
+  const text = squash(doc.lite())
+  assert.equal(card.format, 'aetheris-model-card/v1')
+  assert.equal(card.card.identifier, 'aetheris-lite-lm@0.1.0')
+  assert.equal(card.card.status, 'released')
+
+  const metrics = card.card.metrics
+  // Written out at the full precision the card records, not rounded for display.
+  // (An earlier version of this line read `text.includes(metrics.weightsDigest ?? '')`,
+  // which is vacuously true because the field does not exist and `?? ''` matches
+  // everything. A guard that cannot fail is worse than no guard, because it looks
+  // like one.)
+  assert.ok(
+    text.includes(card.card.weightsDigest),
+    `docs/08 must state the card's weights digest ${card.card.weightsDigest.slice(0, 16)}`,
+  )
+  assert.ok(
+    text.includes(metrics.validationPerplexity.toFixed(4)),
+    `docs/08 must state the validation perplexity ${metrics.validationPerplexity.toFixed(4)}`,
+  )
+  assert.ok(
+    text.includes(metrics.bestBaselinePerplexity.toFixed(4)),
+    `docs/08 must state the baseline perplexity ${metrics.bestBaselinePerplexity.toFixed(4)}`,
+  )
+  assert.ok(
+    text.includes(metrics.perplexityVsBigram.toFixed(6)),
+    `docs/08 must state the gate ratio ${metrics.perplexityVsBigram.toFixed(6)}`,
+  )
+  assert.ok(
+    text.includes(metrics.parameterCount.toLocaleString('en-US')),
+    `docs/08 must state the parameter count ${metrics.parameterCount.toLocaleString('en-US')}`,
+  )
+
+  // The gate must actually have passed, not merely be described as if it did.
+  assert.equal(card.runStatus, 'partial', 'the Aetheris Lite family pipeline is still incomplete')
+  assert.ok(!card.card.validation.hardFailures || card.card.validation.hardFailures.length === 0)
+  assert.ok(card.card.limitations.length >= 4, 'the card must list its own limitations')
+  assert.ok(
+    card.card.limitations.some((l) => l.includes('/api/chat')),
+    'the card must say the model is not served as a chat assistant',
+  )
+  // docs/08 has to say the same thing, or the document and the card disagree about
+  // the one claim most likely to be misread.
+  assert.ok(text.includes('/api/chat'), 'docs/08 must state the model is not wired into /api/chat')
+  // Tolerant on phrasing, strict on substance: the card's exact sentence and the
+  // document's shorter phrasing both have to mean "this does not follow instructions".
+  assert.ok(
+    /follows no instructions|no instruction-following|does not follow instructions/.test(text),
+    'docs/08 must say the model does not follow instructions',
   )
 })
 
@@ -541,18 +599,57 @@ test('the documented fabric line counts match the filesystem', () => {
     walk(dir)
     return total
   }
-  const source = countLines(resolve(REPO, 'services/fabric/fabric'))
-  const tests = countLines(resolve(REPO, 'services/fabric/tests'))
-  const header = doc.architecture().match(/### `services\/fabric` — ([\d,]+) source lines, ([\d,]+) test lines/)
-  assert.ok(header, 'services/fabric must state its source and test line counts')
-  assert.equal(Number(header[1].replace(/,/g, '')), source, `fabric source is ${source} lines`)
-  assert.equal(Number(header[2].replace(/,/g, '')), tests, `fabric tests are ${tests} lines`)
+  // Every component states its line counts in the same prose header, and each one
+  // has drifted at least once: fabric said 5,592/3,583 while the filesystem said
+  // 7,113/4,903, and web's test count said 1,100 while the filesystem said 1,185.
+  // Checking all of them is the only way the class of drift stops recurring.
+  const expect = (label, claimedSource, claimedTests, actualSource, actualTests) => {
+    assert.equal(claimedSource, actualSource, `${label} source is ${actualSource} lines, docs claim ${claimedSource}`)
+    assert.equal(claimedTests, actualTests, `${label} tests are ${actualTests} lines, docs claim ${claimedTests}`)
+  }
+  // Parsed by splitting the header rather than by building a RegExp from the name:
+  // escaping a path into a pattern is how the previous version of this test broke.
+  const headers = new Map()
+  for (const line of doc.architecture().split('\n')) {
+    const match = line.match(/^### `([^`]+)` — ([\d,]+) source lines, ([\d,]+) test lines/)
+    if (match) headers.set(match[1], [Number(match[2].replace(/,/g, '')), Number(match[3].replace(/,/g, ''))])
+  }
+  const headerFor = (name) => {
+    const found = headers.get(name)
+    assert.ok(found, `${name} must state its source and test line counts, found: ${[...headers.keys()]}`)
+    return found
+  }
+
+  const [fabricSource, fabricTests] = headerFor('services/fabric')
+  expect('fabric', fabricSource, fabricTests,
+    countLines(resolve(REPO, 'services/fabric/fabric')),
+    countLines(resolve(REPO, 'services/fabric/tests')))
+
+  const [webSource, webTests] = headerFor('apps/web')
+  const countFiles = (dir, extensions) => {
+    let total = 0
+    const walk = (current) => {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        const full = resolve(current, entry.name)
+        if (entry.isDirectory()) {
+          if (entry.name !== '.render-build' && entry.name !== 'node_modules') walk(full)
+        } else if (extensions.some((e) => entry.name.endsWith(e))) {
+          total += readFileSync(full, 'utf8').split('\n').length - 1
+        }
+      }
+    }
+    walk(dir)
+    return total
+  }
+  expect('web', webSource, webTests,
+    countFiles(resolve(REPO, 'apps/web/src'), ['.jsx', '.js', '.css']),
+    countFiles(resolve(REPO, 'apps/web/test'), ['.mjs']))
 })
 
 test('every documented file actually exists', () => {
   // Catches the docs-only failure mode: a guide that points at a file nobody wrote.
   const referenced = new Set()
-  for (const text of [doc.architecture(), doc.security(), doc.setup(), doc.status(), doc.readme(), doc.benchmarks()]) {
+  for (const text of [doc.architecture(), doc.security(), doc.setup(), doc.status(), doc.readme(), doc.benchmarks(), doc.lite()]) {
     for (const match of text.matchAll(/\]\((?:\.\.?\/)*([A-Za-z0-9._/-]+\.(?:md|json|mjs|js|py|txt|css|example))\)/g)) {
       referenced.add(match[1])
     }

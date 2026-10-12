@@ -87,8 +87,32 @@ def best_baseline_name(report) -> str:
     return str(name)
 
 
+def model_limitations(report) -> list[str]:
+    """Limitations of the *model*, stated on the card itself.
+
+    Distinct from `limitations_from_report`, which describes the *evaluation*
+    conditions. The retriever card keeps both lists, and for good reason: "trained
+    from scratch, not derived from a pretrained base" is a fact about the artifact,
+    while "the corpus is in-distribution" is a fact about the measurement. Leaving
+    the card's own `limitations` field empty would make a reader who looks there --
+    which is where a reader looks -- conclude there are none.
+    """
+    payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
+    return [
+        "trained from random initialisation; not derived from any pretrained base model",
+        f"character-level base model: it predicts the next character of repository text and "
+        f"follows no instructions "
+        f"({payload['provenance']['parameterCount']:,} parameters, vocabulary of "
+        f"{payload['tokenizer']['size']})",
+        "output quality is low: this demonstrates the pipeline, not a usable assistant",
+        "deliberately not wired into /api/chat, because exposing a model of this size as a "
+        "chat assistant would misrepresent it",
+        "no comparison against any pretrained model was performed, and none is claimed",
+    ]
+
+
 def limitations_from_report(report) -> list[str]:
-    """What the card must say about a model this size, whether or not it is released."""
+    """What the evaluation conditions limit, recorded on the provenance."""
     payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
     parameters = payload["provenance"]["parameterCount"]
     baseline = payload["evaluation"]["bestBaseline"]
@@ -156,6 +180,7 @@ def register_from_report(report, manager: ModelReleaseManager, *, version: str, 
         dataset_digest=payload["corpus"]["manifestDigest"],
         parameter_count=int(payload["provenance"]["parameterCount"]),
         requirements=requirements_for_language_model(),
+        limitations=model_limitations(payload),
         provenance=build_provenance(payload, hardware=hardware),
         artifacts={
             "filename": payload["artifact"]["filename"],

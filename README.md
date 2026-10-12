@@ -52,13 +52,13 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 762 tests: core 266, web 56, fabric 440
+npm test          # 765 tests: core 267, web 56, fabric 442
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~55 min on 2 CPUs)
 npm run train     # in-process training run
 ```
 
-All 762 run in CI on every push and pull request
+All 765 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -119,7 +119,7 @@ Status of every acceptance criterion, with evidence:
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
 | `services/core` | Node 22 ESM | 7,380 | 5,237 | **zero npm packages** | 260 |
-| `services/fabric` | Python 3.11 | 7,113 | 4,903 | NumPy only | 440 |
+| `services/fabric` | Python 3.11 | 7,138 | 4,927 | NumPy only | 442 |
 | `apps/web` | React 18 + Vite | 3,486 | 1,169 | react, react-dom | 56 |
 
 The core service has **no npm dependencies at all** — that is why the root

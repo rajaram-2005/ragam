@@ -174,10 +174,10 @@ Full design, evaluation methodology and limitations:
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (762 tests)
-npm run test:core         # 266
+npm test                  # all three suites (765 tests)
+npm run test:core         # 267
 npm run test:web          # 56
-npm run test:fabric       # 440 — needs numpy + pytest on the interpreter
+npm run test:fabric       # 442 — needs numpy + pytest on the interpreter
 ```
 
 If NumPy and pytest live in a virtualenv rather than on the system interpreter,

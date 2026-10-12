@@ -1,0 +1,176 @@
+{
+  "format": "aetheris-model-card/v1",
+  "generatedBy": "services/fabric/scripts/lm_release.py",
+  "reproduce": "npm run lm:train   # writes artifacts/<run>.report.json beside the weights, then\ncd services/fabric && python scripts/lm_release.py --report artifacts/aetheris-lite-lm-82392ef89074.report.json --version 0.1.0",
+  "runId": "82392ef89074",
+  "runStatus": "partial",
+  "note": "Trained from random initialisation in pure NumPy. No pretrained weights, no PyTorch, no GPU, no network. Weights are NOT in this repository: .gitignore keeps artifacts out by policy and they are referenced by digest.",
+  "card": {
+    "name": "aetheris-lite-lm",
+    "version": "0.1.0",
+    "identifier": "aetheris-lite-lm@0.1.0",
+    "family": "aetheris-lite",
+    "licence": "MIT",
+    "weightsDigest": "82392ef8907455e56e1cee56bf4a074cb9337dc38f79775859b67efa5b822e94",
+    "baseCheckpoint": null,
+    "configDigest": "d70bbe7780fd296ff28f47e66ab811ac0fffa1c4418954aa2b2c8eab421e2cdb",
+    "datasetDigest": "c357293317e781f5d97dcf409146090e02517221108c7b9f8cac21832427c8dd",
+    "parameterCount": 359136,
+    "status": "released",
+    "metrics": {
+      "validationPerplexity": 4.40331790103542,
+      "bitsPerCharacter": 2.138591004549883,
+      "perplexityVsBigram": 0.2767478454588419,
+      "bestBaselinePerplexity": 15.910938326312225,
+      "validationUnknownRate": 0.0004965183166818044,
+      "validationTokens": 165120.0,
+      "lossImprovement": 3.5829291343688965,
+      "finalLoss": 1.2551050186157227,
+      "parameterCount": 359136.0,
+      "wallSeconds": 2220.146
+    },
+    "provenance": {
+      "subject": "aetheris-lite-lm (from-scratch, pure NumPy)",
+      "comparator": "bigram baseline on identical held-out tokens",
+      "hardware": {
+        "machine": "x86_64",
+        "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+        "accelerator": "none (CPU only)",
+        "peakMemoryMb": 157.8
+      },
+      "decoding": {
+        "temperature": 0.0,
+        "topK": 0,
+        "note": "perplexity is teacher-forced; no sampling involved in the gate metric"
+      },
+      "context": {
+        "seqLen": 128,
+        "window": "sliding, non-overlapping, stride = seqLen"
+      },
+      "quantization": null,
+      "prompts": [],
+      "datasetDigest": "c357293317e781f5d97dcf409146090e02517221108c7b9f8cac21832427c8dd",
+      "corpusSize": 1431417,
+      "queries": null,
+      "codeRevision": "8108d3098d575ca333ca86348fac2567a6364837-dirty",
+      "seed": 0,
+      "limitations": [
+        "Character-level, not subword: sequences are long for the parameter count.",
+        "Trained from scratch on 1,431,417 bytes of this repository's own text. It has no world knowledge, no instruction-following and no safety behaviour.",
+        "Output quality is low by design of the experiment: 359,136 parameters trained for 2600 steps. This proves the pipeline, not the model.",
+        "Evaluated only against bigram/uniform/unigram baselines on in-distribution held-out text; no comparison against any pretrained model was performed and none is claimed.",
+        "Not instruction-tuned and has no tokenizer beyond ASCII-and-source-code characters; it cannot be exposed as a chat assistant in this state.",
+        "0.000497 of held-out characters are outside the training vocabulary and scored as <unk>; perplexity is slightly pessimistic because of it."
+      ],
+      "status": "completed",
+      "measuredAt": 1791826919.5432334
+    },
+    "limitations": [
+      "trained from random initialisation; not derived from any pretrained base model",
+      "character-level base model: it predicts the next character of repository text and follows no instructions (359,136 parameters, vocabulary of 143)",
+      "output quality is low: this demonstrates the pipeline, not a usable assistant",
+      "deliberately not wired into /api/chat, because exposing a model of this size as a chat assistant would misrepresent it",
+      "no comparison against any pretrained model was performed, and none is claimed"
+    ],
+    "requirements": [
+      {
+        "metric": "perplexityVsBigram",
+        "minimum": null,
+        "maximum": 1.0,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "validationUnknownRate",
+        "minimum": null,
+        "maximum": 0.02,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "lossImprovement",
+        "minimum": 1.0,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "parameterCount",
+        "minimum": null,
+        "maximum": 5000000,
+        "category": null,
+        "hard": false
+      },
+      {
+        "metric": "wallSeconds",
+        "minimum": null,
+        "maximum": 3600.0,
+        "category": null,
+        "hard": false
+      }
+    ],
+    "validation": {
+      "passed": [
+        "'perplexityVsBigram' 0.2767 meets the requirement",
+        "'validationUnknownRate' 0.0005 meets the requirement",
+        "'lossImprovement' 3.5829 meets the requirement",
+        "'parameterCount' 359136.0000 meets the requirement",
+        "'wallSeconds' 2220.1460 meets the requirement"
+      ],
+      "hardFailures": [],
+      "softFailures": [],
+      "validatedAt": 1791826919.5432725,
+      "metrics": {
+        "validationPerplexity": 4.40331790103542,
+        "bitsPerCharacter": 2.138591004549883,
+        "perplexityVsBigram": 0.2767478454588419,
+        "bestBaselinePerplexity": 15.910938326312225,
+        "validationUnknownRate": 0.0004965183166818044,
+        "validationTokens": 165120.0,
+        "lossImprovement": 3.5829291343688965,
+        "finalLoss": 1.2551050186157227,
+        "parameterCount": 359136.0,
+        "wallSeconds": 2220.146
+      }
+    },
+    "artifacts": {
+      "filename": "aetheris-lite-lm-82392ef89074.npz",
+      "strongestBaseline": "bigram",
+      "fileDigest": "bf723f1c3e35061e3209082f607fdcee40c87f5ff4e7adad9fe6b1af54573506",
+      "bytes": 1444942,
+      "vocabularyDigest": "ac62fb43d7c5d40ca5f838d0f1bcf2550c0d9bb944feece074bd2b9ff1b611c8",
+      "corpusManifest": "c357293317e781f5d97dcf409146090e02517221108c7b9f8cac21832427c8dd",
+      "trainer": "services/fabric/fabric/lm/train.py"
+    },
+    "parentVersion": null,
+    "createdAt": 1791826919.543243,
+    "releasedAt": 1791826919.543282,
+    "supersededAt": null,
+    "retiredAt": null,
+    "history": [
+      {
+        "at": 1791826919.543243,
+        "event": "registered",
+        "status": "candidate"
+      },
+      {
+        "at": 1791826919.5432742,
+        "event": "validated",
+        "passed": [
+          "'perplexityVsBigram' 0.2767 meets the requirement",
+          "'validationUnknownRate' 0.0005 meets the requirement",
+          "'lossImprovement' 3.5829 meets the requirement",
+          "'parameterCount' 359136.0000 meets the requirement",
+          "'wallSeconds' 2220.1460 meets the requirement"
+        ]
+      },
+      {
+        "at": 1791826919.543282,
+        "event": "released",
+        "notes": "from-scratch NumPy training run",
+        "superseded": null
+      }
+    ]
+  },
+  "reverifiedAt": "8108d3098d575ca333ca86348fac2567a6364837-dirty"
+}

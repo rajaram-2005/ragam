@@ -97,7 +97,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `policy/classify.mjs` | 137 | Secret and sensitivity classification, redaction |
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
 
-### `services/fabric` — 7,113 source lines, 4,903 test lines
+### `services/fabric` — 7,138 source lines, 4,927 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible
@@ -106,7 +106,7 @@ release manager, and a hand-written dual encoder whose **five parameter gradient
 all match central finite differences to ~3e-10**. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 3,486 source lines, 1,100 test lines
+### `apps/web` — 3,486 source lines, 1,185 test lines
 
 Five area components, a shell, shared primitives, an API client and three test
 files. Design tokens and the shell's visual structure come from upstream Aetheris

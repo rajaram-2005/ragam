@@ -36,7 +36,7 @@ noticing that the blocker applied to a path we did not have to take.
 | | |
 |---|---|
 | Architecture | decoder-only transformer, pre-LayerNorm, 3 blocks, 4 heads, `d_model` 96, `d_ff` 384 |
-| Parameter count | **625,920** (recorded on the card; the exact figure moves with the vocabulary) |
+| Parameter count | **359,136** (recorded on the card; the exact figure moves with the vocabulary) |
 | Tokenisation | character-level, vocabulary fitted on the **training split only** |
 | Context | 128 characters, sliding non-overlapping evaluation windows |
 | Implementation | `services/fabric/fabric/lm/`, pure NumPy, no PyTorch, no GPU |
@@ -92,7 +92,7 @@ Preference Optimization → Distillation → Evaluation → Release`. What is re
 | SFT | **Not implemented** | Needs an instruction corpus that does not exist here |
 | Preference optimization | **Not implemented** | Needs preference data, a reward signal and compute that this host does not have |
 | Distillation | **Planned, not implemented** | The trainer accepts any token stream, so a teacher-generated corpus is a second data source rather than a rewrite. Requires an authenticated provider. |
-| Evaluation | **Implemented** | Held-out perplexity against three computed baselines |
+| Evaluation | **Implemented** | Held-out perplexity against three computed baselines — see §6 |
 | Release | **Implemented** | `fabric/lm/card.py` drives the existing `ModelReleaseManager`: register → validate → release, with rollback |
 
 A stage marked *not implemented* is not simulated. There is no placeholder SFT stage
@@ -125,8 +125,61 @@ Recorded from the release run. Every figure below is reproducible from the comma
 in §8; the corpus manifest, tokenizer digest, configuration digest, code revision and
 seeds are all recorded in the run report.
 
-<!-- RESULTS -->
-<!-- /RESULTS -->
+Recorded from the release run
+`aetheris-lite-lm-82392ef89074`. Every figure below is reproducible from the command
+in §8; the corpus manifest, tokenizer digest, configuration digest, code revision and
+all three seeds are in the run report and on the model card.
+
+**Held-out perplexity, against baselines computed from the same training statistics
+and scored on the same 165,120 held-out tokens:**
+
+| | Perplexity | Bits/char |
+|---|---|---|
+| `uniform` (`ln 143`) | 143.0000 | 7.1599 |
+| `unigram` | 35.2895 | 5.1414 |
+| `bigram` | 15.9109 | 3.9917 |
+| **Aetheris Lite LM** | **4.4033** | **2.1386** |
+
+**Verdict: beats the strongest baseline.** `perplexityVsBigram` = **0.276748** — the
+model's perplexity is 27.7% of the bigram's, or **3.61× better** than the best
+non-neural baseline. The gate requires ≤ 1.0.
+
+| | |
+|---|---|
+| Parameters | 359,136 |
+| Training loss | 4.8380 → 1.2551 |
+| Wall time | 2,220.1 s (37 minutes, 2 CPU cores) |
+| Peak memory | 157.8 MB |
+| Tokens seen during training | 5,324,800 |
+| Validation unknown-character rate | 0.000497 |
+| Artifact | 1,444,942 bytes |
+| Weights digest | `82392ef8907455e56e1cee56bf4a074cb9337dc38f79775859b67efa5b822e94` |
+| Model card | [`model-cards/aetheris-lite-lm-0.1.0.md`](./model-cards/aetheris-lite-lm-0.1.0.md) · [`json`](./model-cards/aetheris-lite-lm-0.1.0.json) |
+| Correlation evidence | `perplexityVsBigram` 0.276748 ≤ 1.0 (hard) · `validationUnknownRate` 0.000497 ≤ 0.02 (hard) · `lossImprovement` 3.582929 ≥ 1.0 (hard) · 0 hard failures, 0 soft failures |
+| **Gate result** | **RELEASED** |
+
+**Greedy sample (temperature 0):**
+
+```
+server the control and the control limits in detail. Sentence 3 describes the
+contactor and thermal limits in detail. Se
+```
+
+That is genuinely what a 359K-parameter character model trained on 1.4 MB of source
+code for 37 minutes on two CPU cores produces. It is shaped like the corpus and it is
+not meaningful. Sampled output at temperature 0.8 is visibly less coherent still.
+
+**What this number is not.** It is not a language-modelling result in any competitive
+sense. The corpus is 1.4 MB of this repository's own text, the vocabulary is 143
+characters, and the comparison is against baselines computed from the same data — not
+against any pretrained model, none of which could be obtained here. The claim being
+supported is narrow and exact: **the pipeline runs, the gradients are correct, and the
+result is reproducible from the recorded inputs.**
+
+Additionally, the baselines are what make the number interpretable at all. `4.40`
+alone is neither good nor bad until the bigram's `15.91` is beside it, measured
+identically.
+
 
 ---
 
@@ -165,7 +218,7 @@ its reasons and does not become the live release.
 ## 8. Reproducing it
 
 ```bash
-# Full release configuration (~35-55 minutes on 2 CPUs, no GPU)
+# Full release configuration: measured at 37 minutes on 2 CPU cores, no GPU
 npm run lm:train
 
 # 60-step smoke run, seconds, to check the pipeline end to end
@@ -195,7 +248,7 @@ meaningless if the seed did nothing.
 Stated on the model card itself, not only here. This list is generated by
 `limitations_from_report()` so it cannot be forgotten when a card is produced.
 
-- **Output quality is low.** 625K parameters trained for 2,600 steps produces text
+- **Output quality is low.** 359K parameters trained for 2,600 steps produces text
   shaped like the corpus and mostly meaningless. This proves the pipeline, not the
   model.
 - **Character-level, not subword.** Sequences are long for the parameter count.

@@ -9,12 +9,12 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 762 passing, 0 failing.**
+**Test totals: 765 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **266 / 266** (11 files, ~23 s) |
-| `services/fabric` | `pytest -q` | **440 / 440** (19 files, ~31 s) |
+| `services/core` | `node --test test/*.test.mjs` | **267 / 267** (11 files, ~23 s) |
+| `services/fabric` | `pytest -q` | **442 / 442** (19 files, ~31 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **56 / 56** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 217.28 kB → **65.53 kB gzip**, single chunk, no warnings |
 
@@ -150,7 +150,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (266 tests)
+### `services/core` — Implemented and tested (267 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -170,7 +170,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (440 tests)
+### `services/fabric` — Implemented and tested (442 tests)
 
 | Stage | Status |
 |---|---|
@@ -188,6 +188,14 @@ pieces all tested: failure taxonomy, failure memory (`E_{t+1} = E_t ∪ F_t`),
 experiment ledger (baseline → experiment → verdict), metrics with a latency noise
 floor, DataForge, the Node↔Python text-parity fixture, model cards, and the HTTP
 server (23 tests).
+
+`fabric/lm/` is the one part of this service that does **not** follow the
+`base_selection → domain_training → sft` path, because it does not need a base to
+select from. It trains a character-level language model from random initialisation
+using corpora it already has, which is why it is not blocked where the retrieval
+pipeline is. See [`08-aetheris-lite.md`](./08-aetheris-lite.md). It carries the
+same discipline: a corpus split that cannot leak, held-out evaluation against
+computed baselines, a versioned card, and a gate that refuses.
 
 ### `apps/web` — Implemented and tested (56 tests)
 
