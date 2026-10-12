@@ -494,13 +494,32 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 13)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**260 / 260**'), 'core total must be stated')
+  assert.ok(status.includes('**265 / 265**'), 'core total must be stated')
   assert.ok(status.includes('**342 / 342**'), 'fabric total must be stated')
   assert.ok(status.includes('**56 / 56**'), 'web total must be stated')
-  assert.ok(status.includes('658 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('658 tests: core 260, web 56, fabric 342'),
+  assert.ok(status.includes('663 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('663 tests: core 265, web 56, fabric 342'),
     'README must state the same totals')
   assert.ok(status.includes('(11 files'), 'the file count must move with the suite')
+
+  // The component headings each state a count too, and they drifted from the table
+  // in the same document without this: fabric's heading read 256 while the table
+  // said 342. A number stated twice is a number that can disagree with itself, so
+  // every occurrence is checked rather than just the one the table happens to hold.
+  // Anchored to the component-heading form ("### `services/core` — ... (265 tests)")
+  // so subsection counts like "(23 tests)" are not mistaken for components.
+  const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
+  assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
+  const fromHeadings = perComponent
+  assert.ok(fromHeadings.includes(265), `core heading must say 265, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(342), `fabric heading must say 342, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(56), `web heading must say 56, found ${JSON.stringify(fromHeadings)}`)
+  // And the headings must sum to the stated grand total, not merely contain it.
+  assert.equal(
+    fromHeadings.reduce((a, b) => a + b, 0),
+    663,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 663`,
+  )
 })
 
 test('every documented file actually exists', () => {

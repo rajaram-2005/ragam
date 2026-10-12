@@ -88,8 +88,8 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `mcp/schema.mjs` | 246 | JSON Schema subset: validation of schemas *and* of arguments/output |
 | `knowledge/bm25.mjs` | 224 | BM25 index (k1=1.5, b=0.75), rebuilt from stored chunks |
 | `plugins/manifest.mjs` | 216 | Manifest validation, scope vocabulary, semver |
-| `config.mjs` | 209 | Environment → config, secret loading, `publicConfig` redaction |
-| `policy/egress.mjs` | 172 | The egress guard, runtime policies, data classes, global fetch hook |
+| `config.mjs` | 234 | Environment → config, secret loading, `publicConfig` redaction |
+| `policy/egress.mjs` | 216 | The egress guard, runtime policies, data classes, `*` allow-all, global fetch hook |
 | `server.mjs` | 151 | Entry point, startup banner, graceful shutdown |
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
 | `media/validate.mjs` | 143 | Magic-byte sniffing, video genuineness check |
@@ -217,7 +217,22 @@ the realistic failure mode.
 | `hybrid` | exact-host allowlist, and only data classified at or below `externalCeiling` |
 | `online_enabled` | exact-host allowlist, no classification ceiling |
 
-Allowlists match **exact hosts** — no wildcards, no suffix matching. A blank or
+Allowlists match **exact hosts** — no wildcards, no suffix matching.
+
+The single entry `*` means **any** external host. It is a normal allowlist entry, so
+it is exact and not a glob: `*.example.com` still matches nothing. It exists because
+the two axes above are independent and the policy alone could not express "fully
+online". `online_enabled` relaxes the *classification* gate, but the egress guard
+still consulted the allowlist, so `online_enabled` with an empty allowlist rejected
+every external host and was indistinguishable from `strict_offline` at the point of
+enforcement. The capability is now stated explicitly rather than implied by the
+policy name.
+
+`*` is checked **after** `strict_offline`, so it can never weaken offline mode;
+`offline.test.mjs` asserts that ordering, and a negative control that swaps the two
+checks fails. `hybrid` with `*` and `online_enabled` with `*` are both fully online
+and are **not the same decision** — the first keeps the ceiling, the second does not.
+The loader warns specifically when the bypass is combined with wide-open egress. A blank or
 invalid policy **fails safe to `strict_offline`** and records a warning; it never
 fails open. `offline.test.mjs` proves the blocking with a recording `fetch` spy:
 `api.openai.com`, `freellmapi.co`, `huggingface.co` and `api.anthropic.com` are

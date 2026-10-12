@@ -145,7 +145,7 @@ aetheris-fabric listening
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (658 tests)
+npm test                  # all three suites (663 tests)
 npm run test:core         # 260
 npm run test:web          # 56
 npm run test:fabric       # 256 — needs numpy + pytest on the interpreter
@@ -311,7 +311,9 @@ Three things to know before enabling it:
 
 1. **`hybrid`, not `online_enabled`,** unless you have a reason. `hybrid` keeps the
    data-classification ceiling: `confidential` and `restricted` content still
-   needs explicit authorization per request.
+   needs explicit authorization per request. A fully online gateway needs
+   `AETHERIS_ONLINE_ALLOWLIST=*` as well — an automatic host list is not implied by
+   the policy, see [`05-security.md`](./05-security.md).
 2. **The gateway's host is added to the allowlist automatically** from
    `FREELLMAPI_BASE_URL`. Allowlist matching is exact-host — no wildcards, no
    suffix matching.

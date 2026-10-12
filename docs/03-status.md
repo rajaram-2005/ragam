@@ -9,11 +9,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 658 passing, 0 failing.**
+**Test totals: 663 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **260 / 260** (11 files, ~22 s) |
+| `services/core` | `node --test test/*.test.mjs` | **265 / 265** (11 files, ~22 s) |
 | `services/fabric` | `pytest -q` | **342 / 342** (13 files, ~8 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **56 / 56** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 217.28 kB → **65.53 kB gzip**, single chunk, no warnings |
@@ -61,7 +61,7 @@ instead.
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
 | 3 | Unified app, five areas | **Complete** | `apps/web`; 56 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
-| 4 | Local inference with ≥1 real local LM | **Blocked — requires weights** | Adapter implemented and tested against a real loopback server; no LM is installed on this host |
+| 4 | Local inference with ≥1 real local LM | **Blocked — requires weights** | Adapter implemented and tested against a real loopback server; no LM is installed on this host and seven independent acquisition attempts failed ("Phase 4 in detail", below) |
 | 5 | FreeLLMAPI online integration | **Implemented — requires external credentials** | Client written to contracts read from source; no key here |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
@@ -102,6 +102,27 @@ limitation    no video generation model is available; /api/video will refuse rat
 Install Ollama and pull any model, then re-probe, and the same code path serves
 real inference — that is the design, and the loopback test is its evidence.
 
+#### What was tried, in order, before accepting this
+
+The gap is a missing binary and missing weights, so it was attacked directly
+rather than assumed. Each attempt is recorded with its result, because "no model
+could be obtained" is only an honest statement alongside the evidence for it.
+
+| Attempt | Result |
+|---|---|
+| `release-assets.githubusercontent.com` (llama2.c prebuilt binaries) | HTTP **000**, host unreachable |
+| `gh api repos/karpathy/llama2.c/releases` | **0** releases |
+| `pip install llama-cpp-python` | 0.3.36 publishes **no manylinux x86_64 wheel** for any version — source build needs a compiler toolchain and time not available here |
+| `pypi.org/pypi/{tinyllama,llama-models,model2vec,llm-gguf}` | reachable, but no weights: largest is 6.6 MB of Python, and `tinyllama` only wraps a PyTorch training utility |
+| `command -v ollama llama-cli llama-server llamafile mlx_lm` | all absent |
+| `find / -xdev -name '*.gguf' -o -name '*.safetensors'` | files as **.safetensors or .gguf: none** on the host |
+| `download.pytorch.org`, `huggingface.co` | unreachable from this sandbox |
+
+A local model is still the goal, and the code path is ready for one — but no
+reachable source in this environment provides a runtime or weights. The correct
+status for **Phase 4 is "Implemented but not fully tested"**, and it is recorded
+that way in §2 rather than being upgraded by the loopback fixture.
+
 ---
 
 ## 3. Acceptance criteria
@@ -127,7 +148,7 @@ real inference — that is the design, and the loopback test is its evidence.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (260 tests)
+### `services/core` — Implemented and tested (265 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -147,7 +168,7 @@ real inference — that is the design, and the loopback test is its evidence.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (256 tests)
+### `services/fabric` — Implemented and tested (342 tests)
 
 | Stage | Status |
 |---|---|
@@ -267,6 +288,16 @@ Recorded because the classes of bug matter more than the individual fixes.
   the ones missing → `#refuse()`.
 - The secret classifier missed env-var-style credentials, so such a prompt
   classified `public` and could have left the machine in hybrid mode.
+- **`online_enabled` could not actually go online.** The policy relaxed the
+  data-classification gate, but the egress guard still consulted the allowlist, so
+  with an empty allowlist it rejected every external host and enforced exactly what
+  `strict_offline` did. A policy named "online enabled" that cannot reach anything
+  online is a control whose name promises more than it delivers — and the failure
+  was silent, since nothing distinguished "blocked because offline" from "blocked
+  because no host was listed". → the `*` sentinel, checked *after* `strict_offline`;
+  a distinct loader warning when `*` is combined with `online_enabled`, which
+  bypasses classification; and `allowAllExternal` in `publicConfig` so wide-open
+  egress is visible in `/api/config` rather than only in an env file.
 
 Lesson recorded: `node --check` catches neither private-member misuse nor
 control-flow errors. Always instantiate and exercise.

@@ -52,11 +52,11 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 658 tests: core 260, web 56, fabric 342
+npm test          # 663 tests: core 265, web 56, fabric 342
 npm run train     # in-process training run
 ```
 
-All 658 run in CI on every push and pull request
+All 663 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must

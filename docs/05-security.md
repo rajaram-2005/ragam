@@ -41,6 +41,17 @@ the connection, which is the difference between enforcement and cosmetic UI.
 | `hybrid` | exact-host allowlist only | allowed | `AETHERIS_EXTERNAL_DATA_CEILING` (default `internal`) |
 | `online_enabled` | exact-host allowlist only | allowed | none |
 
+`AETHERIS_ONLINE_ALLOWLIST=*` permits every external host. It is the *only* way to
+be fully online: an exact-host list is a whitelist, so `online_enabled` with no
+listed hosts blocks exactly as much as `strict_offline` does. Two consequences are
+stated rather than left to be discovered. First, `*` is ignored under
+`strict_offline`, because the offline check runs before the allow-all check and
+returns; the ordering is asserted by test and verified by a negative control.
+Second, combining `*` with `online_enabled` disables the classification ceiling at
+the same time as it opens every host, so text classified up to `restricted` can be
+sent anywhere — `hybrid` with the same `*` is equally online and keeps the ceiling.
+The loader emits a distinct warning for the `online_enabled` combination.
+
 Properties, each with a test:
 
 - **Fails safe.** A blank or invalid `AETHERIS_RUNTIME_POLICY` falls back to

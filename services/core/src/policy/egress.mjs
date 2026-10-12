@@ -25,6 +25,26 @@ export const DATA_CLASSES = Object.freeze({
 // Hosts that count as "local" and are therefore reachable in strict_offline.
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'])
 
+/**
+ * Sentinel meaning "any external host".
+ *
+ * It exists because the three-policy model could not express "fully online".
+ * ``online_enabled`` relaxes the *data* gate — ``#mayGoExternal`` returns true
+ * unconditionally — but the egress guard still consulted the allowlist, so with
+ * an empty allowlist ``online_enabled`` blocked every external host and was
+ * indistinguishable from ``strict_offline`` at the point of enforcement. A policy
+ * named "online enabled" that cannot reach anything online is a name that promises
+ * more than the control delivers, so the capability is stated explicitly instead.
+ *
+ * It is a single exact entry, not a glob: an allowlist of ``['*.example.com']``
+ * still matches nothing, so the subdomain-spoofing property of the exact-match
+ * allowlist is preserved.
+ *
+ * It is never honoured under ``strict_offline``. That check runs first and returns
+ * before this one, so offline mode stays absolute.
+ */
+export const ALLOW_ALL_HOSTS = '*'
+
 export class EgressBlockedError extends Error {
   constructor(url, reason, policy) {
     super(`egress blocked (${policy}): ${reason} — ${url}`)
@@ -68,6 +88,16 @@ export function createEgressGuard(options = {}) {
   const onDecision = options.onDecision || (() => {})
   const realFetch = options.fetch || globalThis.fetch
 
+  // Resolved once so the ordering below can rely on it being a fixed property of
+  // this guard rather than something re-evaluated per request.
+  //
+  // The policy is folded in on purpose. The field answers "does this guard permit
+  // every external host?", and under strict_offline the honest answer is no even if
+  // '*' is sitting in the allowlist being ignored. Reporting true there would tell
+  // an operator that egress is wide open at the exact moment it is fully closed.
+  const allowAllExternal =
+    onlineAllowlist.has(ALLOW_ALL_HOSTS) && policy !== RUNTIME_POLICIES.STRICT_OFFLINE
+
   if (!Object.values(RUNTIME_POLICIES).includes(policy)) {
     throw new TypeError(`unknown runtime policy: ${policy}`)
   }
@@ -91,8 +121,14 @@ export function createEgressGuard(options = {}) {
     const local = isLocalHost(target.hostname) || localAllowlist.has(target.hostname) || localAllowlist.has(target.host)
     const scope = local ? 'local' : 'external'
     if (local) return { allowed: true, scope, ...target }
+    // Order matters and is load-bearing: strict_offline is absolute, so it is
+    // checked before allow-all. Reversing these two lines would let '*' silently
+    // disable offline mode, which is the one guarantee the guard exists to keep.
     if (policy === RUNTIME_POLICIES.STRICT_OFFLINE) {
       return { allowed: false, scope, reason: 'strict_offline forbids all external requests', ...target }
+    }
+    if (allowAllExternal) {
+      return { allowed: true, scope, allowAll: true, ...target }
     }
     if (onlineAllowlist.has(target.hostname) || onlineAllowlist.has(target.host)) {
       return { allowed: true, scope, allowlisted: true, ...target }
@@ -126,6 +162,14 @@ export function createEgressGuard(options = {}) {
     },
     get onlineAllowlist() {
       return [...onlineAllowlist]
+    },
+    /**
+     * True when every external host is permitted. Exposed so an operator can see
+     * that the guard is wide open rather than having to infer it from a config file.
+     * Always false under strict_offline, where '*' is ignored.
+     */
+    get allowAllExternal() {
+      return allowAllExternal
     },
   }
 }

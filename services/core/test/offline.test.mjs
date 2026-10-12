@@ -34,6 +34,7 @@ import {
   EgressBlockedError,
   RUNTIME_POLICIES,
   DATA_CLASSES,
+  ALLOW_ALL_HOSTS,
 } from '../src/policy/egress.mjs'
 
 /** A fetch stand-in that records every URL it is actually asked to open. */
@@ -166,6 +167,117 @@ test('hybrid sends only allowlisted hosts externally and blocks the rest', async
   assert.equal(guard.inspect('https://sub.gateway.freellmapi.co/v1').allowed, false)
   assert.equal(guard.inspect('https://gateway.freellmapi.co.evil.example/v1').allowed, false)
   assert.equal(real.calls.length, 0, 'only blocked URLs were attempted here')
+})
+
+test("the '*' sentinel permits every external host, unlike an empty allowlist", async () => {
+  // The defect this exists for: online_enabled with no allowlist blocked every
+  // external host, so a fully-online configuration was not expressible. Both facts
+  // are asserted here so the regression cannot return unremarked.
+  const nothingAllowed = createEgressGuard({
+    policy: RUNTIME_POLICIES.ONLINE_ENABLED,
+    onlineAllowlist: [],
+    fetch: recordingFetch(async () => new Response('{}', { status: 200 })),
+  })
+  assert.equal(nothingAllowed.inspect('https://api.openai.com/v1/chat/completions').allowed, false)
+  assert.match(nothingAllowed.inspect('https://api.openai.com/v1/chat/completions').reason, /not on the online allowlist/)
+  assert.equal(nothingAllowed.allowAllExternal, false)
+
+  const real = recordingFetch(async () => new Response('{}', { status: 200 }))
+  for (const policy of [RUNTIME_POLICIES.HYBRID, RUNTIME_POLICIES.ONLINE_ENABLED]) {
+    const guard = createEgressGuard({ policy, onlineAllowlist: [ALLOW_ALL_HOSTS], fetch: real })
+    assert.equal(guard.allowAllExternal, true)
+    for (const url of [
+      'https://api.openai.com/v1/chat/completions',
+      'https://generativelanguage.googleapis.com/v1beta/models',
+      'https://some.host.nobody.has.ever.heard.of.example/v1',
+    ]) {
+      const decision = guard.inspect(url)
+      assert.equal(decision.allowed, true, `${policy} should permit ${url} with '*'`)
+      assert.equal(decision.allowAll, true)
+      assert.equal(decision.scope, 'external')
+    }
+    await guard.fetch('https://api.openai.com/v1/chat/completions')
+  }
+  assert.equal(real.calls.length, 2, 'one real call per policy, and nothing else')
+})
+
+test("'*' can never weaken strict_offline", () => {
+  // This is the load-bearing ordering in createEgressGuard. If the allow-all check
+  // ever moved above the strict_offline check, adding '*' to an allowlist would
+  // silently switch offline mode off — the single guarantee the guard exists to
+  // provide. The assertion is on the *reason* as well as the outcome, because a
+  // future change could block for the wrong reason and still look correct.
+  const guard = createEgressGuard({
+    policy: RUNTIME_POLICIES.STRICT_OFFLINE,
+    onlineAllowlist: [ALLOW_ALL_HOSTS],
+    fetch: recordingFetch(async () => new Response('{}', { status: 200 })),
+  })
+  assert.equal(guard.offlineEnforced, true)
+  // '*' is inert here, so the guard must not claim to be wide open.
+  assert.equal(guard.allowAllExternal, false)
+  assert.equal(publicConfig(loadConfig({ AETHERIS_ONLINE_ALLOWLIST: ALLOW_ALL_HOSTS }, {})).allowAllExternal, false)
+  for (const url of ['https://api.openai.com/v1/chat/completions', 'https://example.com/anything']) {
+    const decision = guard.inspect(url)
+    assert.equal(decision.allowed, false)
+    assert.match(decision.reason, /strict_offline forbids/)
+    assert.notEqual(decision.allowAll, true)
+  }
+  // Loopback still works: offline mode must not mean "nothing works".
+  assert.equal(guard.inspect('http://127.0.0.1:11434/api/tags').allowed, true)
+  assert.throws(() => guard.assertReachable('https://api.openai.com/v1'), EgressBlockedError)
+})
+
+test("'*' is exact, not a glob — it does not turn the allowlist into pattern matching", () => {
+  // A guard that started honouring wildcards would silently permit
+  // 'anything.evil.example' for an operator who wrote '*.example.com'.
+  const guard = createEgressGuard({
+    policy: RUNTIME_POLICIES.ONLINE_ENABLED,
+    onlineAllowlist: ['*.example.com'],
+    fetch: recordingFetch(async () => new Response('{}', { status: 200 })),
+  })
+  assert.equal(guard.allowAllExternal, false)
+  assert.equal(guard.inspect('https://api.example.com/v1').allowed, false)
+  assert.equal(guard.inspect('https://anything.example.com/v1').allowed, false)
+  assert.equal(guard.inspect('https://example.com/v1').allowed, false)
+})
+
+test('allow-all egress is visible in the config and warned about loudly', () => {
+  const wide = loadConfig(
+    { AETHERIS_ONLINE_ALLOWLIST: ALLOW_ALL_HOSTS, AETHERIS_RUNTIME_POLICY: RUNTIME_POLICIES.ONLINE_ENABLED },
+    {},
+  )
+  assert.equal(wide.warnings.filter((w) => w.includes('ANY external host')).length, 1)
+  // online_enabled bypasses data classification, which '*' compounds. Say so.
+  assert.equal(wide.warnings.filter((w) => w.includes('bypasses data classification')).length, 1)
+  const exposed = publicConfig(wide)
+  assert.equal(exposed.allowAllExternal, true)
+  assert.deepEqual(exposed.onlineAllowlist, [ALLOW_ALL_HOSTS])
+
+  // The safer combination is offered rather than implied.
+  const hybrid = loadConfig(
+    { AETHERIS_ONLINE_ALLOWLIST: ALLOW_ALL_HOSTS, AETHERIS_RUNTIME_POLICY: RUNTIME_POLICIES.HYBRID },
+    {},
+  )
+  assert.equal(hybrid.warnings.filter((w) => w.includes('ANY external host')).length, 1)
+  assert.equal(
+    hybrid.warnings.filter((w) => w.includes('bypasses data classification')).length,
+    0,
+    'hybrid keeps the data ceiling, so the bypass warning must not fire',
+  )
+})
+
+test("an allowlist entry is never mistaken for the sentinel", () => {
+  // '*example.com' and 'x*' are ordinary (useless) strings, not patterns. Only the
+  // exact string '*' switches the guard wide open.
+  for (const entry of ['*example.com', 'x*', '**', '* ']) {
+    const guard = createEgressGuard({
+      policy: RUNTIME_POLICIES.ONLINE_ENABLED,
+      onlineAllowlist: [entry],
+      fetch: recordingFetch(async () => new Response('{}', { status: 200 })),
+    })
+    assert.equal(guard.allowAllExternal, false, `${JSON.stringify(entry)} must not enable allow-all`)
+    assert.equal(guard.inspect('https://api.openai.com/v1').allowed, false)
+  }
 })
 
 test('every egress decision is recorded for the audit trail', () => {

@@ -6,7 +6,7 @@
 
 import { readFileSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { RUNTIME_POLICIES, DATA_CLASSES } from './policy/egress.mjs'
+import { RUNTIME_POLICIES, DATA_CLASSES, ALLOW_ALL_HOSTS } from './policy/egress.mjs'
 
 export const DEFAULT_CONFIG = Object.freeze({
   port: 8790,
@@ -94,6 +94,26 @@ export function loadConfig(env = process.env, overrides = {}) {
     warnings.push(`an online allowlist is configured but policy is strict_offline; ${onlineAllowlist.length} host(s) will still be blocked`)
   }
 
+  // Wide-open egress is a legitimate operating mode, but it must never be *quiet*.
+  // An allowlist containing '*' means every outbound host is permitted, and under
+  // online_enabled the data-classification gate is bypassed as well, so the two
+  // together mean company-private text can leave the machine with no gate at all.
+  // That combination is warned about specifically, because "fully online" and
+  // "unclassified egress" are different decisions that one setting silently makes.
+  if (onlineAllowlist.includes(ALLOW_ALL_HOSTS) && resolvedPolicy !== RUNTIME_POLICIES.STRICT_OFFLINE) {
+    warnings.push(
+      "AETHERIS_ONLINE_ALLOWLIST contains '*': egress to ANY external host is permitted. " +
+        'strict_offline would still block everything; the current policy does not.',
+    )
+    if (resolvedPolicy === RUNTIME_POLICIES.ONLINE_ENABLED) {
+      warnings.push(
+        `policy online_enabled bypasses data classification entirely, so text classified up to '` +
+          `restricted' may be sent to any host on this allowlist. Use hybrid with the same allowlist ` +
+          `to keep the '${externalCeiling}' ceiling enforced while remaining fully online.`,
+      )
+    }
+  }
+
   // A secret in a VITE_* variable would be shipped to the browser. Refuse loudly.
   for (const key of Object.keys(env)) {
     if (/^VITE_.*(KEY|TOKEN|SECRET|PASSWORD)/i.test(key)) {
@@ -164,6 +184,11 @@ export function publicConfig(config) {
     policy: config.policy,
     externalCeiling: config.externalCeiling,
     offlineEnforced: config.policy === RUNTIME_POLICIES.STRICT_OFFLINE,
+    // Mirrors the guard: '*' under strict_offline is inert, so reporting it as
+    // "allow all" would invert the meaning of the field at the worst moment.
+    allowAllExternal:
+      config.policy !== RUNTIME_POLICIES.STRICT_OFFLINE && config.onlineAllowlist.includes(ALLOW_ALL_HOSTS),
+    onlineAllowlist: [...config.onlineAllowlist],
     dataDir: config.dataDir,
     ollama: { enabled: config.ollama.enabled, baseUrl: config.ollama.baseUrl },
     llamaCpp: { enabled: config.llamaCpp.enabled, baseUrl: config.llamaCpp.baseUrl, runtime: config.llamaCpp.runtime, keyConfigured: Boolean(config.llamaCpp.apiKey) },
