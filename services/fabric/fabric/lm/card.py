@@ -1,0 +1,198 @@
+"""Turn a training report into a model card, and let the release gate decide.
+
+This module deliberately does not implement versioning, rollback or a release gate.
+`fabric/modelcards.py` already has all three, tested, and building a second copy
+would be exactly the duplication the brief forbids. What this adds is the *policy*
+for a language model: which numbers count as requirements, and which are only
+recorded as limitations.
+
+The requirements are chosen so that passing them means something:
+
+* **`perplexityVsBigram` <= 1.0 (hard).** The model must beat a bigram table
+  estimated from the same training text and scored on the same held-out tokens. This
+  is the only requirement that speaks to whether the model learned anything about
+  order rather than about frequency. A model that cannot beat a bigram table has not
+  earned the compute it cost.
+* **`validationUnknownRate` <= 0.02 (hard).** The tokenizer is fitted on training
+  text only, so validation characters can be unknown. If too many are, the perplexity
+  is partly a measurement of the `<unk>` token and does not describe language
+  modelling. A number that does not measure what it claims must not be releasable.
+* **`lossImprovement` >= 1.0 (hard).** Final loss must be below initial loss.
+  Guards against a run that diverged and was recorded anyway.
+* **`parameterCount` <= 5,000,000 (soft).** A limitation, not a gate: exceeding it
+  means the model is larger than the "Lite" family is meant to be, and that is
+  recorded on the card rather than blocking the release.
+* **`wallSeconds` <= 3600 (soft).** Records cost.
+"""
+
+from __future__ import annotations
+
+import math
+
+from ..modelcards import EvaluationProvenance, ModelReleaseManager, ModelReleaseError, Requirement, StageStatus
+
+
+#: Name of the sole first-party language model in the Aetheris Lite family.
+LM_NAME = "aetheris-lite-lm"
+LM_FAMILY = "aetheris-lite"
+LM_LICENCE = "MIT"  # first-party weights trained here; see the NOTICES for dependencies
+
+
+def requirements_for_language_model() -> tuple[Requirement, ...]:
+    return (
+        Requirement(metric="perplexityVsBigram", maximum=1.0, hard=True),
+        Requirement(metric="validationUnknownRate", maximum=0.02, hard=True),
+        Requirement(metric="lossImprovement", minimum=1.0, hard=True),
+        Requirement(metric="parameterCount", maximum=5_000_000, hard=False),
+        Requirement(metric="wallSeconds", maximum=3600.0, hard=False),
+    )
+
+
+def metrics_from_report(report) -> dict:
+    """Extract the numbers the requirements are checked against."""
+    payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
+    evaluation = payload["evaluation"]
+    best = next(
+        (b for b in evaluation["baselines"] if b["name"] == evaluation["bestBaseline"]),
+        None,
+    )
+    if best is None:
+        raise ValueError("the report has no baselines; a perplexity with nothing to compare to cannot be gated")
+    ratio = evaluation["perplexity"] / best["perplexity"]
+    first = payload["loss_curve"][0]["loss"]
+    final = payload["final_loss"]
+    # Numeric only. `ModelReleaseManager.validate` coerces every entry with float(),
+    # which is correct -- a metric is a number. The name of the baseline that was
+    # beaten is context, not a metric, and lives on the card's artifacts instead.
+    return {
+        "validationPerplexity": float(evaluation["perplexity"]),
+        "bitsPerCharacter": float(evaluation["bitsPerCharacter"]),
+        "perplexityVsBigram": float(ratio),
+        "bestBaselinePerplexity": float(best["perplexity"]),
+        "validationUnknownRate": float(evaluation["unknownRate"]),
+        "validationTokens": float(evaluation["tokensEvaluated"]),
+        "lossImprovement": float(first - final),
+        "finalLoss": float(final),
+        "parameterCount": float(payload["provenance"]["parameterCount"]),
+        "wallSeconds": float(payload["resource"]["wallSeconds"]),
+    }
+
+
+def best_baseline_name(report) -> str:
+    """Which baseline the model was measured against. Context, not a metric."""
+    payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
+    name = payload["evaluation"]["bestBaseline"]
+    if not name:
+        raise ValueError("the report does not record which baseline was strongest")
+    return str(name)
+
+
+def limitations_from_report(report) -> list[str]:
+    """What the card must say about a model this size, whether or not it is released."""
+    payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
+    parameters = payload["provenance"]["parameterCount"]
+    baseline = payload["evaluation"]["bestBaseline"]
+    limitations = [
+        "Character-level, not subword: sequences are long for the parameter count.",
+        f"Trained from scratch on {payload['corpus']['trainBytes']:,} bytes of this repository's own "
+        "text. It has no world knowledge, no instruction-following and no safety behaviour.",
+        f"Output quality is low by design of the experiment: {parameters:,} parameters trained for "
+        f"{payload['resource']['steps']} steps. This proves the pipeline, not the model.",
+        f"Evaluated only against {baseline}/uniform/unigram baselines on in-distribution held-out "
+        "text; no comparison against any pretrained model was performed and none is claimed.",
+        "Not instruction-tuned and has no tokenizer beyond ASCII-and-source-code characters; it "
+        "cannot be exposed as a chat assistant in this state.",
+    ]
+    if payload["tokenizer"]["validationUnknownRate"] > 0:
+        limitations.append(
+            f"{payload['tokenizer']['validationUnknownRate']:.6f} of held-out characters are outside "
+            "the training vocabulary and scored as <unk>; perplexity is slightly pessimistic because "
+            "of it."
+        )
+    return limitations
+
+
+def build_provenance(report, *, hardware: dict | None = None) -> EvaluationProvenance:
+    payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
+    provenance = payload["provenance"]
+    model = payload["model_config"]
+    return EvaluationProvenance(
+        subject=f"{LM_NAME} (from-scratch, pure NumPy)",
+        comparator=f"{payload['evaluation']['bestBaseline']} baseline on identical held-out tokens",
+        hardware=hardware or {
+            "machine": provenance.get("machine"),
+            "platform": provenance.get("platform"),
+            "accelerator": "none (CPU only)",
+            "peakMemoryMb": payload["resource"]["peakMemoryMb"],
+        },
+        decoding={
+            "temperature": 0.0,
+            "topK": 0,
+            "note": "perplexity is teacher-forced; no sampling involved in the gate metric",
+        },
+        context={"seqLen": model["seq_len"], "window": "sliding, non-overlapping, stride = seqLen"},
+        quantization=None,  # trained and evaluated in float32; no quantisation applied
+        prompts=[],
+        dataset_digest=payload["corpus"]["manifestDigest"],
+        corpus_size=payload["corpus"]["trainBytes"],
+        code_revision=provenance.get("codeRevision"),
+        seed=provenance["seed"]["model"],
+        limitations=limitations_from_report(payload),
+        status=StageStatus.COMPLETED,
+    )
+
+
+def register_from_report(report, manager: ModelReleaseManager, *, version: str, hardware: dict | None = None):
+    """Register a training report as a candidate version. Not released."""
+    payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
+    return manager.register(
+        name=LM_NAME,
+        version=version,
+        family=LM_FAMILY,
+        licence=LM_LICENCE,
+        weights_digest=payload["artifact"]["weightsDigest"],
+        base_checkpoint=None,  # trained from random initialisation; there is no base
+        config_digest=_config_digest(payload),
+        dataset_digest=payload["corpus"]["manifestDigest"],
+        parameter_count=int(payload["provenance"]["parameterCount"]),
+        requirements=requirements_for_language_model(),
+        provenance=build_provenance(payload, hardware=hardware),
+        artifacts={
+            "filename": payload["artifact"]["filename"],
+            "strongestBaseline": best_baseline_name(payload),
+            "fileDigest": payload["artifact"]["fileDigest"],
+            "bytes": payload["artifact"]["bytes"],
+            "vocabularyDigest": payload["tokenizer"]["vocabularyDigest"],
+            "corpusManifest": payload["corpus"]["manifestDigest"],
+            "trainer": "services/fabric/fabric/lm/train.py",
+        },
+    )
+
+
+def _config_digest(payload: dict) -> str:
+    import hashlib
+    import json
+
+    return hashlib.sha256(
+        json.dumps({"model": payload["model_config"], "train": payload["config"]}, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+
+def candidate_from_report(report, manager: ModelReleaseManager, *, version: str, hardware: dict | None = None):
+    """Register, validate against the declared requirements, and release only if it passes.
+
+    Returns `(card, released)`. A rejected candidate is left in the manager as
+    REJECTED with its reasons, which is the record that the attempt happened and why
+    it did not ship.
+    """
+    payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
+    card = register_from_report(payload, manager, version=version, hardware=hardware)
+    manager.validate(card.identifier, metrics_from_report(payload), provenance=card.provenance)
+
+    card = manager.card(card.identifier)
+    if card.status != "validated":
+        return card, False
+    try:
+        return manager.release(card.identifier, notes="from-scratch NumPy training run"), True
+    except ModelReleaseError:
+        return manager.card(card.identifier), False

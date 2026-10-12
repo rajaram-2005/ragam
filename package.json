@@ -21,8 +21,10 @@
     "train": "cd services/fabric && ${AETHERIS_PYTHON:-python3} -c \"from fabric.pipeline import Pipeline, PipelineConfig; r = Pipeline(PipelineConfig(epochs=25)).run(); print(r.status, r.run_id)\"",
     "cycle": "cd services/fabric && ${AETHERIS_PYTHON:-python3} scripts/sparsiz_cycle.py",
     "robustness": "cd services/fabric && ${AETHERIS_PYTHON:-python3} scripts/robustness.py",
+    "lm:train": "cd services/fabric && ${AETHERIS_PYTHON:-python3} scripts/train_lm.py",
     "verify": "npm run test && npm run web:build",
-    "fabric:run": "curl -sS -X POST http://127.0.0.1:8791/pipeline/run -H \"content-type: application/json\" -d \"{}\""
+    "fabric:run": "curl -sS -X POST http://127.0.0.1:8791/pipeline/run -H \"content-type: application/json\" -d \"{}\"",
+    "lm:quick": "cd services/fabric && ${AETHERIS_PYTHON:-python3} scripts/train_lm.py --steps 60 --d-model 48 --n-layers 2 --d-ff 128 --warmup-steps 10 --output-dir /tmp/aetheris-lite-quick"
   },
   "//": [
     "This is a script runner, not an npm workspace, on purpose.",
@@ -41,7 +43,8 @@
     "and installing torch here is actively harmful: on a GPU-less host pip pulls the",
     "entire CUDA stack. See docs/04-setup.md.",
     "Python scripts honour $AETHERIS_PYTHON (default: python3). Set it when numpy and pytest live in a virtualenv rather than on the system interpreter \u2014 e.g. AETHERIS_PYTHON=/path/to/venv/bin/python npm run test:fabric. Do not install torch to satisfy them; nothing here needs it.",
-    "Training is a library call or an HTTP POST to the Fabric service, not a CLI: fabric/run.py is the RunRecord module. `npm run train` runs the pipeline in-process; `npm run fabric:run` triggers it through the service (start `npm run fabric` first)."
+    "Training is a library call or an HTTP POST to the Fabric service, not a CLI: fabric/run.py is the RunRecord module. `npm run train` runs the pipeline in-process; `npm run fabric:run` triggers it through the service (start `npm run fabric` first).",
+    "Aetheris Lite training is a pure-NumPy from-scratch language model: `npm run lm:train` runs the release configuration and `npm run lm:quick` a 60-step smoke run. No torch, no GPU, no downloads. Artifacts go to services/fabric/artifacts/, which is gitignored by policy: weights are referenced by digest from a model card, never redistributed through this repository."
   ],
   "workspaces": []
 }

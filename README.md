@@ -52,11 +52,13 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 663 tests: core 265, web 56, fabric 342
+npm test          # 762 tests: core 266, web 56, fabric 440
+npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
+npm run lm:train  # the full from-scratch LM run (~55 min on 2 CPUs)
 npm run train     # in-process training run
 ```
 
-All 663 run in CI on every push and pull request
+All 762 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -117,7 +119,7 @@ Status of every acceptance criterion, with evidence:
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
 | `services/core` | Node 22 ESM | 7,380 | 5,237 | **zero npm packages** | 260 |
-| `services/fabric` | Python 3.11 | 5,592 | 3,583 | NumPy only | 342 |
+| `services/fabric` | Python 3.11 | 7,113 | 4,903 | NumPy only | 440 |
 | `apps/web` | React 18 + Vite | 3,486 | 1,169 | react, react-dom | 56 |
 
 The core service has **no npm dependencies at all** — that is why the root
@@ -132,10 +134,40 @@ Architecture, component responsibilities and enforcement points:
 
 ## Aetheris Lite
 
-One first-party model exists, and it is real: **`aetheris-lite-retriever@0.1.0`**,
-a 18,784-parameter dual encoder trained from scratch by a hand-written NumPy Adam
-loop whose five parameter gradients all match central finite differences to
-~3e-10. Trained from scratch, not a fine-tune: `baseCheckpoint: null`.
+Two first-party models exist, and both are real.
+
+### A language model, trained from nothing
+
+**`aetheris-lite-lm`** — a **625,920-parameter character-level transformer**
+trained from random initialisation, in pure NumPy, on this repository's own text.
+No pretrained weights, no PyTorch, no GPU, no downloads.
+
+This exists because every route to *fine-tuning someone else's* model was blocked —
+`huggingface.co` and `download.pytorch.org` are unreachable, `llama-cpp-python` ships
+no manylinux wheel for this platform, and there is no `.gguf` or `.safetensors`
+anywhere on the host. Training from random initialisation needs none of that.
+
+The gradients are derived by hand and **every one is checked against a central finite
+difference**. That check found a real bug on its first run: the positional-embedding
+gradient scattered with a `(T, B)` layout while the hidden state is `(B, T)`. It
+reported `pos: exceeds tolerance by 1.6e-01` and nothing else would have noticed.
+
+> **This is not a good language model, and it is not presented as one.** Its output is
+> mostly meaningless. It proves the pipeline — data validation, a disjoint split,
+> hand-derived backprop, held-out evaluation against computed uniform/unigram/bigram
+> baselines, a versioned card and a release gate that refuses. Its limitations are
+> generated onto its own model card, not tucked into a footnote.
+
+It is deliberately **not** wired into `/api/chat`: exposing a base model of this size
+as a chat assistant would misrepresent it. See
+[`docs/08-aetheris-lite.md`](docs/08-aetheris-lite.md).
+
+### The retriever
+
+**`aetheris-lite-retriever@0.1.0`**, a 18,784-parameter dual encoder trained from
+scratch by a hand-written NumPy Adam loop whose five parameter gradients all match
+central finite differences to ~3e-10. Trained from scratch, not a fine-tune:
+`baseCheckpoint: null`.
 
 On held-out queries at low lexical overlap it scores **MRR 0.8497 against BM25's
 0.3352** (+153.5%), with an untrained control at 0.0500. The experiment ledger

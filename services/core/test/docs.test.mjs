@@ -491,14 +491,14 @@ test('the status doc reports the real test totals', () => {
   // docs/03-status.md and README.md have to move with it.
   assert.equal(count('services/core/test', /\.test\.mjs$/), 11)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
-  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 13)
+  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 19)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**265 / 265**'), 'core total must be stated')
-  assert.ok(status.includes('**342 / 342**'), 'fabric total must be stated')
+  assert.ok(status.includes('**266 / 266**'), 'core total must be stated')
+  assert.ok(status.includes('**440 / 440**'), 'fabric total must be stated')
   assert.ok(status.includes('**56 / 56**'), 'web total must be stated')
-  assert.ok(status.includes('663 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('663 tests: core 265, web 56, fabric 342'),
+  assert.ok(status.includes('762 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('762 tests: core 266, web 56, fabric 440'),
     'README must state the same totals')
   assert.ok(status.includes('(11 files'), 'the file count must move with the suite')
 
@@ -511,15 +511,42 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(265), `core heading must say 265, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(342), `fabric heading must say 342, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(266), `core heading must say 266, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(440), `fabric heading must say 440, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(56), `web heading must say 56, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    663,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 663`,
+    762,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 762`,
   )
+})
+
+test('the documented fabric line counts match the filesystem', () => {
+  // The core module table was checked; the fabric header was not, and it drifted
+  // silently from 5,592/3,583 while the numbers in this file kept passing. A number
+  // a document states twice can disagree with itself, so both are checked now.
+  const countLines = (dir, filter) => {
+    let total = 0
+    const walk = (current) => {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        const full = resolve(current, entry.name)
+        if (entry.isDirectory()) {
+          if (entry.name !== '__pycache__') walk(full)
+        } else if (entry.name.endsWith('.py') && (!filter || filter(entry.name))) {
+          total += readFileSync(full, 'utf8').split('\n').length - 1
+        }
+      }
+    }
+    walk(dir)
+    return total
+  }
+  const source = countLines(resolve(REPO, 'services/fabric/fabric'))
+  const tests = countLines(resolve(REPO, 'services/fabric/tests'))
+  const header = doc.architecture().match(/### `services\/fabric` — ([\d,]+) source lines, ([\d,]+) test lines/)
+  assert.ok(header, 'services/fabric must state its source and test line counts')
+  assert.equal(Number(header[1].replace(/,/g, '')), source, `fabric source is ${source} lines`)
+  assert.equal(Number(header[2].replace(/,/g, '')), tests, `fabric tests are ${tests} lines`)
 })
 
 test('every documented file actually exists', () => {

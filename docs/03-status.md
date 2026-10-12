@@ -9,12 +9,12 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 663 passing, 0 failing.**
+**Test totals: 762 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **265 / 265** (11 files, ~22 s) |
-| `services/fabric` | `pytest -q` | **342 / 342** (13 files, ~8 s) |
+| `services/core` | `node --test test/*.test.mjs` | **266 / 266** (11 files, ~23 s) |
+| `services/fabric` | `pytest -q` | **440 / 440** (19 files, ~31 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **56 / 56** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 217.28 kB → **65.53 kB gzip**, single chunk, no warnings |
 
@@ -61,18 +61,20 @@ instead.
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
 | 3 | Unified app, five areas | **Complete** | `apps/web`; 56 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
-| 4 | Local inference with ≥1 real local LM | **Blocked — requires weights** | Adapter implemented and tested against a real loopback server; no LM is installed on this host and seven independent acquisition attempts failed ("Phase 4 in detail", below) |
+| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now exists and runs here — trained from scratch, no weights needed ([`08-aetheris-lite.md`](./08-aetheris-lite.md)). The *chat* half is still unmet: it is a 625K-parameter base model that is not wired to `/api/chat`, and doing so would misrepresent it. The adapter half remains proven only against a loopback fixture ("Phase 4 in detail", below) |
 | 5 | FreeLLMAPI online integration | **Implemented — requires external credentials** | Client written to contracts read from source; no key here |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
 | 8 | Multimodal pipelines | **Complete** | Job queue, validation, video genuineness check |
 | 9 | Sparsiz integration | **Complete** | Responsibility defined; taxonomies and `Q(x)` adopted, scoring replaced |
-| 10 | Aetheris Lite experiments | **Partial** | One real trained retriever; 3 of 8 stages blocked |
-| 11 | Competitive benchmark cycle | **Partial** | Real, reproducible BM25 comparison; **no** Mistral/Qwen/Llama/Gemma/DeepSeek comparison possible |
+| 10 | Aetheris Lite experiments | **Partial** | Two real first-party models: the trained retriever, and a from-scratch **625K-parameter character-level LM** trained in pure NumPy with hand-derived, finite-difference-verified gradients. SFT and preference optimization remain unimplemented for want of data and compute, and are not simulated |
+| 11 | Competitive benchmark cycle | **Partial** | Real, reproducible BM25 comparison; **no** Mistral/Qwen/Llama/Gemma/DeepSeek comparison possible. Aetheris Lite is evaluated against computed uniform/unigram/bigram baselines on identical held-out tokens — never against a pretrained model, because none could be obtained |
 | — | Sparsiz improvement cycle on a real failure | **Complete** | [`07-improvement-cycle.md`](./07-improvement-cycle.md): rejected run diagnosed, hypothesis tested, regression cases promoted; the accepted `mrr` gain **did not replicate** across seeds and is recorded as such; 66 tests |
 | — | Selection-protocol correction | **Complete** | [`06-benchmarks.md`](./06-benchmarks.md) §5.3: base selection ran on the evaluation split; now runs on a training-side validation split. Released artifact unchanged (`weightsDigest db3366ea…`) |
 | — | Robustness measurement | **Complete** | `scripts/robustness.py`: seed, training-size and paired axes. The released `mrr` is one seed of six (spread 0.103) and ranks 4th of 6 |
 | 12 | Release readiness docs | **Complete** | This document plus 04, 05, 06 and the model card |
+| — | From-scratch language model | **Complete** | [`08-aetheris-lite.md`](./08-aetheris-lite.md): character-level transformer, 98 new tests including every gradient against a finite difference. Found and fixed a real positional-gradient bug the numeric check reported as `pos: exceeds tolerance by 1.6e-01` |
+| — | Aetheris Lite release gate | **Complete** | `fabric/lm/card.py` drives the existing `ModelReleaseManager`. Hard requirements: beat the bigram baseline, unknown-rate ≤ 2%, loss must fall. The rejection path is tested more than the acceptance path |
 
 ### Phase 4 in detail — the most important limitation
 
@@ -148,7 +150,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (265 tests)
+### `services/core` — Implemented and tested (266 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -168,7 +170,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (342 tests)
+### `services/fabric` — Implemented and tested (440 tests)
 
 | Stage | Status |
 |---|---|

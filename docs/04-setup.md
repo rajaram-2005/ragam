@@ -142,13 +142,42 @@ aetheris-fabric listening
 
 ---
 
+## 3b. Training Aetheris Lite
+
+The language model is trained here, from random initialisation, with no downloads:
+
+```bash
+npm run lm:quick   # 60 steps, seconds — proves the pipeline end to end
+npm run lm:train   # the release configuration, ~55 minutes on 2 CPU cores
+```
+
+Both write to `services/fabric/artifacts/`, which is **gitignored by policy**:
+weights are referenced by digest from a model card and never redistributed through
+this repository. Each run also writes a report JSON carrying the corpus manifest
+digest, tokenizer digest, configuration digest, code revision, all three seeds, wall
+time, peak memory, the loss curve, and the evaluation against every baseline.
+
+Re-running an identical command produces a **bit-identical** artifact. To train on a
+different corpus, pass `--corpus-root`; the split is by whole file, so no document
+can appear on both sides of it.
+
+```bash
+cd services/fabric
+python scripts/train_lm.py --steps 2600 --d-model 96 --n-layers 3 --corpus-root /path/to/text
+```
+
+Full design, evaluation methodology and limitations:
+[`08-aetheris-lite.md`](./08-aetheris-lite.md).
+
+---
+
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (663 tests)
-npm run test:core         # 260
+npm test                  # all three suites (762 tests)
+npm run test:core         # 266
 npm run test:web          # 56
-npm run test:fabric       # 256 — needs numpy + pytest on the interpreter
+npm run test:fabric       # 440 — needs numpy + pytest on the interpreter
 ```
 
 If NumPy and pytest live in a virtualenv rather than on the system interpreter,
