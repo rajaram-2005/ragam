@@ -153,9 +153,44 @@ only, including `node:sqlite`.
 
 `services/fabric` has **one** runtime dependency:
 
-| Package | Version | Licence | Copyright |
-|---|---|---|---|
-| numpy | 2.1.3 | BSD-3-Clause | Copyright (c) 2005-2024, NumPy Developers |
+| Package | Declared range | Version measured here | Licence | Copyright |
+|---|---|---|---|---|
+| numpy | `>=1.26` | 2.1.3 | BSD-3-Clause | Copyright (c) 2005-2024, NumPy Developers |
+
+**The declared range is open, so the licence that applies depends on when you
+install.** Every figure and measurement in this repository was produced with
+numpy **2.1.3**, whose dist-info declares `BSD-3-Clause`. A fresh install today
+resolves numpy **2.4.6**, whose metadata declares a compound SPDX expression
+instead:
+
+```
+License-Expression: BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0
+```
+
+All five components were checked individually: BSD-3-Clause, 0BSD (BSD Zero
+Clause), MIT and Zlib are permissive, and CC0-1.0 is a public-domain dedication.
+**None is copyleft, and all are compatible with this project's MIT licence.** The
+change is one of expression granularity, not of obligation — numpy has always
+bundled components under several permissive terms, and newer releases state that
+explicitly rather than summarising it as BSD-3-Clause.
+
+The bundled `LICENSE.txt` also differs in length between the two versions
+(47,755 B at 2.1.3, 46,794 B at 2.4.6), so the copy checked in under §4 is
+version-specific and is labelled with the version it came from. Anyone pinning a
+different numpy should re-read the licence from that version's own dist-info
+rather than assuming this copy still matches:
+
+```bash
+python -c "
+import importlib.metadata as m
+d = m.distribution('numpy')
+print('version       :', d.version)
+print('License-Expr  :', d.metadata.get('License-Expression'))
+for f in (d.files or []):
+    if str(f).endswith('LICENSE.txt'):
+        print('LICENSE.txt   :', len((d._path.parent / f).read_bytes()), 'bytes')
+"
+```
 
 ---
 
@@ -252,9 +287,44 @@ the core auditable and free of a supply chain.
 
 `services/fabric` has **one** runtime dependency:
 
-| Package | Version | Licence | Copyright |
-|---|---|---|---|
-| numpy | 2.1.3 | BSD-3-Clause | Copyright (c) 2005-2024, NumPy Developers |
+| Package | Declared range | Version measured here | Licence | Copyright |
+|---|---|---|---|---|
+| numpy | `>=1.26` | 2.1.3 | BSD-3-Clause | Copyright (c) 2005-2024, NumPy Developers |
+
+**The declared range is open, so the licence that applies depends on when you
+install.** Every figure and measurement in this repository was produced with
+numpy **2.1.3**, whose dist-info declares `BSD-3-Clause`. A fresh install today
+resolves numpy **2.4.6**, whose metadata declares a compound SPDX expression
+instead:
+
+```
+License-Expression: BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0
+```
+
+All five components were checked individually: BSD-3-Clause, 0BSD (BSD Zero
+Clause), MIT and Zlib are permissive, and CC0-1.0 is a public-domain dedication.
+**None is copyleft, and all are compatible with this project's MIT licence.** The
+change is one of expression granularity, not of obligation — numpy has always
+bundled components under several permissive terms, and newer releases state that
+explicitly rather than summarising it as BSD-3-Clause.
+
+The bundled `LICENSE.txt` also differs in length between the two versions
+(47,755 B at 2.1.3, 46,794 B at 2.4.6), so the copy checked in under §4 is
+version-specific and is labelled with the version it came from. Anyone pinning a
+different numpy should re-read the licence from that version's own dist-info
+rather than assuming this copy still matches:
+
+```bash
+python -c "
+import importlib.metadata as m
+d = m.distribution('numpy')
+print('version       :', d.version)
+print('License-Expr  :', d.metadata.get('License-Expression'))
+for f in (d.files or []):
+    if str(f).endswith('LICENSE.txt'):
+        print('LICENSE.txt   :', len((d._path.parent / f).read_bytes()), 'bytes')
+"
+```
 
 Python test tooling (development only, not redistributed):
 
@@ -277,7 +347,7 @@ project can be redistributed without re-fetching anything:
 | `licenses/aetheris-MIT.txt` | `Aetheris-/LICENSE` @ `bed29f4` | 1,066 B |
 | `licenses/freellmapi-MIT.txt` | `freellmapi/LICENSE` @ `65ec96d` | 1,071 B |
 | `licenses/sparsiz-Unlicense.txt` | `sparsiz/LICENSE` @ `76ec6f0` | 1,211 B |
-| `licenses/numpy-BSD-3-Clause.txt` | `numpy 2.1.3` dist-info `LICENSE.txt` | 47,755 B |
+| `licenses/numpy-BSD-3-Clause.txt` | `numpy 2.1.3` dist-info `LICENSE.txt` — **version-specific**; 2.4.6 ships a 46,794 B text | 47,755 B |
 
 The texts below are reproduced verbatim from those files.
 
