@@ -125,18 +125,43 @@ that keeps recall inside tolerance while raising MRR further.
 
 ### 3.3 Base selection
 
-Candidates trained for 8 epochs each, selected by held-out MRR measured **before**
-the baseline was frozen (an earlier version recorded the baseline first and then
-mutated it — a real bug, fixed).
+Candidates are trained for 8 epochs on a **fit** split and selected by MRR on a
+**validation** split. Neither is the evaluation split. Selection measured on the
+split you then report as held-out is not a held-out measurement: the reported
+number becomes the maximum over the candidates rather than an estimate of unseen
+performance, and it gets more optimistic the more candidates are tried. See §5.3.
 
-| Condition | `d_model=24` | `d_model=48` (selected) |
-|---|---|---|
-| low overlap | 9,424 params · MRR 0.7563 · R@1 0.7083 | **18,784 params · MRR 0.8326 · R@1 0.7917** |
-| high overlap | 8,632 params · MRR 0.8115 · R@1 0.7500 | **17,200 params · MRR 0.8889 · R@1 0.8750** |
+The split: 48 training queries → 36 fit + 12 validation, seed `20251012`. The
+evaluation split is never touched by selection, and the stage records
+`validationSplit.disjointFromEvaluation` so a reader can check that rather than
+assume it.
+
+| Condition | Candidate | Fit params | MRR on **validation** (decides) | MRR on evaluation (recorded only) |
+|---|---|---|---|---|
+| low overlap | `d_model=24` | 9,112 | 0.2063 | 0.4460 |
+| low overlap | `d_model=48` | 18,160 | **0.2944** ← selected | 0.3935 |
+| high overlap | `d_model=24` | 8,512 | 0.2897 | 0.5665 |
+| high overlap | `d_model=48` | 16,960 | **0.4722** ← selected | 0.6341 |
+
+Three things this table is honest about:
+
+- **The evaluation column is recorded, not consulted.** It is printed so the gap
+  between the two criteria is visible. On low overlap they disagree: validation
+  ranks `d_model=48` above 24 while evaluation ranks 24 above 48. That disagreement
+  is the argument for the change — the two criteria are not interchangeable, so
+  choosing on the evaluation set was never a neutral convenience.
+- **The fit candidates are smaller than the released model.** These parameter
+  counts (16,960 / 18,160) belong to candidates trained on 36 queries. The released
+  model is trained on all 48 and has **18,784** parameters. A candidate's score here
+  is therefore not the released model's score, and is not meant to be.
+- **Both conditions still select `d_model=48`**, so the released weights are
+  unchanged: `weightsDigest db3366ea…`, `configDigest 8bb457b2…`. The protocol was
+  corrected without touching the artifact.
 
 `languageModelBase = "not selected: no weights available on this host"` in both.
-Parameter counts differ between conditions because the vocabulary is
-corpus-dependent.
+Fit parameter counts differ between conditions because the vocabulary is
+corpus-dependent, and the fit vocabulary is smaller than the released one because
+it is built from the fit split only.
 
 ### 3.4 Latency
 
@@ -224,16 +249,45 @@ are recorded in the dataset `meta` as `evaluationLabelledFraction` and
 `trainLabelledFraction`, so a reader can see the composition of both splits rather
 than trusting that they were balanced.
 
-### 5.3 Latency noise floor (fixed)
+### 5.3 Selection on the evaluation split (fixed)
+
+**The defect.** `base_selection` scored each candidate width on the evaluation
+queries, chose the best, and the evaluation report then described the winner's
+score on those same queries. The stage even labelled it `selectedBy: "held-out MRR
+on the evaluation split"`. Training data was separated from evaluation data; the
+*choice* was not, so the reported evaluation score was partly a maximum over
+candidates.
+
+**Why it survived so long.** The numbers it produced were plausible. Selecting on
+the evaluation set does not make a number obviously wrong — it makes it quietly
+optimistic, and nothing in the output distinguishes the two.
+
+**Fix.** Candidates train on a fit split and are selected by MRR on a validation
+split, both carved from the training queries (`split_fit_validation`, deterministic
+under `validation_seed`). Both criteria are recorded. A tie on the validation split
+fails the stage rather than being broken by list order, because `max` would
+silently return the first candidate and a reader would misread that as a decision
+supported by measurement.
+
+**Effect on the artifact: none.** Both conditions select `d_model=48` under either
+protocol, so `weightsDigest` is unchanged at `db3366ea…`. The fix corrected the
+reason, not the answer — which is the outcome to want, and also the reason a change
+like this is safe to make.
+
+### 5.4 Latency noise floor (fixed)
 
 See §3.4. A relative tolerance applied to sub-millisecond timings rejects models
 for reasons that have nothing to do with the model.
 
-### 5.4 Contamination and separation
+### 5.5 Contamination and separation
 
 - **Development and evaluation data are separated by construction.** Training uses
   `ds.triples()` from `train_queries`; evaluation uses `evaluation_queries`. The
   held-out-topic split additionally removes whole topics from training.
+- **Selection is separated too (§5.3).** Training data being separate from
+  evaluation data is not sufficient if the evaluation data is what picks the
+  configuration. Candidate selection runs on a validation split carved from the
+  training queries, and the stage asserts the two are disjoint.
 - **Contamination is checkable, not asserted.** `KnowledgePipeline.findContamination`
   flags evaluation cases whose token overlap with training material exceeds a
   threshold (default 12 tokens), and `evaluateRetrieval` scores retrieval against

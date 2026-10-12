@@ -123,13 +123,20 @@ The first line matches the rejection recorded in `docs/06-benchmarks.md`. The
 negative control passed: the ledger, re-run against the same inputs, reaches the
 same conclusion for the same reason.
 
-The fused ranker is accepted because it improves ordering (`mrr` +19.4% on `high`,
-+179.1% on `low`) while its `recall@5` stays inside the 5% tolerance on `high`
-(−4.17%) and improves to a perfect 1.0000 on `low`. Accuracy is bought, not
-traded: on `low` the fused ranker is better than *both* of its own components on
-every reported metric.
+**What that verdict is and is not.** The ledger decided, at seed 7, that the
+fused ranker beat the frozen baseline on `mrr` while holding `recall@5` inside
+tolerance. That is a correct application of its rules to one measurement, and it
+is all it is. It is **not** evidence that fusion generally improves ordering —
+[§5.2](#52-replication-what-survives-across-seeds) re-runs the comparison at five
+further seeds and the `mrr` half of that verdict does not survive, while the
+`recall@5` half does. Read the accept as "accepted at the recorded seed", which is
+the literal claim.
 
-### The mechanism
+An earlier version of this document said the fusion "improves ordering (+19.4% on
+`high`)" without that qualification. That was a single-seed result reported as a
+general one, and it is corrected here rather than quietly softened.
+
+### 5.1 The mechanism
 
 Fusion is rank-based: the document at position `i` of a list of length `n`
 contributes `weight × (1 − i/n)`. Rank-based rather than score-based is deliberate —
@@ -167,7 +174,114 @@ Two conclusions the table supports directly:
   lunch here, and [§6](#6-what-this-pass-does-not-establish) treats this as a live
   limitation rather than a tuning opportunity.
 
+### 5.2 Replication: what survives across seeds
+
+One run at one seed cannot separate a change from luck. The same measurement was
+re-run at six seeds, and on each seed the dense and fused rankers were scored on
+**the same trained model**, so the seed cannot confound the comparison. Reversible
+with `npm run robustness`.
+
+**First, how much does the released number itself move?** Same data, same
+configuration, only the initialisation differs:
+
+| | mean | min | max | spread | stdev |
+|---|---|---|---|---|---|
+| `mrr` | 0.872239 | 0.841667 | 0.944444 | 0.102777 | 0.042107 |
+| `recall@5` | 0.951389 | 0.875000 | 1.000000 | 0.125000 | 0.040966 |
+
+The released `mrr` of **0.849702** is seed 7's value. It sits below the six-seed
+mean and ranks **4th of 6** ascending — so the reported figure is not the best of
+several runs, which is the thing a reader most needs to know. But it is one draw
+from a distribution with a stdev of 0.042, and the model card presents it as *the*
+score. That is the honest unit of measurement, and the spread is the error bar that
+was missing.
+
+**Second, does the fusion help?** Paired comparison, `high` overlap — the condition
+the rejection was about, where BM25 has perfect `recall@5`:
+
+| seed | dense mrr | dense r@5 | fused mrr | fused r@5 |
+|---|---|---|---|---|
+| 7 | 0.8893 | 0.9167 | 0.9157 | 0.9583 |
+| 11 | 0.9365 | 0.9583 | 0.9792 | 1.0000 |
+| 13 | 0.9583 | 0.9583 | 0.9421 | 0.9583 |
+| 17 | 0.8694 | 0.9583 | 0.9302 | 0.9583 |
+| 23 | 0.9389 | 1.0000 | 0.9514 | 1.0000 |
+| 29 | 0.8278 | 0.9167 | 0.9062 | 0.9583 |
+
+and `low` overlap:
+
+| seed | dense mrr | dense r@5 | fused mrr | fused r@5 |
+|---|---|---|---|---|
+| 7 | 0.8497 | 0.9583 | 0.9354 | 1.0000 |
+| 11 | 0.9444 | 1.0000 | 0.9132 | 1.0000 |
+| 13 | 0.9032 | 0.9583 | 0.8590 | 1.0000 |
+| 17 | 0.8472 | 0.9583 | 0.8837 | 0.9583 |
+| 23 | 0.8417 | 0.9583 | 0.9076 | 1.0000 |
+| 29 | 0.8472 | 0.8750 | 0.8441 | 0.9167 |
+
+Two claims come out of this, and they are not the same claim.
+
+**Robust: the fusion never reduces `recall@5`.** On all twelve measurements — two
+conditions across six seeds — the fused ranker's `recall@5` is greater than or equal
+to the dense model's. Mean paired gain +0.0208 on `high`, +0.0278 on `low`. This is
+the property the fusion was introduced for, it is the reason the change is worth
+keeping, and it holds everywhere measured.
+
+**Not robust: the fusion improves `mrr`.** On `high` the mean paired gain is +0.0341
+against a seed stdev of 0.0499, and it is **negative on one seed**. On `low` it is
++0.0183 against 0.0421, and **negative on three of six seeds**. Neither gain exceeds
+the noise floor, and neither is consistent in sign. The `mrr` improvement in §4 is
+seed 7's result and does not replicate.
+
+**The original defect is narrowed, not eliminated.** BM25 has perfect `recall@5` on
+`high`, and neither learned ranker matches it on every seed: the dense model
+regresses on 5 of 6 seeds, the fused ranker on 4 of 6 (min 0.9583 against BM25's
+1.0000). Fusion makes the regression less frequent and less severe. It does not
+make it go away.
+
+That the two claims differ is the reason the report states both. A summary quoting
+only the mean `mrr` gain would read as a win; a summary quoting only the seed table
+would bury the one property that does hold everywhere.
+
+### 5.3 Training-set size
+
+The model is trained from scratch, so how much data it sees matters more than it
+would for a fine-tuned base. Vocabulary held constant at the full training
+vocabulary, so the only variable is the number of training triples:
+
+| training queries | triples | mrr | recall@5 |
+|---|---|---|---|
+| 48 (released protocol) | 48 | 0.849702 | 0.9583 |
+| 42 | 42 | 0.695238 | 0.8333 |
+| 36 | 36 | 0.572487 | 0.6667 |
+| 30 | 30 | 0.374074 | 0.5417 |
+| 24 | 24 | 0.178968 | 0.2500 |
+| 18 | 18 | 0.162434 | 0.2083 |
+
+`mrr` falls 0.687269 across the range, and more than a third of it is gone by 36
+queries. Losing a quarter of the training queries costs roughly a third of the
+score. The released number is therefore not merely a single seed — it is also the
+score at the largest training set available, and there is no evidence here about
+how it behaves between 48 queries and the thousands a real corpus would have. The
+direction is encouraging; the magnitude is unmeasured.
+
 ## 6. What this pass does not establish
+
+
+### The accepted `mrr` improvement did not replicate
+
+The headline weakness of this pass, and it is a weakness in the *result*, not just
+in the reporting. Fusion was accepted at seed 7 on an `mrr` gain that reverses on
+some seeds and never clears the seed-to-seed spread. The one property that does
+replicate — `recall@5` never falling below the dense model — is a smaller claim than
+"the fusion improves retrieval", and it is the claim that should be quoted.
+
+The lesson generalises past this experiment: **a single-run accept/reject ledger
+cannot establish robustness.** `ExperimentLedger` decides whether one measurement
+beat a frozen baseline, which is exactly what it should do and all it can do.
+Whether that beat is reproducible is a different question requiring replication
+across seeds, and no amount of care inside a single run substitutes for it. A
+ledger verdict is a hypothesis about the world until it is replicated.
 
 ### The verdict is knife-edge by construction
 
@@ -217,14 +331,28 @@ the reported `recall@5` is partly inherited rather than learned.
 Everything here is measured on a 96-document synthetic corpus with 24 evaluation
 queries on a two-core, GPU-less host. The mechanism — an untrained `<unk>`
 embedding — is general and would be diagnosed the same way on a larger corpus, but
-the *magnitudes* are not transferable, and no claim is made that they are.
+the *magnitudes* are not transferable, and no claim is made that they are. The
+training-size sweep in §5.3 is the clearest evidence of how little of the
+data-scaling behaviour has actually been observed.
+
+### Six seeds is not a distribution
+
+The replication sweep fixes six seeds, which bounds the spread loosely and cannot
+support a confidence interval or a significance test. The seed values are pinned so
+the measurement is reproducible, not because six is a sufficient sample. Anyone
+extending this should treat the spread as indicative and the rank of the released
+seed (4th of 6) as a single draw from it.
 
 ## 7. Reproducing this
 
 ```bash
 cd services/fabric
-python scripts/sparsiz_cycle.py --json cycle.json
+python scripts/sparsiz_cycle.py --json cycle.json   # the cycle and its verdicts
+python scripts/robustness.py   --json robust.json   # the seed, size and paired axes
 ```
+
+`npm run cycle` and `npm run robustness` from the repository root do the same. Both
+need only NumPy.
 
 Deterministic under the recorded seeds (`data_seed=1`, `model_seed=7`) apart from
 `latencyMs`, which is a timing measurement and is noise-floored in the spec so that
@@ -238,7 +366,10 @@ control: the dense retriever must still be rejected, and for the same reason.
 |---|---|---|
 | Hybrid rank fusion | `services/fabric/fabric/hybrid.py` | Implemented and tested (29 tests) |
 | Cycle driver | `services/fabric/scripts/sparsiz_cycle.py` | Implemented and tested (16 tests) |
+| Robustness measurement (seed, size, paired axes) | `services/fabric/scripts/robustness.py` | Implemented and tested (21 tests) |
 | Fusion + decision tests | `services/fabric/tests/test_hybrid.py`, `test_sparsiz_cycle.py` | Implemented and tested |
+| Validation split for selection | `services/fabric/fabric/dataset.py` (`split_fit_validation`) | Implemented and tested (16 tests) |
+| Selection protocol fix | `services/fabric/fabric/pipeline.py` (`base_selection`) | Implemented and tested; artifact unchanged |
 
 The fusion is **not** wired into the released model artifact as a replacement for
 it. `aetheris-lite-retriever@0.1.0` remains the released retriever and its recorded

@@ -20,6 +20,7 @@
     "test:fabric": "cd services/fabric && ${AETHERIS_PYTHON:-python3} -m pytest -q",
     "train": "cd services/fabric && ${AETHERIS_PYTHON:-python3} -c \"from fabric.pipeline import Pipeline, PipelineConfig; r = Pipeline(PipelineConfig(epochs=25)).run(); print(r.status, r.run_id)\"",
     "cycle": "cd services/fabric && ${AETHERIS_PYTHON:-python3} scripts/sparsiz_cycle.py",
+    "robustness": "cd services/fabric && ${AETHERIS_PYTHON:-python3} scripts/robustness.py",
     "verify": "npm run test && npm run web:build",
     "fabric:run": "curl -sS -X POST http://127.0.0.1:8791/pipeline/run -H \"content-type: application/json\" -d \"{}\""
   },

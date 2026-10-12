@@ -97,7 +97,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `policy/classify.mjs` | 137 | Secret and sensitivity classification, redaction |
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
 
-### `services/fabric` — 5,466 source lines, 3,135 test lines
+### `services/fabric` — 5,592 source lines, 3,583 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible

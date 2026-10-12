@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
+from typing import Sequence
 
 import numpy as np
 
@@ -416,3 +417,61 @@ def build_dataset(
             "note": "synthetic engineering-documentation fixture; not a real corpus",
         },
     )
+
+
+def split_fit_validation(
+    queries: Sequence[Query],
+    *,
+    fraction: float = 0.25,
+    seed: int = 0,
+) -> tuple[list[Query], list[Query]]:
+    """Carve a validation split out of the *training* queries.
+
+    Why this exists
+    ---------------
+    Selecting a configuration on the split you later report as held-out is not a
+    held-out measurement. The reported number becomes the maximum over the
+    candidates rather than an estimate of unseen performance, and the more
+    candidates are tried the more optimistic it gets. `Pipeline.base_selection`
+    did exactly that before this function existed: it scored each candidate width
+    on the evaluation queries, picked the winner, and the evaluation report then
+    described the winner's score on the same queries.
+
+    So candidate selection needs its own data, taken from the training side:
+
+        train queries ─┬─ fit         → trains each candidate
+                       └─ validation  → chooses between candidates
+
+        evaluation queries            → measured once, reported, never used to choose
+
+    The validation queries are returned to the caller and are then *also* used
+    when the selected configuration is retrained for the final model. That is
+    correct, not a leak: the purpose of holding them out was to keep the choice
+    independent of the evaluation set, not to keep them out of the model forever.
+
+    Guarantees
+    ----------
+    * Disjoint from each other, and both drawn only from ``queries``.
+    * Deterministic: the same seed and input produce the same split. Sorted by
+      position rather than by id so the result does not depend on id ordering.
+    * At least one query on each side, so a validation score always exists.
+    * Ordering within each list follows the input, so the returned lists are
+      stable to inspect.
+
+    Raises ``ValueError`` for a fraction outside ``(0, 1)`` or fewer than two
+    queries, because a "validation split" of one query is not a split.
+    """
+    if not 0.0 < fraction < 1.0:
+        raise ValueError("fraction must be within (0, 1)")
+    if len(queries) < 2:
+        raise ValueError(f"need at least 2 queries to split, got {len(queries)}")
+
+    rng = np.random.default_rng(seed)
+    size = max(1, int(round(len(queries) * fraction)))
+    # Never take everything: a split with no fit queries cannot train a candidate.
+    size = min(size, len(queries) - 1)
+    chosen = set(rng.permutation(len(queries))[:size].tolist())
+
+    fit = [query for position, query in enumerate(queries) if position not in chosen]
+    validation = [query for position, query in enumerate(queries) if position in chosen]
+    return fit, validation

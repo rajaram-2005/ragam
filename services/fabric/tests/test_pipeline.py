@@ -119,10 +119,86 @@ def test_base_selection_chooses_by_measurement_not_preference(completed_run):
     stage = next(s for s in record.stages if s["name"] == "base_selection")
     candidates = stage["detail"]["candidates"]
     assert len(candidates) == 2
-    best = max(candidates, key=lambda entry: entry["mrr"])
+    best = max(candidates, key=lambda entry: entry["validationMrr"])
     assert stage["detail"]["selected"] == best
-    assert stage["detail"]["selectedBy"] == "held-out MRR on the evaluation split"
+    assert stage["detail"]["selectedBy"] == "MRR on a validation split carved from the training queries"
     assert "not selected" in stage["detail"]["languageModelBase"]
+
+
+def test_base_selection_does_not_choose_on_the_evaluation_split(completed_run):
+    """The choice must be explicable by validation scores alone.
+
+    If any candidate were selected because of its evaluation score, the reported
+    evaluation number would be a maximum over candidates rather than a held-out
+    estimate. This asserts the selection equals the validation-best candidate, and
+    that the two scores are genuinely different measurements rather than one value
+    copied under two names.
+    """
+    _, record = completed_run
+    stage = next(s for s in record.stages if s["name"] == "base_selection")
+    candidates = stage["detail"]["candidates"]
+
+    for entry in candidates:
+        assert "validationMrr" in entry, "each candidate must report its validation score"
+        assert "evaluationMrr" in entry, "each candidate's evaluation score is recorded for transparency"
+
+    validation_best = max(candidates, key=lambda entry: entry["validationMrr"])
+    assert stage["detail"]["selected"]["dModel"] == validation_best["dModel"]
+
+    # The evaluation score is recorded but is not what decided it. If these two
+    # columns were identical the test would be vacuous, so require that at least
+    # one candidate's evaluation score disagrees with its validation score.
+    assert any(
+        entry["validationMrr"] != entry["evaluationMrr"] for entry in candidates
+    ), "validation and evaluation scores must be independent measurements"
+
+
+def test_base_selection_validation_split_is_disjoint_from_evaluation(completed_run):
+    _, record = completed_run
+    stage = next(s for s in record.stages if s["name"] == "base_selection")
+    split = stage["detail"]["validationSplit"]
+
+    assert split["disjointFromEvaluation"] is True
+    assert split["count"] > 0
+    assert split["fitCount"] > 0
+    assert split["count"] + split["fitCount"] == 48, "the split partitions the training queries"
+    for query_id in split["queries"]:
+        assert not query_id.startswith("eval-"), "no evaluation query may enter selection"
+
+
+def test_a_selection_that_provides_no_separation_is_refused():
+    """A tie on the validation split is refused rather than broken arbitrarily.
+
+    ``max`` would silently return the first candidate on a tie, which a reader
+    would then misread as a decision supported by measurement. Two identical
+    widths is a guaranteed tie — same width, same seed, same fit queries, so the
+    models are identical — which makes this an exact negative control rather than
+    a hope that some pair happens to collide.
+
+    The refusal surfaces as a failed stage, because ``Pipeline._stage`` records a
+    stage failure rather than propagating it, and the run as a whole is then failed
+    and cannot be released.
+    """
+    from fabric.pipeline import Pipeline, PipelineConfig
+
+    record = Pipeline(PipelineConfig(epochs=3, candidate_dims=(16, 16), candidate_epochs=1)).run()
+    stage = next(s for s in record.stages if s["name"] == "base_selection")
+
+    assert stage["status"] == StageStatus.FAILED.value
+    assert "identically" in stage["detail"]["error"]
+    assert record.status == "failed"
+
+
+def test_a_single_candidate_is_not_treated_as_a_tie():
+    """One candidate cannot tie with anything, so it must not be refused."""
+    from fabric.pipeline import Pipeline, PipelineConfig
+
+    record = Pipeline(PipelineConfig(epochs=3, candidate_dims=(16,), candidate_epochs=1)).run()
+    stage = next(s for s in record.stages if s["name"] == "base_selection")
+    assert stage["status"] == StageStatus.COMPLETED.value
+    assert len(stage["detail"]["candidates"]) == 1
+    assert stage["detail"]["selected"]["dModel"] == 16
+
 
 
 def test_domain_training_reports_a_real_loss_curve(completed_run):

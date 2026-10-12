@@ -15,6 +15,7 @@ five product areas, never presented as one of them.
 | `fabric/dataset.py` | Generated retrieval corpus with BM25-mined hard negatives |
 | `fabric/dual_encoder.py` | The Aetheris Lite retriever, trained from scratch on NumPy |
 | `fabric/hybrid.py` | Rank fusion of the lexical and dense retrievers |
+| `fabric/dataset.py::split_fit_validation` | Fit/validation split so selection never touches the evaluation set |
 | `fabric/metrics.py` | Recall@k, MRR, nDCG@k, hit rate |
 | `fabric/experiments.py` | The improvement cycle and its accept/reject ledger |
 | `fabric/failure_memory.py` | `E_{t+1} = E_t ∪ F_t` — validated failures become regression cases |

@@ -33,7 +33,7 @@ import numpy as np
 
 from .bm25 import Bm25Index
 from .dataforge import DatasetManifest, DataSample, check_contamination
-from .dataset import RetrievalDataset, build_dataset
+from .dataset import Query, RetrievalDataset, build_dataset, split_fit_validation
 from .dual_encoder import DualEncoder, DualEncoderConfig, Vocabulary
 from .experiments import (
     RETRIEVAL_METRICS,
@@ -104,6 +104,11 @@ class PipelineConfig:
     #: Base selection: candidate widths tried, chosen by held-out score.
     candidate_dims: tuple[int, ...] = (24, 48)
     candidate_epochs: int = 8
+    #: Fraction of the *training* queries held out to choose between candidates.
+    #: The evaluation split is never used for this: choosing on the split you then
+    #: report as held-out turns the reported score into a maximum over candidates.
+    validation_fraction: float = 0.25
+    validation_seed: int = 20251012
     #: Release gate.
     model_name: str = "aetheris-lite-retriever"
     model_version: str = "0.1.0"
@@ -130,6 +135,8 @@ class PipelineConfig:
             "scale": self.scale,
             "candidateDims": list(self.candidate_dims),
             "candidateEpochs": self.candidate_epochs,
+            "validationFraction": self.validation_fraction,
+            "validationSeed": self.validation_seed,
             "modelName": self.model_name,
             "modelVersion": self.model_version,
             "licence": self.licence,
@@ -191,12 +198,28 @@ class Pipeline:
             limitations=[f"{name}: {reason}"],
         )
 
-    def _encoder_for(self, dataset: RetrievalDataset, config: PipelineConfig, d_model: int, epochs: int) -> DualEncoder:
+    def _encoder_for(
+        self,
+        dataset: RetrievalDataset,
+        config: PipelineConfig,
+        d_model: int,
+        epochs: int,
+        *,
+        queries: Sequence[Query] | None = None,
+    ) -> DualEncoder:
+        """A candidate model.
+
+        ``queries`` restricts both the vocabulary and the training triples to a
+        subset of the training queries, which is what lets candidate selection run
+        on the fit split alone. The default is every training query, which is what
+        the final model uses.
+        """
+        training_queries = dataset.train_queries if queries is None else list(queries)
         vocabulary = Vocabulary().build(
-            [document.text for document in dataset.documents] + [query.text for query in dataset.train_queries]
+            [document.text for document in dataset.documents] + [query.text for query in training_queries]
         )
         model = DualEncoder(vocabulary, config.encoder_config(d_model=d_model, epochs=epochs))
-        model.train(dataset.triples())
+        model.train(dataset.triples(training_queries))
         model.vocabulary = vocabulary  # carried alongside for evaluation
         return model
 
@@ -277,13 +300,33 @@ class Pipeline:
         Mistral, Qwen, Llama, Gemma and DeepSeek requires those weights, and none
         can be downloaded here. What *can* be selected is the retriever's own
         configuration, and that is done by measurement.
+
+        The measurement is taken on a validation split carved out of the
+        *training* queries, never on the evaluation split. Selecting a width
+        because it scored best on the evaluation queries would make the reported
+        evaluation score a maximum over the candidates rather than an estimate of
+        unseen performance — the candidates would be fitted to the very number
+        used to describe them. Each candidate's evaluation score is still computed
+        and recorded, for transparency and so the selection/evaluation gap is
+        visible, but the choice is made on the validation score alone.
         """
         def body() -> StageResult:
             dataset = self.dataset
             if dataset is None:
                 raise RuntimeError("data_validation must run first")
 
-            judgements = [{"id": q.query_id, "text": q.text, "relevant": q.relevant} for q in dataset.evaluation_queries]
+            # Selection data comes from the training side. See split_fit_validation.
+            fit, validation = split_fit_validation(
+                dataset.train_queries,
+                fraction=self.config.validation_fraction,
+                seed=self.config.validation_seed,
+            )
+
+            def judgements_for(queries) -> list[dict]:
+                return [{"id": q.query_id, "text": q.text, "relevant": q.relevant} for q in queries]
+
+            judgements = judgements_for(dataset.evaluation_queries)
+            validation_judgements = judgements_for(validation)
             bm25 = dataset.index()
 
             def bm25_rank(text: str) -> list[str]:
@@ -293,17 +336,28 @@ class Pipeline:
 
             candidates = []
             for width in self.config.candidate_dims:
-                model = self._encoder_for(dataset, self.config, width, self.config.candidate_epochs)
-                report = evaluate_ranker(judgements, self._rank_with(model, dataset))
+                model = self._encoder_for(
+                    dataset, self.config, width, self.config.candidate_epochs, queries=fit
+                )
+                rank = self._rank_with(model, dataset)
+                validation_report = evaluate_ranker(validation_judgements, rank)
+                # Recorded, deliberately not used to choose.
+                evaluation_report = evaluate_ranker(judgements, rank)
                 candidates.append({
                     "dModel": width,
                     "epochs": self.config.candidate_epochs,
                     "parameters": model.parameter_count(),
-                    "mrr": round(report.metrics["mrr"], 6),
-                    "recall@1": round(report.metrics["recall@1"], 6),
+                    "validationMrr": round(validation_report.metrics["mrr"], 6),
+                    "evaluationMrr": round(evaluation_report.metrics["mrr"], 6),
                 })
 
-            best = max(candidates, key=lambda entry: entry["mrr"])
+            if len({entry["validationMrr"] for entry in candidates}) == 1 and len(candidates) > 1:
+                raise RuntimeError(
+                    "every candidate scored identically on the validation split, so the "
+                    "selection carries no information; widen candidate_dims or the split"
+                )
+
+            best = max(candidates, key=lambda entry: entry["validationMrr"])
 
             # Latency is measured BEFORE the baseline is frozen, because a baseline
             # missing any judged metric is refused — and mutating one afterwards
@@ -328,13 +382,26 @@ class Pipeline:
                 detail={
                     "selected": best,
                     "candidates": candidates,
-                    "selectedBy": "held-out MRR on the evaluation split",
+                    "selectedBy": "MRR on a validation split carved from the training queries",
+                    "validationSplit": {
+                        "queries": [query.query_id for query in validation],
+                        "count": len(validation),
+                        "fraction": self.config.validation_fraction,
+                        "seed": self.config.validation_seed,
+                        "fitCount": len(fit),
+                        "disjointFromEvaluation": not (
+                            {query.query_id for query in validation}
+                            & {query.query_id for query in dataset.evaluation_queries}
+                        ),
+                    },
                     "bm25Baseline": {name: round(baseline.metrics[name], 6) for name in ("mrr", "recall@1", "recall@5", "ndcg@10")},
                     "languageModelBase": "not selected: no weights available on this host",
                 },
                 limitations=[
                     "base selection covers the retriever configuration only; choosing between "
                     "Mistral, Qwen, Llama, Gemma and DeepSeek needs weights that cannot be downloaded here",
+                    "the validation split is small (12 of 48 training queries), so candidate scores "
+                    "carry a wide error bar; the selection is reproducible but not precise",
                 ],
             )
 
