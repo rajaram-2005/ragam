@@ -117,6 +117,12 @@ here would have been a rigged summary.
 Determinism was checked: three identical high-overlap runs produced identical
 status, verdict, MRR and recall (0.889286 / 1.0 / `failed` / `reject`).
 
+This rejection was the starting point for the improvement cycle in
+[`07-improvement-cycle.md`](./07-improvement-cycle.md), which diagnosed the cause
+(a vocabulary fitted on training text only leaves held-out query terms as `<unk>`,
+whose embedding never receives a gradient) and produced an accepted candidate fix
+that keeps recall inside tolerance while raising MRR further.
+
 ### 3.3 Base selection
 
 Candidates trained for 8 epochs each, selected by held-out MRR measured **before**

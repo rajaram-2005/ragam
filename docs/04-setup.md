@@ -145,7 +145,7 @@ aetheris-fabric listening
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (572 tests)
+npm test                  # all three suites (617 tests)
 npm run test:core         # 260
 npm run test:web          # 56
 npm run test:fabric       # 256 — needs numpy + pytest on the interpreter

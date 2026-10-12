@@ -52,11 +52,11 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 572 tests: core 260, web 56, fabric 256
+npm test          # 617 tests: core 260, web 56, fabric 301
 npm run train     # in-process training run
 ```
 
-All 572 run in CI on every push and pull request
+All 617 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -117,7 +117,7 @@ Status of every acceptance criterion, with evidence:
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
 | `services/core` | Node 22 ESM | 7,380 | 5,237 | **zero npm packages** | 260 |
-| `services/fabric` | Python 3.11 | 5,331 | 2,860 | NumPy only | 256 |
+| `services/fabric` | Python 3.11 | 5,466 | 3,135 | NumPy only | 301 |
 | `apps/web` | React 18 + Vite | 3,486 | 1,169 | react, react-dom | 56 |
 
 The core service has **no npm dependencies at all** — that is why the root
@@ -200,6 +200,7 @@ Details, including sixteen open items stated plainly:
 | [`docs/04-setup.md`](docs/04-setup.md) | Install, run, test, make chat actually work, troubleshooting |
 | [`docs/05-security.md`](docs/05-security.md) | Threat model and every control, each tied to a test |
 | [`docs/06-benchmarks.md`](docs/06-benchmarks.md) | Measurements, conditions, fairness controls, what they do not support |
+| [`docs/07-improvement-cycle.md`](docs/07-improvement-cycle.md) | The Sparsiz improvement cycle run on a real failure, end to end |
 | [`docs/model-cards/`](docs/model-cards/) | Versioned model cards (Markdown + machine-readable JSON) |
 | [`third-party/NOTICES.md`](third-party/NOTICES.md) | Provenance, what was adopted vs replaced, licence compatibility |
 | [`services/fabric/README.md`](services/fabric/README.md) | Training pipeline and experiment ledger |

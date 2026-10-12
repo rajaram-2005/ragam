@@ -9,12 +9,12 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 572 passing, 0 failing.**
+**Test totals: 617 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
 | `services/core` | `node --test test/*.test.mjs` | **260 / 260** (11 files, ~22 s) |
-| `services/fabric` | `pytest -q` | **256 / 256** (9 files, ~6 s) |
+| `services/fabric` | `pytest -q` | **301 / 301** (11 files, ~7 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **56 / 56** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 217.28 kB → **65.53 kB gzip**, single chunk, no warnings |
 
@@ -69,6 +69,7 @@ instead.
 | 9 | Sparsiz integration | **Complete** | Responsibility defined; taxonomies and `Q(x)` adopted, scoring replaced |
 | 10 | Aetheris Lite experiments | **Partial** | One real trained retriever; 3 of 8 stages blocked |
 | 11 | Competitive benchmark cycle | **Partial** | Real, reproducible BM25 comparison; **no** Mistral/Qwen/Llama/Gemma/DeepSeek comparison possible |
+| — | Sparsiz improvement cycle on a real failure | **Complete** | [`07-improvement-cycle.md`](./07-improvement-cycle.md): rejected run diagnosed, hypothesis tested, fix accepted, regression cases promoted; 45 tests |
 | 12 | Release readiness docs | **Complete** | This document plus 04, 05, 06 and the model card |
 
 ### Phase 4 in detail — the most important limitation
