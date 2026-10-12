@@ -183,6 +183,12 @@ tokeniser changes.
 pull request against `main`. Four jobs, split so a failure names the component that
 broke instead of surfacing as one red check:
 
+Four jobs run on every push to `main` or `arena/**`, on every pull request against
+`main`, and **weekly on Mondays at 04:17 UTC**. The scheduled run exists because the
+advisory gates below check against databases that change continuously: a commit that
+was clean when it merged can become vulnerable later, and a trigger that only fires
+when something else changes would not notice.
+
 | Job | What it proves |
 |---|---|
 | **Core service** | 260 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |

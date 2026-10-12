@@ -14,6 +14,14 @@ on:
     branches: [main, 'arena/**']
   pull_request:
     branches: [main]
+  schedule:
+    # Advisories are published continuously, and a commit that was clean when it merged
+    # can become vulnerable afterwards. Without this the audit gates only re-run when
+    # something else changes, so a newly published advisory against already-merged
+    # code would wait for the next unrelated build. Weekly, at an off-peak
+    # non-round minute: GitHub documents that top-of-hour cron jobs are heavily
+    # contended and may be delayed or dropped.
+    - cron: '17 4 * * 1'
 
 permissions:
   contents: read

@@ -429,7 +429,7 @@ Stated plainly, because an unstated gap is worse than a stated one.
    | `apps/web` production deps | `npm audit --omit=dev` | **0 vulnerabilities** |
    | `apps/web` all deps | `npm audit` | **0 vulnerabilities** |
    | `services/core` | — | no npm dependencies at all, so nothing to scan |
-   | `services/fabric` runtime | GitHub Advisory Database | numpy 2.1.3: 8 advisories exist for numpy, every one bounded at ≤ 1.22 or below — **none covers 2.1.3** |
+   | `services/fabric` runtime | GitHub Advisory Database | numpy: 8 advisories are recorded, every one bounded at ≤ 1.22 or below. Verified clean at **both** 2.1.3 (the version all measurements were taken with) and **2.4.6** (what an unpinned `numpy>=1.26` resolves to today) |
    | `services/fabric` test tooling | GitHub Advisory Database | pytest **was affected**; pluggy, iniconfig, packaging clean |
 
    Getting the web tree to zero was not free. At `vite@5.4.11` `npm audit` reported
@@ -501,11 +501,18 @@ Stated plainly, because an unstated gap is worse than a stated one.
    argument, no resolvable target) were confirmed to exit 2, and the scanner was
    confirmed to exit 1 against `pytest==8.3.4`, naming GHSA-6w46-j5rx-g56g.
 
+   Both gates also run **weekly on a schedule** (`cron: '17 4 * * 1'`, Mondays at
+   04:17 UTC), not only on push and pull request. That matters because advisories are
+   published continuously: a commit that was clean when it merged can become
+   vulnerable afterwards, and a trigger that only fires when something else changes
+   would leave that undetected until the next unrelated build. The minute is
+   deliberately off-peak and non-round — GitHub documents that top-of-hour cron jobs
+   are heavily contended and may be delayed or dropped.
+
    **What is still open:** the advisory database is only as current as its
    publication lag, and neither gate covers a vulnerability that has not yet been
-   assigned an identifier. Both gates also run on push and pull request only — there
-   is no scheduled job, so an advisory published against an already-merged commit is
-   caught on the next build rather than proactively.
+   assigned an identifier. A scheduled failure also only reaches whoever watches the
+   repository's Actions tab; there is no alerting routed to a person.
 6. **FreeLLMAPI was never exercised live.** No key was available, so its error
    handling is code-complete and contract-derived, not integration-tested.
 7. **Model-weight licences for any future fine-tuned base are unassessed.** No

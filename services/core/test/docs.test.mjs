@@ -697,6 +697,14 @@ test('the CI workflow is valid YAML with the structure it claims', () => {
   assert.ok(workflow.includes('pull_request'), 'CI must run on pull requests')
   assert.ok(workflow.includes('jobs:'), 'the workflow must declare jobs')
 
+  // The audit gates must also run on a schedule. Push and pull-request triggers only
+  // re-run them when something changes, so an advisory published against code that is
+  // already merged would otherwise wait for the next unrelated build.
+  assert.ok(workflow.includes('schedule:'), 'CI must run on a schedule')
+  const cron = workflow.match(/- cron: '([^']+)'/)
+  assert.ok(cron, 'the schedule trigger must declare a cron expression')
+  assert.equal(cron[1].split(/\s+/).length, 5, `cron must have five fields, got ${cron[1]}`)
+
   // Scope to the jobs: block. The on: trigger block is indented the same way, so an
   // unscoped /^  ([a-z]+):$/ also matched 'push:' and reported five jobs.
   const jobsBlock = workflow.slice(workflow.indexOf('\njobs:'))
