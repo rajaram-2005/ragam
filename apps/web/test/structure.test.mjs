@@ -325,3 +325,59 @@ test('Shell.jsx imports the area list, not only re-exports it', () => {
   )
   assert.ok(shell.includes('AREAS.map'), 'the navigation must still be generated from AREAS')
 })
+
+// --- memory and history in Chat -----------------------------------------------------
+
+test('Chat surfaces memory and history as internal services inside the area', () => {
+  const chat = read('areas/ChatArea.jsx')
+  // Both are controls inside Chat, never a sixth navigation entry.
+  assert.match(chat, /title="Memory you approved"/)
+  assert.match(chat, /title="Conversation history"/)
+  assert.match(chat, /<MemoryPanel \/>/)
+  assert.match(chat, /<HistoryPanel sessionId=\{sessionId\} \/>/)
+  // And the approval gate is reachable, which is the whole point of building the panel.
+  assert.match(chat, /api\.decideMemory\(candidate\.id, true\)/)
+  assert.match(chat, /api\.decideMemory\(candidate\.id, false\)/)
+})
+
+test('memory is offered as a switch, off by default, and described in ordinary words', () => {
+  const chat = read('areas/ChatArea.jsx')
+  assert.match(chat, /const \[useMemory, setUseMemory\] = useState\(false\)/, 'memory must default to off')
+  assert.match(chat, /Use what I asked you to remember/)
+  // The API says useMemory; the label does not.
+  assert.ok(!/>\s*useMemory\s*</.test(chat), 'the label must not be an API field name')
+  // And the panel says the plain-language consequence rather than naming the mechanism.
+  assert.match(chat, /not injected into any prompt/)
+})
+
+test('the history panel reports an empty search rather than filling it in', () => {
+  const chat = read('areas/ChatArea.jsx')
+  assert.match(chat, /Nothing was\s+invented to fill the result/)
+  assert.match(chat, /Searched \{hits\.searchedTurns\}/)
+})
+
+test('a session is created lazily, so a visit with no question stores nothing', () => {
+  const chat = read('areas/ChatArea.jsx')
+  assert.match(chat, /if \(!sessionRef\.current\)/, 'the session must be created on first send')
+  assert.match(chat, /api\.startSession\(null\)/)
+  // A failure to store must not block the answer, and must be visible.
+  assert.match(chat, /This conversation is not being stored/)
+  assert.match(chat, /the conversation continues/i)
+})
+
+test('the memory panel confirms what the server actually reported', () => {
+  const chat = read('areas/ChatArea.jsx')
+  // The store distinguishes a stored memory from a duplicate and says how many rows a wipe
+  // removed. A confirmation that is true either way throws that away.
+  assert.match(chat, /result\?\.duplicate \? 'That is already remembered/)
+  assert.match(chat, /Removed \$\{result\?\.deletedMemories \?\? 0\} memories and \$\{result\?\.deletedCandidates \?\? 0\} proposals/)
+})
+
+test('memory can be exported, not only deleted', () => {
+  const chat = read('areas/ChatArea.jsx')
+  assert.match(chat, /api\.exportMemory\(\)/)
+  assert.match(chat, /Download a copy/)
+  // The export states its own terms, and the confirmation repeats them rather than
+  // claiming the copy is unrestricted.
+  assert.match(chat, /marked \$\{envelope\.consent\} and training use \$\{envelope\.trainingUse\}/)
+})

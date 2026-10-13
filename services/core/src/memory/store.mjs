@@ -311,6 +311,7 @@ export class MemoryStore {
     if (!row) throw new MemoryError(`no memory '${id}'`, 'not_found')
     this.db.exec('BEGIN')
     try {
+      this.#releaseReferences([id])
       this.db.prepare('DELETE FROM memories WHERE id = ?').run(id)
       this.db.prepare('INSERT INTO memory_deletions (id, memory_id, deleted_at, reason, requested_by) VALUES (?, ?, ?, ?, ?)')
         .run(randomUUID(), id, Date.now(), reason, requestedBy)
@@ -323,17 +324,52 @@ export class MemoryStore {
     return { deleted: true, memoryId: id, textWas: row.text.length > 0 }   // length only: the text is gone
   }
 
+  /**
+   * Drop every reference to these memories so the rows themselves can go.
+   *
+   * Both links are records of a decision -- "you approved this proposal", "this replaced
+   * that" -- so they are cleared rather than deleted: `memory_candidates` keeps the row
+   * and its decision, and loses only the pointer to a memory that no longer exists. The
+   * `memories` self-reference is part of the row being deleted, so clearing it is
+   * bookkeeping. Without this, `PRAGMA foreign_keys = ON` makes deletion fail outright
+   * for approved candidates and superseded pairs.
+   */
+  #releaseReferences(ids, { all = false } = {}) {
+    if (all) {
+      this.db.prepare('UPDATE memories SET superseded_by = NULL WHERE superseded_by IS NOT NULL').run()
+      this.db.prepare('UPDATE memory_candidates SET memory_id = NULL WHERE memory_id IS NOT NULL').run()
+      return
+    }
+    const clearSuperseded = this.db.prepare('UPDATE memories SET superseded_by = NULL WHERE superseded_by = ?')
+    const clearCandidate = this.db.prepare('UPDATE memory_candidates SET memory_id = NULL WHERE memory_id = ?')
+    for (const id of ids) {
+      clearSuperseded.run(id)
+      clearCandidate.run(id)
+    }
+  }
+
   /** Forget everything. One transaction, one tombstone per memory. */
   forgetAll({ reason = 'user requested full memory deletion', requestedBy = 'user' } = {}) {
     const ids = this.db.prepare('SELECT id FROM memories').all().map((r) => r.id)
-    const candidateIds = this.db.prepare("SELECT id FROM memory_candidates WHERE status = 'pending'").all().map((r) => r.id)
+    // Counted, not filtered: the wipe removes every candidate row -- a decided proposal
+    // holds the same user text as a pending one -- so the number it reports has to be the
+    // number of rows it removed. Counting only the pending ones understated it.
+    const candidateIds = this.db.prepare('SELECT id FROM memory_candidates').all().map((r) => r.id)
     this.db.exec('BEGIN')
     try {
       const stamp = Date.now()
       const tombstone = this.db.prepare('INSERT INTO memory_deletions (id, memory_id, deleted_at, reason, requested_by) VALUES (?, ?, ?, ?, ?)')
       for (const id of ids) tombstone.run(randomUUID(), id, stamp, reason, requestedBy)
-      this.db.prepare('DELETE FROM memories').run()
+      // Order matters here. `memory_candidates.memory_id` and `memories.superseded_by`
+      // both reference `memories`, so with foreign keys on, deleting the memories first
+      // fails for any user who has ever approved a proposed memory or superseded one --
+      // exactly the memories that came through the user-facing approval gate. The
+      // references are released before the rows they point at, and the tombstones (which
+      // deliberately carry no foreign key) are written first so the record of the
+      // deletion cannot be rolled back with the row it describes.
+      this.#releaseReferences(ids, { all: true })
       this.db.prepare('DELETE FROM memory_candidates').run()
+      this.db.prepare('DELETE FROM memories').run()
       this.db.exec('COMMIT')
     } catch (error) {
       this.db.exec('ROLLBACK')

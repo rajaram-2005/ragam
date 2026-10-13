@@ -596,11 +596,11 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 23)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**384 / 384**'), 'core total must be stated')
+  assert.ok(status.includes('**389 / 389**'), 'core total must be stated')
   assert.ok(status.includes('**528 / 528**'), 'fabric total must be stated')
-  assert.ok(status.includes('**56 / 56**'), 'web total must be stated')
-  assert.ok(status.includes('968 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('968 tests: core 384, web 56, fabric 528'),
+  assert.ok(status.includes('**65 / 65**'), 'web total must be stated')
+  assert.ok(status.includes('982 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('982 tests: core 389, web 65, fabric 528'),
     'README must state the same totals')
   assert.ok(status.includes('(15 files'), 'the file count must move with the suite')
 
@@ -613,14 +613,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(384), `core heading must say 384, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(389), `core heading must say 389, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(528), `fabric heading must say 528, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(56), `web heading must say 56, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(65), `web heading must say 65, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    968,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 968`,
+    982,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 982`,
   )
 })
 
@@ -1217,4 +1217,54 @@ test('the learning-level tables match the modules that implement them', () => {
   assert.ok(text.includes("CHECK (approved_by = 'user')"),
     'docs/11 must state how an agent-approved memory is prevented')
   assert.ok(text.includes("CHECK (training_use = 'prohibited')"))
+})
+
+test('the memory interface the documents claim is the one that is in the app', () => {
+  // docs/11 §2.2b and docs/12 both state that Level 2 is reachable from Chat rather than
+  // API-only: that proposals can be approved in the interface, that memory can be listed,
+  // edited, deleted, searched and exported, and that using it is a switch that starts off.
+  // Documentation claiming an interface is the same failure mode as documentation claiming
+  // a capability, so the claims are checked against the component that has to contain them.
+  const chat = readFileSync(resolve(REPO, 'apps/web/src/areas/ChatArea.jsx'), 'utf8')
+  const affordances = {
+    'list memories': /\{memories\.length \? \(/,
+    'add a memory': /api\.remember\(/,
+    'edit a memory': /api\.updateMemory\(/,
+    'delete a memory': /api\.forgetMemory\(/,
+    'delete everything': /api\.forgetAllMemory\(/,
+    'search memory': /api\.searchMemory\(/,
+    'export memory': /api\.exportMemory\(/,
+    'approve a proposal': /api\.decideMemory\(candidate\.id, true\)/,
+    'reject a proposal': /api\.decideMemory\(candidate\.id, false\)/,
+    'a switch that starts off': /const \[useMemory, setUseMemory\] = useState\(false\)/,
+    'search your own turns': /api\.recall\(/,
+    'delete a session': /api\.deleteSession\(/,
+  }
+  const missing = Object.entries(affordances).filter(([, pattern]) => !pattern.test(chat))
+  assert.deepEqual(missing.map(([name]) => name), [],
+    `the documents claim a memory interface; Chat is missing: ${missing.map(([name]) => name).join(', ')}`)
+
+  // docs/12 marks memory Completed and history Partial. Completed is only allowed while the
+  // affordances above exist, and the history row's stated reason has to be true: the search
+  // is lexical, which is what "not semantic" means, so the store must actually use BM25.
+  const rows = new Map()
+  for (const line of doc.matrix().split('\n')) {
+    const cells = line.split('|').map((cell) => cell.trim())
+    if (cells.length < 4) continue
+    rows.set(cells[1], { status: cells[2].replace(/[*`]/g, ''), note: cells[3] })
+  }
+  const memory = rows.get('Memory the user can inspect and delete')
+  assert.equal(memory.status, 'Completed', `memory row says '${memory.status}'`)
+  const history = rows.get('Conversation history + search')
+  assert.equal(history.status, 'Partial', 'history is partial: its search is lexical')
+  assert.match(history.note, /lexical/i, 'the partial reason must be the search, and must say so')
+  assert.match(readFileSync(resolve(CORE, 'src/memory/store.mjs'), 'utf8'), /Bm25Index/,
+    'docs/12 calls the history search lexical; the store must actually be a lexical index')
+  // docs/11 names the two panels. Both titles are strings in the component above, so the
+  // document cannot describe a panel that was never built.
+  const klyvaron = squash(doc.klyvaron())
+  for (const title of ['Memory you approved', 'Conversation history']) {
+    assert.ok(klyvaron.includes(`**${title}**`), `docs/11 must name the '${title}' panel`)
+    assert.ok(chat.includes(`title="${title}"`), `docs/11 names a '${title}' panel the app does not render`)
+  }
 })

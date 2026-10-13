@@ -211,6 +211,32 @@ enforced rather than described:
 | Recall is not memory | `recall()` searches the user's own turns on demand and returns each hit with its session and role |
 | Memory is local | Its own database file, and a test drives the store with egress blocked and a fetch recorder, asserting **no network call is attempted** |
 
+The gate has a user interface. L2 was implemented for one commit with no way to reach it:
+a memory store whose approval step is only callable through the API is a memory system
+that cannot be used as intended, because the whole point of the gate is that a person
+decides. `apps/web/src/areas/ChatArea.jsx` now carries two panels inside **Chat** — never a
+sixth navigation entry:
+
+| Panel | What it offers | Where the promise is kept |
+|---|---|---|
+| **Memory you approved** | List, add, edit, delete, delete everything, search, and **approve or reject each pending proposal** | The candidate card says in words that a proposal is not a memory and is not injected; the composer's switch reads *Use what I asked you to remember* and is off by default |
+| **Conversation history** | List stored sessions with their turn counts, search your own past turns, delete a session | A search that finds nothing says how many turns it searched and that **nothing was invented to fill the result** |
+
+The panel also states its own limits from the store's `limits` block, and when the list
+comes back full it says so rather than implying those are all of them. Deletion is real in
+the interface — the confirmations report the counts the server actually returned, and a
+duplicate is reported as a duplicate rather than as a second copy. Export is now reachable
+too (`GET /api/memory/export`), so "delete and export" is one right rather than half of one.
+
+One defect the interface's own test found, worth recording: `forgetAll()` failed with
+`FOREIGN KEY constraint failed` for any user who had ever approved a proposal. Both
+`memory_candidates.memory_id` and `memories.superseded_by` reference `memories`, and with
+`PRAGMA foreign_keys = ON` the wipe deleted the memories before the rows pointing at them.
+Approval is exactly what the panel is for, so the feature's headline promise — real
+deletion — was broken for the memories that came through the gate. The delete paths now
+release the references first; the decision records survive and lose only the pointer to a
+row that no longer exists.
+
 Two properties are worth calling out because they were bugs before they were features:
 
 **Egress is decided on the assembled request, not on the question.** Memory injection and
@@ -281,10 +307,11 @@ without a list of what does not is a sales document:
   so obtaining base weights is not possible; the tiers are unbuilt rather than pending.
 - **Lite does not chat, translate, summarise or reason.** Only `text.completion` and
   `text.extract` are backed.
-- **L2 memory has no user interface yet.** The store, the approval gate, the routes and
-  the injection path are implemented and tested; what is missing is the Chat control that
-  lists memories and offers a proposed candidate for approval. Until it exists, a memory
-  can only be created through the API.
+- **L2's user interface does not cover superseding.** The panel lists, adds, edits,
+  deletes, exports, searches and decides proposals; the store's `supersede()` — replacing a
+  memory with a corrected one while keeping the link to what it used to say — is implemented
+  and tested but still has no control. Editing a memory in place is offered instead, which
+  loses the history that superseding preserves.
 - **L4 transfer testing is not implemented.** A lesson that helps on task A is not
   currently tested for whether it helps on task B; the directive's requirement to record
   non-generalisation is met only for the failure-recurrence case.

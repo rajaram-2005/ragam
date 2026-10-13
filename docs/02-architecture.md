@@ -70,11 +70,11 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 10,049 source lines, 7,548 test lines
+### `services/core` — 10,096 source lines, 7,812 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
-| `app.mjs` | 1,324 | Composition root, the HTTP route table, error→status mapping, chat/image/video entry points, readiness |
+| `app.mjs` | 1,335 | Composition root, the HTTP route table, error→status mapping, chat/image/video entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
 | `media/jobs.mjs` | 359 | Job queue, progress, cancellation, timeouts, artifact storage |
@@ -96,7 +96,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/base.mjs` | 136 | Provider contract, timeout and retry helpers |
 | `policy/classify.mjs` | 143 | Secret and sensitivity classification, redaction |
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
-| `memory/store.mjs` | 666 | User-approved memory, candidates that need approval before use, and session recall with citations |
+| `memory/store.mjs` | 702 | User-approved memory, candidates that need approval before use, and session recall with citations |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
 | `klyvaron/tiers.mjs` | 412 | The three-tier model family, backing records, and the validator that refuses a capability with no artifact behind it |
 | `skills/registry.mjs` | 305 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
@@ -112,7 +112,7 @@ release manager, and a hand-written dual encoder whose **five parameter gradient
 all match central finite differences to ~3e-10**. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 3,480 source lines, 1,185 test lines
+### `apps/web` — 4,000 source lines, 1,279 test lines
 
 Five area components, a shell, shared primitives, an API client and three test
 files. Design tokens and the shell's visual structure come from upstream Aetheris

@@ -1004,6 +1004,12 @@ async function handle(request, response, app) {
     // database CHECK.
     return sendJson(response, 201, app.memory.remember(await readBody(request)), app)
   }
+  if (method === 'GET' && segments[1] === 'memory' && segments[2] === 'export') {
+    // Everything the store holds about a person, in one envelope that states its own
+    // consent and training-use terms. This is the other half of deletion: a user who can
+    // delete their data but cannot take a copy of it has been given half a right.
+    return sendJson(response, 200, app.memory.exportAll(), app)
+  }
   if (method === 'GET' && segments[1] === 'memory' && segments[2] === 'search') {
     const query = url.searchParams.get('q') ?? ''
     return sendJson(response, 200, { query, results: app.memory.searchMemories(query, { topK: Number(url.searchParams.get('limit') ?? 10) }) }, app)
@@ -1210,6 +1216,11 @@ function publicModel(model) {
     minRamGb: model.minRamGb,
     minVramGb: model.minVramGb,
     aetherisLite: model.aetherisLite,
+    // The UI renders this column and appends it to the model picker. It lives under
+    // `measured` in the registry and was not being sent, so the State column could only
+    // ever show its placeholder.
+    availability: model.measured?.availability ?? null,
+    lastProbedAt: model.measured?.lastProbedAt ?? null,
     // Derived, not declared: present only when this model id IS the artifact behind a
     // capability the tier actually provides. See klyvaron/tiers.mjs tierClaimFor().
     tier: tierClaimFor(model.id),

@@ -963,3 +963,158 @@ test('chat: without useMemory nothing from the store is injected', async () => {
     await core.close()
   }
 })
+
+test('every field the web panels read comes back from the routes they call', async () => {
+  // ChatArea.jsx's MemoryPanel and HistoryPanel read named fields off these responses. The
+  // two ways that goes wrong are both silent: a field renamed on the server renders as a
+  // blank cell, and a nested field read as if it were flat renders as three blank cells.
+  // Both have happened in this repository (models lost `availability`; memory search
+  // results are hits with the memory under `.memory`), so the client's field list is
+  // asserted here rather than left to whoever clicks through the UI next.
+  const core = await startCore()
+  try {
+    // --- the memory panel's first call ------------------------------------
+    let memory = (await core.get('/api/memory')).json
+    assert.deepEqual(Object.keys(memory).sort(), ['candidates', 'memories', 'stats'])
+    assert.ok(Array.isArray(memory.memories) && Array.isArray(memory.candidates))
+    assert.equal(typeof memory.stats.memories, 'number')
+    assert.equal(typeof memory.stats.pendingCandidates, 'number')
+    assert.equal(typeof memory.stats.supersededMemories, 'number')
+    assert.equal(typeof memory.stats.deletionsRecorded, 'number')
+    // The panel states its capacity from this, and falls back to generic wording without it.
+    assert.equal(typeof memory.stats.limits.maxMemories, 'number')
+
+    // --- "Ask Aetheris to remember something" -----------------------------
+    const remembered = (await core.post('/api/memory', {
+      text: 'Prefers responses in British English.',
+      kind: 'preference',
+      subject: 'writing style',
+      dataClass: 'internal',
+    })).json
+    // The 201 is an envelope, not the row: `duplicate` is what lets the panel say "that is
+    // already remembered" instead of silently adding a second copy of the same statement.
+    assert.deepEqual(Object.keys(remembered).sort(), ['duplicate', 'memory'])
+    assert.equal(remembered.duplicate, false)
+    for (const field of ['id', 'text', 'kind', 'subject', 'dataClass']) {
+      assert.ok(field in remembered.memory, `remembering must return '${field}'; the row renders it`)
+    }
+
+    // --- "Find a memory" --------------------------------------------------
+    const search = (await core.get('/api/memory/search?q=British')).json
+    assert.deepEqual(Object.keys(search).sort(), ['query', 'results'])
+    assert.ok(search.results.length >= 1)
+    // The panel renders result.memory.text, not result.text: these are BM25 hits with the
+    // row hydrated underneath them.
+    const hit = search.results.find((entry) => entry.memory)
+    assert.ok(hit, 'a search result must carry its memory under `.memory`')
+    for (const field of ['id', 'text', 'kind', 'dataClass']) {
+      assert.ok(field in hit.memory, `the rendered memory must carry '${field}'`)
+    }
+
+    // --- propose, then approve from the panel -----------------------------
+    const proposed = (await core.post('/api/memory/candidates', {
+      text: 'I deploy on Fridays.',
+      rationale: 'stated while planning a release',
+      proposedFrom: 'conversation',
+    })).json
+    // Proposing returns the bare row it created; the card the user decides on is built
+    // from the pending list, which is where the four fields it renders come from.
+    assert.deepEqual(Object.keys(proposed).sort(), ['id', 'status', 'text'])
+    memory = (await core.get('/api/memory')).json
+    const card = memory.candidates.find((candidate) => candidate.id === proposed.id)
+    assert.ok(card, 'a proposed candidate must appear in the pending list')
+    for (const field of ['id', 'text', 'rationale', 'proposedFrom']) {
+      assert.ok(field in card, `the candidate card renders '${field}'`)
+    }
+
+    const decision = (await core.post(`/api/memory/candidates/${proposed.id}/decide`, { approve: true })).json
+    assert.equal(decision.approved, true)
+    assert.ok(decision.memory.id, 'approving must return the memory it created')
+    memory = (await core.get('/api/memory')).json
+    assert.equal(memory.stats.memories, 2, 'approving must produce a memory')
+    assert.equal(memory.stats.pendingCandidates, 0)
+    assert.ok(!memory.candidates.some((candidate) => candidate.id === proposed.id),
+      'a decided candidate must leave the pending list the card was rendered from')
+
+    // --- edit in place, then delete ---------------------------------------
+    const edited = (await core.patch(`/api/memory/${remembered.memory.id}`, { text: 'Prefers British spelling.' })).json
+    assert.equal(edited.text, 'Prefers British spelling.')
+
+    const forgotten = (await core.del(`/api/memory/${remembered.memory.id}`, { reason: 'removed from the memory panel' })).json
+    assert.equal(forgotten.deleted, true)
+    // The tombstone the panel promises: a record that it happened, never what it said.
+    const after = (await core.get('/api/memory')).json
+    assert.ok(!after.memories.some((entry) => entry.id === remembered.memory.id))
+
+    // --- the conversation's session ---------------------------------------
+    const session = (await core.post('/api/sessions', { title: null })).json
+    assert.ok(session.id, 'starting a session must return its id; the composer stores it')
+    const chat = (await core.post('/api/chat', {
+      prompt: 'What do I deploy on?',
+      sessionId: session.id,
+      useMemory: true,
+      stream: false,
+    })).json
+    // The reply chip reads meta.memory.used and meta.memory.count.
+    assert.equal(chat.memory.used, true)
+    assert.ok(chat.memory.count >= 1)
+
+    const sessions = (await core.get('/api/sessions')).json
+    const listed = sessions.sessions.find((entry) => entry.id === session.id)
+    for (const field of ['id', 'title', 'turnCount', 'lastAt']) {
+      assert.ok(field in listed, `the history table renders '${field}'`)
+    }
+    assert.equal(listed.turnCount, 2, 'the question and the answer are both turns')
+
+    const recall = (await core.get('/api/sessions/recall?q=deploy')).json
+    assert.equal(typeof recall.searchedTurns, 'number')
+    assert.ok(recall.hits.length >= 1, 'recall must find the turn it stored')
+    for (const field of ['turnId', 'sessionId', 'sessionTitle', 'role', 'at']) {
+      assert.ok(field in recall.hits[0], `a recall hit must carry '${field}'`)
+    }
+    // The panel prints excerpt.text. It is a quotation of the user's own turn, which is
+    // why it must exist: a generated summary presented as a quotation is not acceptable.
+    assert.equal(typeof recall.hits[0].excerpt.text, 'string')
+    assert.ok(recall.hits.some((entry) => entry.role === 'user'))
+
+    // An empty query reports a reason instead of a searchedTurns count, and the panel
+    // branches on that rather than printing "Searched undefined turns".
+    const empty = (await core.get('/api/sessions/recall?q=')).json
+    assert.ok(empty.reason, 'an empty query must explain itself')
+    assert.ok(!('searchedTurns' in empty), 'and must not imply a search happened')
+
+    // --- "Download a copy" -------------------------------------------------
+    const exported = (await core.get('/api/memory/export')).json
+    assert.equal(exported.format, 'aetheris-memory-export/v1')
+    // The confirmation the panel shows is built from these four.
+    assert.equal(exported.consent, 'user_approved')
+    assert.equal(exported.trainingUse, 'prohibited')
+    assert.ok(Array.isArray(exported.memories) && exported.memories.length >= 1)
+    assert.ok(Array.isArray(exported.sessions) && exported.sessions.length >= 1)
+    // The restriction travels with each record, not only in the envelope.
+    assert.equal(exported.memories[0].trainingUse, 'prohibited')
+    // And the export is of everything, not of what is left after a wipe.
+    assert.equal(exported.sessions[0].turns.length, 2)
+
+    // --- deleting a session from the history table -------------------------
+    const removed = (await core.del(`/api/sessions/${session.id}`)).json
+    assert.equal(removed.deleted, true)
+    const remaining = (await core.get('/api/sessions')).json
+    assert.ok(!remaining.sessions.some((entry) => entry.id === session.id))
+    const orphaned = (await core.get('/api/sessions/recall?q=deploy')).json
+    assert.equal(orphaned.hits.length, 0, 'recall must not resurrect a deleted session')
+
+    // --- "Delete everything" ----------------------------------------------
+    const wiped = (await core.del('/api/memory/forget-all')).json
+    // The panel's confirmation states these two numbers, so they have to exist and be
+    // right. One memory remains at this point -- the one the approved proposal produced --
+    // and the wipe removes the candidate row it came from too, so that number is one and
+    // not zero: a decided proposal holds the same user text a pending one does.
+    assert.deepEqual(wiped, { deletedMemories: 1, deletedCandidates: 1 })
+    const cleared = (await core.get('/api/memory')).json
+    assert.equal(cleared.stats.memories, 0)
+    assert.equal(cleared.stats.pendingCandidates, 0)
+  } finally {
+    await core.close()
+  }
+})

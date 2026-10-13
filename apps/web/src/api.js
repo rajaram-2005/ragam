@@ -69,6 +69,8 @@ async function request(method, path, body, { signal } = {}) {
 export const api = {
   get: (path, options) => request('GET', path, undefined, options),
   post: (path, body, options) => request('POST', path, body ?? {}, options),
+  patch: (path, body, options) => request('PATCH', path, body ?? {}, options),
+  del: (path, body, options) => request('DELETE', path, body ?? {}, options),
 
   // --- system -------------------------------------------------------------
   health: () => request('GET', '/api/health'),
@@ -87,6 +89,28 @@ export const api = {
   knowledgeStats: () => request('GET', '/api/knowledge/stats'),
   knowledgeDocuments: () => request('GET', '/api/knowledge/documents'),
   knowledgeReindex: () => request('POST', '/api/knowledge/reindex', {}),
+
+  // --- memory and history -------------------------------------------------
+  // Memory is the user's own data, so every one of these is a user action: listing what
+  // is held, adding to it, editing it, and deleting it. A candidate proposed by the agent
+  // appears in `candidates` and is not a memory until `decideCandidate` approves it.
+  memory: () => request('GET', '/api/memory'),
+  remember: (body) => request('POST', '/api/memory', body),
+  updateMemory: (id, body) => request('PATCH', `/api/memory/${encodeURIComponent(id)}`, body),
+  forgetMemory: (id, reason) => request('DELETE', `/api/memory/${encodeURIComponent(id)}`, { reason: reason ?? null }),
+  forgetAllMemory: () => request('DELETE', '/api/memory/forget-all', {}),
+  searchMemory: (query) => request('GET', `/api/memory/search?q=${encodeURIComponent(query)}`),
+  exportMemory: () => request('GET', '/api/memory/export'),
+  proposeMemory: (body) => request('POST', '/api/memory/candidates', body),
+  decideMemory: (id, approve) => request('POST', `/api/memory/candidates/${encodeURIComponent(id)}/decide`, { approve }),
+
+  // History is a separate mechanism from memory: it searches the user's own past turns
+  // on request and returns where each hit came from.
+  sessions: () => request('GET', '/api/sessions'),
+  startSession: (title) => request('POST', '/api/sessions', { title: title ?? null }),
+  session: (id) => request('GET', `/api/sessions/${encodeURIComponent(id)}`),
+  deleteSession: (id) => request('DELETE', `/api/sessions/${encodeURIComponent(id)}`, {}),
+  recall: (query) => request('GET', `/api/sessions/recall?q=${encodeURIComponent(query)}`),
 
   // --- tasks (God Core) ---------------------------------------------------
   tasks: (limit = 25) => request('GET', `/api/tasks?limit=${limit}`),

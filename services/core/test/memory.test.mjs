@@ -351,3 +351,62 @@ test('the stats report what is held without exposing it', () => {
   ])
   assert.ok(!JSON.stringify(stats).includes('a private thing'))
 })
+
+// --- deletion has to work for the memories the approval gate produces ----------------
+//
+// `memory_candidates.memory_id` and `memories.superseded_by` both reference `memories`,
+// and `PRAGMA foreign_keys = ON` is set. An approved candidate is therefore a memory that
+// cannot be deleted by id, and a superseded pair is a set that cannot be wiped, unless the
+// referencing rows are released first. Both are ordinary user actions: approval is what
+// the memory panel is for, and superseding is the curate path. Neither was covered, and
+// the wipe failed with ERR_SQLITE_ERROR for anyone who had approved a proposal.
+
+test('forgetting a memory that an approved proposal produced succeeds', () => {
+  const store = fresh()
+  const candidate = store.propose({ text: 'Deploys happen on Fridays.', proposedFrom: 'conversation' })
+  const decision = store.decideCandidate(candidate.id, { approve: true })
+  const memoryId = decision.memory.id
+
+  const result = store.forget(memoryId, { reason: 'changed' })
+  assert.equal(result.deleted, true)
+  assert.equal(store.getMemory(memoryId), null)
+
+  // The decision record survives; only its pointer to a memory that no longer exists goes.
+  const decided = store.db.prepare('SELECT * FROM memory_candidates WHERE id = ?').get(candidate.id)
+  assert.equal(decided.status, 'approved', 'the approval the user made is still recorded')
+  assert.equal(decided.memory_id, null, 'and it no longer points at a deleted row')
+  // The tombstone still does not quote it.
+  const tombstone = store.db.prepare('SELECT * FROM memory_deletions WHERE memory_id = ?').get(memoryId)
+  assert.ok(tombstone)
+  assert.equal(tombstone.reason, 'changed')
+})
+
+test('forgetting a memory that another memory supersedes succeeds', () => {
+  const store = fresh()
+  const { memory: first } = store.remember({ text: 'Releases are cut on Tuesday.' })
+  const { replacement } = store.supersede(first.id, { text: 'Releases are cut on Thursday.' })
+
+  // `first.superseded_by` points at the replacement, so this is the same constraint from
+  // the other direction.
+  assert.equal(store.forget(replacement.id).deleted, true)
+  assert.equal(store.getMemory(replacement.id), null)
+  assert.equal(store.getMemory(first.id).status, 'superseded', 'the superseded row is untouched')
+})
+
+test('a full wipe clears memories an approved proposal produced and a superseded pair', () => {
+  const store = fresh()
+  const candidate = store.propose({ text: 'Prefers small pull requests.', proposedFrom: 'conversation' })
+  store.decideCandidate(candidate.id, { approve: true })
+  const { memory: first } = store.remember({ text: 'Releases are cut on Tuesday.' })
+  store.supersede(first.id, { text: 'Releases are cut on Thursday.' })
+  store.propose({ text: 'Never merges on a Friday.', proposedFrom: 'conversation' })
+
+  const wiped = store.forgetAll()
+  assert.deepEqual(wiped, { deletedMemories: 3, deletedCandidates: 2 })
+  assert.equal(store.stats().memories, 0)
+  assert.equal(store.stats().supersededMemories, 0)
+  assert.equal(store.stats().pendingCandidates, 0)
+  assert.equal(store.contextFor('releases').memories.length, 0)
+  // Three memories, three tombstones, and none of them quotes what went.
+  assert.equal(store.stats().deletionsRecorded, 3)
+})

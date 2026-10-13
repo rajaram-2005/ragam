@@ -359,3 +359,41 @@ test('the render bundle is generated, never committed, and cleaned up', () => {
   rmSync(OUT_DIR, { recursive: true, force: true })
   assert.equal(existsSync(OUT_DIR), false, 'the generated bundle must not be left behind')
 })
+
+test('the memory panel renders its empty state honestly, before anything is loaded', () => {
+  // renderToStaticMarkup does not run effects, so this is the pre-fetch state: the panel
+  // must render with no data rather than crash on a missing field.
+  const markup = render('ChatArea', React.createElement(components.ChatArea, { readiness: READINESS_READY, refreshReadiness: noop }))
+  assert.ok(/Memory you approved/.test(markup), 'the memory panel must render in Chat')
+  assert.ok(/Conversation history/.test(markup), 'the history panel must render in Chat')
+  assert.ok(/Nothing remembered yet/.test(markup), 'the empty state must be shown, not a blank panel')
+  assert.ok(/Nothing is remembered automatically/.test(markup))
+})
+
+test('the button variant reaches the stylesheet as a class', () => {
+  // The stylesheet selects on `.btn.primary` / `.btn.danger`. The variant used to be
+  // written to a data attribute that nothing selected, so fifteen call sites asking for a
+  // variant silently got the default button.
+  const primary = render('Button', React.createElement(components.ui.Button, { variant: 'primary' }, 'Send'))
+  assert.match(primary, /class="btn primary"/)
+  const danger = render('Button', React.createElement(components.ui.Button, { variant: 'danger' }, 'Delete'))
+  assert.match(danger, /class="btn danger"/)
+  const plain = render('Button', React.createElement(components.ui.Button, null, 'Refresh'))
+  assert.match(plain, /class="btn"/)
+  assert.ok(!/class="btn "/.test(plain), 'a default button must not carry a trailing space')
+})
+
+test('every button variant used in the app has a rule in the stylesheet', () => {
+  // The guard for the class of bug above: a variant with no rule renders unstyled and
+  // nobody notices, because an unstyled button still looks like a button.
+  const css = readFileSync(resolve(WEB, 'src/styles.css'), 'utf8')
+  const used = new Set()
+  for (const file of ['areas/ChatArea.jsx', 'areas/ImageArea.jsx', 'areas/VideoArea.jsx', 'areas/PluginsArea.jsx', 'areas/McpArea.jsx']) {
+    const source = readFileSync(resolve(WEB, 'src', file), 'utf8')
+    for (const match of source.matchAll(/variant="([a-z]+)"/g)) used.add(match[1])
+  }
+  assert.ok(used.size >= 2, `expected to find variants in use, found ${[...used]}`)
+  for (const variant of used) {
+    assert.ok(new RegExp(`\\.btn\\.${variant}\\b`).test(css), `.btn.${variant} is used but has no rule in styles.css`)
+  }
+})

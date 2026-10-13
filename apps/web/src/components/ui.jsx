@@ -41,9 +41,14 @@ export function Panel({ eyebrow, title, actions, footer, tight, children, classN
   )
 }
 
-export function Button({ children, variant = 'default', busy, disabled, ...rest }) {
+export function Button({ children, variant = 'default', busy, disabled, className = '', ...rest }) {
+  // The stylesheet selects on `.btn.primary` / `.btn.danger`, so the variant has to be a
+  // class. It was being written to a `data-variant` attribute that nothing selected, which
+  // meant every one of the fifteen call sites that asked for a variant silently got the
+  // default button -- including the primary send button and every destructive action.
+  const classes = ['btn', variant !== 'default' ? variant : '', className].filter(Boolean).join(' ')
   return (
-    <button className="btn" data-variant={variant} disabled={disabled || busy} {...rest}>
+    <button className={classes} data-variant={variant} disabled={disabled || busy} {...rest}>
       {busy ? <span className="spinner" aria-hidden="true" /> : null}
       {children}
     </button>

@@ -23,11 +23,11 @@ them rather than restating them.
 | Multi-turn context | **Completed** | Messages are passed whole; nothing is persisted (L1) |
 | Stop / cancel a generation | **Completed** | Aborts the upstream request, not just the display |
 | Copy, regenerate, edit-and-resend | **Completed** | Edit resends from that turn; earlier turns are kept |
-| Conversation history + search | **Partial** | Sessions and turns persist locally and recall returns each hit with its session and role; **the UI does not surface it yet**, and search is lexical rather than semantic |
+| Conversation history + search | **Partial** | Sessions, turns and recall are in the Chat **Conversation history** panel, which also lists sessions and deletes them. Still partial for one reason: search is lexical (BM25 over your own turns), not semantic |
 | Suggested prompts | **Completed** | Shown on an empty conversation |
 | Plain-language model control | **Completed** | Provider and location, never quantisation, unless Advanced is open |
 | Privacy mode control | **Completed** | Strict offline / hybrid / online-enabled, with the trade-off stated |
-| Memory the user can inspect and delete | **Partial** | Level 2 is implemented: memory is stored locally, editable and really deletable, and nothing is remembered without an explicit approval. **The Chat control for it does not exist yet**, so today it is API-only |
+| Memory the user can inspect and delete | **Completed** | Level 2 is implemented and reachable: the Chat **Memory you approved** panel lists, adds, edits, deletes, searches, exports and decides pending proposals, and the composer's switch to use it is off by default. Superseding a memory from the UI is not offered (editing in place is), which is a missing affordance rather than a missing capability |
 | Citations from the user's own documents | **Completed** | Every grounded claim carries the chunk it came from; no evidence is admitted when there is none |
 | Assistants / projects / spaces | **Unsupported** | Would be a sixth area; deliberately not built |
 | Voice conversation | **Planned** | Needs a speech model; none is installed |
