@@ -68,7 +68,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 12,346 source lines, 9,422 test lines
+### `services/core` — 12,364 source lines, 9,601 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -85,7 +85,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `knowledge/pipeline.mjs` | 470 | Ingest, dedupe, chunk, index, search, grounded context, purge |
 | `knowledge/store.mjs` | 385 | SQLite metadata, chunks, ACL rows, deletion records |
 | `mcp/schema.mjs` | 246 | JSON Schema subset: validation of schemas *and* of arguments/output |
-| `klyvaron/store.mjs` | 230 | Installing, verifying, listing, loading and removing local models inside the managed storage budget |
+| `klyvaron/store.mjs` | 248 | Installing, verifying, listing, loading and removing local models inside the managed storage budget |
 | `knowledge/bm25.mjs` | 224 | BM25 index (k1=1.5, b=0.75), rebuilt from stored chunks |
 | `plugins/manifest.mjs` | 216 | Manifest validation, scope vocabulary, semver |
 | `plugins/signing.mjs` | 262 | Ed25519 manifest signatures, canonical form, the local trust store |

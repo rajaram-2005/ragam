@@ -259,6 +259,52 @@ surprise. The whole record of that run — report figures, gate verdict, install
 evidence — is committed at
 [`experiments/lm-verification-run-67cdd58.json`](./experiments/lm-verification-run-67cdd58.json).
 
+That record's `codeRevision` reads `67cdd58…-dirty`, because the revision used to be read
+when the report was written — thirty-five minutes after the corpus was read — and the
+working tree was dirty by then. The suffix described the tree, not the corpus: exporting
+`67cdd58` and rebuilding the manifest from its text reproduces `264a436c…` exactly, 152
+train and 17 validation files. The ordering is fixed in `c621bf8`, which reads the
+revision beside the corpus, so the pair cannot be recorded apart again.
+
+### A second run, on a clean revision
+
+That run's corpus contained this project's own build products, because `artifacts/` was
+missing from the list of directories discovery skips — so a model was training on the
+previous model's report. One line of the exclude list fixed it, and the run was repeated
+on the tree at `8d9cdf8` with the fix in place. It is the stronger of the two runs, because
+its corpus can be rebuilt from a commit:
+
+| | |
+|---|---|
+| Revision | `8d9cdf8…`, **no `-dirty` suffix** — the revision is read beside the corpus |
+| Corpus manifest digest | `70c5b78c…` — recomputed from that revision's own text before the run finished, so the match is a prediction that held rather than a check fitted to the answer |
+| Corpus | 154 train / 17 validation files, 2,614,740 bytes, vocabulary 148 characters (147 in the training text) |
+| Parameters | **359,616** |
+| Validation perplexity | **4.8932**, against a bigram baseline of **15.7588** on the same 280,192 held-out tokens — ratio **0.310505** |
+| Gate | **released**, 0 hard failures, 0 soft failures |
+| Wall time / peak memory | 2,062.9 s, 165.2 MB |
+| Artifact | `aetheris-lite-lm-53ae59b2a777.npz`, 1,446,862 bytes, weights digest `53ae59b2a777…` |
+| Record | [`experiments/lm-verification-run-8d9cdf8.json`](./experiments/lm-verification-run-8d9cdf8.json) |
+
+The perplexity is **not** comparable with the release's 4.4033 and is offered as neither an
+improvement nor a regression: the same 5,324,800-token budget was spent on a corpus **1.849×**
+larger with a larger vocabulary — about **2.25 passes** over the training text. What carried
+over is the configuration and the gate.
+
+Measured the same way, from the operator CLI and the HTTP surface rather than through the
+store's API:
+
+| | |
+|---|---|
+| Install | `scripts/klyvaron.mjs install <dir>` — manifest plus weights, **1,451,765 bytes**, verified before the copy and again after it |
+| Device throughput | 22.6 ms to load, **26.2 tokens/s**, 72.9 MB resident |
+| NumPy vs JavaScript | all 148 logits for one prompt, maximum difference **1.6e-05**; 24 greedy tokens identical from both (`" a corpus a the comparis"`) |
+| `/api/chat`, not pinned | **501** `model_not_instruction_tuned`; pinned, **200** with 48 tokens, `sentExternally: false`, 24.2 tokens/s |
+| `/api/storage` | 1.5 MB used, `withinBudget: true`, 4,998,548,235 bytes of headroom |
+
+Both runs remain **verification artifacts**: `aetheris-lite-lm@0.1.0` is the released model,
+and neither run is presented as better than it.
+
 ---
 
 ## 8b. From checkpoint to a model the core can run
@@ -291,6 +337,31 @@ node services/core/scripts/klyvaron.mjs verify [<artifact-id>]
 node services/core/scripts/klyvaron.mjs status                   # what the app reports, no server needed
 node services/core/scripts/klyvaron.mjs remove <artifact-id> --yes
 ```
+
+The library holds **one artifact per id**. Updating a model is `install <dir> --replace`, and
+the store keeps no copy of what it replaced — so an on-device rollback is the same command
+with the previous artifact, which is why the operator has to retain it. That was exercised
+with two artifacts whose weights genuinely differ (the `67cdd58` run, `2840150f…`, and the
+`8d9cdf8` run, `165e150f…`), under one id:
+
+| Step | Result |
+|---|---|
+| install `0.1.0-verify` | 1,451,373 bytes, weights `2840150f…`, verified |
+| install `0.1.1-verify` without `--replace` | refused (`already_installed`); the library is unchanged |
+| install `0.1.1-verify` with `--replace` | all four gates re-run; weights `165e150f…` |
+| roll back to `0.1.0-verify` with `--replace` | weights `2840150f…` again, 1,451,373 bytes |
+| a copy corrupted by one flipped byte, same size | refused (`digest_mismatch`, both hashes printed); the installed artifact is left alone |
+
+**That exercise found a real defect**, which is the reason it is described here rather than
+summarised as a passing test. The first version of it ended with the library holding
+**2,898,235 bytes for one artifact id**: `cpSync` merges into an existing directory, so
+replacing a version left the previous version's 1.4 MB `.npz` behind with no manifest
+referring to it — invisible to `verify()`, never reclaimed, and reported as the source
+directory's size rather than the device's. `store.mjs` now clears the artifact's own
+directory when it replaces, charges the budget the growth rather than the whole artifact
+again, and reports the size it measured on disk; `klyvaron-store.test.mjs` covers a
+version-to-version replace and **fails against the old code**. The same sequence now ends at
+1,451,373 bytes.
 
 `remove` refuses without `--yes` and prints what it would delete: a model the user asked
 for is user data, and a cleanup that silently drops it is not a cleanup.

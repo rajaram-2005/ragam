@@ -62,6 +62,7 @@ const doc = {
   distillVerdict: () => read('docs/experiments/distillation-logit-vs-baseline.json'),
   l4Transfer: () => read('docs/experiments/l4-transfer.json'),
   lmVerification: () => read('docs/experiments/lm-verification-run-67cdd58.json'),
+  lmCleanRun: () => read('docs/experiments/lm-verification-run-8d9cdf8.json'),
   readme: () => read('README.md'),
   env: () => read('.env.example'),
   notices: () => read('third-party/NOTICES.md'),
@@ -607,11 +608,11 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 25)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**446 / 446**'), 'core total must be stated')
+  assert.ok(status.includes('**448 / 448**'), 'core total must be stated')
   assert.ok(status.includes('**563 / 563**'), 'fabric total must be stated')
   assert.ok(status.includes('**67 / 67**'), 'web total must be stated')
-  assert.ok(status.includes('1076 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1076 tests: core 446, web 67, fabric 563'),
+  assert.ok(status.includes('1078 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1078 tests: core 448, web 67, fabric 563'),
     'README must state the same totals')
   assert.ok(status.includes('(20 files'), 'the file count must move with the suite')
 
@@ -624,14 +625,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(446), `core heading must say 446, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(448), `core heading must say 448, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(563), `fabric heading must say 563, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(67), `web heading must say 67, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1076,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1076`,
+    1078,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1078`,
   )
 })
 
@@ -689,6 +690,29 @@ test('the documented language-model results match its committed model card', () 
     /follows no instructions|no instruction-following|does not follow instructions/.test(text),
     'docs/08 must say the model does not follow instructions',
   )
+
+  // The card is an artifact of record, and one sentence in it was false: it said the model
+  // was "deliberately not wired into /api/chat" while the route had been resolving and
+  // refusing it with 501. Correcting a record silently is worse than leaving it wrong, so
+  // the correction is recorded on the card itself and every part of it is checked here --
+  // including that no measured value moved with it.
+  const envelope = JSON.parse(doc.lmCard())
+  assert.equal(envelope.corrections.length, 1, 'the one correction must be recorded, not implied')
+  const [correction] = envelope.corrections
+  assert.ok(correction.was.includes('not wired into'), 'the correction must quote what it replaced')
+  assert.ok(correction.now.includes('/api/chat') && correction.now.includes('model_not_instruction_tuned'))
+  assert.equal(correction.measuredValuesChanged, false)
+  assert.ok(!JSON.stringify(envelope.card).includes('not wired into'),
+    'the false sentence must be gone from the card body itself')
+  assert.ok(
+    card.card.limitations.some((l) => l.includes('model_not_instruction_tuned')),
+    'the card must state the behaviour the route actually has',
+  )
+  // The Markdown card carries the same sentence twice and the same correction once.
+  const markdown = squash(read('docs/model-cards/aetheris-lite-lm-0.1.0.md'))
+  assert.ok(!markdown.includes('not wired into'))
+  assert.ok(markdown.includes('model_not_instruction_tuned'))
+  assert.ok(markdown.includes('Corrections'), 'the Markdown card must show the correction')
 })
 
 test('the documented verification run matches the committed record', () => {
@@ -746,8 +770,94 @@ test('the documented verification run matches the committed record', () => {
   assert.equal(record.serving.chatPinned.sentExternally, false)
   assert.equal(record.serving.crossImplementation.greedy_identical, true, 'the two implementations must agree')
   assert.ok(record.serving.crossImplementation.maxAbsLogitDelta < 1e-3)
+
+  // The run's corpus was read from a working tree that was clean *at read time*, and the
+  // report says -dirty because the revision used to be read after training. That reading
+  // was checked rather than explained away: the revision's own text reproduces the digest.
+  const reverified = record.corpusReverification
+  assert.equal(reverified.matches, true)
+  assert.equal(reverified.recomputedManifestDigest, record.corpus.manifestDigest)
+  assert.ok(record.revision.startsWith(reverified.revision),
+    'the record must still name the revision whose text the corpus came from')
+  assert.ok(squash(doc.lite()).includes(reverified.recomputedManifestDigest.slice(0, 8)),
+    'docs/08 must state the re-derived corpus digest')
   assert.ok(squash(doc.klyvaron()).includes('not a version bump'),
     'docs/11 must say the verification run is not a release')
+})
+
+test('the clean-revision run matches its committed record', () => {
+  // The second verification run, and the first whose corpus can be rebuilt from a commit.
+  // It is quoted in docs/08, docs/11 and docs/03, so the quotes are checked against the
+  // record -- and the record is checked for the two things that would make them misleading:
+  // presenting a different corpus as an improvement, and calling a verification run a release.
+  const record = JSON.parse(doc.lmCleanRun())
+  assert.equal(record.experiment, 'lm-release-configuration-reproduction')
+  assert.equal(record.gate.verdict, 'released')
+  assert.deepEqual(record.gate.hardFailures, [])
+  assert.deepEqual(record.gate.softFailures, [])
+
+  // Revision and corpus were read together, and the digest was re-derived from the commit.
+  assert.ok(!record.revision.endsWith('-dirty'), 'this is the run without the uncommitted-tree caveat')
+  assert.equal(record.corpusReverification.matches, true)
+  assert.equal(record.corpusReverification.recomputedManifestDigest, record.corpus.manifestDigest)
+  assert.equal(record.corpusReverification.revision, record.revision)
+
+  const text = squash(doc.lite())
+  assert.ok(text.includes(record.run.weightsDigest.slice(0, 12)),
+    `docs/08 must quote the clean run's digest ${record.run.weightsDigest.slice(0, 12)}`)
+  assert.ok(text.includes(record.corpus.manifestDigest.slice(0, 8)),
+    'docs/08 must state the re-derived corpus digest')
+  assert.ok(text.includes(record.run.parameterCount.toLocaleString('en-US')),
+    `docs/08 must state ${record.run.parameterCount} parameters`)
+  assert.ok(text.includes(record.run.evaluation.perplexity.toFixed(4)),
+    `docs/08 must state the perplexity ${record.run.evaluation.perplexity.toFixed(4)}`)
+  const best = record.run.evaluation.baselines.find((entry) => entry.name === record.run.evaluation.bestBaseline)
+  assert.ok(text.includes(best.perplexity.toFixed(4)),
+    `docs/08 must state the baseline ${best.perplexity.toFixed(4)}`)
+  assert.ok(text.includes(record.run.evaluation.perplexityVsBestBaseline.toFixed(6)),
+    'docs/08 must state the ratio to the best baseline')
+
+  // Three runs, three corpora, three weight digests: none may be confused with another.
+  const card = JSON.parse(doc.lmCard()).card
+  const previous = JSON.parse(doc.lmVerification())
+  const digests = new Set([record.run.weightsDigest, previous.run.weightsDigest, card.weightsDigest])
+  assert.equal(digests.size, 3)
+  const corpora = new Set([record.corpus.manifestDigest, previous.corpus.manifestDigest, card.artifacts.corpusManifest])
+  assert.equal(corpora.size, 3)
+  assert.equal(record.comparison.comparable, false, 'a different corpus is not a comparable measurement')
+  assert.equal(record.releaseRun.weightsDigest, card.weightsDigest)
+  assert.ok(squash(doc.klyvaron()).includes(record.run.evaluation.perplexity.toFixed(4)),
+    'docs/11 must carry the same perplexity')
+
+  // The serving evidence is measured, and the update/rollback exercise must be recorded with
+  // the defect it found rather than only with the numbers that now look right.
+  assert.equal(record.serving.ready.capabilities.chat, false)
+  assert.equal(record.serving.chatUnpinned.status, 501)
+  assert.equal(record.serving.chatPinned.status, 200)
+  assert.equal(record.serving.chatPinned.sentExternally, false)
+  assert.equal(record.serving.crossImplementation.greedy_identical, true)
+  assert.ok(record.serving.crossImplementation.maxAbsLogitDelta < 1e-3)
+  assert.equal(record.serving.deviceThroughput.requestedTokens > record.serving.deviceThroughput.generatedTokens,
+    true, 'the manifest’s generation ceiling must be visible in the measurement')
+  const update = record.serving.storeUpdateAndRollback
+  const installs = update.steps.filter((step) => step.weightsSha256 && !step.error)
+  assert.deepEqual(installs.map((step) => step.version), ['0.1.0-verify', '0.1.1-verify', '0.1.0-verify'])
+  assert.equal(installs[0].weightsSha256, installs[2].weightsSha256, 'the rollback restores the digest')
+  assert.notEqual(installs[0].weightsSha256, installs[1].weightsSha256, 'the update changed the weights')
+  assert.ok(update.steps.some((step) => step.error === 'already_installed'))
+  assert.ok(update.steps.some((step) => step.error === 'digest_mismatch'))
+  // The record must not disagree with itself about its own arithmetic: the growth factor and
+  // the pass count are printed in prose, so they are recomputed from the record's own fields.
+  const expectedGrowth = Number(((record.corpus.trainBytes + record.corpus.validationBytes)
+    / record.releaseRun.corpusSize).toFixed(3))
+  assert.equal(record.comparison.corpusGrowth, expectedGrowth)
+  assert.ok(record.comparison.explanation.includes(`${expectedGrowth}x`),
+    `the prose must carry the same growth factor, ${expectedGrowth}x`)
+  assert.equal(record.comparison.trainCorpusPasses,
+    Number((record.run.tokensSeen / record.corpus.trainTokens).toFixed(3)))
+
+  assert.ok(update.finding.includes('2,898,235'), 'the defect the exercise found must be stated')
+  assert.ok(squash(doc.lite()).includes('2,898,235'), 'docs/08 must state what the defect cost')
 })
 
 test('the documented distillation result matches the committed experiment record', () => {

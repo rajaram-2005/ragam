@@ -52,6 +52,15 @@
   "validationTokens": 181365
  },
  "revision": "67cdd58b02dbfbd76cec3c7026168c898fbe9cdb-dirty",
+ "corpusReverification": {
+  "method": "recomputed the manifest digest from the revision's own text: git archive 67cdd58 | tar -x, then build_manifest",
+  "revision": "67cdd58b02dbfbd76cec3c7026168c898fbe9cdb",
+  "recomputedManifestDigest": "264a436ce256540e9393ca6b6d5681837794343fb8a3ecb40813b8f73cc04915",
+  "matches": true,
+  "trainFiles": 152,
+  "validationFiles": 17,
+  "note": "The report's revision reads -dirty because it was read when the report was written, 35 minutes after the corpus was read, and the tree was dirty by then. The suffix described the tree, not the corpus: exporting 67cdd58 and rebuilding the manifest from its text reproduces the digest exactly. Commit c621bf8 reads the revision beside the corpus, so the two can no longer be recorded apart."
+ },
  "releaseRun": {
   "runId": "82392ef89074",
   "weightsDigest": "82392ef8907455e56e1cee56bf4a074cb9337dc38f79775859b67efa5b822e94",

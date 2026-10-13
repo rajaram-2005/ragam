@@ -5,6 +5,17 @@
   "runId": "82392ef89074",
   "runStatus": "partial",
   "note": "Trained from random initialisation in pure NumPy. No pretrained weights, no PyTorch, no GPU, no network. Weights are NOT in this repository: .gitignore keeps artifacts out by policy and they are referenced by digest.",
+  "corrections": [
+    {
+      "at": "2026-10-13",
+      "field": "card.limitations[3], and the same sentence in the Markdown card",
+      "was": "deliberately not wired into /api/chat, because exposing a model of this size as a chat assistant would misrepresent it",
+      "now": "reachable from /api/chat, where an unpinned request is refused with model_not_instruction_tuned (501): it continues text and does not answer questions, and presenting it as an assistant would misrepresent it",
+      "reason": "The sentence described a behaviour the code does not have. The artifact is installed in the model library and routable, so /api/chat resolves it: an unpinned request is refused with model_not_instruction_tuned (501) and a pinned request returns a continuation labelled as one. A limitation that states the wrong behaviour is worse than none, because it gets quoted as the reason the behaviour is safe.",
+      "measuredValuesChanged": false,
+      "generator": "services/fabric/fabric/lm/card.py::model_limitations, corrected in the same revision"
+    }
+  ],
   "card": {
     "name": "aetheris-lite-lm",
     "version": "0.1.0",
@@ -69,7 +80,7 @@
       "trained from random initialisation; not derived from any pretrained base model",
       "character-level base model: it predicts the next character of repository text and follows no instructions (359,136 parameters, vocabulary of 143)",
       "output quality is low: this demonstrates the pipeline, not a usable assistant",
-      "deliberately not wired into /api/chat, because exposing a model of this size as a chat assistant would misrepresent it",
+      "reachable from /api/chat, where an unpinned request is refused with model_not_instruction_tuned (501): it continues text and does not answer questions, and presenting it as an assistant would misrepresent it",
       "no comparison against any pretrained model was performed, and none is claimed"
     ],
     "requirements": [

@@ -108,7 +108,8 @@ export class KlyvaronStore {
     const verified = loadArtifact(from)
 
     const target = join(this.libraryPath, verified.manifest.id)
-    if (existsSync(target) && !replace) {
+    const existing = existsSync(target)
+    if (existing && !replace) {
       throw new ModelStoreError(
         `'${verified.manifest.id}' is already installed; pass replace to overwrite it deliberately`,
         { code: 'already_installed' },
@@ -121,9 +122,16 @@ export class KlyvaronStore {
       })
     }
 
-    const bytes = directoryBytes(from)
+    // What the device gains, not what the download weighs. A replace frees the space the
+    // previous version of this id occupied, and the two are not the same number: charging
+    // the whole artifact again refuses an update that in fact costs almost nothing. For a
+    // fresh install the directory is new, so the two coincide -- which is why the
+    // difference stayed invisible until two versions of one id were installed in sequence.
+    const sourceBytes = directoryBytes(from)
+    const existingBytes = existing ? directoryBytes(target) : 0
+    const growthBytes = Math.max(0, sourceBytes - existingBytes)
     // Gate 2: the budget decides, and it decides with real numbers.
-    const decision = this.budget.canInstall(bytes, {
+    const decision = this.budget.canInstall(growthBytes, {
       category: CATEGORIES.MODEL_WEIGHTS,
       userRequested,
       label: verified.manifest.id,
@@ -135,6 +143,15 @@ export class KlyvaronStore {
       )
     }
 
+    if (existing) {
+      // `cpSync` merges into a directory that already exists, so replacing an artifact used
+      // to leave the previous version's .npz sitting next to the new one: no manifest refers
+      // to it, `verify()` never looks at it, and nothing ever reclaims it. Measured on a real
+      // update -- replace 0.1.0-verify with 0.1.1-verify, then roll back -- the directory held
+      // two 1.4 MB weight files for one artifact id. Only this artifact's own directory is
+      // touched, and its contents are a copy of something that still exists in the source.
+      rmSync(target, { recursive: true, force: true })
+    }
     mkdirSync(target, { recursive: true })
     cpSync(from, target, { recursive: true })
 
@@ -158,7 +175,8 @@ export class KlyvaronStore {
       id: installed.manifest.id,
       version: installed.manifest.version,
       directory: target,
-      bytes,
+      // Measured after the copy, so the number describes the device rather than the source.
+      bytes: directoryBytes(target),
       sha256: record.sha256,
       storage: this.budget.measure(),
     }

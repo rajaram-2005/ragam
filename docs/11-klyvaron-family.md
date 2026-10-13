@@ -56,6 +56,20 @@ the corpus is this repository, the repository moved, and the two numbers are not
 comparable with each other — the verification run spent the same token budget on a
 corpus about 1.8× larger.
 
+That run's corpus turned out to include this project's own build products, because
+`artifacts/` was missing from the directories discovery skips — so a model was reading the
+previous model's report as training text. Fixed, and the run repeated on the tree at
+`8d9cdf8c`, which is committed as
+[`experiments/lm-verification-run-8d9cdf8.json`](./experiments/lm-verification-run-8d9cdf8.json):
+**359,616** parameters, perplexity **4.8932** against the bigram's 15.7588 (ratio 0.310505),
+gate verdict **RELEASED**, installed through `scripts/klyvaron.mjs` and served over
+`/api/chat` the same way. It is also a verification model and not a version bump — the two
+verification runs are not comparable with each other or with the release, because each
+spent the same fixed token budget on a different corpus with a different vocabulary (the
+second corpus is 1.849× the released one, and the run makes 2.25 passes over it). What
+the pair demonstrates is the pipeline, not progress: the released record stays
+`aetheris-lite-lm@0.1.0`.
+
 Its limitations are part of the record, not a footnote, and one of them is load-bearing:
 **Lite meets the storage target and no capability target.** It is smaller than the 1.5 GB
 per-model budget because it is tiny, not because it is efficient. The validator refuses a

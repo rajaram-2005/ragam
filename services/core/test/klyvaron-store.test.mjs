@@ -8,7 +8,8 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -25,6 +26,35 @@ function sourceArtifact() {
   writeFileSync(join(directory, 'parity.npz'), Buffer.from(fixture.npzBase64, 'base64'))
   writeFileSync(join(directory, 'klyvaron-parity-tiny.klyvaron.json'), JSON.stringify(fixture.manifest, null, 2))
   return directory
+}
+
+/**
+ * A second artifact for the *same* id: another version, and genuinely different bytes.
+ *
+ * A same-artifact replace cannot expose what a version change does to the directory -- the
+ * filenames are identical, so nothing can be left behind. Real artifacts carry their
+ * version in the weights filename (`<id>-<version>.npz`), which is the case that matters.
+ */
+function otherVersionArtifact(version = '0.9.9') {
+  const directory = mkdtempSync(join(tmpdir(), 'klyvaron-source-'))
+  const manifest = structuredClone(fixture.manifest)
+  manifest.version = version
+  // Same length, one flipped byte: only the digest distinguishes the two weight files, so
+  // the size accounting stays comparable between versions.
+  const weights = Buffer.from(fixture.npzBase64, 'base64')
+  weights[Math.floor(weights.length / 2)] ^= 0x01
+  manifest.weights = {
+    ...manifest.weights,
+    file: `${manifest.id}-${version}.npz`,
+    sha256: createHash('sha256').update(weights).digest('hex'),
+  }
+  writeFileSync(join(directory, manifest.weights.file), weights)
+  writeFileSync(join(directory, `${manifest.id}.klyvaron.json`), JSON.stringify(manifest, null, 2))
+  return directory
+}
+
+function directoryBytes(directory) {
+  return readdirSync(directory).reduce((total, name) => total + statSync(join(directory, name)).size, 0)
 }
 
 function makeRoot({ limits = {} } = {}) {
@@ -56,6 +86,45 @@ test('an artifact installs into the library, and the copy is verified, not assum
   const replaced = store.install(sourceArtifact(), { replace: true })
   assert.equal(replaced.sha256, fixture.manifest.weights.sha256)
   assert.equal(store.list().length, 1, 'replace must not leave a second copy behind')
+})
+
+test('replacing one version with another leaves nothing of the first behind', () => {
+  // Found by installing two versions of one id on a real device and reading the directory
+  // afterwards: `cpSync` merges into an existing directory, so the previous version's
+  // weights survived the replace with no manifest referring to them. `verify()` never looks
+  // at an unreferenced file and the budget only ever measured the directory, so the only
+  // visible symptom was a device using twice the storage it reported for one model.
+  const { store } = makeRoot()
+  const first = sourceArtifact()
+  const second = otherVersionArtifact()
+
+  const installedFirst = store.install(first)
+  assert.equal(installedFirst.version, '0.1.0')
+  assert.equal(installedFirst.bytes, directoryBytes(first))
+
+  const installedSecond = store.install(second, { replace: true })
+  assert.equal(installedSecond.version, '0.9.9')
+
+  // The directory holds this version and nothing else...
+  assert.deepEqual(
+    readdirSync(installedSecond.directory).sort(),
+    [`${fixture.manifest.id}.klyvaron.json`, `${fixture.manifest.id}-0.9.9.npz`].sort(),
+  )
+  // ...and the store's own report agrees with its own measurement. Before the fix these two
+  // numbers differed by exactly one artifact, because install reported the source directory.
+  const [listed] = store.list()
+  assert.equal(listed.version, '0.9.9')
+  assert.equal(installedSecond.bytes, directoryBytes(installedSecond.directory))
+  assert.equal(listed.bytes, installedSecond.bytes)
+
+  // Rolling back is the same operation in the other direction, and it also leaves no trace.
+  const rolledBack = store.install(first, { replace: true })
+  assert.equal(rolledBack.version, '0.1.0')
+  assert.deepEqual(
+    readdirSync(rolledBack.directory).sort(),
+    [`${fixture.manifest.id}.klyvaron.json`, 'parity.npz'].sort(),
+  )
+  assert.deepEqual(store.verify().map((entry) => entry.ok), [true])
 })
 
 test('an artifact that does not fit the budget is refused rather than accommodated', () => {
