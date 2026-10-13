@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 import {
   CAPABILITY_STATES, HARDWARE_CLASS, KLYVARON, MOBILE_TARGETS, ModelFamilyError, PROVENANCE, TIERS,
   TIER_STATUS,
-  familyReport, getTier, ownedArtifacts, tierClaimFor, tierFitsHardware, validateFamily,
+  familyReport, getTier, ownedArtifacts, tierClaimFor, tierClaimForArtifact, tierFitsHardware, validateFamily,
 } from '../src/klyvaron/tiers.mjs'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
@@ -49,7 +49,8 @@ test('Lite reports the artifact that exists, and only the capabilities it backs'
   assert.deepEqual(lite.availableCapabilities, ['text.completion', 'text.extract'])
 
   const backing = lite.capabilities['text.completion'].backing
-  assert.equal(backing.parameters, 359_136)
+  assert.equal(backing.artifact, 'aetheris-lite-lm-0.1.1', 'the released artifact')
+  assert.equal(backing.parameters, 359_616)
   assert.equal(backing.provenance, PROVENANCE.FROM_SCRATCH)
   assert.equal(backing.baseModel, null, 'trained from random initialisation, so there is no base')
   assert.equal(backing.licence, 'MIT')
@@ -60,12 +61,14 @@ test('Lite reports the artifact that exists, and only the capabilities it backs'
 })
 
 test('Lite does not claim to chat, and says why', () => {
-  // The single most important negative claim in this file: the model that exists emits
-  // mush, and /api/chat deliberately does not serve it.
+  // The single most important negative claim in this file. The model that exists is
+  // reachable over /api/chat and still does not constitute a chat capability, so the
+  // reason has to say what actually happens rather than that nothing was wired up.
   const chat = getTier(TIERS.LITE).capabilities.chat
   assert.equal(chat.state, CAPABILITY_STATES.UNAVAILABLE)
   assert.equal(chat.backing, null)
-  assert.match(chat.reason, /not wired into \/api\/chat/)
+  assert.match(chat.reason, /No instruction-tuned artifact exists/)
+  assert.match(chat.reason, /refused there unless pinned by id/)
 })
 
 test('Pro and High are recorded as unbuilt rather than omitted', () => {
@@ -179,6 +182,53 @@ test('the report is generated from the data, so a rename cannot add a capability
 })
 
 // --- integration: the family reaches the API, and a label cannot be faked ---------
+
+test('a tier label needs a backing record for the exact version, not a declaration', () => {
+  // The versioned form is what the core uses, because "is this model Klyvaron Lite?" is a
+  // question about an artifact, and an artifact is an id plus a version.
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.1'), TIERS.LITE, 'the released artifact')
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.1-verify'), TIERS.LITE,
+    'the same bytes under the label the drill installed them with')
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.0'), TIERS.LITE,
+    'the superseded artifact is still a Lite model on a device that has not updated')
+  // And nothing else may carry the label, whatever its manifest declares.
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '9.9.9'), null, 'a version that does not exist')
+  assert.equal(tierClaimForArtifact('klyvaron-parity-tiny', '0.1.0'), null, 'a test fixture is not a family artifact')
+  assert.equal(tierClaimForArtifact('Qwen2.5-7B-Instruct', '0.1.0'), null, 'a renamed third-party model')
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm-pro', '0.1.0'), null)
+  // Pro and High have nothing behind them, so no version of anything is theirs yet.
+  assert.equal(tierClaimForArtifact('aetheris-pro-lm', '0.1.0'), null)
+  assert.equal(tierClaimForArtifact('aetheris-high-lm', '0.1.0'), null)
+})
+
+test('the superseded artifact is recorded, not deleted, and is not the release', () => {
+  // One artifact is released and one is superseded, and the record has to say which is
+  // which. A tier that quietly kept the old figures as "the release" would be describing a
+  // model nobody can rebuild; one that dropped them would be erasing a published record.
+  const backing = KLYVARON.lite.capabilities['text.completion'].backing
+  const old = backing.supersededArtifact
+  assert.ok(old, 'the superseded artifact must be recorded, not omitted')
+  assert.equal(old.status, 'superseded')
+  assert.notEqual(old.artifact, backing.artifact, 'two artifacts must not share a name')
+  assert.notEqual(old.weightsDigest, backing.weightsDigest, 'a different corpus means different weights')
+  assert.match(old.weightsDigest, /^[0-9a-f]{64}$/)
+  assert.equal(old.card, 'docs/model-cards/aetheris-lite-lm-0.1.0.json',
+    'the superseded figures live on the card that published them')
+  assert.ok(old.parameters < backing.parameters, 'the superseded model was the smaller vocabulary')
+  assert.match(old.note, /cannot be re-derived|not comparable/,
+    'the record must say why it is superseded and that the numbers are not comparable')
+  // It is still owned: a device that has not updated is running this model, and it may
+  // still carry the tier label and still be rolled back to.
+  assert.ok(ownedArtifacts(TIERS.LITE).includes(old.artifact))
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.0'), TIERS.LITE)
+
+  // The released artifact's own digests, and the two names it answers to.
+  assert.match(backing.artifactSha256, /^[0-9a-f]{64}$/, 'the file the store verifies needs its own digest')
+  assert.notEqual(backing.artifactSha256, backing.weightsDigest,
+    'the weights hash and the file hash are different digests of different things')
+  assert.ok(backing.artifactBytes > 0)
+  assert.deepEqual([...backing.alsoKnownAs], ['aetheris-lite-lm-0.1.1-verify'])
+})
 
 test('a tier label is looked up from the backing record, never declared', () => {
   assert.equal(tierClaimFor('aetheris-lite-lm-0.1.0'), TIERS.LITE)

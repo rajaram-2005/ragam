@@ -20,7 +20,7 @@ learns decides what infrastructure it needs.
 
 Logit distillation matches the teacher's full next-token distribution. That requires
 the teacher's weights, which rules out any model behind an API — including every
-provider FreeLLMAPI fronts. Sequence distillation only needs the teacher's *text*, so
+model that lives behind an API. Sequence distillation only needs the teacher's *text*, so
 it works across HTTP, at the cost of the teacher's uncertainty: the student sees one
 sampled continuation instead of a distribution over all of them.
 
@@ -28,15 +28,17 @@ So the split is forced by the interface, not chosen for convenience.
 
 ### The teacher that was already here
 
-The blocker for external distillation is not technique. `gateway.freellmapi.co`,
+The blocker for external distillation is not technique. `api.openai.com`,
 `text.pollinations.ai`, `api.openai.com` and `generativelanguage.googleapis.com` are
 **all unreachable from this sandbox** (HTTP 000 before credentials are even
 considered), and no API key is configured. Nothing in this repository has ever
 contacted a real provider.
 
 But logit distillation needs no provider. It needs a teacher whose weights are local —
-and `aetheris-lite-lm@0.1.0`, trained in `services/fabric` from random initialisation,
-is exactly that. 359,136 parameters, digest `82392ef89074…`, released through the gate
+and the released `aetheris-lite-lm@0.1.1`, trained in `services/fabric` from random
+initialisation, is exactly that — as is the superseded `@0.1.0`, and as was the run this
+experiment actually used (§5 names it: 359,904 parameters, weights `c034a15095fc…`). The
+released artifact is 359,616 parameters, digest `53ae59b2a777…`, released through the gate
 in [`08-aetheris-lite.md`](./08-aetheris-lite.md).
 
 That is the path that produced the result in §5.
@@ -86,8 +88,8 @@ bit-identical across three configurations, including one with an untied output h
 
 ## 3. Sequence distillation: the credentialed path
 
-`fabric/lm/teacher.py` speaks `/v1/chat/completions` to anything OpenAI-compatible,
-including FreeLLMAPI. It takes evenly spaced prefixes of real repository text, asks the
+`fabric/lm/teacher.py` speaks `/v1/chat/completions` to anything OpenAI-compatible.
+It takes evenly spaced prefixes of real repository text, asks the
 teacher to continue each one, and writes the continuations into a corpus that the
 existing trainer consumes as ordinary data.
 
@@ -146,7 +148,8 @@ reorder fails loudly.
   request shape, the header, the parsing and the gate — and proves nothing about any
   real provider's behaviour. Status: **Requires external credentials**.
 - **No logit distillation from a model we did not train.** Only
-  `aetheris-lite-lm@0.1.0` is available to act as a teacher.
+  the released `aetheris-lite-lm@0.1.1` is available to act as a teacher (and `@0.1.0`
+  before it).
 - **No instruction tuning.** The student is a base model, exactly like its teacher.
 
 ---

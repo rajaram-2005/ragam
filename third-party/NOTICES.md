@@ -1,6 +1,6 @@
 # Third-party notices
 
-Aetheris Omni integrates work from three upstream repositories and depends on a
+Aetheris Omni integrates work from two upstream repositories and depends on a
 small set of permissively licensed libraries. This file records what was taken
 from where, under what licence, and — just as importantly — **what was
 deliberately not copied**.
@@ -86,51 +86,13 @@ Because the work is Unlicensed (public domain), no attribution is legally
 required. It is recorded anyway, because the provenance of an idea matters for
 reviewing it.
 
-### 1.3 freellmapi (Repository C)
-
-| | |
-|---|---|
-| URL | https://github.com/tashfeenahmed/freellmapi |
-| Licence | **MIT** |
-| Copyright | `Copyright (c) 2026 Tashfeen Ahmed` |
-| Commit reviewed | `65ec96df6450224a95a0eabfff8b41b394b2396f` (2026-10-11, 33,138 stars) |
-| Baseline | `npm test` **not run** — requires a native `better-sqlite3` build unavailable in this sandbox. Contracts were read from source instead and are recorded as read-from-source, not as verified-by-execution. |
-
-**What was taken — nothing. No files were copied.**
-
-The gateway is consumed as a **separately versioned external service** over its
-documented `/v1` HTTP surface, from `services/core/src/providers/freellmapi.mjs`.
-This was a deliberate architectural choice: copying a 33k-star TypeScript service
-into this repository would have duplicated its dependency surface and made
-Aetheris responsible for its maintenance.
-
-Contracts confirmed by reading its source:
-
-- Chat/images/videos under `/v1`; error envelope `{error:{message,type,code?}}`
-  with `type ∈ invalid_request | authentication | rate_limit | server`, status
-  clamped to 400–599 else 502.
-- Image responses are JSON: `{created, data[], model, provider}`.
-- **Video responses are a raw binary MP4**, not JSON — so cancellation means
-  aborting the request, and validation must sniff the container.
-- `VIDEO_PLATFORMS = {pollinations, huggingface}` — **two** platforms, against
-  **eight** for images. `keys.ts:921` states video is unsupported on custom
-  endpoints. Hence: chat support does **not** imply video support.
-
-Its upstream note "*Personal experimentation only*" is reproduced here because it
-bears on deployment decisions, not on licence compatibility.
-
-The MIT licence text is reproduced in §4 below.
-
-Aetheris remains fully functional when this service, a provider, or its external
-catalogue is unavailable: every capability that depends on it degrades to an
-audited refusal with an explicit limitation.
-
 ---
 
 ## 2. Runtime dependencies (shipped in the browser bundle)
 
-Only these reach production. The bundle is 217.28 kB (65.53 kB gzipped), a single
-chunk, and `apps/web/test/structure.test.mjs` fails if it grows past 400 kB.
+Only these reach production. The bundle is 242.71 kB (71.78 kB gzipped), a single
+chunk, as reported by `npm run build` in this revision, and
+`apps/web/test/structure.test.mjs` fails if it grows past 400 kB.
 
 | Package | Version | Licence | In the bundle? | Copyright |
 |---|---|---|---|---|
@@ -345,7 +307,6 @@ project can be redistributed without re-fetching anything:
 | File | Source | Size |
 |---|---|---|
 | `licenses/aetheris-MIT.txt` | `Aetheris-/LICENSE` @ `bed29f4` | 1,066 B |
-| `licenses/freellmapi-MIT.txt` | `freellmapi/LICENSE` @ `65ec96d` | 1,071 B |
 | `licenses/sparsiz-Unlicense.txt` | `sparsiz/LICENSE` @ `76ec6f0` | 1,211 B |
 | `licenses/numpy-BSD-3-Clause.txt` | `numpy 2.1.3` dist-info `LICENSE.txt` — **version-specific**; 2.4.6 ships a 46,794 B text | 47,755 B |
 
@@ -357,32 +318,6 @@ The texts below are reproduced verbatim from those files.
 MIT License
 
 Copyright (c) 2026 RAJARAM K
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-### MIT — freellmapi
-
-```
-MIT License
-
-Copyright (c) 2026 Tashfeen Ahmed
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

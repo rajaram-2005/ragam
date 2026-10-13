@@ -145,7 +145,7 @@ def looks_like_a_refusal_or_error(text: str) -> bool:
 class ExternalTeacher:
     """An OpenAI-compatible completion endpoint, behind the privacy gate.
 
-    Works against FreeLLMAPI and against anything else speaking `/v1/chat/completions`.
+    Works against anything speaking `/v1/chat/completions`.
     The key is held in memory only, never included in a report, and never written to
     the corpus provenance -- only whether one was configured.
     """
@@ -157,7 +157,7 @@ class ExternalTeacher:
         api_key: str,
         model: str,
         authorization: Authorization | None,
-        provider: str = "freellmapi",
+        provider: str = "external",
         timeout_s: float = 60.0,
         max_retries: int = 2,
         max_tokens: int = 160,
@@ -168,11 +168,11 @@ class ExternalTeacher:
             raise ValueError(f"base_url must be http(s), got {base_url!r}")
         if not api_key or not api_key.strip():
             raise ValueError(
-                "no API key configured. Set FREELLMAPI_API_KEY (or FREELLMAPI_API_KEY_FILE to a "
-                "readable path). The key is read from the environment, never from the repository."
+                "no API key configured. Pass one from the environment or a readable file path; "
+                "the key is never read from the repository."
             )
         if not model or not model.strip():
-            raise ValueError("a model identifier is required; the gateway serves many")
+            raise ValueError("a model identifier is required; an endpoint may serve many")
         if timeout_s <= 0:
             raise ValueError("timeout_s must be positive")
         if max_retries < 0:

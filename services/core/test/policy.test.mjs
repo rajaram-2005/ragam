@@ -27,7 +27,7 @@ test('strict_offline blocks every external host', () => {
   const guard = createEgressGuard({ policy: RUNTIME_POLICIES.STRICT_OFFLINE, fetch })
   for (const url of [
     'https://api.openai.com/v1/chat/completions',
-    'https://freellmapi.co/v1/models',
+    'https://api.example.com/v1/models',
     'http://example.internal.corp/api',
     'https://huggingface.co/api/models',
   ]) {

@@ -10,9 +10,10 @@ import { JobDetail, JobTable } from '../components/Jobs.jsx'
 // retry-after, state history) and output validation (magic-byte sniffing, so a
 // JSON error page from a provider can never be shown as a generated image).
 //
-// On this host there is no local image runtime and no online provider key, so the
-// expected outcome of a generate call is an audited refusal. That refusal is
-// displayed with its code and the router's explanation instead of a stock image.
+// No image provider is configured in this build: no local runtime and no online
+// gateway, so the expected outcome of a generate call is an audited refusal. That
+// refusal is displayed with its code and the router's explanation instead of a
+// stock image.
 // ---------------------------------------------------------------------------
 
 const SIZES = ['', '512x512', '768x768', '1024x1024', '1280x720']
@@ -24,7 +25,6 @@ export default function ImageArea({ readiness, refreshReadiness }) {
   const [count, setCount] = useState('1')
   const [size, setSize] = useState('')
   const [principal, setPrincipal] = useState('')
-  const [authorize, setAuthorize] = useState(false)
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
   const [created, setCreated] = useState(null)
@@ -66,7 +66,6 @@ export default function ImageArea({ readiness, refreshReadiness }) {
         n: Math.max(1, Number(count) || 1),
         size: size || null,
         principal: principal.trim() || null,
-        externalAuthorization: authorize ? { granted: true, reason: 'operator authorised this image request from the interface' } : null,
       })
       setCreated(job)
       setSelectedId(job.id ?? null)
@@ -125,11 +124,6 @@ export default function ImageArea({ readiness, refreshReadiness }) {
               </Field>
             </div>
 
-            <label className="checkbox" style={{ marginTop: 4 }}>
-              <input type="checkbox" checked={authorize} onChange={(event) => setAuthorize(event.target.checked)} />
-              Explicitly authorise sending this prompt to an approved online provider
-            </label>
-
             <div className="row end" style={{ marginTop: 13 }}>
               <Button type="submit" variant="primary" busy={busy === 'generate'} disabled={!prompt.trim()}>
                 Generate
@@ -151,8 +145,8 @@ export default function ImageArea({ readiness, refreshReadiness }) {
         {!available ? (
           <Banner tone="warn" title="No image-capable provider is available on this host">
             <span className="small">
-              Local image generation is not implemented in this build, and no online provider is configured. Submitting a prompt produces an
-              audited refusal with the router’s explanation — it does not produce a stock image and it does not silently send the prompt anywhere.
+              Neither a local image runtime nor an online provider is configured in this build. Submitting a prompt produces an audited refusal
+              with the router’s explanation — it does not produce a stock image and it does not silently send the prompt anywhere.
             </span>
           </Banner>
         ) : null}

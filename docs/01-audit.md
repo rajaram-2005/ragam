@@ -76,7 +76,7 @@ Repository A. **All 37 tests were re-run and pass.** They must not be broken.
     `typeof content === 'string'`, truncated to last 40.
   - Upstream call is `POST ${BASE_URL}/chat/completions` with
     `authorization: Bearer <key>` — i.e. **already OpenAI-compatible**, which is
-    exactly FreeLLMAPI's `/v1/chat/completions` contract (§3.2).
+    the same shape the local llama.cpp adapter speaks.
 - `src/runtime/phaseEngine.js`, `taskGraph.js`, `taskState.js`,
   `workflowEngine.js` — real state machines with pause/resume/cancel,
   checkpoints, DAG cycle validation, retries, timeouts and compensation. Covered
@@ -302,124 +302,7 @@ aspirational RAJARAM/PREMSOTH model, not shipped code.
 
 ---
 
-## 3. Repository C — `tashfeenahmed/freellmapi`
-
-| Field | Verified value |
-|---|---|
-| Licence | MIT |
-| Primary language | TypeScript (682 `.ts` + 112 `.tsx`) |
-| Stars / forks | 33 138 / 4 583 |
-| Created / last push | 2026-04-21 / **2026-10-11 (today)** — actively maintained |
-| Structure | npm workspaces: `shared`, `server`, `client`, `cli` + `desktop/` |
-| Storage | `better-sqlite3` with a real migration system (`src/db/migrations`) |
-| Deployment | `Dockerfile`, `docker-compose.yml`, `docker-entrypoint.sh` |
-
-This is the only one of the three that is a mature production system. It is
-**not** vendored or copied. Directive §4.E is followed: it is integrated as a
-*separately versioned external service* through its published HTTP contract,
-behind a provider abstraction, so Aetheris Omni keeps working when it is
-absent.
-
-### 3.1 Verified endpoint surface
-
-Extracted from `server/src/**` by grepping declared router paths (not from the
-README):
-
-```
-/v1/chat/completions        /v1/completions          /v1/embeddings
-/v1/rerank                  /v1/images/generations   /v1/videos/generations
-/v1/audio/speech            /v1/audio/transcriptions /v1/models
-/v1/responses               /v1/messages  (Anthropic-compatible)
-/v1/messages/count_tokens   /v1beta/models (Gemini-compatible)
-/api/chat, /api/tags        (Ollama-compatible)
-/v1/usage  /v1/providers  /v1/openapi.json  /v1/docs
-/v1/t/{token}/chat/completions   (URL-scoped revocable tokens)
-```
-
-`server/src/routes/` contains a real `mcp.ts` — FreeLLMAPI is itself an MCP
-host, which Aetheris Omni's MCP layer can interoperate with.
-
-### 3.2 Exact contracts Aetheris Omni codes against
-
-Auth: `Authorization: Bearer <unified API key>` (`db/index.ts:225
-getUnifiedApiKey()`); missing/invalid → **401** (asserted by
-`__tests__/routes/video-generations.test.ts`).
-
-**Chat** (`routes/proxy.ts:599 chatCompletionSchema`): `messages` (required,
-min 1; union of system/developer/user/assistant/tool/function), `model?`,
-`temperature?` (0–2), `max_tokens?` (int; `<=0` treated as unset), `top_p?`
-(0–1), `stop?`, `stream?`, `stream_options.include_usage?`, `tools?`,
-`tool_choice?`, `parallel_tool_calls?`, `fusion?`, plus extended sampling /
-`response_format` structured output. **Tool calling is genuinely supported.**
-
-**Embeddings** (`:667`): `{model?, input: string|string[], dimensions?}` →
-`{object:'list', data:[{object:'embedding', index, embedding}], model, provider,
-usage:{prompt_tokens,total_tokens}}`.
-
-**Rerank** (`:705`): `{model?, query (min 1), documents[] (min 1), top_n?}` —
-Cohere/Jina style. Directly useful for the knowledge pipeline.
-
-**Images** (`:745 ImageBody`, handler `:769`):
-`{model?, prompt (required, min 1), n? (int 1–4), size?, response_format?:
-'url'|'b64_json'}` → **JSON** `{created, data: images[], model, provider}`.
-`model:'auto'` or omitted tries every enabled image provider in order; a
-provider model id pins one. Failover is *across providers, never across
-modalities*.
-
-**Videos** (`:795 VideoBody`):
-`{model?, prompt (required), duration? (int 1–120), aspect_ratio?:
-'16:9'|'9:16', image? (url), seed? (int −1…2147483647), audio?: bool}` →
-**raw binary MP4**, not JSON. Response headers: `Content-Type` (from provider,
-default `video/mp4`), `Cache-Control: no-store`, `X-Provider`, `X-Model`.
-
-Critical video semantics, quoted from the source comment at `:792`:
-> *"Providers may use a synchronous binary response (Pollinations) or an
-> asynchronous queue internally (Hugging Face/fal.ai), but this gateway presents
-> one bounded request and returns the completed MP4."*
-
-and at `:812`:
-> *"A video job runs for minutes, so a caller that hangs up must actually stop
-> the work … `res.on('close', …)` … `writableEnded` distinguishes."*
-
-So **cancellation is achieved by aborting the HTTP request** — the gateway then
-stops polling the provider. Aetheris Omni's video job queue is built around this
-fact (`services/core/src/media/videoJobs.mjs`): it owns the job lifecycle,
-progress and timeout locally, and cancels by aborting its own fetch.
-
-`VIDEO_PLATFORMS = {pollinations, huggingface}` only (`services/media.ts:32`),
-versus `MEDIA_PLATFORMS = {nvidia, pollinations, cloudflare, siliconflow,
-google, speechify, electronhub, freeai}` for images (`:27`). And
-`routes/keys.ts:921`: *"video generation models are not supported on custom
-endpoints yet; skipped"*. **Chat support therefore does not imply video
-support** — exactly the trap directive §4.E warns about, and now confirmed from
-code rather than assumed.
-
-**Error contract** (uniform across media/embeddings):
-`{error: {message, type, code?}}` where `type ∈ invalid_request_error (400/413)
-| authentication_error (401) | rate_limit_error (429) | server_error`, HTTP
-status clamped to 400–599 else 502, plus a `Retry-After` header set from
-`retryAfterMs` (soonest provider back-off) or `secondsUntilNextMonth()` on
-`quota_exceeded`. Aetheris Omni's adapter honours `Retry-After` rather than
-retrying blindly.
-
-### 3.3 Security review
-
-Strong: `ENCRYPTION_KEY`-based at-rest key encryption
-(`lib/crypto.ts` `encrypt()` → `encrypted_key, iv, auth_tag` columns), CSP
-tests (`csp-security.test.ts`, `csp-inline-bootstrap.test.ts`), body-limit
-tests, error-handler information-leak tests, auth login throttling, revocable
-URL-scoped tokens, key rotation/reveal endpoints. `.env.example` is 21 764 bytes
-of *empty* settings — no committed secrets.
-
-Residual risk for Aetheris Omni: it is a **third-party gateway to 34 upstream
-providers**. Its own description scopes it as *"Personal experimentation only."*
-Provider quotas, terms and availability change without notice. Hence:
-hybrid-mode egress requires explicit authorisation, and company-private data
-defaults to local processing (directive §5).
-
----
-
-## 4. Cross-repository integration map
+## 3. Cross-repository integration map
 
 | Aetheris Omni capability | Reused from | Verified source | New code required |
 |---|---|---|---|
@@ -429,25 +312,21 @@ defaults to local processing (directive §5).
 | Failure taxonomy + regression memory | **B** | `training/failure-memory/failure_memory.py` | Persistent store, real classification, suite growth |
 | Benchmark categories + no-regression rule | **B** | `training/evaluation/evaluation.py` | **Real** scoring (replaces `random.uniform`) |
 | Data quality formula + tiers + hashing | **B** | `training/dataforge/dataforge.py` | **Real** deterministic quality terms, dedup, contamination check |
-| Online chat / embeddings / rerank | **C** | `/v1/chat/completions`, `/v1/embeddings`, `/v1/rerank` | Provider adapter + failover + `Retry-After` |
-| Online image generation | **C** | `/v1/images/generations` (JSON) | Adapter, output validation, storage |
-| Online video generation | **C** | `/v1/videos/generations` (binary MP4, abort = cancel) | Job queue, progress, MP4 validation, storage |
 | Local LLM inference | **none** | — | **New**: Ollama + llama.cpp/OpenAI-compatible adapters, honest readiness |
 | Private knowledge retrieval | **none** | — | **New**: ingest, chunk, BM25, citations, ACL, deletion |
 | Plugin permission enforcement | **A** (UI only) | `runtime/pluginFabric.js` | **New**: server-side manifest validation + enforcement |
-| MCP with schema validation | **A** (in-browser) | `runtime/mcpFabric.js`; **C** `routes/mcp.ts` | **New**: real MCP client, untrusted-output handling |
+| MCP with schema validation | **A** (in-browser) | `runtime/mcpFabric.js` | **New**: real MCP client, untrusted-output handling |
 | Aetheris Lite model family | **none** | — | **New**: NumPy training fabric (§2.2 shows sparsiz cannot supply it) |
 
 ---
 
-## 5. Licence review
+## 4. Licence review
 
 | Repository | Licence | Redistribution | Attribution action |
 |---|---|---|---|
 | Aetheris- | MIT | permitted with notice | notice preserved in `third-party/NOTICES.md` |
 | sparsiz | Unlicense | unrestricted | recorded; concepts re-implemented, no files copied |
-| freellmapi | MIT | permitted with notice | **not copied**; notice preserved for contract reference |
-| ragam (this repo) | MIT | — | compatible with all three |
+| ragam (this repo) | MIT | — | compatible with both |
 
 No GPL/AGPL contamination found. **Model-weight licences are a separate, still
 open item**: no weights are redistributed or downloaded here, and any future
@@ -456,13 +335,12 @@ release (directive §6 Stage 6).
 
 ---
 
-## 6. Baseline recorded for regression comparison
+## 5. Baseline recorded for regression comparison
 
 | System | Command | Result |
 |---|---|---|
 | Aetheris- | `npm test` | **37 pass / 0 fail** |
 | sparsiz | `python -m pytest tests/ -q` | **14 pass / 1 fail** (`test_saram.py::test_compression`, missing torch/numpy) |
-| freellmapi | `npm test` (workspaces, needs `better-sqlite3` native build) | **not run** — `blocked` on native toolchain in this sandbox; contracts read from source instead |
 | ragam (Aetheris Omni) | see `docs/03-status.md` | established in Phase 3+ |
 
 The Aetheris 37-test suite and the sparsiz 14-passing-test baseline are the

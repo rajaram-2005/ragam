@@ -148,10 +148,44 @@ The language model is trained here, from random initialisation, with no download
 
 ```bash
 npm run lm:quick   # 60 steps, seconds — proves the pipeline end to end
-npm run lm:train   # the release configuration, ~55 minutes on 2 CPU cores
+npm run lm:train   # the release configuration, ~35-40 minutes on 2 CPU cores
 ```
 
-Both write to `services/fabric/artifacts/`, which is **gitignored by policy**:
+### Export a model the core can load
+
+```
+python services/fabric/scripts/export_lm.py --from-run services/fabric/artifacts \
+    --id aetheris-lite-lm --version 0.1.0
+python services/fabric/scripts/export_lm.py --verify <output-dir>
+# the cross-language parity fixture services/core tests against
+python services/fabric/scripts/export_lm.py --parity-fixture \
+    services/core/test/fixtures/klyvaron-lite-parity.json
+```
+
+Install it with the operator's command, which drives the store — the only thing that may
+write under `<AETHERIS_DATA_DIR>/klyvaron/models`:
+
+```bash
+node services/core/scripts/klyvaron.mjs install <artifact-dir>   # verify, budget, copy, re-verify, record
+node services/core/scripts/klyvaron.mjs list
+node services/core/scripts/klyvaron.mjs verify [<artifact-id>]
+node services/core/scripts/klyvaron.mjs status                    # what the app reports, no server needed
+node services/core/scripts/klyvaron.mjs remove <artifact-id> --yes
+```
+
+`install` takes four gates in order — verify the artifact, ask the storage budget, copy,
+re-verify what landed and record its digest — and refuses rather than warns: results are
+JSON on stdout, a refusal is JSON on stderr with exit code 1, `list` and `verify` exit 1
+when an artifact is broken, and `remove` without `--yes` prints the artifact it would
+delete and exits 2. Copying an artifact into `<AETHERIS_DATA_DIR>/klyvaron/models/<id>/` by hand
+also works, and the core still verifies the digests at startup and reports the model over
+`/api/models`, `/api/ready` and `/api/storage`; what a hand copy skips is the budget check
+and the install record, so the device's own accounting will not have seen the artifact
+arrive. A model that fails verification is reported as broken and left on disk, never
+deleted.
+
+The training runs and the export both write to `services/fabric/artifacts/`, which is
+**gitignored by policy**:
 weights are referenced by digest from a model card and never redistributed through
 this repository. Each run also writes a report JSON carrying the corpus manifest
 digest, tokenizer digest, configuration digest, code revision, all three seeds, wall
@@ -174,10 +208,10 @@ Full design, evaluation methodology and limitations:
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1044 tests)
-npm run test:core         # 422
+npm test                  # all three suites (1084 tests)
+npm run test:core         # 454
 npm run test:web          # 67
-npm run test:fabric       # 555 — needs numpy + pytest on the interpreter
+npm run test:fabric       # 563 — needs numpy + pytest on the interpreter
 ```
 
 If NumPy and pytest live in a virtualenv rather than on the system interpreter,
@@ -220,10 +254,10 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 422 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
-| **Fabric** | 555 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
+| **Core service** | 454 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Fabric** | 563 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 67 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
-| **Docs** | The 35-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
+| **Docs** | The 37-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 
 The Fabric job's release-gate step is the one worth reading, because it asserts the
 negative case as well as the positive one:
@@ -313,50 +347,38 @@ cd services/core && node --test test/offline.test.mjs
 
 This starts a real HTTP server speaking the Ollama protocol, completes a genuine
 chat round-trip under `strict_offline`, and proves with a recording `fetch` spy
-that `api.openai.com`, `freellmapi.co`, `huggingface.co` and `api.anthropic.com`
+that `api.openai.com`, `api.example.com`, `huggingface.co` and `api.anthropic.com`
 are rejected without opening a socket or resolving DNS.
 
 ---
 
-## 8. Enabling the online gateway
+## 8. External providers — removed, and what it would take
 
-Optional, and off unless both a key and a base URL are present.
+**This build has no external provider.** There is no gateway to enable, no
+provider key to set, and no provider block in `.env.example`: the integration was
+removed entirely, along with its adapter, its environment variables and its place
+in the readiness view.
 
-```bash
-printf '%s' 'your-key' > /run/secrets/freellmapi_key && chmod 600 /run/secrets/freellmapi_key
+That is a capability decision, not an oversight, and the interface says so:
 
-AETHERIS_RUNTIME_POLICY=hybrid \
-FREELLMAPI_BASE_URL=https://your-gateway.example.com \
-FREELLMAPI_API_KEY_FILE=/run/secrets/freellmapi_key \
-node services/core/src/server.mjs
-```
+- The Image and Video areas report **no provider** and their requests are refused
+  with a machine-readable limitation. A still image is never substituted for a
+  video, and nothing is sent anywhere without a policy decision recorded in the
+  audit ledger.
+- `AETHERIS_ONLINE_ALLOWLIST` still exists and still governs external hosts for any
+  code path that reaches out, but with no provider configured it has nothing to
+  authorise. Under `strict_offline` it is inert, and the loader warns when an
+  allowlist is present.
+- The router still understands `online` model descriptors. Re-adding a provider is
+  therefore an adapter plus a credential path, not a redesign — but it is a
+  deliberate change, and it must come with the classification ceiling described in
+  [`05-security.md`](./05-security.md) rather than being enabled by a stray
+  environment variable.
 
-The gateway is a **separately versioned service**; its code is not vendored here.
-Deploy it from [its own repository](https://github.com/tashfeenahmed/freellmapi)
-and read its "*Personal experimentation only*" note before pointing production
-traffic at it.
-
-Three things to know before enabling it:
-
-1. **`hybrid`, not `online_enabled`,** unless you have a reason. `hybrid` keeps the
-   data-classification ceiling: `confidential` and `restricted` content still
-   needs explicit authorization per request. A fully online gateway needs
-   `AETHERIS_ONLINE_ALLOWLIST=*` as well — an automatic host list is not implied by
-   the policy, see [`05-security.md`](./05-security.md).
-2. **The gateway's host is added to the allowlist automatically** from
-   `FREELLMAPI_BASE_URL`. Allowlist matching is exact-host — no wildcards, no
-   suffix matching.
-3. **Video support is narrower than image support.** The gateway serves video on
-   two platforms against eight for images, and marks video unsupported on custom
-   endpoints. Chat working does not imply video works. See
-   [`03-status.md`](./03-status.md) §3 and [`01-audit.md`](./01-audit.md) §3.
-
-Prefer `*_FILE` over the inline variable so the secret never appears in the
-process environment. A `VITE_*` variable whose name looks like a secret is
-reported as a warning at config load, because Vite ships `VITE_*` into the browser
-bundle.
-
----
+If you are re-introducing one, prefer `hybrid` over `online_enabled` so the
+data-classification ceiling stays enforced, keep the credential in a `*_FILE` path
+rather than the process environment, and allowlist the exact host — matching is
+exact-host, with no wildcards and no suffix matching.
 
 ## 9. Data locations
 
@@ -389,7 +411,7 @@ record rather than leaving an unexplained gap.
 | UI works locally but not behind a proxy | Dev server rejecting the host | Already handled: `allowedHosts: true`. Check the proxy forwards `/api` |
 | `No module named pytest` | System interpreter has no pytest | `AETHERIS_PYTHON=/path/to/venv/bin/python` |
 | `Database opened` / sqlite errors | Node < 22.5 | Upgrade Node; `node:sqlite` is required |
-| Image/video refuse with `capability_unavailable` | No provider under the current policy | Expected. §8 to enable the gateway, or accept the refusal |
+| Image/video refuse with `capability_unavailable` | No image or video provider is configured | Expected in this build: §8 explains why there is nothing to enable, and the refusal is audited |
 | Video refuses with `needs_hardware` | No local video runtime | Expected on this hardware class. The refusal never substitutes a still image |
 | Fabric `POST /pipeline/run` returns `failed` | Trained MRR below the 0.60 release floor | Correct behaviour. Raise `epochs`; see the model card's release requirements |
 | Fabric returns 413 | Body over 1 MB | Expected; this service takes small JSON commands, not datasets |

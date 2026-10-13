@@ -26,9 +26,20 @@ import numpy as np
 #: teaching the model nothing transferable.
 DEFAULT_EXTENSIONS = (".md", ".mjs", ".js", ".jsx", ".py", ".json", ".css", ".html", ".sh", ".yml")
 
+# Directories that are never corpus. Every entry is either a dependency tree, a build
+# output, or this project's own managed state -- none of it is source, and none of it is
+# in Git, so a corpus that included any of it could not be reproduced from a revision.
+#
+# `artifacts` was the one that got through, and it was found by checking a run's corpus
+# against `git check-ignore` rather than by reading this tuple: a previous run's
+# *.report.json and its 2.7 MB corpus snapshot were being read back in as training text.
+# That made the corpus unreproducible from any commit (the files are gitignored), put one
+# model's entire training text into the next model's corpus twice over, and inflated every
+# corpus figure the report states. A model trained on its own previous run's report is
+# still a language model; it is just no longer the model the card describes.
 DEFAULT_EXCLUDE_DIRS = (
     ".git", "node_modules", "dist", "__pycache__", ".aetheris-data", "build",
-    ".pytest_cache", "coverage", ".venv", "venv",
+    ".pytest_cache", "coverage", ".venv", "venv", "artifacts",
 )
 
 

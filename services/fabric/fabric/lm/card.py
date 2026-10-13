@@ -105,8 +105,13 @@ def model_limitations(report) -> list[str]:
         f"({payload['provenance']['parameterCount']:,} parameters, vocabulary of "
         f"{payload['tokenizer']['size']})",
         "output quality is low: this demonstrates the pipeline, not a usable assistant",
-        "deliberately not wired into /api/chat, because exposing a model of this size as a "
-        "chat assistant would misrepresent it",
+        # This sentence used to say the model is "deliberately not wired into /api/chat",
+        # which stopped being true when the artifact became installable and routable: the
+        # route exists and refuses. A limitation that describes the wrong behaviour is
+        # worse than no limitation, because it is quoted as the reason the behaviour is safe.
+        "reachable from /api/chat, where an unpinned request is refused with "
+        "model_not_instruction_tuned (501): it continues text and does not answer questions, and "
+        "presenting it as an assistant would misrepresent it",
         "no comparison against any pretrained model was performed, and none is claimed",
     ]
 

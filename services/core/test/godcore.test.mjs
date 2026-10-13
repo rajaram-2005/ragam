@@ -200,7 +200,7 @@ test('a knowledge query with no matching evidence says so instead of inventing p
 
 test('routing failure surfaces the real explanation, not a fabricated answer', async () => {
   const registry = new ModelRegistry()
-  registry.register({ id: 'online:only', kind: MODEL_KINDS.ONLINE_LLM, displayName: 'O', capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT], location: 'online', provider: 'freellmapi' })
+  registry.register({ id: 'online:only', kind: MODEL_KINDS.ONLINE_LLM, displayName: 'O', capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT], location: 'online', provider: 'gateway' })
   registry.observe('online:only', { availability: AVAILABILITY.READY })
   const router = new ModelRouter({ registry })
   const core = new GodCore({ router, policy: { mode: 'strict_offline', allowExternalFor: () => false } })

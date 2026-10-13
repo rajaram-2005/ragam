@@ -239,6 +239,14 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
 
     started = time.time()
 
+    # The revision is read here, beside the corpus, and not when the report is written at
+    # the end. The corpus is this working tree's own text, so the pair (revision, corpus
+    # digest) is the entire reproducibility claim -- and a revision read thirty-five
+    # minutes later describes a tree the model may never have seen. Reading both at the
+    # same moment is what makes "check out this revision and get this corpus" checkable
+    # instead of merely stated.
+    revision = code_revision(root)
+
     # 1. Data validation: hash the corpus, split it so no document is on both sides.
     manifest = build_manifest(
         root,
@@ -360,7 +368,7 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
             "validationUnknownRate": unknown_rate,
         },
         provenance={
-            "codeRevision": code_revision(root),
+            "codeRevision": revision,
             "python": platform.python_version(),
             "numpy": np.__version__,
             "platform": platform.platform(),

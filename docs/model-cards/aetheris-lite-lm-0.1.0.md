@@ -51,8 +51,10 @@ dependency.
 ## Out of scope
 
 - **Not a chat assistant.** It does not follow instructions and has no safety
-  behaviour. It is deliberately **not** wired into `/api/chat`, because serving it
-  there would misrepresent it as something it is not.
+  behaviour. It is reachable from `/api/chat`, where an unpinned request is refused with
+  `model_not_instruction_tuned` (501) and a pinned request returns a continuation
+  labelled as one; serving it as an assistant would misrepresent it. (This sentence was
+  corrected — see [Corrections](#corrections).)
 - **Not a general-purpose model.** It has no world knowledge beyond 1.38 MB of
   repository text.
 - **Not compared to any pretrained model.** No such comparison was possible, and none
@@ -109,9 +111,25 @@ forgotten when a card is produced:
 - character-level base model: it predicts the next character of repository text and
   follows no instructions (359,136 parameters, vocabulary of 143)
 - output quality is low: this demonstrates the pipeline, not a usable assistant
-- deliberately not wired into `/api/chat`, because exposing a model of this size as a
-  chat assistant would misrepresent it
+- reachable from `/api/chat`, where an unpinned request is refused with
+  model_not_instruction_tuned (501): it continues text and does not answer questions, and
+  presenting it as an assistant would misrepresent it
 - no comparison against any pretrained model was performed, and none is claimed
+
+### Corrections
+
+This card is an artifact of record: it is corrected in place only where a statement about
+the code was **false**, never where a number was measured, and every correction is
+recorded here with what it replaced.
+
+| | |
+|---|---|
+| **Corrected** | 2026-10-13 |
+| **Field** | the `/api/chat` limitation above, in the card JSON and twice in this document |
+| **Was** | "deliberately **not** wired into `/api/chat`" |
+| **Now** | "reachable from `/api/chat`, where an unpinned request is refused with `model_not_instruction_tuned` (501)" |
+| **Why** | the model became installable and routable when the model library landed, and `/api/chat` has refused it with 501 ever since. The old sentence described the opposite behaviour, and a limitation that describes the wrong behaviour is worse than none: it reads as the reason the behaviour is safe |
+| **Measured values changed** | **none** — no perplexity, baseline, digest, parameter count or timing was touched, and `card.py` now generates the corrected sentence so a regenerated card matches this one |
 
 Additionally, on the evaluation provenance:
 

@@ -24,23 +24,67 @@ is exactly where overclaiming starts.
 
 ### 1.1 What Klyvaron Lite actually is
 
-A 359,136-parameter character-level language model trained from random initialisation on
-this repository's own text, on two CPU cores, in about 37 minutes. Its measurements come
-from a committed run report and model card:
+A 359,616-parameter character-level language model trained from random initialisation on
+this repository's own text, on two CPU cores, in about 34 minutes. Its measurements come
+from a committed run record and model card:
 
 | Measure | Value |
 |---|---|
-| Validation perplexity | 4.4033 |
-| Bits per character | 2.1386 |
-| Best of three computed baselines | bigram, 15.9109 |
-| Ratio to that baseline | 0.276748 |
-| Weights digest | `82392ef8907455e56e1cee56bf4a074cb9337dc38f79775859b67efa5b822e94` |
+| Validation perplexity | 4.8932 |
+| Bits per character | 2.2908 |
+| Best of three computed baselines | bigram, 15.7588 |
+| Ratio to that baseline | 0.310505 |
+| Weights digest | `53ae59b2a777be9d22f1f04b6cbc94aee3dad6144ac40e4e25c12f900164b60c` |
+
+It **supersedes `aetheris-lite-lm@0.1.0`** — 359,136 parameters, perplexity 4.4033 against
+the bigram's 15.9109, ratio 0.276748, digest `82392ef8…`. That artifact is kept as a
+published record rather than withdrawn: its card, its figures and its digest stand. It is
+superseded because a released artifact should be one somebody else can check, and its
+corpus cannot be re-derived — its revision reads `8108d30…-dirty`, and the gitignored files
+it read are gone. The two perplexities are not comparable with each other and neither is
+offered as better: the same fixed token budget was spent on corpora of different sizes (the
+superseded one is 1,431,417 bytes; the released one is 2,646,300).
 
 The two capabilities it backs are `text.completion` and `text.extract`. **It does not
-chat, and it is deliberately not wired into `/api/chat`.** Presenting it as an assistant
-would be a fiction: it continues text, its output is not fluent, and no instruction
-tuning has been done. The capability record for `chat` is `unavailable` with that reason
-attached, and `services/core/test/klyvaron.test.mjs` asserts the reason stays there.
+chat.** The artifact format, the JavaScript runtime, the on-device library and the
+provider are implemented and tested, so the model genuinely runs behind the chat
+route — as a completion model: an unpinned chat request is refused with
+`model_not_instruction_tuned` (501) and this limitation list, and pinning it by id
+returns a continuation labelled as one. Presenting it as an assistant would be a
+fiction: its output is not fluent and no instruction tuning has been done. The
+capability record for `chat` is `unavailable` with that reason attached, and
+`services/core/test/klyvaron.test.mjs` asserts the reason stays there.
+
+The table above is the released record, and its artifact was trained at a revision whose
+corpus **rebuilds byte for byte** — that is the property the superseded artifact lacks. An
+earlier, independent run of the same configuration is committed as
+[`experiments/lm-verification-run-67cdd58.json`](./experiments/lm-verification-run-67cdd58.json):
+359,520 parameters, perplexity 5.3585 against the bigram's 16.7151 (ratio 0.320578),
+gate verdict **RELEASED**, then installed into the on-device library and served over
+`/api/chat` as a labelled continuation. It is a verification model, not a version bump:
+the corpus is this repository, the repository moved, and the two numbers are not
+comparable with each other.
+
+That run's corpus turned out to include this project's own build products, because
+`artifacts/` was missing from the directories discovery skips — so a model was reading the
+previous model's report as training text. Fixed, and the run repeated on the tree at
+`8d9cdf8`; **that repeat produced the released artifact**, and its record is
+[`experiments/lm-verification-run-8d9cdf8.json`](./experiments/lm-verification-run-8d9cdf8.json):
+359,616 parameters, perplexity 4.8932 against the bigram's 15.7588 (ratio 0.310505), gate
+verdict **RELEASED**, installed through `scripts/klyvaron.mjs` and served over `/api/chat`
+the same way. The two runs are not comparable with each other or with the superseded
+artifact, because each spent the same fixed token budget on a corpus of a different size
+with a different vocabulary. What the sequence demonstrates is the pipeline and a
+corrected methodology, not progress: the version numbers describe which corpus a model was
+trained on, not which model is better.
+
+That distinction is enforced rather than described. A tier label is a **lookup by artifact
+id and version** in the backing records (`tierClaimForArtifact`), never a value a manifest
+declares about itself: the second artifact is recorded in the tier record as
+`status: 'not_a_release'` next to the released one, so neither can be mistaken for the
+other, and an artifact that declares a tier nothing backs is loaded and reported with
+`tier: null`, no `tier:<name>` tag and no place in the table above. `klyvaron-app.test.mjs`
+installs an artifact declaring `tier: 'pro'` and asserts exactly that.
 
 Its limitations are part of the record, not a footnote, and one of them is load-bearing:
 **Lite meets the storage target and no capability target.** It is smaller than the 1.5 GB
@@ -331,5 +375,6 @@ without a list of what does not is a sales document:
   `docs/03-status.md` §"what remains" tracks it.
 
 Nothing in this document should be read as a claim of parity with any other model family.
-Lite is a 359,136-parameter character model that beats three computed baselines on
-perplexity. That is the whole claim.
+Lite is a 359,616-parameter character model that beats three computed baselines on
+perplexity, trained from random initialisation on this repository's own text. That is the
+whole claim.

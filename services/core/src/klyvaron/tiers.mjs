@@ -107,50 +107,73 @@ export class ModelFamilyError extends Error {
 }
 
 /**
- * The single artifact that exists today.
+ * The artifact this tier is backed by, and the artifact it replaced.
  *
- * It is a character-level language model trained from random initialisation on this
- * repository's own text. Its measurements come from its committed run report and model
- * card, not from a guess -- see docs/08-aetheris-lite.md and docs/model-cards/.
+ * **The released artifact is `aetheris-lite-lm@0.1.1`**: a character-level language model
+ * trained from random initialisation on this repository's own text at the clean revision
+ * `8d9cdf8`, whose corpus rebuilds byte for byte from that commit (`70c5b78c…`). It has a
+ * committed card (`docs/model-cards/aetheris-lite-lm-0.1.1.json`, Markdown beside it), a
+ * run record (`docs/experiments/lm-verification-run-8d9cdf8.json`), and a release gate that
+ * passed with no hard and no soft failures. Every number below is read from that card.
+ *
+ * It supersedes `aetheris-lite-lm@0.1.0`, which is kept as a record rather than deleted:
+ * that artifact was trained at revision `8108d30…-dirty`, and the corpus it read cannot be
+ * rebuilt from any commit -- the gitignored files it saw are gone, and `artifacts/` was
+ * still visible to corpus discovery then, so a run could train on the reports of the runs
+ * before it. The exclusion landed in `8d9cdf8`. A released artifact whose corpus cannot be
+ * re-derived is not something a third party can verify, which is why the version that can
+ * be is the released one. The 0.1.0 card, its figures and its digest stay in the record as
+ * `supersededArtifact`, and the two perplexities are **not comparable** with each other:
+ * the same 5,324,800-token budget was spent on corpora of different sizes (2,646,300 bytes
+ * against 1,431,417), so neither is offered as an improvement or a regression.
  */
 const LITE_BACKING = Object.freeze({
-  artifact: 'aetheris-lite-lm-0.1.0',
+  artifact: 'aetheris-lite-lm-0.1.1',
   kind: 'language_model',
-  parameters: 359_136,
-  // The released artifact's digest. Klyvaron Lite refers to this model; the weights
+  parameters: 359_616,
+  // The released artifact's digests: the run hashes the weight arrays themselves, the store
+  // hashes the `.npz` it ships and re-verifies on install. Both are here because they are
+  // different digests of different things and neither implies the other. The weights
   // themselves are gitignored by policy and referenced by hash, never redistributed.
-  weightsDigest: '82392ef8907455e56e1cee56bf4a074cb9337dc38f79775859b67efa5b822e94',
+  weightsDigest: '53ae59b2a777be9d22f1f04b6cbc94aee3dad6144ac40e4e25c12f900164b60c',
+  artifactSha256: '165e150f6e290fe3a8162673f743037dcf15a3b63199ecd7661bdbc83652b6f7',
+  artifactBytes: 1_446_862,
+  // The label the verification drill installed this same artifact under, before the version
+  // was promoted: same weights, same file digest, different version string in the manifest.
+  // It may carry the tier label too, because it is the same bytes.
+  alsoKnownAs: Object.freeze(['aetheris-lite-lm-0.1.1-verify']),
   licence: 'MIT',
   provenance: PROVENANCE.FROM_SCRATCH,
   baseModel: null,
-  vocabularySize: 143,
+  vocabularySize: 148,
   contextTokens: 128,
   quantization: 'none (float32 NumPy)',
-  trainingCorpus: "this repository's own text, whole-file split",
-  // Copied from the committed model card, at full precision rather than rounded. The
-  // first version of this record carried 4.403318 against the card's 4.40331790103542,
-  // and the doc guard caught the disagreement -- which is the argument for one value
-  // having one home. docs/model-cards/aetheris-lite-lm-0.1.0.json is that home; this is
-  // a reference to it, and a test asserts the two stay identical field by field.
+  trainingCorpus: "this repository's own text at 8d9cdf8, whole-file split",
+  // Copied from the committed model card, at full precision rather than rounded. The first
+  // version of this record carried 4.403318 against the card's 4.40331790103542, and the
+  // doc guard caught the disagreement -- which is the argument for one value having one
+  // home. docs/model-cards/aetheris-lite-lm-0.1.1.json is that home for the released
+  // artifact (0.1.0.json for the superseded one); this is a reference to it, and tests
+  // assert both pairs stay identical field by field.
   measured: {
-    validationPerplexity: 4.40331790103542,
-    bitsPerCharacter: 2.138591004549883,
-    // Against the best of three computed baselines (uniform 143.0, unigram 35.2895,
-    // bigram 15.91094). A ratio, not a claim about other language models.
-    perplexityVsBestBaseline: 0.2767478454588419,
-    bestBaselinePerplexity: 15.910938326312225,
+    validationPerplexity: 4.893185177076384,
+    bitsPerCharacter: 2.2907738809713725,
+    // Against the best of three computed baselines (uniform 148.0, unigram 32.9491,
+    // bigram 15.7588). A ratio, not a claim about other language models.
+    perplexityVsBestBaseline: 0.31050497433169066,
+    bestBaselinePerplexity: 15.758798027658449,
     bestBaseline: 'bigram',
-    validationTokens: 165_120,
-    validationUnknownRate: 0.0004965183166818044,
-    lossImprovement: 3.5829291343688965,
-    parameterCount: 359_136,
-    wallSeconds: 2220.146,
+    validationTokens: 280_192,
+    validationUnknownRate: 1.0705339109458524e-05,
+    lossImprovement: 3.380646228790283,
+    parameterCount: 359_616,
+    wallSeconds: 2062.942,
   },
   benchmarks: [
     {
       name: 'held-out next-token perplexity vs computed baselines',
-      protocol: 'character-level, whole-file split, 165,120 validation tokens, seeds 0/0/20251012',
-      result: '4.4033 against a bigram baseline of 15.9109 (3.61x better)',
+      protocol: 'character-level, whole-file split, 280,192 validation tokens, seeds 0/0/20251012',
+      result: '4.8932 against a bigram baseline of 15.7588 (3.22x better)',
     },
   ],
   limitations: [
@@ -160,6 +183,24 @@ const LITE_BACKING = Object.freeze({
       + 'storage target is met, and it is met by being undersized.',
     'Trained on this repository\'s text, so it reproduces that text distribution and nothing else.',
   ],
+  // The artifact this one replaced, kept rather than deleted. It is still a Klyvaron Lite
+  // artifact -- it may still carry the label, and a device running it may still roll it
+  // back -- but it is not the release: a released artifact should be one a third party can
+  // rebuild, and this one cannot be.
+  supersededArtifact: Object.freeze({
+    artifact: 'aetheris-lite-lm-0.1.0',
+    weightsDigest: '82392ef8907455e56e1cee56bf4a074cb9337dc38f79775859b67efa5b822e94',
+    parameters: 359_136,
+    vocabularySize: 143,
+    status: 'superseded',
+    card: 'docs/model-cards/aetheris-lite-lm-0.1.0.json',
+    note: 'Superseded, not withdrawn: its card, figures and digest stay in the record, and '
+      + 'its measurements were never wrong. It was trained at revision 8108d30 -- a tree '
+      + 'that read -dirty, before `artifacts/` was excluded from corpus discovery -- and the '
+      + 'corpus it read cannot be re-derived from any commit, so a third party cannot '
+      + 'rebuild or check it. Its perplexity is not comparable with the released model\'s: '
+      + 'the same token budget was spent on a corpus 1.85x smaller.',
+  }),
 })
 
 /**
@@ -173,12 +214,13 @@ const LITE = Object.freeze({
   id: TIERS.LITE,
   displayName: 'Klyvaron Lite',
   status: 'partial',
-  statusNote: 'One small artifact exists and two capabilities are backed by it. Conversation, '
-    + 'summarisation, translation, vision and speech do not exist at this tier.',
+  statusNote: 'One small released artifact backs two capabilities, and the artifact it '
+    + 'superseded is kept as a record. Conversation, summarisation, translation, vision and '
+    + 'speech do not exist at this tier.',
   targetHardware: HARDWARE_CLASS.MOBILE,
   description: 'Compact intelligence for phones and constrained devices.',
   storageProfile: {
-    primaryArtifactBytes: 1_448_014,
+    primaryArtifactBytes: 1_451_751,
     managedStorageTargetBytes: MOBILE_TARGETS.managedTotalBytes,
     reserveBytes: MOBILE_TARGETS.reserveBytes,
     appPackageTargetBytes: MOBILE_TARGETS.appPackageBytes,
@@ -198,11 +240,12 @@ const LITE = Object.freeze({
     chat: {
       state: CAPABILITY_STATES.UNAVAILABLE,
       backing: null,
-      reason: 'No instruction-tuned artifact exists. The released model emits mush and is '
-        + 'deliberately not wired into /api/chat, because presenting it as an assistant would be a fiction.',
+      reason: 'No instruction-tuned artifact exists. The released model is reachable over '
+        + '/api/chat and is refused there unless pinned by id, because a completion model '
+        + 'answering a question would be a fiction.',
     },
     'text.summarize': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
-    'text.translate': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'No multilingual artifact; the tokenizer is a 143-character English-and-code vocabulary.' },
+    'text.translate': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'No multilingual artifact; the tokenizer is a 148-token English-and-code vocabulary.' },
     'text.rewrite': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
     'reasoning.light': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
     'coding.assist': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
@@ -264,7 +307,11 @@ export function ownedArtifacts(tierId) {
   const tier = getTier(tierId)
   const ids = new Set()
   for (const claim of Object.values(tier.capabilities)) {
-    if (claim.state === CAPABILITY_STATES.AVAILABLE && claim.backing?.artifact) ids.add(claim.backing.artifact)
+    if (claim.state !== CAPABILITY_STATES.AVAILABLE || !claim.backing) continue
+    if (claim.backing.artifact) ids.add(claim.backing.artifact)
+    // A superseded artifact is still owned: it is the same model family, still installed on
+    // devices that have not updated, and still what a rollback returns to.
+    if (claim.backing.supersededArtifact?.artifact) ids.add(claim.backing.supersededArtifact.artifact)
   }
   return [...ids]
 }
@@ -273,15 +320,42 @@ export function ownedArtifacts(tierId) {
  * Which Klyvaron tier, if any, may this model id carry as a label?
  *
  * This is the mechanism that makes directive §5A structural instead of aspirational.
- * A model cannot *declare* a tier -- there is no field for it. A tier label is a
- * lookup: it appears only if the model id IS the artifact named in a backing record
- * for a capability the tier actually provides. So rebranding an unchanged third-party
- * model as Klyvaron Pro is not a rule to be broken; it is a string that does not match
- * anything, and the label simply does not appear.
+ * A tier label is a lookup: it appears only if the model id IS the artifact named in a
+ * backing record for a capability the tier actually provides. So rebranding an unchanged
+ * third-party model as Klyvaron Pro is not a rule to be broken; it is a string that does
+ * not match anything, and the label simply does not appear.
  */
 export function tierClaimFor(modelId) {
   for (const tier of Object.values(KLYVARON)) {
     if (ownedArtifacts(tier.id).includes(modelId)) return tier.id
+  }
+  return null
+}
+
+/**
+ * The same lookup for a specific artifact version, which is the form the core uses.
+ *
+ * An artifact manifest carries a `tier` field, and that field is the artifact's own
+ * statement about itself -- useful metadata, and not evidence. `app.mjs` therefore emits
+ * a `tier:<name>` tag only when this function corroborates the declaration by finding
+ * `<id>-<version>` named in a backing record. A hand-built artifact that declares
+ * `tier: 'pro'` gets no tier label, no tier tag, and no place in the tier table: the
+ * declaration has nothing behind it.
+ */
+export function tierClaimForArtifact(id, version) {
+  const named = `${id}-${version}`
+  for (const tier of Object.values(KLYVARON)) {
+    for (const claim of Object.values(tier.capabilities)) {
+      if (claim.state !== CAPABILITY_STATES.AVAILABLE || !claim.backing) continue
+      const { backing } = claim
+      // Three names qualify, and each is a fact rather than a courtesy: the released
+      // artifact, the version strings the same bytes were also installed under, and the
+      // artifact this one superseded -- which is still a Klyvaron Lite model on a device
+      // that has not updated, and still rollback-eligible.
+      if (backing.artifact === named) return tier.id
+      if (backing.alsoKnownAs?.includes(named)) return tier.id
+      if (backing.supersededArtifact?.artifact === named) return tier.id
+    }
   }
   return null
 }

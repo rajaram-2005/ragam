@@ -1,7 +1,7 @@
 """The external teacher: the gate, the request path, and the corpus builder.
 
 **Every test here runs against a fixture, never against a real provider.** No test in
-this repository contacts FreeLLMAPI or any other third party. The fixture is a local
+this repository contacts any third party. The fixture is a local
 `http.server` on loopback, started by the test, which is the same approach the core
 service uses for its offline chat round-trip. What that proves is the request path: the
 authorization header, the JSON shape, the response parsing. What it does not prove is

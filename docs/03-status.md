@@ -9,14 +9,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1044 passing, 0 failing.**
+**Test totals: 1084 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **422 / 422** (17 files, ~48 s) |
-| `services/fabric` | `pytest -q` | **555 / 555** (24 files, ~20 s) |
+| `services/core` | `node --test test/*.test.mjs` | **454 / 454** (20 files, ~50 s) |
+| `services/fabric` | `pytest -q` | **563 / 563** (25 files, ~21 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **67 / 67** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 243.42 kB → **71.99 kB gzip**, single chunk, no warnings |
+| `apps/web` build | `vite build` | 242.71 kB → **71.78 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as four jobs split so a
@@ -60,15 +60,17 @@ instead.
 |---|---|---|---|
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
-| 3 | Unified app, five areas | **Complete** | `apps/web`; 66 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
-| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now exists and runs here — trained from scratch, no weights needed ([`08-aetheris-lite.md`](./08-aetheris-lite.md)). The *chat* half is still unmet: it is a 625K-parameter base model that is not wired to `/api/chat`, and doing so would misrepresent it. The adapter half remains proven only against a loopback fixture ("Phase 4 in detail", below) |
-| 5 | FreeLLMAPI online integration | **Implemented — requires external credentials** | Client written to contracts read from source; no key here |
+| 3 | Unified app, five areas | **Complete** | `apps/web`; 67 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
+| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,616-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 11, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 28 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
+| 5 | Online provider integration | **Not met — removed by decision** | No external provider is configured, vendored or bundled. Image and video requests are refused with an explicit limitation, and the UI states that no provider exists rather than implying one can be enabled with a key |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
 | 8 | Multimodal pipelines | **Complete** | Job queue, validation, video genuineness check |
 | — | Procedural skills (meta-learning L3) | **Partial** | Documents on disk with append-only history, evidence-gated promotion, rollback, deletion tombstones and lexical relevance matching — reachable over 12 routes and from a panel inside Chat. Nothing loads a procedure automatically when a task needs it, and no proposal is captured from a failure without being asked |
 | 9 | Sparsiz integration | **Complete** | Responsibility defined; taxonomies and `Q(x)` adopted, scoring replaced |
-| 10 | Aetheris Lite experiments | **Partial** | Two real first-party models: the trained retriever, and a from-scratch **625K-parameter character-level LM** trained in pure NumPy with hand-derived, finite-difference-verified gradients. SFT and preference optimization remain unimplemented for want of data and compute, and are not simulated |
+| — | Klyvaron artifact format, runtime and model library | **Complete** | `klyvaron/format.mjs` (manifest + digest verification, a ZIP/`.npy` reader in the core), `klyvaron/runtime.mjs` (the forward pass in JavaScript, parity-checked against NumPy), `klyvaron/store.mjs` (install/verify/load/remove inside the storage budget), `providers/klyvaron.mjs` and `scripts/export_lm.py`; a committed parity fixture ties the two implementations together |
+| — | On-device storage accounting | **Complete** | `storage/budget.mjs` plus `klyvaron/footprint.mjs`; `/api/storage` reports measured bytes, verification results and headroom |
+| 10 | Aetheris Lite experiments | **Partial** | Two real first-party models: the trained retriever, and a from-scratch **359,616-parameter character-level LM** trained in pure NumPy with hand-derived, finite-difference-verified gradients. SFT and preference optimization remain unimplemented for want of data and compute, and are not simulated |
 | 11 | Competitive benchmark cycle | **Partial** | Real, reproducible BM25 comparison; **no** Mistral/Qwen/Llama/Gemma/DeepSeek comparison possible. Aetheris Lite is evaluated against computed uniform/unigram/bigram baselines on identical held-out tokens — never against a pretrained model, because none could be obtained |
 | — | Sparsiz improvement cycle on a real failure | **Complete** | [`07-improvement-cycle.md`](./07-improvement-cycle.md): rejected run diagnosed, hypothesis tested, regression cases promoted; the accepted `mrr` gain **did not replicate** across seeds and is recorded as such; 66 tests |
 | — | Selection-protocol correction | **Complete** | [`06-benchmarks.md`](./06-benchmarks.md) §5.3: base selection ran on the evaluation split; now runs on a training-side validation split. Released artifact unchanged (`weightsDigest db3366ea…`) |
@@ -105,6 +107,33 @@ limitation    no video generation model is available; /api/video will refuse rat
 Install Ollama and pull any model, then re-probe, and the same code path serves
 real inference — that is the design, and the loopback test is its evidence.
 
+As of this revision the from-scratch model is no longer an offline artifact: it is
+exported with a manifest, verified, installed into `<dataDir>/klyvaron/models/`, loaded
+by the core in JavaScript and registered in the routing table. `/api/ready` reports
+`capabilities.chat = false` and `capabilities.textCompletion = true`, `/api/chat`
+refuses it with `model_not_instruction_tuned` (501) unless the caller pins it by id, and
+`/api/storage` reports the measured bytes. What is still missing is an
+**instruction-tuned** local model; the wiring for one is what this revision built.
+
+The second full-size run, on the clean revision `8d9cdf8`, makes the same journey with an
+ending that can be checked — and its artifact is **the released `aetheris-lite-lm@0.1.1`**:
+359,616 parameters, perplexity 4.8932 against a bigram baseline of 15.7588, gate verdict
+RELEASED, installed by the store in 1,451,765 bytes, served at 26.2 tokens/s in JavaScript.
+Its corpus manifest digest `70c5b78c…` was recomputed from that revision's own text
+**before the run finished** and matched, so revision and corpus are known to be the same
+thing rather than assumed to be: that is the property the superseded `@0.1.0` lacks, and
+why the version that has it is the released one. The released export was installed and
+served through the same path after the promotion, and both captures are in the record:
+`tier: lite`, `tierClaim: lite`, `textCompletion: true`, `chat: false`, an unpinned chat
+refused with `model_not_instruction_tuned`, and 22.7 tokens/s over HTTP. Record:
+[`experiments/lm-verification-run-8d9cdf8.json`](./experiments/lm-verification-run-8d9cdf8.json). Two artifacts of the same id with
+different weights (`2840150f…` and `165e150f…`) were then installed in sequence, replaced,
+and rolled back; that exercise is what exposed a real defect — a replace left the previous
+version's 1.4 MB weights in the library with no manifest referring to them, and reported
+the source directory's size instead of the device's — which is now fixed in
+`services/core/src/klyvaron/store.mjs` and covered by a test that fails against the old
+code.
+
 #### What was tried, in order, before accepting this
 
 The gap is a missing binary and missing weights, so it was attacked directly
@@ -136,7 +165,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local chat inference with an actually installed model | **Not met — requires weights** | Adapter tested against a real loopback server; no LM installed here. Reported as `degraded`, never faked |
 | Strict offline mode verifiably blocks network | **Met** | Recording-`fetch` spy: 4 external hosts rejected, call log empty, no socket, no DNS. Guard also installed over `globalThis.fetch` |
 | Hybrid sends only authorized requests externally | **Met** | Exact-host allowlist + classification ceiling; `confidential`/`restricted` need explicit authorization |
-| FreeLLMAPI uses supported endpoints and handles provider failure | **Met in code — requires credentials to exercise live** | Contracts read from source; error envelope and status clamping handled; images JSON vs video raw binary distinguished |
+| An external provider, when one is configured, uses supported endpoints and handles provider failure | **Not applicable — no external provider is configured** | The provider adapter was removed with the rest of the external integration. The router still supports `online` descriptors, so the gate this criterion describes would be re-established by a new adapter rather than assumed |
 | Private knowledge indexed / retrieved / cited / managed locally | **Met** | Ingest, content-hash dedupe, chunk, BM25, cited grounding, ACL, purge, audit |
 | Plugin + MCP enforce capability permissions | **Met** | Scope allowlist, elevated-scope approvals, forbidden scopes, risk-tier gates, schema validation of arguments and output |
 | God Mode tasks observable / pausable / resumable / cancellable / verifiable | **Met** | All five exercised by tests; pause→resume checkpoints at `phaseIndex=1` (2 → 9 steps) |
@@ -151,7 +180,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (422 tests)
+### `services/core` — Implemented and tested (454 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -160,7 +189,6 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Audit ledger | **Implemented and tested** | Append-only SQLite; refusals audited; NDJSON export; subject purge |
 | Model registry & router | **Implemented and tested** | Capability gating before scoring; unknown latency scores 0.5, not 0 |
 | Ollama / llama.cpp providers | **Implemented and tested against a fixture server** | Real protocol handling; no real LM installed here |
-| FreeLLMAPI provider | **Implemented — requires external credentials** | Never exercised against the live service |
 | Knowledge pipeline | **Implemented and tested** | SQLite + filesystem + in-memory rebuildable BM25 |
 | Media queue & validation | **Implemented and tested** | Progress, cancellation, timeouts, retry-after, state history |
 | Plugin registry & manifests | **Implemented and tested** | Preflight vs invoke distinction; uninstall keeps a record |
@@ -171,7 +199,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (555 tests)
+### `services/fabric` — Implemented and tested (563 tests)
 
 | Stage | Status |
 |---|---|
@@ -216,9 +244,51 @@ therefore the model**; the first attempt at a reproduction produced a different
 model (first loss 4.8057 against the release's 4.8380) and the first attempt at the
 distillation experiment was refused outright when eight characters entered the
 corpus. A run now writes its exact corpus beside its weights, and a reproduction can
-be demanded or refused by digest rather than assumed. And the model emits mush at
-this size — 359,136 parameters is enough to beat every baseline it was measured
-against and not enough to hold a conversation.
+be demanded or refused by digest rather than assumed. The full release configuration
+was then run twice more, end to end. The first, on the tree at `67cdd58`: 2,005 s of
+training, a corpus manifest of its own, a model of 359,520 parameters, and a gate verdict of
+**RELEASED** (perplexity 5.3585 against the bigram's 16.7151, 0 hard failures). That run's
+corpus turned out to include this project's own build products — `artifacts/` was missing
+from the directories discovery skips — so it was fixed and the configuration re-run on the
+tree at `8d9cdf8`, whose corpus rebuilds byte for byte from the commit: **that artifact is
+the released `aetheris-lite-lm@0.1.1`** (359,616 parameters, perplexity 4.8932 against the
+bigram's 15.7588, ratio 0.310505, gate verdict RELEASED, 0 hard and 0 soft failures). The
+superseded `@0.1.0` (359,136 parameters) stays published with its own card; none of the
+three perplexities is comparable with another, because the same token budget went into
+corpora of different sizes, and none is reported as an improvement. That
+artifact was then installed into a core data directory through `KlyvaronStore.install`,
+loaded by the app, and served over HTTP: `/api/ready` reports `textCompletion: true`
+and `chat: false`, an unpinned `/api/chat` is refused with `model_not_instruction_tuned`
+(501), a pinned one returns a labelled continuation, and the streaming path emits
+`route`/`delta`/`done` events. Python and JavaScript produce the same greedy text from
+the same bytes (max logit difference 8.2e-06). Record:
+[`experiments/lm-verification-run-67cdd58.json`](./experiments/lm-verification-run-67cdd58.json).
+### What the CI check found, and why it took a diagnostic to see it
+
+The **Fabric** job was red on this branch from the first Klyvaron Lite commit while every
+local run of the same suite was green — a clean venv, a pristine clone, depth-1 and full
+history, the same NumPy and pytest. The reason could not be read the usual way: a job log is
+served from a host an agent without the repository's browser session cannot reach, and the
+log page itself is behind a sign-in wall. The test step now emits the failing test and its
+assertion as a check annotation, which the checks API serves openly, and the answer arrived
+in one line: the committed cross-language parity fixture regenerated *byte for byte
+differently* on the runner while all fourteen arrays were identical. CPython 3.11.2 frames
+each local record with version-needed 20 beside the real sizes; 3.11.17 writes 45 with both
+sizes replaced by the `0xffffffff` sentinel that ZIP64 defines for "the value is in the extra
+field". Same members, same weights, a different container — the fixture test was comparing a
+container built by the standard library.
+
+Two things changed, both in the honest direction. The fixture test now compares the *model*
+(tokenizer digest, member names, per-array dtype, shape and values) and reports which array
+changed and by how much when it fails; the container is the standard library's, not this
+project's. And the JavaScript reader resolves ZIP64 sentinels instead of trusting the fixed
+fields, because an artifact is bytes and the interpreter that wrote it is not recorded in
+them — `klyvaron-runtime.test.mjs` reads the committed fixture reframed both ways and asserts
+the weights are identical, and asserts a refusal (not a guess) when a sentinel cannot be
+resolved anywhere. Both tests fail against the previous reader.
+
+And the model emits mush at this size — 359,616 parameters is enough to beat every
+baseline it was measured against and not enough to hold a conversation.
 
 ### `apps/web` — Implemented and tested (67 tests)
 
@@ -392,10 +462,13 @@ Ordered by how much it blocks the acceptance criteria.
    network access to a registry, then re-probe. No code change is expected — that
    is the claim the loopback test supports, and it is the single largest gap
    between this repository and a usable product.
-2. **Configure FreeLLMAPI** (Phase 5) with a key via `FREELLMAPI_API_KEY_FILE`,
-   policy `hybrid`, and the gateway's host on `AETHERIS_ONLINE_ALLOWLIST`. Then
-   exercise image and video generation live. Until then those paths are
-   code-complete but unexercised against the real service.
+2. **Decide whether to add an external provider at all** (Phase 5). The online
+   integration was removed rather than configured: there is no provider, no
+   credential and no allowlisted gateway in this build. Adding one back is a new
+   decision with its own adapter, credential handling and classification gate —
+   not a configuration change. Until that decision is taken, image and video
+   requests are refused with an explicit limitation, and the readiness view reports
+   those capabilities as unavailable.
 3. **Run the pipeline against a real corpus.** The fixture corpus is generated
    engineering documentation; retrieval quality on real company documents is
    unknown and is recorded as a limitation on the model card.

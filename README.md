@@ -1,12 +1,12 @@
 # Aetheris Omni
 
-A local-first AI platform built by integrating three repositories into one system:
+A local-first AI platform built by integrating two repositories into one system:
 [`Aetheris-`](https://github.com/rajaram-2005/Aetheris-) (application and
-orchestration), [`sparsiz`](https://github.com/rajaram-2005/sparsiz) (research and
-compute optimisation), and [`freellmapi`](https://github.com/tashfeenahmed/freellmapi)
-(optional online-model gateway, consumed as a service — not vendored).
+orchestration) and [`sparsiz`](https://github.com/rajaram-2005/sparsiz) (research and
+compute optimisation). Everything runs on this machine: there is no online provider,
+by design, so no prompt can leave the host without a policy decision recorded for it.
 
-This is **not** a concatenation of the three. Each was audited first
+This is **not** a concatenation of the two. Each was audited first
 ([`docs/01-audit.md`](docs/01-audit.md)), responsibilities were assigned by
 capability, duplication was removed, and conflicting interfaces were resolved.
 Provenance for every adopted piece is in
@@ -52,13 +52,13 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 1044 tests: core 422, web 67, fabric 555
+npm test          # 1084 tests: core 454, web 67, fabric 563
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
-npm run lm:train  # the full from-scratch LM run (~55 min on 2 CPUs)
+npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
 ```
 
-All 1044 run in CI on every push and pull request
+All 1084 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -92,7 +92,7 @@ re-probe, and the same code path serves real inference
 Verified by test, on this host, with no external service:
 
 - **Offline enforcement is real, not cosmetic.** A recording `fetch` spy proves
-  `api.openai.com`, `freellmapi.co`, `huggingface.co` and `api.anthropic.com` are
+  `api.openai.com`, `api.example.com`, `huggingface.co` and `api.anthropic.com` are
   rejected under `strict_offline` without opening a socket or resolving DNS — while
   a real loopback server speaking the Ollama wire protocol still completes a genuine
   chat round-trip. Offline does not mean nothing works.
@@ -118,9 +118,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 11,275 | 8,774 | **zero npm packages** | 422 |
-| `services/fabric` | Python 3.11 | 8,621 | 6,599 | NumPy only | 555 |
-| `apps/web` | React 18 + Vite | 4,477 | 1,312 | react, react-dom | 67 |
+| `services/core` | Node 22 ESM | 12,546 | 9,990 | **zero npm packages** | 454 |
+| `services/fabric` | Python 3.11 | 9,046 | 6,900 | NumPy only | 563 |
+| `apps/web` | React 18 + Vite | 4,464 | 1,311 | react, react-dom | 67 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web
@@ -138,9 +138,10 @@ Two first-party models exist, and both are real.
 
 ### A language model, trained from nothing
 
-**`aetheris-lite-lm`** — a **625,920-parameter character-level transformer**
+**`aetheris-lite-lm@0.1.1`** — a **359,616-parameter character-level transformer**
 trained from random initialisation, in pure NumPy, on this repository's own text.
-No pretrained weights, no PyTorch, no GPU, no downloads.
+No pretrained weights, no PyTorch, no GPU, no downloads. It supersedes
+`@0.1.0` (359,136 parameters), whose figures stay published as a superseded record.
 
 This exists because every route to *fine-tuning someone else's* model was blocked —
 `huggingface.co` and `download.pytorch.org` are unreachable, `llama-cpp-python` ships
@@ -158,9 +159,13 @@ reported `pos: exceeds tolerance by 1.6e-01` and nothing else would have noticed
 > baselines, a versioned card and a release gate that refuses. Its limitations are
 > generated onto its own model card, not tucked into a footnote.
 
-It is deliberately **not** wired into `/api/chat`: exposing a base model of this size
-as a chat assistant would misrepresent it. See
-[`docs/08-aetheris-lite.md`](docs/08-aetheris-lite.md).
+It **is** reachable from `/api/chat`, and that is the point rather than an oversight:
+the artifact is registered as a local provider, an ordinary request is refused with
+`model_not_instruction_tuned` (**501**) unless the model is pinned by id, and a pinned
+request returns a continuation labelled as one, carrying the model's own limitations.
+The model never answers as if it were an assistant. See
+[`docs/08-aetheris-lite.md`](docs/08-aetheris-lite.md) and
+[`docs/11-klyvaron-family.md`](docs/11-klyvaron-family.md).
 
 ### The retriever
 
@@ -217,7 +222,7 @@ Enforcement lives entirely in `services/core`. The browser is a display.
   capability refusals with no ledger entry, meaning the most security-relevant
   events were the ones missing.
 
-Details, including sixteen open items stated plainly:
+Details, including seven open items stated plainly:
 [`docs/05-security.md`](docs/05-security.md).
 
 ---

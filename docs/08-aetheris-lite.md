@@ -23,7 +23,7 @@ same reason: there was no checkpoint to fine-tune with and no way to obtain one.
 
 Those are the obstacles for *adapting someone else's* model. Training from random
 initialisation needs none of them: it needs a corpus, an optimiser, and compute. The
-corpus is this repository (1.53 MB of its own text). The compute is 2 CPU cores,
+corpus is this repository (2.65 MB of its own text). The compute is 2 CPU cores,
 measured at roughly 250 GFLOPS for the matrix shapes a small transformer uses.
 
 So the "new technique" that made this possible was not a modelling trick. It was
@@ -36,7 +36,8 @@ noticing that the blocker applied to a path we did not have to take.
 | | |
 |---|---|
 | Architecture | decoder-only transformer, pre-LayerNorm, 3 blocks, 4 heads, `d_model` 96, `d_ff` 384 |
-| Parameter count | **359,136** (recorded on the card; the exact figure moves with the vocabulary) |
+| Parameter count | **359,616** (recorded on the card; the exact figure moves with the vocabulary) |
+| Released version | `aetheris-lite-lm@0.1.1` — supersedes `@0.1.0`, which is kept as a published record (§6) |
 | Tokenisation | character-level, vocabulary fitted on the **training split only** |
 | Context | 128 characters, sliding non-overlapping evaluation windows |
 | Implementation | `services/fabric/fabric/lm/`, pure NumPy, no PyTorch, no GPU |
@@ -121,64 +122,84 @@ paid for itself — so losing is reported as losing, not explained away.
 
 ## 6. Results
 
-Recorded from the release run. Every figure below is reproducible from the command
-in §8; the corpus manifest, tokenizer digest, configuration digest, code revision and
-seeds are all recorded in the run report.
-
-Recorded from the release run
-`aetheris-lite-lm-82392ef89074`. Every figure below is reproducible from the command
-in §8; the corpus manifest, tokenizer digest, configuration digest, code revision and
-all three seeds are in the run report and on the model card.
+Recorded from the released run `aetheris-lite-lm-53ae59b2a777`, which is
+`aetheris-lite-lm@0.1.1`. Every figure below is reproducible from the command in §8
+**against the same corpus** — and for this artifact that is a stronger statement than it
+used to be: the corpus rebuilds byte for byte from the revision it names, so a third party
+can re-derive the training text rather than take ours on trust (see §8).
 
 **Held-out perplexity, against baselines computed from the same training statistics
-and scored on the same 165,120 held-out tokens:**
+and scored on the same 280,192 held-out tokens:**
 
 | | Perplexity | Bits/char |
 |---|---|---|
-| `uniform` (`ln 143`) | 143.0000 | 7.1599 |
-| `unigram` | 35.2895 | 5.1414 |
-| `bigram` | 15.9109 | 3.9917 |
-| **Aetheris Lite LM** | **4.4033** | **2.1386** |
+| `uniform` (`ln 148`) | 148.0000 | 7.2095 |
+| `unigram` | 32.9491 | 5.0422 |
+| `bigram` | 15.7588 | 3.9781 |
+| **Aetheris Lite LM** | **4.8932** | **2.2908** |
 
-**Verdict: beats the strongest baseline.** `perplexityVsBigram` = **0.276748** — the
-model's perplexity is 27.7% of the bigram's, or **3.61× better** than the best
+**Verdict: beats the strongest baseline.** `perplexityVsBigram` = **0.310505** — the
+model's perplexity is 31.1% of the bigram's, or **3.22× better** than the best
 non-neural baseline. The gate requires ≤ 1.0.
 
 | | |
 |---|---|
-| Parameters | 359,136 |
-| Training loss | 4.8380 → 1.2551 |
-| Wall time | 2,220.1 s (37 minutes, 2 CPU cores) |
-| Peak memory | 157.8 MB |
+| Parameters | 359,616 |
+| Training loss | 4.8597 → 1.4791 |
+| Wall time | 2,062.9 s (34 minutes, 2 CPU cores) |
+| Peak memory | 165.2 MB |
 | Tokens seen during training | 5,324,800 |
-| Validation unknown-character rate | 0.000497 |
-| Artifact | 1,444,942 bytes |
-| Weights digest | `82392ef8907455e56e1cee56bf4a074cb9337dc38f79775859b67efa5b822e94` |
-| Model card | [`model-cards/aetheris-lite-lm-0.1.0.md`](./model-cards/aetheris-lite-lm-0.1.0.md) · [`json`](./model-cards/aetheris-lite-lm-0.1.0.json) |
-| Correlation evidence | `perplexityVsBigram` 0.276748 ≤ 1.0 (hard) · `validationUnknownRate` 0.000497 ≤ 0.02 (hard) · `lossImprovement` 3.582929 ≥ 1.0 (hard) · 0 hard failures, 0 soft failures |
+| Validation unknown-character rate | 0.000011 |
+| Artifact | 1,446,862 bytes |
+| Weights digest | `53ae59b2a777be9d22f1f04b6cbc94aee3dad6144ac40e4e25c12f900164b60c` |
+| Model card | [`model-cards/aetheris-lite-lm-0.1.1.md`](./model-cards/aetheris-lite-lm-0.1.1.md) · [`json`](./model-cards/aetheris-lite-lm-0.1.1.json) |
+| Correlation evidence | `perplexityVsBigram` 0.310505 ≤ 1.0 (hard) · `validationUnknownRate` 0.000011 ≤ 0.02 (hard) · `lossImprovement` 3.380646 ≥ 1.0 (hard) · 0 hard failures, 0 soft failures |
 | **Gate result** | **RELEASED** |
 
 **Greedy sample (temperature 0):**
 
 ```
-server the control and the control limits in detail. Sentence 3 describes the
-contactor and thermal limits in detail. Se
+contactor and thermal limits in the contactor and thermal thermal in thermal thermal imits in the contactor and thermal
 ```
 
-That is genuinely what a 359K-parameter character model trained on 1.4 MB of source
-code for 37 minutes on two CPU cores produces. It is shaped like the corpus and it is
+That is genuinely what a 360K-parameter character model trained on 2.6 MB of source
+code for 34 minutes on two CPU cores produces. It is shaped like the corpus and it is
 not meaningful. Sampled output at temperature 0.8 is visibly less coherent still.
 
 **What this number is not.** It is not a language-modelling result in any competitive
-sense. The corpus is 1.4 MB of this repository's own text, the vocabulary is 143
-characters, and the comparison is against baselines computed from the same data — not
-against any pretrained model, none of which could be obtained here. The claim being
-supported is narrow and exact: **the pipeline runs, the gradients are correct, and the
-result is reproducible from the recorded inputs.**
+sense. The corpus is this repository's own text, the vocabulary is 148 tokens, and the
+comparison is against baselines computed from the same data — not against any pretrained
+model, none of which could be obtained here. The claim being supported is narrow and
+exact: **the pipeline runs, the gradients are correct, and the result is reproducible
+from the recorded inputs.**
 
-Additionally, the baselines are what make the number interpretable at all. `4.40`
-alone is neither good nor bad until the bigram's `15.91` is beside it, measured
+Additionally, the baselines are what make the number interpretable at all. `4.89`
+alone is neither good nor bad until the bigram's `15.76` is beside it, measured
 identically.
+
+### The artifact this supersedes, and why
+
+`aetheris-lite-lm@0.1.0` was released first and is **not withdrawn**: its card, its figures
+and its digest stay published, and a device running it can still roll back to it. It is
+superseded because a released artifact should be one somebody else can check, and this one
+cannot be re-derived:
+
+| | |
+|---|---|
+| Parameters | 359,136 |
+| Held-out perplexity | **4.4033** (2.1386 bits/char) against a bigram of **15.9109** on 165,120 held-out tokens — ratio **0.276748** |
+| Training loss | 4.8380 → 1.2551 |
+| Wall time / peak memory | 2,220.1 s (37 minutes) / 157.8 MB |
+| Validation unknown-character rate | 0.000497 |
+| Artifact | 1,444,942 bytes, weights digest `82392ef8907455e56e1cee56bf4a074cb9337dc38f79775859b67efa5b822e94` |
+| Model card | [`model-cards/aetheris-lite-lm-0.1.0.md`](./model-cards/aetheris-lite-lm-0.1.0.md) · [`json`](./model-cards/aetheris-lite-lm-0.1.0.json) |
+| Why superseded | trained at revision `8108d30…-dirty`; the corpus it read cannot be re-derived from any commit, so no third party can rebuild or check it |
+
+Its perplexity is **not comparable** with the released model's and is offered as neither an
+improvement nor a regression: the same 5,324,800-token budget was spent on a corpus of a
+different size (1,431,417 bytes against 2,646,300) with a different vocabulary (143
+characters against 148). Held-out perplexity is a function of the corpus and the
+vocabulary, and both moved.
 
 
 ---
@@ -218,7 +239,7 @@ its reasons and does not become the live release.
 ## 8. Reproducing it
 
 ```bash
-# Full release configuration: measured at 37 minutes on 2 CPU cores, no GPU
+# Full release configuration: measured at 34 minutes on 2 CPU cores, no GPU
 npm run lm:train
 
 # 60-step smoke run, seconds, to check the pipeline end to end
@@ -241,7 +262,193 @@ exactly that, on the weight bytes rather than on the loss. A differently-seeded 
 produces different weights — also asserted, because reproducibility would be
 meaningless if the seed did nothing.
 
+Both of those hold **for a fixed corpus, and the corpus is this repository**. The released
+figures are therefore reproducible against the released artifact's corpus — and for
+`0.1.1` that is a corpus somebody else can rebuild too: manifest `70c5b78c…`, recomputed
+from revision `8d9cdf8`'s own text (§8b). The superseded `0.1.0` is the counter-example,
+and the reason it is superseded: its corpus (manifest `c3572933…`) read a tree that
+included gitignored files which are gone, so it can be neither rebuilt nor re-checked by
+anyone else.
+
+That asymmetry was measured rather than asserted, and it shows up in every run since. An
+independent run of the identical configuration on the tree at `67cdd58` produced a
+different model, and could not have done otherwise — corpus manifest `264a436c…`,
+vocabulary 147 characters instead of 148, **359,520** parameters instead of 359,616,
+weights digest `f935f044fe81…` instead of `53ae59b2a777…`. It still passed the release
+gate (perplexity **5.3585** against the bigram's **16.7151**, ratio **0.320578**, 0 hard
+failures, 0 soft failures).
+
+Its perplexity is *not* comparable with the released model's 4.8932, nor with the
+superseded 0.1.0's 4.4033, and is offered as neither an improvement nor a regression: the
+same 5,324,800-token budget (2,600 steps × 16 × 128) was spent on a corpus of yet another
+size (2,614,740 bytes), so the run made about 2.2 passes over its training text. Held-out
+perplexity is a function of the corpus and the vocabulary, and both moved. Every run writes
+its exact corpus next to its weights (`<run>.corpus.json`, digest recorded in the report)
+for exactly this reason, and `train(..., expect_manifest_digest=…)` turns silent drift into
+a refusal rather than a surprise. The whole record of that run — report figures, gate
+verdict, install and serve evidence — is committed at
+[`experiments/lm-verification-run-67cdd58.json`](./experiments/lm-verification-run-67cdd58.json).
+
+That record's `codeRevision` reads `67cdd58…-dirty`, because the revision used to be read
+when the report was written — thirty-five minutes after the corpus was read — and the
+working tree was dirty by then. The suffix described the tree, not the corpus: exporting
+`67cdd58` and rebuilding the manifest from its text reproduces `264a436c…` exactly, 152
+train and 17 validation files. The ordering is fixed in `c621bf8`, which reads the
+revision beside the corpus, so the pair cannot be recorded apart again.
+
+### The release run, on a clean revision
+
+That run's corpus contained this project's own build products, because `artifacts/` was
+missing from the list of directories discovery skips — so a model was training on the
+previous model's report. One line of the exclude list fixed it, and the run was repeated
+on the tree at `8d9cdf8` with the fix in place. **That run's artifact is the released
+`aetheris-lite-lm@0.1.1`**, because its corpus can be rebuilt from a commit:
+
+| | |
+|---|---|
+| Revision | `8d9cdf8…`, **no `-dirty` suffix** — the revision is read beside the corpus |
+| Corpus manifest digest | `70c5b78c…` — recomputed from that revision's own text before the run finished, so the match is a prediction that held rather than a check fitted to the answer |
+| Corpus | 154 train / 17 validation files, 2,646,300 bytes, vocabulary 148 characters (147 in the training text) |
+| Parameters | **359,616** |
+| Validation perplexity | **4.8932**, against a bigram baseline of **15.7588** on the same 280,192 held-out tokens — ratio **0.310505** |
+| Gate | **released**, 0 hard failures, 0 soft failures |
+| Wall time / peak memory | 2,062.9 s, 165.2 MB |
+| Artifact | `aetheris-lite-lm-53ae59b2a777.npz`, 1,446,862 bytes, weights digest `53ae59b2a777…` |
+| Record | [`experiments/lm-verification-run-8d9cdf8.json`](./experiments/lm-verification-run-8d9cdf8.json) |
+
+The perplexity is **not** comparable with the superseded artifact's 4.4033 and is offered as
+neither an improvement nor a regression: the same 5,324,800-token budget was spent on a
+corpus **1.849×** larger with a larger vocabulary — about **2.25 passes** over the training
+text. What carried over is the configuration and the gate.
+
+Measured the same way, from the operator CLI and the HTTP surface rather than through the
+store's API:
+
+| | |
+|---|---|
+| Install | `scripts/klyvaron.mjs install <dir>` — manifest plus weights, **1,451,765 bytes**, verified before the copy and again after it |
+| Device throughput | 22.6 ms to load, **26.2 tokens/s**, 72.9 MB resident |
+| NumPy vs JavaScript | all 148 logits for one prompt, maximum difference **1.6e-05**; 24 greedy tokens identical from both (`" a corpus a the comparis"`) |
+| `/api/chat`, not pinned | **501** `model_not_instruction_tuned`; pinned, **200** with 48 tokens, `sentExternally: false`, 23.0 tokens/s |
+| `/api/storage` | 1.5 MB used, `withinBudget: true`, 4,998,548,235 bytes of headroom |
+
+With this run released as `aetheris-lite-lm@0.1.1`, the earlier `0.1.0` becomes the
+superseded record (§6) and the `67cdd58` run remains a verification artifact. None of the
+three is presented as better than another; the corpora differ, and so do the numbers.
+
 ---
+
+## 8b. From checkpoint to a model the core can run
+
+A `.npz` and a report are not an artifact. `services/fabric/fabric/lm/export.py` turns a
+run into one, and `services/core/src/klyvaron/format.mjs` reads it without a Python
+process anywhere near the device:
+
+| | |
+|---|---|
+| Manifest | `<id>.klyvaron.json` — architecture, vocabulary, digests, provenance, measurements, limitations |
+| Weights | the `.npz` itself, parsed in the core (ZIP + `.npy`), with the manifest's SHA-256 re-checked before a byte is used |
+| Vocabulary digest | one specification implemented in both languages, checked by running the JavaScript implementation from the Python test suite. The run report records a *different* function over the same character set (`CharacterTokenizer.digest`); the two are not expected to agree, and both are recorded |
+| Cross-language parity | a committed fixture carries the exact weights, the NumPy logits and the greedy continuation; `klyvaron-runtime.test.mjs` asserts the JavaScript agrees |
+| Container framing | both the inline and the ZIP64 framing of the same members load. CPython's `zipfile` writes version-needed 20 beside the real sizes on one patch release and 45 with both sizes sentinelled on another — `numpy.savez` goes through it, so the same weights are framed differently depending on the interpreter that exported them. The reader resolves a sentinel from the ZIP64 extra field in the central directory, then in the local header, and refuses rather than guessing when neither has it |
+
+```
+python services/fabric/scripts/export_lm.py --from-run services/fabric/artifacts \
+    --id aetheris-lite-lm --version 0.1.1 --output <dir>
+python services/fabric/scripts/export_lm.py --verify <dir>
+```
+
+Putting it on a device is `services/core/scripts/klyvaron.mjs`, which is a wrapper over
+the store rather than a second install path — it takes the same four gates, so a scripted
+install cannot skip one:
+
+```bash
+node services/core/scripts/klyvaron.mjs install <artifact-dir>   # verify, budget, copy, re-verify, record
+node services/core/scripts/klyvaron.mjs list
+node services/core/scripts/klyvaron.mjs verify [<artifact-id>]
+node services/core/scripts/klyvaron.mjs status                   # what the app reports, no server needed
+node services/core/scripts/klyvaron.mjs remove <artifact-id> --yes
+```
+
+The library holds **one artifact per id**. Updating a model is `install <dir> --replace`, and
+the store keeps no copy of what it replaced — so an on-device rollback is the same command
+with the previous artifact, which is why the operator has to retain it. That was exercised
+with two artifacts whose weights genuinely differ (the `67cdd58` run, `2840150f…`, and the
+`8d9cdf8` run, `165e150f…`), under one id:
+
+| Step | Result |
+|---|---|
+| install `0.1.0-verify` | 1,451,373 bytes, weights `2840150f…`, verified |
+| install `0.1.1-verify` without `--replace` | refused (`already_installed`); the library is unchanged |
+| install `0.1.1-verify` with `--replace` | all four gates re-run; weights `165e150f…` |
+| roll back to `0.1.0-verify` with `--replace` | weights `2840150f…` again, 1,451,373 bytes |
+| a copy corrupted by one flipped byte, same size | refused (`digest_mismatch`, both hashes printed); the installed artifact is left alone |
+
+The drill's labels carry `-verify` because that is what the two artifacts were exported as
+when it ran. The released export of the `8d9cdf8` run (`--version 0.1.1`) is the same
+weights and the same file digest, installed through the same command as **1,451,751 bytes**
+— 14 bytes fewer than the drill's copy only because the version string in the manifest is
+shorter.
+
+That export was then installed and served again **after** the promotion, and the
+[record](./experiments/lm-verification-run-8d9cdf8.json) keeps both captures side by side so
+the claim above is measured rather than inferred: `tier: lite` and `tierClaim: lite` on the
+model row, `/api/ready` reporting `textCompletion: true` and `chat: false`, an unpinned
+`/api/chat` refused `501 model_not_instruction_tuned`, a pinned one answered with 48 labelled
+tokens at **22.7 tokens/s** over HTTP (**26.2 tokens/s** in the runtime with no HTTP in the
+path), and NumPy and JavaScript agreeing to **1.6e-05** on the logits and exactly on the
+greedy text. Two captures of one weight file under two version strings, and the arithmetic
+between them — 1,451,765 and 1,451,751, fourteen bytes apart — is what a promotion has to
+survive to be believed.
+
+**That exercise found a real defect**, which is the reason it is described here rather than
+summarised as a passing test. The first version of it ended with the library holding
+**2,898,235 bytes for one artifact id**: `cpSync` merges into an existing directory, so
+replacing a version left the previous version's 1.4 MB `.npz` behind with no manifest
+referring to it — invisible to `verify()`, never reclaimed, and reported as the source
+directory's size rather than the device's. `store.mjs` now clears the artifact's own
+directory when it replaces, charges the budget the growth rather than the whole artifact
+again, and reports the size it measured on disk; `klyvaron-store.test.mjs` covers a
+version-to-version replace and **fails against the old code**. The same sequence now ends at
+1,451,373 bytes.
+
+`remove` refuses without `--yes` and prints what it would delete: a model the user asked
+for is user data, and a cleanup that silently drops it is not a cleanup.
+
+The runtime is `services/core/src/klyvaron/runtime.mjs`: the same pre-LayerNorm
+transformer, the same parameter names, the same order of operations, in plain
+JavaScript. It is not a second model and it is deliberately not an approximation — the
+point of the parity fixture is that a divergence in an activation, an attention scale or
+the output projection fails a test instead of silently producing worse text.
+
+Two things it does **not** do, both for honesty rather than effort: there is no KV cache
+(each token re-runs the 128-token window, exactly like the reference) and no
+quantisation (shipping int8 without measuring its effect on this model's perplexity would
+be a quality claim with nothing behind it).
+
+### Measured on a full-size artifact, not only on the fixture
+
+The parity fixture is deliberately tiny. The same checks were then run against the
+359,520-parameter verification artifact — a model 57× its size — because a parity claim
+that holds at 6,264 parameters and nowhere else is not a parity claim:
+
+| | |
+|---|---|
+| NumPy vs JavaScript logits, all 147 of them, same prompt | maximum absolute difference **8.2e-06** (the fixture test's tolerance is 1e-3) |
+| Greedy continuation, 24 tokens, temperature 0 | the **same string** from both implementations (`" not a contactor and the"`) |
+| Vocabulary digest | the manifest's digest is the export specification and the JavaScript reproduces it exactly; the run report's separate `CharacterTokenizer.digest` is also reproduced, by Python |
+| Install | `KlyvaronStore.install()` — verified before copying, budget-checked, re-verified after, digest recorded: 1,451,373 bytes |
+| `/api/ready` | model loaded, `capabilities.chat` **false**, `textCompletion` **true** |
+| `/api/chat`, not pinned | **501** `model_not_instruction_tuned`, with the artifact's own four limitations attached |
+| `/api/chat`, pinned to `klyvaron:aetheris-lite-lm-verify` | **200**, 48 tokens, `sentExternally: false`, and the text labelled as a continuation rather than an answer |
+| `/api/chat/stream`, pinned | **200**, `route` / `delta` / `done` events |
+| Load and generate, in JavaScript, no Python and no GPU | **23–27 ms** to load; **24–26 tokens/s**; 72–81 MB resident |
+| The manifest's generation ceiling | honoured: a request for 128 tokens returns the 64 the manifest allows |
+
+The run behind those numbers, including its corpus manifest digest and gate verdict:
+[`experiments/lm-verification-run-67cdd58.json`](./experiments/lm-verification-run-67cdd58.json).
+It is a verification artifact, not a release: the released model is
+`aetheris-lite-lm@0.1.1`, and nothing here claims the verification model is better than it.
 
 ## 9. Limitations
 
@@ -254,8 +461,10 @@ Stated on the model card itself, not only here. This list is generated by
 - **Character-level, not subword.** Sequences are long for the parameter count.
 - **No world knowledge, no instruction-following, no safety behaviour.** It is a
   base model trained to predict the next character of repository text.
-- **Cannot be exposed as a chat assistant in this state**, and is not wired into
-  `/api/chat`. Doing so would misrepresent it.
+- **Cannot be exposed as a chat assistant in this state.** It *is* wired into
+  `/api/chat`, and that is the point: the request is refused with
+  `model_not_instruction_tuned` (501) unless the model is pinned by id, and the
+  refusal carries this list. Answering a question with it would misrepresent it.
 - **No comparison against any pretrained model** was performed and none is claimed.
   The comparison is against uniform, unigram and bigram baselines on in-distribution
   held-out text.

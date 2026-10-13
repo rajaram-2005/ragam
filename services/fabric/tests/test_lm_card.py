@@ -265,6 +265,12 @@ def test_the_card_itself_lists_limitations_not_only_the_provenance():
     joined = " ".join(card.limitations).lower()
     assert "not derived from any pretrained base model" in joined
     assert "/api/chat" in joined
+    # The wording moved once already, from "deliberately not wired into /api/chat" to the
+    # refusal that actually happens. A limitation describing a behaviour the app does not
+    # have would be quoted as the reason the real behaviour is safe, so the direction is
+    # pinned: the route exists and refuses.
+    assert "refused" in joined and "not_instruction_tuned" in joined, joined
+    assert "not wired" not in joined
     assert card.provenance.limitations, "the provenance must still carry its own list"
     assert not set(card.limitations) & set(card.provenance.limitations), "the two lists overlap"
 

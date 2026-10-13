@@ -36,7 +36,7 @@ them rather than restating them.
 
 | Capability | Status | Note |
 |---|---|---|
-| Text-to-image generation | **Partial** | Works through the gateway (JSON response). *Requires external credentials* |
+| Text-to-image generation | **Unsupported** | No image provider is configured in this build — no local runtime and no online one — so a request is refused with an explicit limitation. The queue, magic-byte validation and storage that a provider would feed are implemented and tested, but nothing generates an image |
 | Local image generation | **Planned** | Needs weights and a GPU; this host has neither |
 | Image understanding | **Partial** | Adapters declared; no vision model is installed |
 | Upload validation before processing | **Completed** | Magic-byte sniffing; a mislabelled file is refused |
@@ -48,8 +48,8 @@ them rather than restating them.
 
 | Capability | Status | Note |
 |---|---|---|
-| Text-to-video generation | **Partial** | Raw MP4 through the gateway. *Requires external credentials* |
-| Local video generation | **Unsupported** | Too demanding for this hardware class. The limitation is stated rather than hidden, and the user is offered the online path as an explicit choice |
+| Text-to-video generation | **Unsupported** | No video provider is configured in this build, so a request is refused with an explicit limitation and a still image is never substituted. The job queue, container sniffing and genuineness check are implemented and tested |
+| Local video generation | **Unsupported** | Too demanding for this hardware class. The limitation is stated rather than hidden, and the refusal is explicit rather than routed somewhere else |
 | Video input handling | **Partial** | Magic-byte genuineness check; no frame-level analysis |
 | Honest quality reporting | **Completed** | No quality adjective is attached to a generated video; the parameters are shown |
 | Long-form / multi-shot | **Planned** | Requires a real video model |
@@ -86,11 +86,13 @@ them rather than restating them.
 | Capability-aware routing across local and online models | **Completed** | Privacy restrictions override quality and cost |
 | Every adapter declares real capabilities, hardware and licence | **Completed** | An unknown licence is recorded as `unknown`, not guessed |
 | First-party model family with honest status | **Completed** | Three tiers; one partial, two recorded unbuilt |
-| A tier label that cannot be faked | **Completed** | `tierClaimFor()` is a lookup against backing records, not a field |
+| A tier label that cannot be faked | **Completed** | `tierClaimForArtifact()` looks the id *and version* up in the backing records, and the core emits no `tier:` tag or row value for a declaration nothing backs — asserted by installing an artifact that declares `tier: 'pro'` |
 | Embeddings and reranking | **Partial** | Declared in the router; no reranker model is installed |
 | Multi-tier local models (Pro, High) | **Unsupported** | No artifact and no way to obtain base weights on this host |
 | Model download and integrity verification | **Completed** | Digest checked before load; a truncated artifact is caught |
-| Managed storage accounting | **Completed** | Measured, not estimated; 5 GB mobile budget with a 500 MB reserve |
+| Managed storage accounting | **Completed** | Measured, not estimated; 5 GB mobile budget with a 500 MB reserve, and `/api/storage` reports the bytes plus the unmanaged files the category walk cannot see |
+| A first-party model that loads and runs locally | **Partial** | Klyvaron Lite loads from a verified artifact and generates in the core service; the model is a base completion model, so chat refuses it unless pinned. A full-size artifact has been installed into the on-device library and served over HTTP (`docs/experiments/lm-verification-run-67cdd58.json`). Real, and far below assistant quality |
+| Local model integrity verification | **Completed** | The manifest's digests are re-checked before a byte is used; a corrupted install is reported and never loaded, silently deleted or described as ready |
 
 ## 7. Privacy and security
 
@@ -173,9 +175,13 @@ of it:
 - **Completed** rows are the majority, and they cluster in the areas a user touches
   most: conversation controls, plugins, MCP, privacy enforcement and the five-area
   interface.
-- **Partial** rows cluster around *quality* rather than *existence*: generation that
-  depends on an external gateway, retrieval whose precision is unmeasured, a sandbox that
-  is enforced by scopes rather than by kernel isolation.
+- **Partial** rows cluster around *quality* rather than *existence*: retrieval whose
+  precision is unmeasured, a sandbox that is enforced by scopes rather than by kernel
+  isolation.
+- **Image and video generation are Unsupported, not Partial.** With the online
+  integration removed there is no provider of any kind, and calling that "implemented
+  with a named limitation" would overstate it. What exists — the queue, the
+  validation and the refusals — is recorded in the rows below.
 - **Planned** rows are mostly model-dependent. They fail together if a model cannot be
   obtained, which is why the from-scratch Lite artifact matters: it is the one path that
   does not depend on a download.

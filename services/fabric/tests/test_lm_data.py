@@ -13,6 +13,7 @@ import pytest
 from fabric.lm.data import (
     build_manifest,
     discover,
+    DEFAULT_EXCLUDE_DIRS,
     is_excluded,
     make_batches,
     read_corpus,
@@ -34,6 +35,12 @@ def corpus(tmp_path):
     (tmp_path / "node_modules" / "dep.md").write_text("SHOULD NEVER APPEAR\n", encoding="utf-8")
     (tmp_path / "dist").mkdir()
     (tmp_path / "dist" / "bundled.md").write_text("SHOULD NEVER APPEAR\n", encoding="utf-8")
+    # A previous run's build products. Gitignored, so a corpus containing them cannot be
+    # reproduced from any revision -- and `artifacts` really was missing from the exclude
+    # list, which meant a report and a 2.7 MB corpus snapshot were being trained on.
+    (tmp_path / "artifacts").mkdir()
+    (tmp_path / "artifacts" / "run.report.json").write_text("SHOULD NEVER APPEAR\n", encoding="utf-8")
+    (tmp_path / "artifacts" / "run.corpus.json").write_text("SHOULD NEVER APPEAR\n", encoding="utf-8")
     (tmp_path / "binary.png").write_bytes(b"\x89PNG\r\n")
     return tmp_path
 
@@ -56,6 +63,8 @@ def test_discovery_is_deterministic_sorted_and_filters(corpus):
     assert not any("node_modules" in p for p in found)
     assert not any(p.startswith("dist/") for p in found)
     assert not any(p.endswith(".png") for p in found)
+    assert not any(p.startswith("artifacts/") for p in found), "build products are not corpus"
+    assert "artifacts" in DEFAULT_EXCLUDE_DIRS
     assert discover(corpus) == discover(corpus)
 
 

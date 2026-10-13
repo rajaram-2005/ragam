@@ -9,10 +9,9 @@ import { JobDetail, JobTable } from '../components/Jobs.jsx'
 // Two things make this area different from Image, and both come from verified
 // facts rather than assumption:
 //
-//  1. The upstream gateway supports video on only two platforms (pollinations,
-//     huggingface) while it supports eight for images, and its own key table marks
-//     video as unsupported on custom endpoints. Chat support therefore does NOT
-//     imply video support, and the UI says so.
+//  1. No video provider is configured in this build, and the UI says so rather
+//     than implying that a chat-capable runtime can also produce video. Chat
+//     support does NOT imply video support.
 //  2. Video responses come back as a raw binary MP4, not JSON — so cancellation
 //     means aborting the request, and validation has to sniff the container rather
 //     than read a field.
@@ -33,7 +32,6 @@ export default function VideoArea({ readiness, refreshReadiness }) {
   const [seed, setSeed] = useState('')
   const [audio, setAudio] = useState(false)
   const [principal, setPrincipal] = useState('')
-  const [authorize, setAuthorize] = useState(false)
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
   const [created, setCreated] = useState(null)
@@ -75,7 +73,6 @@ export default function VideoArea({ readiness, refreshReadiness }) {
         seed: seed.trim() ? Number(seed) : null,
         audio: audio || null,
         principal: principal.trim() || null,
-        externalAuthorization: authorize ? { granted: true, reason: 'operator authorised this video request from the interface' } : null,
       })
       setCreated(job)
       setSelectedId(job.id ?? null)
@@ -145,10 +142,6 @@ export default function VideoArea({ readiness, refreshReadiness }) {
                 <input type="checkbox" checked={audio} onChange={(event) => setAudio(event.target.checked)} />
                 Request audio track
               </label>
-              <label className="checkbox">
-                <input type="checkbox" checked={authorize} onChange={(event) => setAuthorize(event.target.checked)} />
-                Authorise an approved online provider
-              </label>
             </div>
 
             <div className="row end" style={{ marginTop: 13 }}>
@@ -167,8 +160,8 @@ export default function VideoArea({ readiness, refreshReadiness }) {
               {gpu ? 'GPU present' : 'no GPU'}. No local video runtime is installed, and none is claimed.
             </li>
             <li>
-              The optional online gateway supports video on a narrower set of platforms than it supports images, and marks video unsupported on
-              custom endpoints. Chat working does not mean video works.
+              No online provider is configured in this build, so a video request is never routed anywhere. Chat working does not mean video
+              works: the two capabilities are routed separately.
             </li>
             <li>
               When no video-capable provider is reachable, the request is refused and recorded. The interface does <strong>not</strong> offer a

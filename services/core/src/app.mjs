@@ -13,10 +13,9 @@ import { readFile, stat } from 'node:fs/promises'
 import { AuditLedger, AUDIT_OUTCOMES } from './audit/ledger.mjs'
 import { createEgressGuard, installGlobalEgressGuard, createDataPolicy, RUNTIME_POLICIES, mostSensitiveDataClass } from './policy/egress.mjs'
 import { classifyText, redactDeep } from './policy/classify.mjs'
-import { familyReport, tierClaimFor } from './klyvaron/tiers.mjs'
+import { familyReport, tierClaimFor, tierClaimForArtifact } from './klyvaron/tiers.mjs'
 import { ModelRegistry, ModelRouter, MODEL_KINDS, MODALITIES, AVAILABILITY } from './router/registry.mjs'
 import { OllamaProvider, OpenAiCompatLocalProvider, normalizeMessages } from './providers/local.mjs'
-import { FreellmapiProvider } from './providers/freellmapi.mjs'
 import { KnowledgePipeline } from './knowledge/pipeline.mjs'
 import { CANDIDATE_STATES, MemoryStore } from './memory/store.mjs'
 import { MediaJobQueue, JOB_STATES } from './media/jobs.mjs'
@@ -30,7 +29,10 @@ import { validateManifest, SCOPES, ELEVATED_SCOPES } from './plugins/manifest.mj
 import { McpRegistry, RISK, SERVER_KINDS } from './mcp/layer.mjs'
 import { GodCore, TASK_STATES, LIFECYCLE } from './godcore/lifecycle.mjs'
 import { registerBuiltins } from './builtins.mjs'
-import { publicConfig, redactUrl } from './config.mjs'
+import { publicConfig } from './config.mjs'
+import { KlyvaronStore } from './klyvaron/store.mjs'
+import { MobileFootprint } from './klyvaron/footprint.mjs'
+import { KlyvaronProvider } from './providers/klyvaron.mjs'
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024
 
@@ -168,9 +170,109 @@ export class AetherisOmniApp {
     // these the Plugins and MCP areas would have nothing real to inspect: a
     // browser cannot bind a local_tool handler, so they must be bound in code.
     this.builtins = registerBuiltins(this)
+
+    // --- the local model library -------------------------------------------
+    // Opened last so the ledger reads startup -> providers -> models. Nothing here
+    // reaches the network: a Klyvaron artifact is a file, and `loadArtifact` verifies
+    // it against its manifest before a single weight is used.
+    this.klyvaron = this.#openKlyvaron()
   }
 
   // --- wiring -------------------------------------------------------------
+
+  /**
+   * Open the on-device model library and load whatever is already installed.
+   *
+   * Loading at startup is a deliberate trade: it costs a few hundred milliseconds once
+   * and makes readiness a statement about a model in memory rather than a promise about
+   * a file. A model that fails verification is reported as broken and left alone -- it
+   * is never silently deleted, because it is the user's download.
+   */
+  #openKlyvaron() {
+    const root = resolve(this.config.dataDir, 'klyvaron')
+    const store = new KlyvaronStore({ root })
+    const library = { root, store, footprint: new MobileFootprint({ budget: store.budget }), loaded: [], broken: [], errors: [] }
+
+    for (const entry of store.list()) {
+      if (entry.broken) {
+        library.broken.push({ id: entry.id, reason: entry.broken })
+        this.#onEvent({ type: 'klyvaron_model_broken', id: entry.id, reason: entry.broken })
+        continue
+      }
+      try {
+        const { runtime, loadMs } = store.load(entry.id)
+        const providerName = `klyvaron:${entry.id}`
+        // The artifact's manifest carries a `tier` field, and a manifest is the artifact
+        // talking about itself. The tag below is emitted only when a backing record in
+        // tiers.mjs names this exact id and version, so a hand-built artifact declaring
+        // `tier: 'pro'` gets `base_completion` and nothing else.
+        const tierClaim = tierClaimForArtifact(runtime.manifest.id, runtime.manifest.version)
+        this.providers[providerName] = new KlyvaronProvider({
+          runtime, guard: this.guard, loadMs, onEvent: (event) => this.#onEvent(event),
+        })
+        const model = this.registry.register({
+          id: providerName,
+          kind: MODEL_KINDS.LOCAL_LLM,
+          displayName: `${runtime.manifest.id} ${runtime.manifest.version} (Klyvaron ${runtime.manifest.tier})`,
+          provider: providerName,
+          location: 'local',
+          capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT],
+          contextWindow: runtime.contextTokens,
+          streaming: true,
+          toolCalling: false,
+          structuredOutput: false,
+          parametersBillions: runtime.parameterCount / 1e9,
+          quantization: runtime.dtype === Float64Array ? 'none (float64)' : 'none (float32)',
+          licence: runtime.manifest.licence,
+          version: runtime.manifest.version,
+          // `base_completion` is the tag that stops a base model being chosen to answer
+          // a question: it can satisfy [text_in, text_out] and still not be an assistant.
+          tags: ['first_party', 'klyvaron', ...(tierClaim ? [`tier:${tierClaim}`] : []),
+            ...(runtime.instructionTuned ? [] : ['base_completion'])],
+          // The Lite flag is the same lookup as the tag, not a second opinion: a model named
+          // like a Lite artifact used to publish `aetherisLite: false` next to `tier:lite`,
+          // which is two answers to one question from one row.
+          aetherisLite: tierClaim === 'lite',
+          costWeight: 0.5,
+        })
+        // Availability is *observed*, never declared: the descriptor starts NOT_INSTALLED
+        // and only a completed load moves it to READY, exactly like a provider probe.
+        this.registry.observe(model.id, {
+          availability: AVAILABILITY.READY,
+          medianLatencyMs: loadMs,
+          detail: { artifact: runtime.manifest.id, version: runtime.manifest.version,
+            weightsSha256: runtime.sha256, instructionTuned: runtime.instructionTuned,
+            declaredTier: runtime.manifest.tier, tierClaim, loadMs },
+        })
+        library.loaded.push({ id: model.id, artifact: runtime.manifest.id, version: runtime.manifest.version,
+          tier: runtime.manifest.tier, tierClaim, parameters: runtime.parameterCount, contextTokens: runtime.contextTokens,
+          instructionTuned: runtime.instructionTuned, loadMs, weightsSha256: runtime.sha256,
+          limitations: [...runtime.manifest.limitations] })
+      } catch (error) {
+        library.errors.push({ id: entry.id, code: error.code ?? 'load_failed', message: error.message })
+        this.ledger.record({ category: 'model', action: 'klyvaron_load_failed', outcome: AUDIT_OUTCOMES.FAILURE,
+          detail: { id: entry.id, code: error.code ?? 'load_failed', message: error.message } })
+      }
+    }
+    return library
+  }
+
+  /**
+   * A local library report for the storage surface: the bytes, in the user's terms.
+   */
+  storageReport() {
+    const report = this.klyvaron.footprint.report()
+    return {
+      ...report,
+      // The one sentence a settings screen can show as-is.
+      summary: this.klyvaron.footprint.summary(),
+      installed: this.klyvaron.store.list().map((entry) => ({
+        id: entry.id, version: entry.version, bytes: entry.bytes ?? null, broken: entry.broken ?? null,
+      })),
+      verification: this.klyvaron.store.verify(),
+      loaded: this.klyvaron.loaded.map((entry) => ({ id: entry.id, instructionTuned: entry.instructionTuned })),
+    }
+  }
 
   #registerProviders() {
     const { config } = this
@@ -184,15 +286,6 @@ export class AetherisOmniApp {
         apiKey: config.llamaCpp.apiKey,
         guard: this.guard,
         onEvent: (e) => this.#onEvent(e),
-      })
-    }
-    if (config.freellmapi.enabled) {
-      this.providers.freellmapi = new FreellmapiProvider({
-        baseUrl: config.freellmapi.baseUrl,
-        apiKey: config.freellmapi.apiKey,
-        guard: this.guard,
-        onEvent: (e) => this.#onEvent(e),
-        videoTimeoutMs: config.freellmapi.videoTimeoutMs ?? config.media.videoTimeoutMs,
       })
     }
   }
@@ -275,61 +368,6 @@ export class AetherisOmniApp {
           })
           this.registry.observe(id, { availability: AVAILABILITY.READY, detail: { discoveredVia: `${name} /v1/models` } })
         }
-      } else if (name === 'freellmapi') {
-        const models = await provider.listModels({ readyOnly: true }).catch(() => [])
-        // Register one online chat entry plus the media capabilities the gateway
-        // genuinely serves. The catalog is not enumerated into hundreds of rows:
-        // 'auto' is the documented routing behaviour.
-        this.registry.upsert({
-          id: 'freellmapi:auto',
-          kind: MODEL_KINDS.ONLINE_LLM,
-          displayName: 'FreeLLMAPI auto-routed chat',
-          capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT],
-          location: 'online',
-          provider: 'freellmapi',
-          toolCalling: true,
-          streaming: true,
-          structuredOutput: true,
-          licence: 'provider-terms',
-          costWeight: 1.4,
-          tags: ['gateway'],
-        })
-        this.registry.observe('freellmapi:auto', { availability: AVAILABILITY.READY, detail: { readyModels: models.length } })
-        this.registry.upsert({
-          id: 'freellmapi:embeddings',
-          kind: MODEL_KINDS.ONLINE_EMBEDDING,
-          displayName: 'FreeLLMAPI embeddings',
-          capabilities: [MODALITIES.TEXT_IN, MODALITIES.EMBEDDING_OUT],
-          location: 'online',
-          provider: 'freellmapi',
-          licence: 'provider-terms',
-          costWeight: 1.1,
-        })
-        this.registry.observe('freellmapi:embeddings', { availability: AVAILABILITY.READY })
-        this.registry.upsert({
-          id: 'freellmapi:image',
-          kind: MODEL_KINDS.ONLINE_IMAGE_GEN,
-          displayName: 'FreeLLMAPI image generation',
-          capabilities: [MODALITIES.TEXT_IN, MODALITIES.IMAGE_OUT],
-          location: 'online',
-          provider: 'freellmapi',
-          licence: 'provider-terms',
-          costWeight: 2,
-        })
-        this.registry.observe('freellmapi:image', { availability: AVAILABILITY.READY })
-        this.registry.upsert({
-          id: 'freellmapi:video',
-          kind: MODEL_KINDS.ONLINE_VIDEO_GEN,
-          displayName: 'FreeLLMAPI video generation',
-          capabilities: [MODALITIES.TEXT_IN, MODALITIES.VIDEO_OUT],
-          location: 'online',
-          provider: 'freellmapi',
-          licence: 'provider-terms',
-          costWeight: 3,
-          // Documented limitation, recorded so the UI can state it honestly.
-          tags: ['gateway', 'video-platforms:pollinations|huggingface', 'not-supported-on-custom-endpoints'],
-        })
-        this.registry.observe('freellmapi:video', { availability: AVAILABILITY.READY })
       }
     } catch (error) {
       this.ledger.record({ category: 'model', action: `register_discovered:${name}`, outcome: AUDIT_OUTCOMES.FAILURE, detail: { error: error?.message } })
@@ -499,6 +537,7 @@ export class AetherisOmniApp {
     }
 
     const chosen = route.chosen
+    this.#assertAnswerable(chosen, model)
     const isExternal = chosen.location === 'online'
 
     // Minimise transmitted data: redact secrets before an external send.
@@ -539,6 +578,10 @@ export class AetherisOmniApp {
         stream: false,
         modelId: chosen.id,
         providerModel: result.model ?? null,
+        // Present only for providers that make the distinction. A base completion model
+        // answering because it was pinned says so in the response, every time.
+        ...(result.instructionTuned === undefined ? {} : { instructionTuned: result.instructionTuned }),
+        ...(result.limitation ? { limitation: result.limitation } : {}),
         durationMs,
         usage: result.usage ?? null,
         routing: routeSummary(route),
@@ -607,8 +650,57 @@ export class AetherisOmniApp {
     })
   }
 
+  /**
+   * What a base completion model may be used for.
+   *
+   * Directive §5A: a model that continues text must not be presented as an assistant.
+   * Klyvaron Lite's artifact carries `instructionTuned: false`, which puts it behind
+   * this check: an ordinary chat request is refused with the model's own limitations,
+   * and the model can still be used deliberately by pinning it by id. The alternative --
+   * answering anyway and trusting a user to notice the output is a continuation -- is
+   * exactly the overclaim the tier registry exists to prevent.
+   */
+  #assertAnswerable(chosen, requestedModel) {
+    if (!(chosen.tags ?? []).includes('base_completion')) return
+    if (requestedModel && requestedModel === chosen.id) return
+    const provider = this.providers[chosen.id]
+    const limitations = provider?.runtime?.manifest?.limitations ?? []
+    this.ledger.record({
+      category: 'model', action: 'refuse_base_completion_chat', outcome: AUDIT_OUTCOMES.REFUSED,
+      detail: { modelId: chosen.id, limitations },
+    })
+    const error = new Error(
+      `'${chosen.id}' is a base completion model: it continues text and does not answer questions. `
+      + 'Pin it by id to use it for a continuation, or install an instruction-tuned model.',
+    )
+    error.code = 'model_not_instruction_tuned'
+    error.status = 501
+    error.limitation = limitations[0] ?? 'This model does not follow instructions.'
+    error.limitations = limitations
+    throw error
+  }
+
   #providerFor(model) {
-    const key = model.location === 'online' ? 'freellmapi' : model.id.startsWith('ollama:') ? 'ollama' : 'llamacpp'
+    if (model.location === 'online') {
+      // This build ships no online provider. A descriptor that still claims the
+      // online location is refused here rather than attempted, so the failure names
+      // the missing provider instead of surfacing as a network error later.
+      const error = new Error(`no online provider is configured for model '${model.id}' in this build`)
+      error.code = 'provider_not_configured'
+      error.status = 503
+      throw error
+    }
+    if (model.id.startsWith('klyvaron:')) {
+      const provider = this.providers[model.id]
+      if (!provider) {
+        const error = new Error(`the local model '${model.id}' is registered but not loaded`)
+        error.code = 'model_not_loaded'
+        error.status = 503
+        throw error
+      }
+      return provider
+    }
+    const key = model.id.startsWith('ollama:') ? 'ollama' : 'llamacpp'
     const provider = this.providers[key]
     if (!provider) {
       const error = new Error(`no provider is configured for model '${model.id}' (expected '${key}')`)
@@ -620,11 +712,13 @@ export class AetherisOmniApp {
   }
 
   #providerModelId(model) {
-    if (model.location === 'online') return model.id === 'freellmapi:auto' ? undefined : model.id.split(':').slice(1).join(':') || undefined
     return model.id.split(':').slice(1).join(':')
   }
 
-  /** Image generation. Returns a job; the artifact exists only after validation. */
+  /**
+   * Image generation. Refused honestly on this host: no runtime is configured, so
+   * no job is created and no placeholder is returned in its place.
+   */
   async generateImage({ prompt, model = null, n = 1, size = null, principal = null, dataClass = null, externalAuthorization = null }) {
     if (!prompt || !String(prompt).trim()) throw badRequest('prompt is required')
     const classification = dataClass ? { dataClass } : classifyText(String(prompt))
@@ -638,40 +732,30 @@ export class AetherisOmniApp {
       error.route = { explanation: route.explanation, rejected: route.rejected }
       return this.#refuse('model', 'image_refused', error, { policy: this.config.policy, rejected: route.rejected.length })
     }
+    // No image runtime ships in this build. A route that resolves therefore reaches
+    // a refusal, not a generation: there is no local image model and no online
+    // provider, and inventing a placeholder would present it as a result — the
+    // failure mode §9 exists to prevent.
     const chosen = route.chosen
-    if (chosen.location !== 'online') {
+    if (chosen.location === 'local') {
       const error = new Error(`local image generation is not implemented for '${chosen.id}' in this build`)
       error.code = 'not_implemented'
       error.status = 501
+      error.limitation = 'no image-capable provider is configured on this host; a substitute image is NOT returned'
       return this.#refuse('model', 'image_refused', error, { modelId: chosen.id })
     }
-    const provider = this.providers.freellmapi
-    if (!provider) throw providerMissing('freellmapi')
-
-    return this.media.enqueue({
-      kind: MEDIA_KINDS.IMAGE,
-      params: { prompt: String(prompt).slice(0, 500), n, size, modelId: chosen.id },
-      subject: principal,
-      timeoutMs: this.config.media.imageTimeoutMs,
-      run: async ({ signal, progress }) => {
-        progress(10, 'submitting')
-        const result = await provider.generateImage({ prompt: String(prompt), model: this.#providerModelId(chosen), n, size, signal, timeoutMs: this.config.media.imageTimeoutMs })
-        progress(80, 'downloading')
-        // If the provider returned URLs rather than b64, fetch them through the guard.
-        if (!result.images.some((entry) => typeof entry.b64_json === 'string') && result.images[0]?.url) {
-          const response = await this.guard.fetch(result.images[0].url, { signal })
-          if (!response.ok) throw new Error(`image download failed with HTTP ${response.status}`)
-          const buffer = Buffer.from(await response.arrayBuffer())
-          return { bytes: new Uint8Array(buffer), contentType: response.headers.get('content-type'), platform: result.platform, model: result.model }
-        }
-        return result
-      },
-    })
+    const error = new Error(`image generation is unavailable: '${chosen.id}' is registered as online, but this build configures no online provider`)
+    error.code = 'provider_not_configured'
+    error.status = 503
+    error.limitation = 'no online provider is configured; a substitute image is NOT returned'
+    return this.#refuse('model', 'image_refused', error, { modelId: chosen.id })
   }
 
   /**
-   * Video generation. Enqueues a real job whose cancellation aborts the gateway
-   * request, which in turn stops the provider-side poll.
+   * Video generation.
+   *
+   * As with images, this build has no video runtime and no online provider, so the
+   * refusal states the limitation instead of substituting a still image (§9).
    */
   async generateVideo({ prompt, model = null, duration = null, aspectRatio = null, image = null, seed = null, audio = null, principal = null, dataClass = null, externalAuthorization = null }) {
     if (!prompt || !String(prompt).trim()) throw badRequest('prompt is required')
@@ -689,39 +773,18 @@ export class AetherisOmniApp {
       return this.#refuse('model', 'video_refused', error, { policy: this.config.policy, rejected: route.rejected.length })
     }
     const chosen = route.chosen
-    if (chosen.location !== 'online') {
+    if (chosen.location === 'local') {
       const error = new Error(`local video generation is not available: '${chosen.id}' has no implemented runtime on this hardware profile (${this.hardware.ramGb}GB RAM, no GPU)`)
       error.code = 'needs_hardware'
       error.status = 501
+      error.limitation = 'no video-capable provider is configured on this host; a still image is NOT offered as a substitute'
       return this.#refuse('model', 'video_refused', error, { modelId: chosen.id, hardware: this.hardware })
     }
-    const provider = this.providers.freellmapi
-    if (!provider) throw providerMissing('freellmapi')
-
-    return this.media.enqueue({
-      kind: MEDIA_KINDS.VIDEO,
-      params: { prompt: String(prompt).slice(0, 500), duration, aspectRatio, seed, audio, modelId: chosen.id, providerLimitations: chosen.tags },
-      subject: principal,
-      timeoutMs: this.config.media.videoTimeoutMs,
-      run: async ({ signal, progress }) => {
-        progress(5, 'submitted to gateway')
-        // The gateway holds one bounded request; we cannot observe its internal poll,
-        // so progress is reported honestly as elapsed-time based, not fabricated.
-        const startedAt = Date.now()
-        const ticker = setInterval(() => {
-          const elapsed = Date.now() - startedAt
-          const estimate = Math.min(90, Math.round((elapsed / this.config.media.videoTimeoutMs) * 100) + 5)
-          progress(estimate, `awaiting provider (${Math.round(elapsed / 1000)}s elapsed)`)
-        }, 2000)
-        try {
-          const result = await provider.generateVideo({ prompt: String(prompt), model: this.#providerModelId(chosen), duration, aspectRatio, image, seed, audio, signal, timeoutMs: this.config.media.videoTimeoutMs })
-          progress(95, 'validating mp4')
-          return result
-        } finally {
-          clearInterval(ticker)
-        }
-      },
-    })
+    const error = new Error(`video generation is unavailable: '${chosen.id}' is registered as online, but this build configures no online provider`)
+    error.code = 'provider_not_configured'
+    error.status = 503
+    error.limitation = 'no online provider is configured; a still image is NOT offered as a substitute'
+    return this.#refuse('model', 'video_refused', error, { modelId: chosen.id })
   }
 
   /** Readiness: what actually works right now, with reasons for what does not. */
@@ -735,7 +798,12 @@ export class AetherisOmniApp {
       hardware: this.hardware,
       models: { total: models.length, ready: ready.length },
       capabilities: {
-        chat: ready.some((model) => model.capabilities.includes(MODALITIES.TEXT_OUT)),
+        // A base completion model can emit text and still cannot answer a question, so
+        // the two are reported separately rather than folded into one 'chat' flag.
+        chat: ready.some((model) => model.capabilities.includes(MODALITIES.TEXT_OUT)
+          && !(model.tags ?? []).includes('base_completion')),
+        textCompletion: ready.some((model) => model.capabilities.includes(MODALITIES.TEXT_OUT)
+          && (model.tags ?? []).includes('base_completion')),
         embeddings: ready.some((model) => model.capabilities.includes(MODALITIES.EMBEDDING_OUT)),
         imageGeneration: ready.some((model) => model.capabilities.includes(MODALITIES.IMAGE_OUT)),
         videoGeneration: ready.some((model) => model.capabilities.includes(MODALITIES.VIDEO_OUT)),
@@ -744,6 +812,13 @@ export class AetherisOmniApp {
       providers: Object.fromEntries(
         Object.entries(this.providers).map(([name, provider]) => [name, { configured: true, safe: provider.safeDescriptor ? provider.safeDescriptor() : { provider: name } }]),
       ),
+      klyvaron: {
+        root: this.klyvaron.root,
+        loaded: this.klyvaron.loaded,
+        broken: this.klyvaron.broken,
+        errors: this.klyvaron.errors,
+        storage: this.klyvaron.footprint.summary(),
+      },
       warnings: this.config.warnings,
       // Never claim a capability the probes did not confirm.
       notReady: models.filter((model) => model.measured.availability !== AVAILABILITY.READY).map((model) => ({ id: model.id, availability: model.measured.availability, detail: model.measured.probeDetail })),
@@ -798,8 +873,10 @@ export class AetherisOmniApp {
         return end()
       }
 
+      const chosen = route.chosen
+      this.#assertAnswerable(chosen, body.model ?? null)
       let outbound = workingMessages
-      const isExternal = route.chosen.location === 'online'
+      const isExternal = chosen.location === 'online'
       if (isExternal) {
         const redacted = redactDeep(workingMessages)
         outbound = redacted.value
@@ -973,6 +1050,9 @@ export function createHttpServer(app) {
           message: error?.message ?? 'internal error',
           ...(error?.route ? { route: error.route } : {}),
           ...(error?.limitation ? { limitation: error.limitation } : {}),
+          // A refusal that names a model should carry that model's own declared
+          // limitations, not a summary of them written at the refusal site.
+          ...(Array.isArray(error?.limitations) && error.limitations.length ? { limitations: error.limitations } : {}),
           ...(error?.errors ? { details: error.errors } : {}),
         }, app)
       } else {
@@ -1006,6 +1086,8 @@ async function handle(request, response, app) {
   if (method === 'GET' && path === '/api/events') return sendJson(response, 200, { events: app.events.slice(-200) }, app)
 
   // --- models -------------------------------------------------------------
+  if (method === 'GET' && path === '/api/storage') return sendJson(response, 200, app.storageReport(), app)
+
   if (method === 'GET' && path === '/api/models') {
     const availableOnly = url.searchParams.get('ready') === 'true'
     return sendJson(response, 200, {
@@ -1502,7 +1584,14 @@ async function handle(request, response, app) {
   return sendJson(response, 404, { error: 'not_found', message: `no route for ${method} ${path}` }, app)
 }
 
-function publicModel(model) {
+/**
+ * A model as the HTTP surface presents it.
+ *
+ * Exported so the operator CLI can describe a model the same way rather than inventing a
+ * second shape: `tier` is derived here, and a caller that printed the raw registry entry
+ * would report `null` beside a `tier:lite` tag for the same model.
+ */
+export function publicModel(model) {
   return {
     id: model.id,
     kind: model.kind,
@@ -1526,8 +1615,13 @@ function publicModel(model) {
     availability: model.measured?.availability ?? null,
     lastProbedAt: model.measured?.lastProbedAt ?? null,
     // Derived, not declared: present only when this model id IS the artifact behind a
-    // capability the tier actually provides. See klyvaron/tiers.mjs tierClaimFor().
-    tier: tierClaimFor(model.id),
+    // capability the tier actually provides. For a locally loaded artifact the claim is
+    // the versioned one, made at load time against the id and version in its manifest and
+    // carried in the observation detail; a model that exists only as a descriptor still
+    // falls back to the id lookup, which cannot claim a tier for an id that no backing
+    // record names. Both paths end at tiers.mjs -- this column never repeats a manifest's
+    // own `tier` field, which is the artifact talking about itself.
+    tier: model.measured?.probeDetail?.tierClaim ?? tierClaimFor(model.id),
     version: model.version,
     tags: model.tags,
     measured: model.measured,
@@ -1610,13 +1704,6 @@ function badRequest(message) {
   const error = new Error(message)
   error.code = 'invalid_request'
   error.status = 400
-  return error
-}
-
-function providerMissing(name) {
-  const error = new Error(`provider '${name}' is not configured`)
-  error.code = 'provider_not_configured'
-  error.status = 503
   return error
 }
 

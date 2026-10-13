@@ -1,0 +1,176 @@
+{
+  "format": "aetheris-model-card/v1",
+  "generatedBy": "services/fabric/scripts/lm_release.py",
+  "reproduce": "npm run lm:train   # release configuration; writes artifacts/<run>.report.json\ncd services/fabric && python scripts/lm_release.py --report artifacts/aetheris-lite-lm-53ae59b2a777.report.json --version 0.1.1\n# The corpus is this repository's own text, so re-running reproduces this artifact only\n# at the revision recorded below: pass --expect-manifest-digest to make drift a refusal.\n#   --expect-manifest-digest 70c5b78c77bce0e122df93fe43504b6b780acf10b865baaa5076307b0883aa02",
+  "runId": "53ae59b2a777",
+  "runStatus": "partial",
+  "note": "Trained from random initialisation in pure NumPy. No pretrained weights, no PyTorch, no GPU, no network. Weights are NOT in this repository: .gitignore keeps artifacts out by policy and they are referenced by digest. The corpus is this repository's own text, so the corpus manifest digest and the code revision are recorded together and were read at the same moment.",
+  "reverifiedAt": "8d9cdf86913877e62ec36b434c398b4b9f7c0a67",
+  "card": {
+    "name": "aetheris-lite-lm",
+    "version": "0.1.1",
+    "identifier": "aetheris-lite-lm@0.1.1",
+    "family": "aetheris-lite",
+    "licence": "MIT",
+    "weightsDigest": "53ae59b2a777be9d22f1f04b6cbc94aee3dad6144ac40e4e25c12f900164b60c",
+    "baseCheckpoint": null,
+    "configDigest": "25b76f2531a0fc544875c0c1d8441dfad0d98d2a7d9d0e5b439274b9e01b9e11",
+    "datasetDigest": "70c5b78c77bce0e122df93fe43504b6b780acf10b865baaa5076307b0883aa02",
+    "parameterCount": 359616,
+    "status": "released",
+    "metrics": {
+      "validationPerplexity": 4.893185177076384,
+      "bitsPerCharacter": 2.2907738809713725,
+      "perplexityVsBigram": 0.31050497433169066,
+      "bestBaselinePerplexity": 15.758798027658449,
+      "validationUnknownRate": 1.0705339109458524e-05,
+      "validationTokens": 280192.0,
+      "lossImprovement": 3.380646228790283,
+      "finalLoss": 1.4790730476379395,
+      "parameterCount": 359616.0,
+      "wallSeconds": 2062.942
+    },
+    "provenance": {
+      "subject": "aetheris-lite-lm (from-scratch, pure NumPy)",
+      "comparator": "bigram baseline on identical held-out tokens",
+      "hardware": {
+        "machine": "x86_64",
+        "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+        "accelerator": "none (CPU only)",
+        "peakMemoryMb": 165.2
+      },
+      "decoding": {
+        "temperature": 0.0,
+        "topK": 0,
+        "note": "perplexity is teacher-forced; no sampling involved in the gate metric"
+      },
+      "context": {
+        "seqLen": 128,
+        "window": "sliding, non-overlapping, stride = seqLen"
+      },
+      "quantization": null,
+      "prompts": [],
+      "datasetDigest": "70c5b78c77bce0e122df93fe43504b6b780acf10b865baaa5076307b0883aa02",
+      "corpusSize": 2366622,
+      "queries": null,
+      "codeRevision": "8d9cdf86913877e62ec36b434c398b4b9f7c0a67",
+      "seed": 0,
+      "limitations": [
+        "Character-level, not subword: sequences are long for the parameter count.",
+        "Trained from scratch on 2,366,622 bytes of this repository's own text. It has no world knowledge, no instruction-following and no safety behaviour.",
+        "Output quality is low by design of the experiment: 359,616 parameters trained for 2600 steps. This proves the pipeline, not the model.",
+        "Evaluated only against bigram/uniform/unigram baselines on in-distribution held-out text; no comparison against any pretrained model was performed and none is claimed.",
+        "Not instruction-tuned and has no tokenizer beyond ASCII-and-source-code characters; it cannot be exposed as a chat assistant in this state.",
+        "0.000011 of held-out characters are outside the training vocabulary and scored as <unk>; perplexity is slightly pessimistic because of it."
+      ],
+      "status": "completed",
+      "measuredAt": 1791906333.222353
+    },
+    "limitations": [
+      "trained from random initialisation; not derived from any pretrained base model",
+      "character-level base model: it predicts the next character of repository text and follows no instructions (359,616 parameters, vocabulary of 148)",
+      "output quality is low: this demonstrates the pipeline, not a usable assistant",
+      "reachable from /api/chat, where an unpinned request is refused with model_not_instruction_tuned (501): it continues text and does not answer questions, and presenting it as an assistant would misrepresent it",
+      "no comparison against any pretrained model was performed, and none is claimed"
+    ],
+    "requirements": [
+      {
+        "metric": "perplexityVsBigram",
+        "minimum": null,
+        "maximum": 1.0,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "validationUnknownRate",
+        "minimum": null,
+        "maximum": 0.02,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "lossImprovement",
+        "minimum": 1.0,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "parameterCount",
+        "minimum": null,
+        "maximum": 5000000,
+        "category": null,
+        "hard": false
+      },
+      {
+        "metric": "wallSeconds",
+        "minimum": null,
+        "maximum": 3600.0,
+        "category": null,
+        "hard": false
+      }
+    ],
+    "validation": {
+      "passed": [
+        "'perplexityVsBigram' 0.3105 meets the requirement",
+        "'validationUnknownRate' 0.0000 meets the requirement",
+        "'lossImprovement' 3.3806 meets the requirement",
+        "'parameterCount' 359616.0000 meets the requirement",
+        "'wallSeconds' 2062.9420 meets the requirement"
+      ],
+      "hardFailures": [],
+      "softFailures": [],
+      "validatedAt": 1791906333.2223938,
+      "metrics": {
+        "validationPerplexity": 4.893185177076384,
+        "bitsPerCharacter": 2.2907738809713725,
+        "perplexityVsBigram": 0.31050497433169066,
+        "bestBaselinePerplexity": 15.758798027658449,
+        "validationUnknownRate": 1.0705339109458524e-05,
+        "validationTokens": 280192.0,
+        "lossImprovement": 3.380646228790283,
+        "finalLoss": 1.4790730476379395,
+        "parameterCount": 359616.0,
+        "wallSeconds": 2062.942
+      }
+    },
+    "artifacts": {
+      "filename": "aetheris-lite-lm-53ae59b2a777.npz",
+      "strongestBaseline": "bigram",
+      "fileDigest": "165e150f6e290fe3a8162673f743037dcf15a3b63199ecd7661bdbc83652b6f7",
+      "bytes": 1446862,
+      "vocabularyDigest": "98228a472eab78caa335205387b0126b87cdf14212375f39b57101f02c4c2605",
+      "corpusManifest": "70c5b78c77bce0e122df93fe43504b6b780acf10b865baaa5076307b0883aa02",
+      "trainer": "services/fabric/fabric/lm/train.py"
+    },
+    "parentVersion": null,
+    "createdAt": 1791906333.2223613,
+    "releasedAt": 1791906333.2224023,
+    "supersededAt": null,
+    "retiredAt": null,
+    "history": [
+      {
+        "at": 1791906333.2223613,
+        "event": "registered",
+        "status": "candidate"
+      },
+      {
+        "at": 1791906333.2223952,
+        "event": "validated",
+        "passed": [
+          "'perplexityVsBigram' 0.3105 meets the requirement",
+          "'validationUnknownRate' 0.0000 meets the requirement",
+          "'lossImprovement' 3.3806 meets the requirement",
+          "'parameterCount' 359616.0000 meets the requirement",
+          "'wallSeconds' 2062.9420 meets the requirement"
+        ]
+      },
+      {
+        "at": 1791906333.2224023,
+        "event": "released",
+        "notes": "from-scratch NumPy training run",
+        "superseded": null
+      }
+    ]
+  }
+}

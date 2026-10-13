@@ -23,7 +23,7 @@ import { DEFAULT_CONFIG, loadConfig } from '../src/config.mjs'
 import { ELEVATED_SCOPES, FORBIDDEN_SCOPES } from '../src/plugins/manifest.mjs'
 import { LIFECYCLE, DEFAULT_BUDGET } from '../src/godcore/lifecycle.mjs'
 import { DEFAULT_ROUTING_WEIGHTS } from '../src/router/registry.mjs'
-import { KLYVARON, familyReport } from '../src/klyvaron/tiers.mjs'
+import { KLYVARON, TIERS, familyReport, tierClaimForArtifact } from '../src/klyvaron/tiers.mjs'
 
 // HERE is services/core/test, so the repo root is three levels up. Getting this
 // wrong made every doc lookup fail at once — which is the argument for comparing
@@ -53,7 +53,8 @@ const doc = {
   status: () => read('docs/03-status.md'),
   benchmarks: () => read('docs/06-benchmarks.md'),
   lite: () => read('docs/08-aetheris-lite.md'),
-  lmCard: () => read('docs/model-cards/aetheris-lite-lm-0.1.0.json'),
+  lmCard: () => read('docs/model-cards/aetheris-lite-lm-0.1.1.json'),
+  lmSupersededCard: () => read('docs/model-cards/aetheris-lite-lm-0.1.0.json'),
   cycle: () => read('docs/07-improvement-cycle.md'),
   hermes: () => read('docs/10-hermes-audit.md'),
   klyvaron: () => read('docs/11-klyvaron-family.md'),
@@ -61,6 +62,8 @@ const doc = {
   distillation: () => read('docs/09-distillation.md'),
   distillVerdict: () => read('docs/experiments/distillation-logit-vs-baseline.json'),
   l4Transfer: () => read('docs/experiments/l4-transfer.json'),
+  lmVerification: () => read('docs/experiments/lm-verification-run-67cdd58.json'),
+  lmCleanRun: () => read('docs/experiments/lm-verification-run-8d9cdf8.json'),
   readme: () => read('README.md'),
   env: () => read('.env.example'),
   notices: () => read('third-party/NOTICES.md'),
@@ -80,7 +83,7 @@ function varsReadByCode() {
       const text = readFileSync(path, 'utf8')
       for (const match of text.matchAll(/(?:process\.)?env\.([A-Z][A-Z0-9_]*)/g)) found.add(match[1])
       for (const match of text.matchAll(/env\[['"]([A-Z][A-Z0-9_]*)['"]\]/g)) found.add(match[1])
-      // readSecret(env, 'FREELLMAPI_API_KEY', 'FREELLMAPI_API_KEY_FILE') passes the
+      // readSecret(env, 'LLAMACPP_API_KEY', 'LLAMACPP_API_KEY_FILE') passes the
       // names as plain string arguments, so neither pattern above sees them. Without
       // this the suite would report a complete inventory while missing every secret.
       for (const match of text.matchAll(/readSecret\(\s*env\s*,\s*'([A-Z][A-Z0-9_]*)'\s*,\s*'([A-Z][A-Z0-9_]*)'/g)) {
@@ -152,9 +155,7 @@ test('.env.example states the real defaults, not plausible ones', async () => {
   assert.equal(documented('LLAMACPP_BASE_URL'), loaded.llamaCpp.baseUrl)
   assert.equal(documented('AETHERIS_FABRIC_URL'), loaded.fabric.baseUrl)
   assert.equal(documented('AETHERIS_MEDIA_CONCURRENCY'), String(loaded.media.concurrency))
-  // The video timeout is read from the provider-namespaced variable, not an
-  // AETHERIS_MEDIA_* one: config.mjs:128 reads FREELLMAPI_VIDEO_TIMEOUT_MS.
-  assert.equal(documented('FREELLMAPI_VIDEO_TIMEOUT_MS'), String(loaded.media.videoTimeoutMs))
+  assert.equal(documented('AETHERIS_VIDEO_TIMEOUT_MS'), String(loaded.media.videoTimeoutMs))
   assert.equal(documented('AETHERIS_IMAGE_TIMEOUT_MS'), String(loaded.media.imageTimeoutMs))
   assert.equal(documented('AETHERIS_CHUNK_TARGET'), String(loaded.knowledge.chunkTargetChars))
   assert.equal(documented('AETHERIS_CHUNK_MAX'), String(loaded.knowledge.chunkMaxChars))
@@ -166,13 +167,12 @@ test('.env.example states the real defaults, not plausible ones', async () => {
   const truthy = (value) => ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase())
   assert.equal(truthy(documented('OLLAMA_ENABLED')), loaded.ollama.enabled)
   assert.equal(truthy(documented('LLAMACPP_ENABLED')), loaded.llamaCpp.enabled)
-  assert.equal(truthy(documented('FREELLMAPI_ENABLED')), loaded.freellmapi.enabled)
   assert.equal(truthy(documented('AETHERIS_FABRIC_ENABLED')), loaded.fabric.enabled)
   assert.equal(truthy(documented('AETHERIS_GODMODE_ENABLED')), loaded.godMode.enabled)
 
   // Nothing that looks like a credential may carry a sample value, and the *_FILE
   // form must be offered so a secret need not sit in the process environment.
-  for (const name of ['FREELLMAPI_API_KEY', 'LLAMACPP_API_KEY']) {
+  for (const name of ['LLAMACPP_API_KEY']) {
     assert.equal(documented(name), '', `${name} must be documented empty, never with a sample secret`)
     assert.equal(documented(`${name}_FILE`).length > 0, true, `${name}_FILE must show a usable path`)
     assert.ok(new RegExp(`^#\\s*${name}=$`, 'm').test(text),
@@ -189,7 +189,6 @@ test('DEFAULT_CONFIG still holds the security-relevant defaults', () => {
   assert.equal(DEFAULT_CONFIG.policy, 'strict_offline', 'default policy must be the most restrictive one')
   assert.equal(DEFAULT_CONFIG.externalCeiling, 'internal')
   assert.equal(DEFAULT_CONFIG.allowedOrigin, null, 'cross-origin must be an explicit choice')
-  assert.equal(DEFAULT_CONFIG.freellmapi.enabled, false, 'the online gateway must default to off')
   assert.equal(DEFAULT_CONFIG.llamaCpp.enabled, false)
   assert.equal(DEFAULT_CONFIG.fabric.enabled, false)
   assert.equal(DEFAULT_CONFIG.ollama.baseUrl, 'http://127.0.0.1:11434')
@@ -251,13 +250,13 @@ test('the documented routing weights are the real weights', () => {
 test('the documented route surface is the real route surface', () => {
   const source = readFileSync(resolve(CORE, 'src/app.mjs'), 'utf8')
   const literal = new Set([...source.matchAll(/'(\/api\/[A-Za-z0-9/:._-]+)'/g)].map((m) => m[1]))
-  assert.equal(literal.size, 37, `literal /api routes changed: ${literal.size}`)
-  assert.ok(squash(doc.architecture()).includes('37 literal routes'))
+  assert.equal(literal.size, 38, `literal /api routes changed: ${literal.size}`)
+  assert.ok(squash(doc.architecture()).includes('38 literal routes'))
 
   for (const route of ['/api/health', '/api/ready', '/api/config', '/api/chat', '/api/chat/stream',
     '/api/models', '/api/models/probe', '/api/knowledge/search', '/api/plugins/validate',
     '/api/mcp/preflight', '/api/mcp/call', '/api/audit', '/api/hardware',
-    '/api/memory', '/api/sessions']) {
+    '/api/memory', '/api/sessions', '/api/storage']) {
     assert.ok(literal.has(route), `${route} is documented but no longer routed`)
   }
 
@@ -352,6 +351,10 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.setup, 'all three suites (930 tests)'], [doc.status, '**346 / 346**'],
     [doc.setup, 'all three suites (932 tests)'], [doc.status, '**348 / 348**'],
     [doc.setup, 'all three suites (934 tests)'], [doc.status, '**350 / 350**'],
+    [doc.setup, 'all three suites (1074 tests)'], [doc.status, '**445 / 445**'],
+    [doc.setup, 'all three suites (1075 tests)'], [doc.status, '**562 / 562**'],
+    [doc.setup, '| **Fabric** | 562 tests pass'], [doc.security, '562 Fabric tests'],
+    [doc.setup, '| **Core service** | 445 tests pass'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -520,7 +523,6 @@ test('the quoted licence texts are byte-identical to the checked-in copies', () 
 
   // A hand-transcribed licence is how attribution silently breaks. Compare exactly.
   assert.equal(quoted('MIT — Aetheris-'), read('third-party/licenses/aetheris-MIT.txt').trim())
-  assert.equal(quoted('MIT — freellmapi'), read('third-party/licenses/freellmapi-MIT.txt').trim())
   assert.equal(quoted('Unlicense — sparsiz'), read('third-party/licenses/sparsiz-Unlicense.txt').trim())
 
   // NumPy's LICENSE.txt bundles component licences; only its own terms are quoted
@@ -531,7 +533,7 @@ test('the quoted licence texts are byte-identical to the checked-in copies', () 
   assert.ok(squash(notices).includes('bundles the licences of its individual components'))
 
   // MIT texts must really be MIT, and the Unlicense really the Unlicense.
-  for (const file of ['aetheris-MIT.txt', 'freellmapi-MIT.txt']) {
+  for (const file of ['aetheris-MIT.txt']) {
     const text = read(`third-party/licenses/${file}`)
     assert.ok(text.includes('Permission is hereby granted, free of charge'), `${file} must be the MIT licence`)
     assert.ok(text.includes('THE SOFTWARE IS PROVIDED "AS IS"'), `${file} must carry the MIT disclaimer`)
@@ -600,20 +602,20 @@ test('the docs record limitations instead of implying completeness', () => {
 test('the status doc reports the real test totals', () => {
   // Recomputed from the filesystem: one test file per suite.
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
-  // 16 includes this file. If a suite file is added or removed, the counts in
+  // 19 includes this file. If a suite file is added or removed, the counts in
   // docs/03-status.md and README.md have to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 17)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 20)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
-  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 24)
+  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 25)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**422 / 422**'), 'core total must be stated')
-  assert.ok(status.includes('**555 / 555**'), 'fabric total must be stated')
+  assert.ok(status.includes('**454 / 454**'), 'core total must be stated')
+  assert.ok(status.includes('**563 / 563**'), 'fabric total must be stated')
   assert.ok(status.includes('**67 / 67**'), 'web total must be stated')
-  assert.ok(status.includes('1044 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1044 tests: core 422, web 67, fabric 555'),
+  assert.ok(status.includes('1084 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1084 tests: core 454, web 67, fabric 563'),
     'README must state the same totals')
-  assert.ok(status.includes('(17 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(20 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -624,14 +626,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(422), `core heading must say 422, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(555), `fabric heading must say 555, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(454), `core heading must say 454, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(563), `fabric heading must say 563, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(67), `web heading must say 67, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1044,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1044`,
+    1084,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1084`,
   )
 })
 
@@ -639,11 +641,16 @@ test('the documented language-model results match its committed model card', () 
   // docs/08 states a perplexity, a baseline and a weights digest. The card JSON is
   // the artifact of record, generated from the run report. If the two disagree, one
   // of them is wrong and there is no way to tell which from reading either alone.
+  //
+  // The released card is 0.1.1; 0.1.0 stays committed as the superseded record and its
+  // own guards follow below, because superseding an artifact is a status change and not
+  // a licence to edit what it published.
   const card = JSON.parse(doc.lmCard())
   const text = squash(doc.lite())
   assert.equal(card.format, 'aetheris-model-card/v1')
-  assert.equal(card.card.identifier, 'aetheris-lite-lm@0.1.0')
+  assert.equal(card.card.identifier, 'aetheris-lite-lm@0.1.1')
   assert.equal(card.card.status, 'released')
+  assert.equal(card.card.supersededAt, null, 'a released card is not itself superseded')
 
   const metrics = card.card.metrics
   // Written out at the full precision the card records, not rounded for display.
@@ -682,13 +689,265 @@ test('the documented language-model results match its committed model card', () 
   )
   // docs/08 has to say the same thing, or the document and the card disagree about
   // the one claim most likely to be misread.
-  assert.ok(text.includes('/api/chat'), 'docs/08 must state the model is not wired into /api/chat')
+  assert.ok(text.includes('/api/chat'), 'docs/08 must state how the model behaves on /api/chat')
   // Tolerant on phrasing, strict on substance: the card's exact sentence and the
   // document's shorter phrasing both have to mean "this does not follow instructions".
   assert.ok(
     /follows no instructions|no instruction-following|does not follow instructions/.test(text),
     'docs/08 must say the model does not follow instructions',
   )
+
+  assert.ok(
+    card.card.limitations.some((l) => l.includes('model_not_instruction_tuned')),
+    'the card must state the behaviour the route actually has',
+  )
+  assert.equal(card.corrections, undefined, 'the released card has nothing to correct')
+
+  // The superseded card is still an artifact of record. One sentence in it was false: it
+  // said the model was "deliberately not wired into /api/chat" while the route had been
+  // resolving and refusing it with 501. Correcting a record silently is worse than leaving
+  // it wrong, so the correction is on the card itself and every part of it is checked here
+  // -- including that no measured value moved with it, and that the artifact it describes
+  // is now labelled superseded in the document rather than deleted from it.
+  const previous = JSON.parse(doc.lmSupersededCard())
+  assert.equal(previous.card.identifier, 'aetheris-lite-lm@0.1.0')
+  assert.equal(previous.corrections.length, 1, 'the one correction must be recorded, not implied')
+  const [correction] = previous.corrections
+  assert.ok(correction.was.includes('not wired into'), 'the correction must quote what it replaced')
+  assert.ok(correction.now.includes('/api/chat') && correction.now.includes('model_not_instruction_tuned'))
+  assert.equal(correction.measuredValuesChanged, false)
+  assert.ok(!JSON.stringify(previous.card).includes('not wired into'),
+    'the false sentence must be gone from the card body itself')
+  // The Markdown card carries the same sentence twice and the same correction once.
+  const markdown = squash(read('docs/model-cards/aetheris-lite-lm-0.1.0.md'))
+  assert.ok(!markdown.includes('not wired into'))
+  assert.ok(markdown.includes('model_not_instruction_tuned'))
+  assert.ok(markdown.includes('Corrections'), 'the Markdown card must show the correction')
+
+  // And the document has to say which artifact is which: the superseded figures stay, with
+  // the reason, and the released card's figures are the headline.
+  assert.ok(text.includes('superseded'), 'docs/08 must record the supersession')
+  assert.ok(text.includes(previous.card.weightsDigest),
+    'docs/08 must keep the superseded artifact\'s published digest')
+  assert.ok(squash(read('docs/model-cards/aetheris-lite-lm-0.1.1.md')).includes('Supersedes'),
+    'the released Markdown card must name what it supersedes')
+})
+
+test('the documented verification run matches the committed record', () => {
+  // A second, independent training run of the released configuration. Its numbers are
+  // quoted in docs/08, docs/11 and docs/03, so they are checked against the record the run
+  // produced rather than against the prose that repeats them -- and the record is checked
+  // for the two things that would make the quotes misleading: being presented as an
+  // improvement, or being confused with the released model.
+  const record = JSON.parse(doc.lmVerification())
+  assert.equal(record.experiment, 'lm-release-configuration-reproduction')
+  assert.equal(record.gate.verdict, 'released')
+  assert.deepEqual(record.gate.hardFailures, [], 'the verification run must have passed the gate')
+  assert.deepEqual(record.gate.softFailures, [])
+
+  const text = squash(doc.lite())
+  const runId = record.run.weightsDigest.slice(0, 12)
+  assert.ok(text.includes(runId), `docs/08 must quote the verification digest ${runId}`)
+  assert.ok(
+    text.includes(record.run.parameterCount.toLocaleString('en-US')),
+    `docs/08 must state the verification parameter count ${record.run.parameterCount}`,
+  )
+  assert.ok(
+    text.includes(record.run.evaluation.perplexity.toFixed(4)),
+    `docs/08 must state the verification perplexity ${record.run.evaluation.perplexity.toFixed(4)}`,
+  )
+  const best = record.run.evaluation.baselines.find((entry) => entry.name === record.run.evaluation.bestBaseline)
+  assert.ok(
+    text.includes(best.perplexity.toFixed(4)),
+    `docs/08 must state the verification baseline ${best.perplexity.toFixed(4)}`,
+  )
+  assert.ok(
+    text.includes(record.run.evaluation.perplexityVsBestBaseline.toFixed(6)),
+    'docs/08 must state the verification ratio to the best baseline',
+  )
+  assert.ok(
+    squash(doc.klyvaron()).includes(record.run.evaluation.perplexity.toFixed(4)),
+    'docs/11 must carry the same verification perplexity',
+  )
+
+  // It must not be confused with the released model: a different corpus gave different
+  // weights, and the cards are the records of the weights they describe.
+  const released = JSON.parse(doc.lmCard()).card
+  const superseded = JSON.parse(doc.lmSupersededCard()).card
+  assert.notEqual(record.run.weightsDigest, released.weightsDigest)
+  assert.notEqual(record.run.weightsDigest, superseded.weightsDigest)
+  assert.notEqual(record.corpus.manifestDigest, released.artifacts.corpusManifest)
+  assert.notEqual(record.releaseRun.weightsDigest, record.run.weightsDigest)
+
+  assert.equal(record.releaseRun.weightsDigest, superseded.weightsDigest,
+    'this record names the artifact that has since been superseded')
+
+  // The serving evidence is the measured one: a base model loadable and reachable, and
+  // refused where it would be misread as an assistant.
+  assert.equal(record.serving.ready.capabilities.chat, false)
+  assert.equal(record.serving.ready.capabilities.textCompletion, true)
+  assert.equal(record.serving.chatUnpinned.status, 501)
+  assert.equal(record.serving.chatUnpinned.error, 'model_not_instruction_tuned')
+  assert.equal(record.serving.chatPinned.status, 200)
+  assert.equal(record.serving.chatPinned.sentExternally, false)
+  assert.equal(record.serving.crossImplementation.greedy_identical, true, 'the two implementations must agree')
+  assert.ok(record.serving.crossImplementation.maxAbsLogitDelta < 1e-3)
+
+  // The run's corpus was read from a working tree that was clean *at read time*, and the
+  // report says -dirty because the revision used to be read after training. That reading
+  // was checked rather than explained away: the revision's own text reproduces the digest.
+  const reverified = record.corpusReverification
+  assert.equal(reverified.matches, true)
+  assert.equal(reverified.recomputedManifestDigest, record.corpus.manifestDigest)
+  assert.ok(record.revision.startsWith(reverified.revision),
+    'the record must still name the revision whose text the corpus came from')
+  assert.ok(squash(doc.lite()).includes(reverified.recomputedManifestDigest.slice(0, 8)),
+    'docs/08 must state the re-derived corpus digest')
+  assert.ok(squash(doc.klyvaron()).includes('not a version bump'),
+    'docs/11 must say the verification run is not a release')
+})
+
+test('the clean-revision run matches its committed record', () => {
+  // The second verification run, and the first whose corpus can be rebuilt from a commit.
+  // It is quoted in docs/08, docs/11 and docs/03, so the quotes are checked against the
+  // record -- and the record is checked for the two things that would make them misleading:
+  // presenting a different corpus as an improvement, and calling a verification run a release.
+  const record = JSON.parse(doc.lmCleanRun())
+  assert.equal(record.experiment, 'lm-release-configuration-reproduction')
+  assert.equal(record.gate.verdict, 'released')
+  assert.deepEqual(record.gate.hardFailures, [])
+  assert.deepEqual(record.gate.softFailures, [])
+
+  // Revision and corpus were read together, and the digest was re-derived from the commit.
+  assert.ok(!record.revision.endsWith('-dirty'), 'this is the run without the uncommitted-tree caveat')
+  assert.equal(record.corpusReverification.matches, true)
+  assert.equal(record.corpusReverification.recomputedManifestDigest, record.corpus.manifestDigest)
+  assert.equal(record.corpusReverification.revision, record.revision)
+
+  const text = squash(doc.lite())
+  assert.ok(text.includes(record.run.weightsDigest.slice(0, 12)),
+    `docs/08 must quote the clean run's digest ${record.run.weightsDigest.slice(0, 12)}`)
+  assert.ok(text.includes(record.corpus.manifestDigest.slice(0, 8)),
+    'docs/08 must state the re-derived corpus digest')
+  assert.ok(text.includes(record.run.parameterCount.toLocaleString('en-US')),
+    `docs/08 must state ${record.run.parameterCount} parameters`)
+  assert.ok(text.includes(record.run.evaluation.perplexity.toFixed(4)),
+    `docs/08 must state the perplexity ${record.run.evaluation.perplexity.toFixed(4)}`)
+  const best = record.run.evaluation.baselines.find((entry) => entry.name === record.run.evaluation.bestBaseline)
+  assert.ok(text.includes(best.perplexity.toFixed(4)),
+    `docs/08 must state the baseline ${best.perplexity.toFixed(4)}`)
+  assert.ok(text.includes(record.run.evaluation.perplexityVsBestBaseline.toFixed(6)),
+    'docs/08 must state the ratio to the best baseline')
+
+  // Numbers that came from the neighbouring run's paragraph when this table was written:
+  // the corpus total is arithmetic over the record's own byte counts, and the two throughput
+  // figures are measurements. Both are pinned so a copy-paste cannot pass.
+  const corpusTotal = (record.corpus.trainBytes + record.corpus.validationBytes).toLocaleString('en-US')
+  assert.ok(text.includes(corpusTotal), `docs/08 must state the corpus total ${corpusTotal}`)
+  assert.ok(text.includes(record.serving.deviceThroughput.tokensPerSecond.toFixed(1)),
+    'docs/08 must state the measured device throughput')
+  assert.ok(text.includes(record.serving.chatPinned.tokensPerSecond.toFixed(1)),
+    'docs/08 must state the measured pinned-chat throughput')
+
+  // Three artifacts, three corpora, three weight digests: none may be confused with another.
+  // This run's artifact is the released one, and the artifact it superseded is the one the
+  // record calls `releaseRun` -- so the released card and this record must agree, and the
+  // superseded card and `releaseRun` must agree.
+  const card = JSON.parse(doc.lmCard()).card
+  const previous = JSON.parse(doc.lmVerification())
+  const superseded = JSON.parse(doc.lmSupersededCard()).card
+  const digests = new Set([record.run.weightsDigest, previous.run.weightsDigest, superseded.weightsDigest])
+  assert.equal(digests.size, 3)
+  const corpora = new Set([record.corpus.manifestDigest, previous.corpus.manifestDigest, superseded.artifacts.corpusManifest])
+  assert.equal(corpora.size, 3)
+  assert.equal(record.comparison.comparable, false, 'a different corpus is not a comparable measurement')
+  assert.equal(record.run.weightsDigest, card.weightsDigest,
+    'this run is the released artifact, and the released card is its record')
+  assert.equal(record.run.fileDigest, card.artifacts.fileDigest)
+  assert.equal(record.run.bytes, card.artifacts.bytes)
+  assert.equal(record.corpus.manifestDigest, card.artifacts.corpusManifest)
+  assert.equal(record.releaseRun.weightsDigest, superseded.weightsDigest,
+    'the artifact this one superseded is the one the record calls the release run')
+  assert.ok(squash(doc.klyvaron()).includes(record.run.evaluation.perplexity.toFixed(4)),
+    'docs/11 must carry the same perplexity')
+
+  // The tier record names this artifact too, and says what it is. Two records describing one
+  // artifact drift apart unless something compares them, and this is the comparison: the run
+  // digest, the file digest, the file size and the parameter count all have to agree, and the
+  // status has to be the one a non-release carries.
+  const backing = KLYVARON.lite.capabilities['text.completion'].backing
+  assert.equal(backing.weightsDigest, record.run.weightsDigest,
+    'the tier record and the run record must name the same weights')
+  assert.equal(backing.artifactSha256, record.run.fileDigest,
+    'the tier record and the run record must name the same file')
+  assert.equal(backing.artifactBytes, record.run.bytes)
+  assert.equal(backing.parameters, record.run.parameterCount)
+  assert.equal(backing.artifact, `aetheris-lite-lm-${card.version}`,
+    'the released artifact string must be the released card, id and version')
+  assert.equal(backing.measurementsRecord ?? 'docs/experiments/lm-verification-run-8d9cdf8.json',
+    'docs/experiments/lm-verification-run-8d9cdf8.json',
+    'the tier record must point at the file the evidence lives in')
+  // The superseded artifact's own record, checked against its own card.
+  assert.equal(backing.supersededArtifact.weightsDigest, superseded.weightsDigest)
+  assert.equal(backing.supersededArtifact.parameters, superseded.parameterCount)
+  assert.equal(backing.supersededArtifact.card, 'docs/model-cards/aetheris-lite-lm-0.1.0.json')
+  // And the tier may label all three names, because all three are Lite artifacts: the label
+  // follows the backing record, while `supersededArtifact` says which one is not current.
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', card.version), TIERS.LITE)
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.1-verify'), TIERS.LITE)
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.0'), TIERS.LITE)
+
+  // The serving evidence is measured, and the update/rollback exercise must be recorded with
+  // the defect it found rather than only with the numbers that now look right.
+  assert.equal(record.serving.ready.capabilities.chat, false)
+  assert.equal(record.serving.chatUnpinned.status, 501)
+  assert.equal(record.serving.chatPinned.status, 200)
+  assert.equal(record.serving.chatPinned.sentExternally, false)
+  assert.equal(record.serving.crossImplementation.greedy_identical, true)
+  assert.ok(record.serving.crossImplementation.maxAbsLogitDelta < 1e-3)
+  assert.equal(record.serving.deviceThroughput.requestedTokens > record.serving.deviceThroughput.generatedTokens,
+    true, 'the manifest’s generation ceiling must be visible in the measurement')
+  const update = record.serving.storeUpdateAndRollback
+  const installs = update.steps.filter((step) => step.weightsSha256 && !step.error)
+  assert.deepEqual(installs.map((step) => step.version), ['0.1.0-verify', '0.1.1-verify', '0.1.0-verify'])
+  assert.equal(installs[0].weightsSha256, installs[2].weightsSha256, 'the rollback restores the digest')
+  assert.notEqual(installs[0].weightsSha256, installs[1].weightsSha256, 'the update changed the weights')
+  assert.ok(update.steps.some((step) => step.error === 'already_installed'))
+  assert.ok(update.steps.some((step) => step.error === 'digest_mismatch'))
+  // The record must not disagree with itself about its own arithmetic: the growth factor and
+  // the pass count are printed in prose, so they are recomputed from the record's own fields.
+  const expectedGrowth = Number(((record.corpus.trainBytes + record.corpus.validationBytes)
+    / record.releaseRun.corpusSize).toFixed(3))
+  assert.equal(record.comparison.corpusGrowth, expectedGrowth)
+  assert.ok(record.comparison.explanation.includes(`${expectedGrowth}x`),
+    `the prose must carry the same growth factor, ${expectedGrowth}x`)
+  assert.equal(record.comparison.trainCorpusPasses,
+    Number((record.run.tokensSeen / record.corpus.trainTokens).toFixed(3)))
+
+  assert.ok(update.finding.includes('2,898,235'), 'the defect the exercise found must be stated')
+  assert.ok(squash(doc.lite()).includes('2,898,235'), 'docs/08 must state what the defect cost')
+
+  // The same artifact was installed and served again *after* the version was promoted -- with
+  // the export the model card describes, no `-verify` qualifier. Two captures of one weight file
+  // under two version strings are what makes the difference between them checkable, and the
+  // second capture has to agree with the card the family publishes.
+  const released = record.servingReleased
+  assert.equal(released.installedAs, `aetheris-lite-lm@${card.version}`)
+  assert.equal(released.weightsSha256, card.artifacts.fileDigest,
+    'the released export must be the file the card describes')
+  assert.equal(released.sameWeightsAsDrill, true,
+    'the drill and the released export must be the same bytes')
+  assert.equal(released.installedBytes, record.serving.installedBytes - 14,
+    'the only difference between the two captures is the shorter version string')
+  assert.equal(released.models.tier, TIERS.LITE)
+  assert.equal(released.models.aetherisLite, true)
+  assert.equal(released.models.measured.probeDetail.tierClaim, TIERS.LITE)
+  assert.equal(released.ready.loaded[0].tierClaim, TIERS.LITE)
+  assert.equal(released.chatUnpinned.status, 501)
+  assert.equal(released.chatPinned.status, 200)
+  assert.equal(released.chatPinned.sentExternally, false)
+  assert.equal(released.crossImplementation.greedy_identical, true)
+  assert.ok(released.crossImplementation.maxAbsLogitDelta < 1e-3)
 })
 
 test('the documented distillation result matches the committed experiment record', () => {
@@ -894,7 +1153,7 @@ test('every documented file actually exists', () => {
     'docs/01-audit.md', 'docs/02-architecture.md', 'docs/03-status.md', 'docs/04-setup.md',
     'docs/05-security.md', 'docs/06-benchmarks.md', '.env.example', 'LICENSE', 'README.md',
     'third-party/NOTICES.md', 'third-party/licenses/aetheris-MIT.txt',
-    'third-party/licenses/freellmapi-MIT.txt', 'third-party/licenses/sparsiz-Unlicense.txt',
+    'third-party/licenses/sparsiz-Unlicense.txt',
     'third-party/licenses/numpy-BSD-3-Clause.txt', 'services/fabric/README.md',
     'docs/model-cards/aetheris-lite-retriever-0.1.0.md',
     'docs/model-cards/aetheris-lite-retriever-0.1.0.json',
@@ -1130,14 +1389,31 @@ test('the Klyvaron document matches the family it describes', () => {
   // The one claim the document most needs to keep: that Lite does not chat.
   const chat = KLYVARON.lite.capabilities.chat
   assert.equal(chat.state, 'unavailable')
-  assert.ok(text.includes('It does not chat, and it is deliberately not wired into `/api/chat`'),
-    'docs/11 must state that Lite is not wired into chat')
+  // The phrasing changed with the code: the model is now reachable over /api/chat and
+  // refused there, so the claim to guard is the refusal, not an absence of wiring.
+  assert.ok(text.includes('It does not chat.'), 'docs/11 must state that Lite does not chat')
+  assert.ok(text.includes('an unpinned chat request is refused with `model_not_instruction_tuned` (501)'),
+    'docs/11 must describe the refusal rather than claiming the model is unreachable')
+
+  // A tier label is a lookup, and the second artifact is evidence rather than a release.
+  // Both sentences are pinned here because both are the kind of claim a document relaxes
+  // first when it starts describing what it wishes were true.
+  assert.ok(text.includes('lookup by artifact'), 'docs/11 must say a tier label is looked up')
+  assert.ok(text.includes('`tier: null`'), 'docs/11 must state what an unbacked declaration gets')
+  // The hierarchy is a hierarchy: the released artifact and the superseded one are both
+  // named, and both may carry the label -- a device that has not updated is still running
+  // a Klyvaron Lite model, and a rolled-back device is running one on purpose.
+  const backing = KLYVARON.lite.capabilities['text.completion'].backing
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.1'), TIERS.LITE)
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.0'), TIERS.LITE, 'the superseded artifact')
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', backing.alsoKnownAs[0].replace('aetheris-lite-lm-', '')),
+    TIERS.LITE, 'the same bytes under the label the drill installed them with')
+  assert.ok(text.includes('superseded'), 'docs/11 must say which artifact was superseded')
 
   // And its measurements come from the card, so the two cannot disagree. Field paths are
   // taken from the card's real shape (`card.metrics.*`, `card.weightsDigest`), which the
   // first version of this check guessed at -- `card.evaluation` does not exist.
   const card = JSON.parse(doc.lmCard()).card
-  const backing = KLYVARON.lite.capabilities['text.completion'].backing
   assert.equal(backing.measured.validationPerplexity, card.metrics.validationPerplexity,
     'the family record and the model card must agree on perplexity')
   assert.equal(backing.measured.perplexityVsBestBaseline, card.metrics.perplexityVsBigram,
@@ -1168,6 +1444,15 @@ test('the feature matrix uses the four statuses and claims no parity', () => {
   ]) {
     assert.ok(text.includes(definition), `the matrix must define every status: missing '${definition}'`)
   }
+  // The tier-label row names the enforcement that exists. The earlier wording credited a
+  // function that compared an unversioned id and therefore returned null for every loaded
+  // artifact; the row now has to name the versioned lookup and the refusal to label an
+  // unbacked declaration.
+  assert.ok(text.includes('tierClaimForArtifact()'),
+    'docs/12 must name the versioned lookup the core actually uses')
+  assert.ok(text.includes("declares `tier: 'pro'`"),
+    'docs/12 must name the test that proves an unbacked declaration gets no label')
+
   // The five areas, named.
   for (const area of ['## 1. Conversation (the Chat area)', '## 2. Image', '## 3. Video',
     '## 4. Plugins', '## 5. MCP']) {
@@ -1178,8 +1463,8 @@ test('the feature matrix uses the four statuses and claims no parity', () => {
     'the matrix must not introduce a sixth top-level area')
   // And the honesty clauses that keep the matrix from becoming a sales table.
   assert.ok(/no row claims parity with a named competitor/i.test(text))
-  assert.ok(/Requires external credentials/.test(text),
-    'the gateway-dependent rows must be labelled')
+  assert.ok(/No (image|video) provider is configured/.test(text),
+    'a capability with no provider must say so rather than imply one is available')
 })
 
 test('the learning-level tables match the modules that implement them', () => {
