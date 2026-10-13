@@ -20,7 +20,7 @@ export class ProviderError extends Error {
 }
 
 /** Thrown when a caller asks a provider for an operation it does not implement. */
-export class CapabilityUnsupportedError extends ProviderError {
+class CapabilityUnsupportedError extends ProviderError {
   constructor(provider, operation) {
     super(`provider '${provider}' does not support operation '${operation}'`, { code: 'capability_unsupported' })
     this.name = 'CapabilityUnsupportedError'
@@ -133,11 +133,4 @@ export async function readProviderError(response, providerName, operation) {
     status: response.status,
     retryAfterMs: Number.isFinite(retryAfterMs) ? retryAfterMs : null,
   })
-}
-
-/** True for statuses worth retrying once (429/5xx), honouring Retry-After. */
-export function isRetryable(error) {
-  if (!error) return false
-  if (error.code === 'timeout' || error.code === 'unreachable') return true
-  return error.status === 429 || (error.status >= 500 && error.status <= 599)
 }

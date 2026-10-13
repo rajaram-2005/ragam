@@ -12,7 +12,7 @@
 // NOT_INSTALLED and the router rejects the candidate with that exact reason.
 
 import { BaseProvider, OPERATIONS, ProviderError, readProviderError } from './base.mjs'
-import { AVAILABILITY, MODALITIES, MODEL_KINDS } from '../router/registry.mjs'
+import { AVAILABILITY } from '../router/registry.mjs'
 
 export class OllamaProvider extends BaseProvider {
   static operations = [OPERATIONS.CHAT, OPERATIONS.CHAT_STREAM, OPERATIONS.EMBED]
@@ -326,19 +326,4 @@ async function* parseSseStream(response, extract) {
   } finally {
     reader.releaseLock?.()
   }
-}
-
-/** Build registry descriptors from a live local runtime probe. */
-export function descriptorsFromOllamaProbe(probeResult, { kind = MODEL_KINDS.LOCAL_LLM } = {}) {
-  if (probeResult?.availability !== AVAILABILITY.READY) return []
-  return (probeResult.detail?.models ?? []).map((name) => ({
-    id: `ollama:${name}`,
-    kind,
-    displayName: `${name} (Ollama)`,
-    capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT],
-    location: 'local',
-    streaming: true,
-    licence: 'unknown',
-    tags: ['discovered'],
-  }))
 }

@@ -3,7 +3,7 @@
 // retrieval results are reproducible and index rebuilds are auditable.
 
 // Keep citation offsets accurate by tracking source position.
-export function normalizeText(input) {
+function normalizeText(input) {
   return String(input ?? '')
     .replace(/\r\n?/g, '\n')
     .replace(/\u00a0/g, ' ')

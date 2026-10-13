@@ -11,7 +11,7 @@ import { api } from '../api.js'
 // "received a still image, not a video" case — rather than a placeholder frame.
 // ---------------------------------------------------------------------------
 
-export function jobTone(job) {
+function jobTone(job) {
   switch (job?.state) {
     case 'succeeded': return 'ok'
     case 'failed': return 'bad'
@@ -73,7 +73,7 @@ export function MediaPreview({ job, kind }) {
   )
 }
 
-export function ValidationPanel({ job }) {
+function ValidationPanel({ job }) {
   const validation = job?.validation
   if (!validation) {
     return <span className="muted small">No validation record — the job produced no bytes to inspect.</span>
@@ -148,8 +148,4 @@ export function JobTable({ jobs, onSelect, selectedId, empty }) {
       empty={empty}
     />
   )
-}
-
-export function SelectedJob({ jobs, selectedId }) {
-  return (jobs ?? []).find((job) => job.id === selectedId) ?? null
 }

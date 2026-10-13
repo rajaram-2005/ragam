@@ -146,17 +146,6 @@ PARAMETER_ORDER = (
 )
 
 
-def parameter_names(config: TransformerConfig) -> list[str]:
-    names = []
-    for layer in range(config.n_layers):
-        for base in ("ln1_gain", "ln1_bias", "wq", "wk", "wv", "wo", "ln2_gain", "ln2_bias", "w1", "w2"):
-            names.append(f"L{layer}.{base}")
-    names = ["emb", "pos"] + names + ["lnf_gain", "lnf_bias"]
-    if not config.tie_embeddings:
-        names.append("head")
-    return names
-
-
 # ---------------------------------------------------------------------------
 # Model
 # ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { randomUUID, createHash, timingSafeEqual } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS documents (
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS deletions (
 );
 `
 
-export const PERMISSIONS = Object.freeze({ READ: 'read', WRITE: 'write', ADMIN: 'admin' })
+const PERMISSIONS = Object.freeze({ READ: 'read', WRITE: 'write', ADMIN: 'admin' })
 
 export class KnowledgeStore {
   constructor(file = ':memory:') {
@@ -383,5 +383,3 @@ function matchesPrincipal(granted, requested) {
   }
   return false
 }
-
-export { timingSafeEqual }

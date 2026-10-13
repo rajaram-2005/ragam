@@ -310,7 +310,7 @@ export class FreellmapiProvider extends BaseProvider {
 }
 
 /** Build the chat body, clamping to the ranges the gateway actually validates. */
-export function buildChatBody(request) {
+function buildChatBody(request) {
   const body = { messages: request.messages }
   if (request.model) body.model = request.model
   if (request.temperature != null) body.temperature = clamp(Number(request.temperature), 0, 2)

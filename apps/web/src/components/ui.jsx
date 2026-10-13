@@ -13,8 +13,6 @@ export { toneFor, formatValue }
 // same red box as "the backend is unreachable".
 // ---------------------------------------------------------------------------
 
-export const TONES = { ok: 'ok', warn: 'warn', bad: 'bad', info: 'info', violet: 'violet' }
-
 export function Chip({ children, tone, title, dot = true }) {
   const resolved = tone ?? toneFor(children)
   return (
@@ -161,7 +159,7 @@ export function Code({ value, label }) {
 }
 
 /** The eight God Core phases, in execution order. */
-export const PHASES = ['understand', 'plan', 'retrieve', 'route', 'execute', 'observe', 'verify', 'synthesize']
+const PHASES = ['understand', 'plan', 'retrieve', 'route', 'execute', 'observe', 'verify', 'synthesize']
 
 export function Lifecycle({ task }) {
   const steps = task?.steps ?? []

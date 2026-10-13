@@ -51,7 +51,7 @@ export const STEP_EVIDENCE = Object.freeze({
   FAILED: 'failed',
 })
 
-export class BudgetExceededError extends Error {
+class BudgetExceededError extends Error {
   constructor(message, details = {}) {
     super(message)
     this.name = 'BudgetExceededError'
@@ -60,7 +60,7 @@ export class BudgetExceededError extends Error {
   }
 }
 
-export class TaskCancelledError extends Error {
+class TaskCancelledError extends Error {
   constructor(taskId, reason) {
     super(`task '${taskId}' cancelled: ${reason}`)
     this.name = 'TaskCancelledError'
@@ -736,4 +736,3 @@ function preview(value) {
   }
 }
 
-export { TERMINAL as TERMINAL_TASK_STATES }

@@ -70,21 +70,21 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 7,380 source lines, 5,237 test lines
+### `services/core` — 7,429 source lines, 5,744 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
-| `app.mjs` | 1,122 | Composition root, the HTTP route table, error→status mapping, chat/image/video entry points, readiness |
-| `godcore/lifecycle.mjs` | 739 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
+| `app.mjs` | 1,121 | Composition root, the HTTP route table, error→status mapping, chat/image/video entry points, readiness |
+| `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
 | `media/jobs.mjs` | 359 | Job queue, progress, cancellation, timeouts, artifact storage |
-| `providers/local.mjs` | 344 | Ollama and OpenAI-compatible local providers |
+| `providers/local.mjs` | 329 | Ollama and OpenAI-compatible local providers |
 | `providers/freellmapi.mjs` | 330 | The online gateway client: chat, images (JSON), video (raw binary) |
 | `router/registry.mjs` | 322 | Model descriptors, capability matching, candidate scoring |
 | `plugins/registry.mjs` | 510 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation |
 | `mcp/layer.mjs` | 502 | Servers, tools, risk tiers, approval gates, output neutralisation |
 | `knowledge/pipeline.mjs` | 462 | Ingest, dedupe, chunk, index, search, grounded context, purge |
-| `knowledge/store.mjs` | 387 | SQLite metadata, chunks, ACL rows, deletion records |
+| `knowledge/store.mjs` | 385 | SQLite metadata, chunks, ACL rows, deletion records |
 | `mcp/schema.mjs` | 246 | JSON Schema subset: validation of schemas *and* of arguments/output |
 | `knowledge/bm25.mjs` | 224 | BM25 index (k1=1.5, b=0.75), rebuilt from stored chunks |
 | `plugins/manifest.mjs` | 216 | Manifest validation, scope vocabulary, semver |
@@ -93,11 +93,11 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `server.mjs` | 151 | Entry point, startup banner, graceful shutdown |
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
 | `media/validate.mjs` | 143 | Magic-byte sniffing, video genuineness check |
-| `providers/base.mjs` | 143 | Provider contract, timeout and retry helpers |
+| `providers/base.mjs` | 136 | Provider contract, timeout and retry helpers |
 | `policy/classify.mjs` | 143 | Secret and sensitivity classification, redaction |
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
 
-### `services/fabric` — 8,090 source lines, 6,220 test lines
+### `services/fabric` — 8,079 source lines, 6,220 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible
@@ -106,7 +106,7 @@ release manager, and a hand-written dual encoder whose **five parameter gradient
 all match central finite differences to ~3e-10**. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 3,486 source lines, 1,185 test lines
+### `apps/web` — 3,480 source lines, 1,185 test lines
 
 Five area components, a shell, shared primitives, an API client and three test
 files. Design tokens and the shell's visual structure come from upstream Aetheris

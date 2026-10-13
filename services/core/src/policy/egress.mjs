@@ -56,7 +56,7 @@ export class EgressBlockedError extends Error {
   }
 }
 
-export class PolicyDeniedError extends Error {
+class PolicyDeniedError extends Error {
   constructor(message, details = {}) {
     super(message)
     this.name = 'PolicyDeniedError'

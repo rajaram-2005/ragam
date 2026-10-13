@@ -175,15 +175,14 @@ export class AetherisOmniApp {
       }
     }
     // Record availability for models already registered under this provider.
+    // A descriptor's `provider` is the provider's own name, which is exactly the key
+    // `results` is built with, so no translation is needed here.
     for (const model of this.registry.list()) {
-      const providerName = model.provider ? model.provider.replace('freellmapi', 'freellmapi') : null
-      const probe = providerName ? results[providerName] : null
+      const probe = model.provider ? results[model.provider] : null
       if (!probe) continue
-      const isLocal = model.location === 'local'
-      const relevant = isLocal ? probe : probe
       this.registry.observe(model.id, {
-        availability: relevant.availability === AVAILABILITY.READY ? AVAILABILITY.READY : relevant.availability,
-        detail: relevant.detail,
+        availability: probe.availability,
+        detail: probe.detail,
       })
     }
     return { providers: results, models: this.registry.list().map((model) => ({ id: model.id, availability: model.measured.availability })) }

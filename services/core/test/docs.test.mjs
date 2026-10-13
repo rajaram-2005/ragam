@@ -16,7 +16,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
+import { resolve, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { DEFAULT_CONFIG, loadConfig } from '../src/config.mjs'
@@ -271,12 +271,77 @@ test('the documented route surface is the real route surface', () => {
     'no internal service may get its own top-level route group')
 })
 
+test('every document that restates a suite total agrees with docs/03', () => {
+  // docs/04 and docs/05 restate the suite totals in prose and in a CI table, and none
+  // of it was checked: docs/04 read 765 / 267 / 442 / 260 / 256 and docs/05 read 256
+  // while the suites were 853 / 269 / 528. A figure stated in three documents will
+  // disagree with itself unless every copy is checked, so docs/03 -- which is pinned
+  // to the filesystem above -- is the single source of truth here.
+  const status = doc.status()
+  const numberFor = (suite) => {
+    const match = new RegExp(`\\| \`${suite}\` \\| [^|]+ \\| \\*\\*(\\d+) / \\d+\\*\\*`).exec(status)
+    assert.ok(match, `docs/03 must state a total for ${suite}`)
+    return Number(match[1])
+  }
+  const core = numberFor('services/core')
+  const fabric = numberFor('services/fabric')
+  const web = numberFor('apps/web')
+  const total = core + web + fabric
+  assert.ok(status.includes(`${total} passing`), `docs/03 must state the grand total ${total}`)
+
+  // Each claim, with the figure it must carry. The wording is free; the number is not.
+  const claims = [
+    [doc.setup, `all three suites (${total} tests)`, `docs/04 must state the grand total ${total}`],
+    [doc.setup, `# ${core}\n`, `docs/04 must state the core total ${core}`],
+    [doc.setup, `# ${fabric} —`, `docs/04 must state the fabric total ${fabric}`],
+    [doc.setup, `| **Core service** | ${core} tests pass`, `docs/04 CI table: core ${core}`],
+    [doc.setup, `| **Fabric** | ${fabric} tests pass`, `docs/04 CI table: fabric ${fabric}`],
+    [doc.setup, `| **Web app** | \`npm ci\`, ${web} tests`, `docs/04 CI table: web ${web}`],
+    [doc.security, `${fabric} Fabric tests`, `docs/05 must state the fabric total ${fabric}`],
+  ]
+  for (const [read, phrase, message] of claims) {
+    assert.ok(squash(read()).includes(squash(phrase)), message)
+  }
+
+  // The figures these lines used to carry. Kept as an explicit regression list: if a
+  // suite total is restated here in one of the old forms, it is stale by construction.
+  for (const [read, stale] of [
+    [doc.setup, 'all three suites (765 tests)'], [doc.setup, '# 442 —'],
+    [doc.setup, '| **Fabric** | 256 tests pass'], [doc.security, '256 Fabric tests'],
+  ]) {
+    assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
+  }
+})
+
 test('the documented module line counts match the filesystem', () => {
   const table = doc.architecture()
-  const rows = [...table.matchAll(/^\| `([a-z/.]+\.mjs)` \| ([\d,]+) \|/gm)]
+  // `[a-z/.]` silently excluded every module with a digit in its name, so
+  // `knowledge/bm25.mjs` was never checked -- and its row set drifted unnoticed.
+  const rows = [...table.matchAll(/^\| `([\w/.]+\.mjs)` \| ([\d,]+) \|/gm)]
   assert.ok(rows.length >= 20, `expected the full module table, found ${rows.length} rows`)
 
   const countLines = (path) => readFileSync(resolve(CORE, 'src', path), 'utf8').split('\n').length - 1
+
+  // Compare the documented set against the filesystem rather than trusting a count:
+  // "at least 20 rows" passes when a module is missing, and a pattern that cannot see
+  // a file is indistinguishable from a file that is not there.
+  const onDisk = []
+  const walkModules = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = resolve(dir, entry.name)
+      if (entry.isDirectory()) walkModules(full)
+      else if (entry.name.endsWith('.mjs')) onDisk.push(relative(resolve(CORE, 'src'), full))
+    }
+  }
+  walkModules(resolve(CORE, 'src'))
+  const documented = new Set(rows.map(([, file]) => file))
+
+  const missing = onDisk.filter((file) => !documented.has(file)).sort()
+  assert.deepEqual(missing, [],
+    `every module must have a row; ${missing.join(', ')} is on disk but missing from the table`)
+  assert.equal(rows.length, onDisk.length,
+    `the table has ${rows.length} rows for ${onDisk.length} modules on disk`)
+
   for (const [, file, claimed] of rows) {
     const actual = countLines(file)
     assert.equal(actual, Number(claimed.replace(/,/g, '')), `${file} is ${actual} lines, docs claim ${claimed}`)
@@ -498,11 +563,11 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 23)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**268 / 268**'), 'core total must be stated')
+  assert.ok(status.includes('**270 / 270**'), 'core total must be stated')
   assert.ok(status.includes('**528 / 528**'), 'fabric total must be stated')
   assert.ok(status.includes('**56 / 56**'), 'web total must be stated')
-  assert.ok(status.includes('852 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('852 tests: core 268, web 56, fabric 528'),
+  assert.ok(status.includes('854 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('854 tests: core 270, web 56, fabric 528'),
     'README must state the same totals')
   assert.ok(status.includes('(11 files'), 'the file count must move with the suite')
 
@@ -515,14 +580,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(268), `core heading must say 268, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(270), `core heading must say 269, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(528), `fabric heading must say 528, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(56), `web heading must say 56, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    852,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 852`,
+    854,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 854`,
   )
 })
 
@@ -699,9 +764,68 @@ test('the documented fabric line counts match the filesystem', () => {
     walk(dir)
     return total
   }
+  const [coreSource, coreTests] = headerFor('services/core')
+  // Counted with the same helper as web: countLines above is Python-only, so using it
+  // here measured 0 lines of a 7,432-line directory and the guard passed anyway.
+  expect('core', coreSource, coreTests,
+    countFiles(resolve(REPO, 'services/core/src'), ['.mjs']),
+    countFiles(resolve(REPO, 'services/core/test'), ['.mjs']))
+
   expect('web', webSource, webTests,
     countFiles(resolve(REPO, 'apps/web/src'), ['.jsx', '.js', '.css']),
     countFiles(resolve(REPO, 'apps/web/test'), ['.mjs']))
+})
+
+test('the README component table matches the filesystem and docs/02', () => {
+  // The whole README table was stale -- core read 7,380/5,237/260 while the filesystem
+  // said 7,432/5,620/268 -- because nothing read it. docs/02 was checked and README was
+  // not, so the same figures were right in one document and wrong in the other.
+  const count = (dir, extensions) => {
+    let total = 0
+    const walk = (current) => {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        const full = resolve(current, entry.name)
+        if (entry.isDirectory()) {
+          if (!['node_modules', '__pycache__', '.render-build'].includes(entry.name)) walk(full)
+        } else if (extensions.some((e) => entry.name.endsWith(e))) {
+          total += readFileSync(full, 'utf8').split('\n').length - 1
+        }
+      }
+    }
+    walk(dir)
+    return total
+  }
+
+  const rows = [...doc.readme().matchAll(
+    /^\| `([\w/-]+)` \| [^|]+ \| ([\d,]+) \| ([\d,]+) \| [^|]+ \| (\d+) \|/gm)]
+  assert.equal(rows.length, 3, `expected three component rows, found ${rows.length}`)
+
+  const truth = {
+    'services/core': [count(resolve(REPO, 'services/core/src'), ['.mjs']),
+                      count(resolve(REPO, 'services/core/test'), ['.mjs'])],
+    'services/fabric': [count(resolve(REPO, 'services/fabric/fabric'), ['.py']),
+                        count(resolve(REPO, 'services/fabric/tests'), ['.py'])],
+    'apps/web': [count(resolve(REPO, 'apps/web/src'), ['.jsx', '.js', '.css']),
+                 count(resolve(REPO, 'apps/web/test'), ['.mjs'])],
+  }
+
+  for (const [, name, claimedSource, claimedTests, claimedCount] of rows) {
+    const actual = truth[name]
+    assert.ok(actual, `README lists an unknown component: ${name}`)
+    assert.equal(Number(claimedSource.replace(/,/g, '')), actual[0],
+      `README says ${name} has ${claimedSource} source lines, the filesystem says ${actual[0]}`)
+    assert.equal(Number(claimedTests.replace(/,/g, '')), actual[1],
+      `README says ${name} has ${claimedTests} test lines, the filesystem says ${actual[1]}`)
+
+    // The test count must agree with docs/03, which counts test files itself. Two
+    // documents stating the same figure is how a figure drifts apart.
+    const status = squash(doc.status())
+    const heading = new RegExp(`### \`${name}\` [^(]*\\((\\d+) tests?\\)`).exec(doc.status())
+    assert.ok(heading, `docs/03 must state a test count for ${name}`)
+    assert.equal(claimedCount, heading[1],
+      `README says ${name} has ${claimedCount} tests, docs/03 says ${heading[1]}`)
+    assert.ok(status.includes(claimedCount), `docs/03 must also state ${claimedCount}`)
+  }
 })
 
 test('every documented file actually exists', () => {
