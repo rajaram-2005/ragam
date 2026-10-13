@@ -26,6 +26,7 @@ import { join } from 'node:path'
 import { AetherisOmniApp } from '../src/app.mjs'
 import { loadConfig, publicConfig } from '../src/config.mjs'
 import { AVAILABILITY } from '../src/router/registry.mjs'
+import { MemoryStore } from '../src/memory/store.mjs'
 import { startLocalModelServer } from './helpers/local-model-server.mjs'
 import {
   createEgressGuard,
@@ -488,4 +489,38 @@ test('an unknown runtime policy is rejected, and a missing one fails safe', () =
   )
   assert.deepEqual(inert.onlineAllowlist, ['gateway.example'])
   assert.ok(inert.warnings.some((w) => /will still be blocked/.test(w)))
+})
+
+// ---------------------------------------------------------------------------
+// Memory is local by construction: it has no network path to block.
+// ---------------------------------------------------------------------------
+
+test('memory and recall attempt no network call at all, with egress blocked', async () => {
+  // Every fact a user asks Aetheris to remember is stored and searched locally. The
+  // claim here is stronger than "it works offline": the store is driven with the global
+  // egress guard installed and a fetch that records every URL it is asked to open, and
+  // the recording is asserted to stay empty. A future change that phoned home from a
+  // memory path would fail this test rather than silently leaking what was remembered.
+  const probe = recordingFetch()
+  const restore = installGlobalEgressGuard(createEgressGuard({
+    policy: RUNTIME_POLICIES.STRICT_OFFLINE,
+    fetch: probe,
+  }))
+  const store = new MemoryStore(':memory:')
+  try {
+    store.remember({ text: 'Remembered with the network blocked.' })
+    store.propose({ text: 'A candidate while offline.', proposedFrom: 'conversation' })
+    const session = store.startSession({ title: 'offline' })
+    store.appendTurn(session.id, { role: 'user', content: 'asked offline about a delimiter' })
+    store.buildContext('Remembered')
+    store.recall('delimiter')
+
+    assert.deepEqual(probe.calls, [], `memory attempted ${probe.calls.length} network call(s): ${probe.calls}`)
+
+    // And the guard is still armed afterwards, so the assertion above is not vacuous.
+    await assert.rejects(() => globalThis.fetch('https://api.openai.com/v1/models'), EgressBlockedError)
+  } finally {
+    store.close()
+    restore()
+  }
 })

@@ -23,11 +23,11 @@ them rather than restating them.
 | Multi-turn context | **Completed** | Messages are passed whole; nothing is persisted (L1) |
 | Stop / cancel a generation | **Completed** | Aborts the upstream request, not just the display |
 | Copy, regenerate, edit-and-resend | **Completed** | Edit resends from that turn; earlier turns are kept |
-| Conversation history + search | **Partial** | Sessions persist locally; search covers text, not semantics |
+| Conversation history + search | **Partial** | Sessions and turns persist locally and recall returns each hit with its session and role; **the UI does not surface it yet**, and search is lexical rather than semantic |
 | Suggested prompts | **Completed** | Shown on an empty conversation |
 | Plain-language model control | **Completed** | Provider and location, never quantisation, unless Advanced is open |
 | Privacy mode control | **Completed** | Strict offline / hybrid / online-enabled, with the trade-off stated |
-| Memory the user can inspect and delete | **Planned** | Level 2. There is no memory module, so nothing can learn silently |
+| Memory the user can inspect and delete | **Partial** | Level 2 is implemented: memory is stored locally, editable and really deletable, and nothing is remembered without an explicit approval. **The Chat control for it does not exist yet**, so today it is API-only |
 | Citations from the user's own documents | **Completed** | Every grounded claim carries the chunk it came from; no evidence is admitted when there is none |
 | Assistants / projects / spaces | **Unsupported** | Would be a sixth area; deliberately not built |
 | Voice conversation | **Planned** | Needs a speech model; none is installed |
@@ -110,7 +110,7 @@ them rather than restating them.
 | Level | Status | Note |
 |---|---|---|
 | L1 contextual adaptation | **Completed** | Session only; nothing stored |
-| L2 user-approved memory | **Planned** | No code |
+| L2 user-approved memory | **Implemented and tested** | Approval is a database `CHECK`; deletion is real; the store attempts no network call |
 | L3 procedural skills | **Completed** | Five invariants, each proven to bite |
 | L4 strategy across tasks | **Partial** | Failure recurrence is implemented; cross-task transfer is not tested |
 | L5 model adaptation | **Partial** | SFT, preference and distillation paths exist; three stages are blocked on this host and say so |
@@ -176,6 +176,8 @@ of it:
 - **Planned** rows are mostly model-dependent. They fail together if a model cannot be
   obtained, which is why the from-scratch Lite artifact matters: it is the one path that
   does not depend on a download.
+- **Memory moved from Planned to implemented** this round, with the interface still
+  missing: the honest mark is Partial, not Completed.
 - **Unsupported** rows are deliberate. Local video generation, competitor-model
   benchmarking and a multi-tier local family are not blocked by effort; they are blocked
   by hardware, weights and honesty respectively.

@@ -250,29 +250,53 @@ test('the documented routing weights are the real weights', () => {
 test('the documented route surface is the real route surface', () => {
   const source = readFileSync(resolve(CORE, 'src/app.mjs'), 'utf8')
   const literal = new Set([...source.matchAll(/'(\/api\/[A-Za-z0-9/:._-]+)'/g)].map((m) => m[1]))
-  assert.equal(literal.size, 31, `literal /api routes changed: ${literal.size}`)
-  assert.ok(squash(doc.architecture()).includes('31 literal routes'))
+  assert.equal(literal.size, 33, `literal /api routes changed: ${literal.size}`)
+  assert.ok(squash(doc.architecture()).includes('33 literal routes'))
 
   for (const route of ['/api/health', '/api/ready', '/api/config', '/api/chat', '/api/chat/stream',
     '/api/models', '/api/models/probe', '/api/knowledge/search', '/api/plugins/validate',
-    '/api/mcp/preflight', '/api/mcp/call', '/api/audit', '/api/hardware']) {
+    '/api/mcp/preflight', '/api/mcp/call', '/api/audit', '/api/hardware',
+    '/api/memory', '/api/sessions']) {
     assert.ok(literal.has(route), `${route} is documented but no longer routed`)
   }
 
   // These are matched on path segments, not as literals — asserting them as strings
   // was a bug in the first version of this test.
   const segments = new Set([...source.matchAll(/segments\[1\] === '([a-z]+)'/g)].map((m) => m[1]))
-  assert.deepEqual([...segments].sort(), ['knowledge', 'mcp', 'media', 'plugins', 'tasks'])
+  assert.deepEqual([...segments].sort(),
+    ['knowledge', 'mcp', 'media', 'memory', 'plugins', 'sessions', 'tasks'])
   assert.ok(/segments\[2\] === 'artifact'/.test(source), 'the artifact route must stay segment-matched')
   const architecture = squash(doc.architecture())
-  for (const prefix of ['tasks', 'plugins', 'mcp', 'media', 'knowledge']) {
+  for (const prefix of ['tasks', 'plugins', 'mcp', 'media', 'knowledge', 'memory', 'sessions']) {
     assert.ok(architecture.includes(`/api/${prefix}`), `docs/02 must mention segment routes under /api/${prefix}`)
   }
 
   // Routing is shown inside Chat, never promoted to its own area.
   assert.ok(!literal.has('/api/routes'))
-  assert.ok(![...literal].some((route) => /policy|training|benchmark|memory|safety/.test(route)),
-    'no internal service may get its own top-level route group')
+
+  // Two different kinds of thing, and the distinction is the point.
+  //
+  // The first is user-owned data: documents, memories, conversations. Each gets a route
+  // group because the person needs to list, edit and delete it -- and each of those is a
+  // deliberate addition to this list, so a new one cannot appear by accident.
+  const userDataGroups = new Set(['/api/knowledge', '/api/memory', '/api/sessions'])
+  for (const group of userDataGroups) {
+    // A group can be expressed either way: /api/knowledge is routed by segments and
+    // /api/memory by literals. Checking only the literals reported knowledge as unrouted,
+    // which is an assertion about the mechanism rather than about the surface.
+    const name = group.replace('/api/', '')
+    assert.ok(literal.has(group) || segments.has(name),
+      `${group} is an allowed user-data group but is no longer routed`)
+  }
+  // The second is internal services. These may be surfaced *inside* the five areas but
+  // must never grow their own route group, because a route group is how a sixth area
+  // starts. The list is a blocklist rather than a count, so adding one fails here whether
+  // or not the total happens to stay the same.
+  for (const route of literal) {
+    if ([...userDataGroups].some((group) => route.startsWith(group))) continue
+    assert.ok(!/policy|training|benchmark|safety|godcore|admin|research/.test(route),
+      `${route} gives an internal service its own route group`)
+  }
 })
 
 test('every document that restates a suite total agrees with docs/03', () => {
@@ -316,6 +340,7 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.status, '**270 / 270**'], [doc.status, '### `services/core` — Implemented and tested (270 tests)'],
     [doc.setup, 'all three suites (930 tests)'], [doc.status, '**346 / 346**'],
     [doc.setup, 'all three suites (932 tests)'], [doc.status, '**348 / 348**'],
+    [doc.setup, 'all three suites (934 tests)'], [doc.status, '**350 / 350**'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -564,20 +589,20 @@ test('the docs record limitations instead of implying completeness', () => {
 test('the status doc reports the real test totals', () => {
   // Recomputed from the filesystem: one test file per suite.
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
-  // 14 includes this file. If a suite file is added or removed, the counts in
+  // 15 includes this file. If a suite file is added or removed, the counts in
   // docs/03-status.md and README.md have to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 14)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 15)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 23)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**350 / 350**'), 'core total must be stated')
+  assert.ok(status.includes('**384 / 384**'), 'core total must be stated')
   assert.ok(status.includes('**528 / 528**'), 'fabric total must be stated')
   assert.ok(status.includes('**56 / 56**'), 'web total must be stated')
-  assert.ok(status.includes('934 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('934 tests: core 350, web 56, fabric 528'),
+  assert.ok(status.includes('968 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('968 tests: core 384, web 56, fabric 528'),
     'README must state the same totals')
-  assert.ok(status.includes('(14 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(15 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -588,14 +613,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(350), `core heading must say 350, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(384), `core heading must say 384, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(528), `fabric heading must say 528, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(56), `web heading must say 56, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    934,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 934`,
+    968,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 968`,
   )
 })
 
@@ -1144,4 +1169,52 @@ test('the feature matrix uses the four statuses and claims no parity', () => {
   assert.ok(/no row claims parity with a named competitor/i.test(text))
   assert.ok(/Requires external credentials/.test(text),
     'the gateway-dependent rows must be labelled')
+})
+
+test('the learning-level tables match the modules that implement them', () => {
+  // docs/11 states a status for each of the six levels. Three of them name a module in
+  // this repository, so the document and the code can be checked against each other: a
+  // level marked implemented whose module is gone is the exact drift this catches.
+  const text = squash(doc.klyvaron())
+  const levels = new Map()
+  for (const line of doc.klyvaron().split('\n')) {
+    const cells = line.split('|').map((c) => c.trim())
+    if (cells.length < 7) continue
+    const id = /^\*\*(L\d)\*\*/.exec(cells[1])
+    if (id) {
+      // The status cell may carry an explanation after an em dash, and it SHOULD when the
+      // status is Partial: a partial level with no reason is the thing worth refusing.
+      // Comparing the whole cell rejected a correct row, so the status word is extracted
+      // and the explanation is required separately, below.
+      const cell = cells[5].replace(/[*`]/g, '')
+      const [status, ...rest] = cell.split('—')
+      levels.set(id[1], { status: status.trim(), note: rest.join('—').trim() })
+    }
+  }
+  assert.equal(levels.size, 6, `docs/11 must table all six levels; found ${[...levels.keys()]}`)
+
+  // The levels this repository actually implements, each tied to its file.
+  const implemented = {
+    L1: 'services/core/src/app.mjs',
+    L2: 'services/core/src/memory/store.mjs',
+    L3: 'services/core/src/skills/lifecycle.mjs',
+    L6: 'services/fabric/fabric/modelcards.py',
+  }
+  for (const [level, file] of Object.entries(implemented)) {
+    assert.equal(levels.get(level).status, 'Implemented and tested',
+      `docs/11 marks ${level} as '${levels.get(level).status}' while ${file} exists`)
+    assert.ok(exists(resolve(REPO, file)), `${level} names ${file}, which is not present`)
+  }
+  // The two partial levels say Partial rather than claiming completion, and each states
+  // what the gap is: L4's transfer testing and L5's three blocked stages.
+  for (const level of ['L4', 'L5']) {
+    assert.equal(levels.get(level).status, 'Partial', `docs/11 must mark ${level} Partial`)
+    assert.ok(levels.get(level).note.length > 20,
+      `${level} is Partial and must say why; the note is '${levels.get(level).note}'`)
+  }
+
+  // And the memory claims in the document match the store's actual behaviour.
+  assert.ok(text.includes("CHECK (approved_by = 'user')"),
+    'docs/11 must state how an agent-approved memory is prevented')
+  assert.ok(text.includes("CHECK (training_use = 'prohibited')"))
 })

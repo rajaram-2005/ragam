@@ -139,9 +139,9 @@ what has to be verified before it does.**
 | Level | What is learned | Persists? | Verified before use? | Status |
 |---|---|---|---|---|
 | **L1** Contextual adaptation | The current conversation's context | No — session only | n/a, nothing is stored | **Implemented and tested** |
-| **L2** User-approved memory | Facts the user explicitly asked to keep | Yes, inspectable | User approval is the gate | **Planned, not implemented** |
+| **L2** User-approved memory | Facts the user explicitly asked to keep | Yes, inspectable | User approval is the gate | **Implemented and tested** |
 | **L3** Procedural skills | How to perform a recurring task | Yes, as versioned documents | Recorded checks that all passed | **Implemented and tested** |
-| **L4** Strategy across tasks | Which approach works, generally | Yes, as regression cases | A validated failure must join the suite | **Implemented for failure recurrence; cross-task transfer testing is not** |
+| **L4** Strategy across tasks | Which approach works, generally | Yes, as regression cases | A validated failure must join the suite | **Partial** — failure recurrence is implemented; cross-task transfer is not tested |
 | **L5** Model adaptation | Changed weights | Yes, as artifacts | Held-out evaluation, and the release gate | **Partial** — SFT, preference and distillation paths exist; stages 4–6 are blocked here |
 | **L6** Verified release improvement | A newer artifact replacing an older one | Yes, with rollback | Data manifest, digest, benchmarks, regression + safety checks | **Implemented and tested** |
 
@@ -195,6 +195,40 @@ about the clock in one place too (they advanced the curator's clock while the re
 the real one), and that is recorded here because "the test failed" is not the same as "the
 code was wrong".
 
+### 2.2b L2 in detail — memory that cannot remember on its own behalf
+
+The directive requires user-approved memory to be inspectable, editable and deletable,
+and requires it to stay distinct from contextual memory, retrieval indexes and training
+data. `services/core/src/memory/store.mjs` implements it, and the distinctions are
+enforced rather than described:
+
+| Property | How it is enforced |
+|---|---|
+| Nothing is remembered without the user | The `approved_by` column carries `CHECK (approved_by = 'user')`, so the database refuses an agent-approved row |
+| Memory is never training data | Every row carries `CHECK (training_use = 'prohibited')`; the restriction travels in the export too |
+| A proposal cannot reach a prompt | `contextFor()` reads a view filtered on `status = 'approved'`; a candidate lives in a different table with no path into a prompt |
+| Deletion is real | `forget()` removes the row, its index entries and writes a tombstone that records *that* a deletion happened, never what it said |
+| Recall is not memory | `recall()` searches the user's own turns on demand and returns each hit with its session and role |
+| Memory is local | Its own database file, and a test drives the store with egress blocked and a fetch recorder, asserting **no network call is attempted** |
+
+Two properties are worth calling out because they were bugs before they were features:
+
+**Egress is decided on the assembled request, not on the question.** Memory injection and
+document retrieval both add text to a prompt, so both can raise its sensitivity. The chat
+path now builds the full context first and takes the most sensitive class of everything in
+it. Before this, a public question that retrieved a confidential chunk was classified
+public and could have been sent externally: the retrieval path was an exfiltration channel
+with a friendly name. The decision is shared by the streaming and non-streaming paths
+through one implementation, because there were two copies and one of them would have been
+missed.
+
+**Two independent layers, discovered by a control that failed to bite.** The first
+attempt at proving "a candidate cannot reach a prompt" removed the index filter and the
+test still passed. The reason is that `contextFor()` re-checks the row's status when it
+hydrates a hit. The control was rewritten to defeat both layers and then the test failed
+as it should — the guard is defence in depth, which is a better answer than the one the
+control was looking for.
+
 ### 2.3 L5 and L6 — what the training system can and cannot do here
 
 `services/fabric` implements data validation → base selection → domain training → SFT →
@@ -225,7 +259,7 @@ where the data lives rather than by a policy statement:
 | | What it is | Where it lives now |
 |---|---|---|
 | Contextual memory | The current session's context | In the request; nothing is written |
-| User-approved memory | Facts the user asked to keep | **Not implemented** (L2) |
+| User-approved memory | Facts the user asked to keep | `memory.sqlite` — approval is a database `CHECK`, so a row cannot be written without one |
 | Reusable skills | Procedures, not data | `skills/` — validated documents, no user content |
 | Candidate training data | Failures and feedback that *might* train | `fabric/failure_memory.py`, behind a triage gate and a privacy filter that refuses credential material |
 | Released weights | A promoted artifact | Gitignored, referenced by digest, with a model card |
@@ -247,8 +281,10 @@ without a list of what does not is a sales document:
   so obtaining base weights is not possible; the tiers are unbuilt rather than pending.
 - **Lite does not chat, translate, summarise or reason.** Only `text.completion` and
   `text.extract` are backed.
-- **L2 memory is not implemented.** There is no memory module, and therefore nothing that
-  can silently learn from a conversation.
+- **L2 memory has no user interface yet.** The store, the approval gate, the routes and
+  the injection path are implemented and tested; what is missing is the Chat control that
+  lists memories and offers a proposed candidate for approval. Until it exists, a memory
+  can only be created through the API.
 - **L4 transfer testing is not implemented.** A lesson that helps on task A is not
   currently tested for whether it helps on task B; the directive's requirement to record
   non-generalisation is met only for the failure-recurrence case.

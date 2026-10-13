@@ -11,13 +11,14 @@ import { totalmem, cpus, freemem } from 'node:os'
 import { readFile, stat } from 'node:fs/promises'
 
 import { AuditLedger, AUDIT_OUTCOMES } from './audit/ledger.mjs'
-import { createEgressGuard, installGlobalEgressGuard, createDataPolicy, RUNTIME_POLICIES } from './policy/egress.mjs'
+import { createEgressGuard, installGlobalEgressGuard, createDataPolicy, RUNTIME_POLICIES, mostSensitiveDataClass } from './policy/egress.mjs'
 import { classifyText, redactDeep } from './policy/classify.mjs'
 import { familyReport, tierClaimFor } from './klyvaron/tiers.mjs'
 import { ModelRegistry, ModelRouter, MODEL_KINDS, MODALITIES, AVAILABILITY } from './router/registry.mjs'
 import { OllamaProvider, OpenAiCompatLocalProvider, normalizeMessages } from './providers/local.mjs'
 import { FreellmapiProvider } from './providers/freellmapi.mjs'
 import { KnowledgePipeline } from './knowledge/pipeline.mjs'
+import { CANDIDATE_STATES, MemoryStore } from './memory/store.mjs'
 import { MediaJobQueue, JOB_STATES } from './media/jobs.mjs'
 import { validateMedia, MEDIA_KINDS } from './media/validate.mjs'
 import { PluginRegistry } from './plugins/registry.mjs'
@@ -85,6 +86,13 @@ export class AetherisOmniApp {
       },
     })
     this.knowledge.rebuildIndex({ kind: 'startup' })
+
+    // --- memory ------------------------------------------------------------
+    // Its own database file, deliberately: §7 requires approved memory and the document
+    // retrieval index to stay separate mechanisms, and separate files make that a fact
+    // about the deployment rather than a convention in the code. Nothing that trains a
+    // model reads this file.
+    this.memory = new MemoryStore(resolve(config.dataDir, 'memory.sqlite'))
 
     // --- media -------------------------------------------------------------
     this.media = new MediaJobQueue({
@@ -356,22 +364,103 @@ export class AetherisOmniApp {
    * secrets before any external send, and returns the routing decision alongside
    * the answer so the UI can show *why* this model was used.
    */
-  async chat({ messages, prompt = null, model = null, temperature = 0.2, maxTokens = 1024, stream = false, principal = null, dataClass = null, useKnowledge = false, signal = null }) {
-    const normalized = messages ? normalizeMessages(messages) : [{ role: 'user', content: String(prompt ?? '') }]
-    const userText = normalized.filter((message) => message.role === 'user').map((message) => (typeof message.content === 'string' ? message.content : '')).join('\n')
+  /**
+   * Record turns for session recall, when the client asked for a session.
+   *
+   * Opt-in: no session id means nothing is written at all, which is what makes "chat
+   * without history" the default rather than a setting. A recording failure is swallowed
+   * and audited, because losing a history entry is not a reason to lose the answer.
+   */
+  #recordTurns(sessionId, exchanges, dataClass) {
+    if (!sessionId) return null
+    try {
+      for (const [role, content] of exchanges) {
+        this.memory.appendTurn(sessionId, { role, content, dataClass })
+      }
+      return { sessionId }
+    } catch (error) {
+      this.ledger.record({
+        category: 'memory',
+        action: 'record_turn_failed',
+        outcome: AUDIT_OUTCOMES.FAILURE,
+        detail: { sessionId, code: error.code ?? 'unknown', message: error.message },
+      })
+      return { sessionId, recorded: false, reason: error.message }
+    }
+  }
 
-    const classification = dataClass ? { dataClass, reason: 'explicitly declared', signals: [] } : classifyText(userText)
-    const allowExternal = this.#mayGoExternal({ id: 'chat', prompt: userText, dataClass: classification.dataClass, context: {} })
+  /**
+   * Assemble the request: prompt, retrieved evidence, remembered items, and the
+   * classification of the result.
+   *
+   * This is shared by chat() and streamChat() because it was NOT shared before, and the
+   * two copies had drifted: both decided egress from the user's question alone, so a
+   * public question that retrieved a confidential chunk was sent externally. Fixing that
+   * in only one path would have left the other open, which is the argument for one
+   * implementation rather than two.
+   *
+   * @returns {{workingMessages:Array, classification:object, allowExternal:boolean,
+   *            grounding:object|null, memory:object|null}}
+   */
+  #assembleChatContext({ normalized, userText, dataClass, principal, useKnowledge, useMemory, purpose }) {
+    const declared = dataClass ? { dataClass, reason: 'explicitly declared', signals: [] } : classifyText(userText)
 
-    // Retrieval augmentation for grounded, cited answers.
     let grounding = null
     let workingMessages = normalized
     if (useKnowledge && this.knowledge) {
       grounding = this.knowledge.buildGroundedContext({ query: userText, principal, topK: 6 })
       if (grounding.hasEvidence) {
-        workingMessages = [{ role: 'system', content: grounding.promptContext }, ...normalized]
+        workingMessages = [{ role: 'system', content: grounding.promptContext }, ...workingMessages]
       }
     }
+
+    // Memory augmentation: only user-approved memories, never a pending candidate.
+    let memory = null
+    if (useMemory && this.memory) {
+      memory = this.memory.buildContext(userText)
+      if (memory.hasMemories) {
+        workingMessages = [{ role: 'system', content: memory.promptContext }, ...workingMessages]
+      }
+    }
+
+    // The classification of the REQUEST is the most sensitive thing in it. Text added to
+    // a prompt raises the class of what would be sent, so egress is decided on the
+    // assembled content rather than on how the turn started.
+    const effectiveClass = mostSensitiveDataClass(
+      declared.dataClass,
+      grounding?.dataClass ?? null,
+      ...(memory?.memories ?? []).map((m) => m.dataClass),
+    )
+    const classification = effectiveClass === declared.dataClass
+      ? declared
+      : {
+          dataClass: effectiveClass,
+          reason: `raised by injected context (declared: ${declared.dataClass})`,
+          signals: [
+            ...(grounding?.dataClass
+              && mostSensitiveDataClass(declared.dataClass, grounding.dataClass) === grounding.dataClass
+              ? [`retrieved evidence is ${grounding.dataClass}`] : []),
+            ...(memory?.memories ?? []).filter((m) => m.dataClass !== declared.dataClass)
+              .map((m) => `remembered item is ${m.dataClass}`),
+          ],
+        }
+
+    const allowExternal = this.#mayGoExternal({
+      id: purpose, prompt: userText, dataClass: classification.dataClass, context: {},
+    })
+    return { workingMessages, classification, allowExternal, grounding, memory }
+  }
+
+  async chat({ messages, prompt = null, model = null, temperature = 0.2, maxTokens = 1024, stream = false, principal = null, dataClass = null, useKnowledge = false, useMemory = false, sessionId = null, signal = null }) {
+    const normalized = messages ? normalizeMessages(messages) : [{ role: 'user', content: String(prompt ?? '') }]
+    const userText = normalized.filter((message) => message.role === 'user').map((message) => (typeof message.content === 'string' ? message.content : '')).join('\n')
+
+    const { workingMessages, classification, allowExternal, grounding, memory } = this.#assembleChatContext({
+      normalized, userText, dataClass, principal, useKnowledge, useMemory, purpose: 'chat',
+    })
+    // The user's turn is recorded before the model is called, so a failed generation
+    // still leaves the question in the history rather than a conversation with a hole.
+    if (sessionId) this.#recordTurns(sessionId, [['user', userText]], classification.dataClass)
 
     const route = this.router.route(
       { capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT], ...(stream ? { streaming: true } : {}), ...(model ? { preferId: model } : {}) },
@@ -411,7 +500,8 @@ export class AetherisOmniApp {
         const text = chunks.join('')
         const durationMs = Date.now() - started
         this.#recordChat({ chosen, classification, isExternal, durationMs, textLength: text.length, stream: true, grounding, redaction })
-        return { text, stream: true, chunks: chunks.length, modelId: chosen.id, durationMs, routing: routeSummary(route), classification: classification.dataClass, sentExternally: isExternal, grounding: groundingSummary(grounding), redaction }
+        if (sessionId) this.#recordTurns(sessionId, [['assistant', text]], classification.dataClass)
+        return { text, stream: true, chunks: chunks.length, modelId: chosen.id, durationMs, routing: routeSummary(route), classification: classification.dataClass, sentExternally: isExternal, grounding: groundingSummary(grounding), memory: memorySummary(memory), redaction }
       }
 
       const provider = this.#providerFor(chosen)
@@ -419,6 +509,7 @@ export class AetherisOmniApp {
       const durationMs = Date.now() - started
       this.registry.observe(chosen.id, { availability: AVAILABILITY.READY, medianLatencyMs: durationMs })
       this.#recordChat({ chosen, classification, isExternal, durationMs, textLength: result.text.length, stream: false, grounding, redaction, usage: result.usage })
+      if (sessionId) this.#recordTurns(sessionId, [['assistant', result.text]], classification.dataClass)
       return {
         text: result.text,
         toolCalls: result.toolCalls ?? [],
@@ -429,6 +520,7 @@ export class AetherisOmniApp {
         usage: result.usage ?? null,
         routing: routeSummary(route),
         classification: classification.dataClass,
+        memory: memorySummary(memory),
         sentExternally: isExternal,
         grounding: groundingSummary(grounding),
         redaction,
@@ -660,15 +752,15 @@ export class AetherisOmniApp {
         .filter((message) => message.role === 'user')
         .map((message) => (typeof message.content === 'string' ? message.content : ''))
         .join('\n')
-      const classification = body.dataClass ? { dataClass: body.dataClass } : classifyText(userText)
-      const allowExternal = this.#mayGoExternal({ id: 'chat-stream', prompt: userText, dataClass: classification.dataClass, context: {} })
-
-      let grounding = null
-      let workingMessages = normalized
-      if (body.useKnowledge && this.knowledge) {
-        grounding = this.knowledge.buildGroundedContext({ query: userText, principal: body.principal ?? null, topK: 6 })
-        if (grounding.hasEvidence) workingMessages = [{ role: 'system', content: grounding.promptContext }, ...normalized]
-      }
+      const { workingMessages, classification, allowExternal, grounding, memory } = this.#assembleChatContext({
+        normalized,
+        userText,
+        dataClass: body.dataClass ?? null,
+        principal: body.principal ?? null,
+        useKnowledge: body.useKnowledge === true,
+        useMemory: body.useMemory === true,
+        purpose: 'chat-stream',
+      })
 
       const route = this.router.route(
         {
@@ -706,6 +798,7 @@ export class AetherisOmniApp {
         dataClass: classification.dataClass,
         sentExternally: isExternal,
         grounding: groundingSummary(grounding),
+        memory: memorySummary(memory),
       })
 
       const provider = this.#providerFor(route.chosen)
@@ -894,6 +987,76 @@ async function handle(request, response, app) {
     )
   }
 
+  // --- memory -------------------------------------------------------------
+  // The surface for the things a user asked to be remembered, and for searching their
+  // own past conversations. Both live inside the five areas -- memory is a control in
+  // Chat, not a sixth destination.
+  if (method === 'GET' && path === '/api/memory') {
+    return sendJson(response, 200, {
+      memories: app.memory.listMemories({ limit: Number(url.searchParams.get('limit') ?? 200) }),
+      candidates: app.memory.listCandidates({ status: CANDIDATE_STATES.PENDING }),
+      stats: app.memory.stats(),
+    }, app)
+  }
+  if (method === 'POST' && path === '/api/memory') {
+    // Remembering is a user action, so this route is the user's hand. There is no body
+    // field that makes it an agent's: the store's approver is a constant, enforced by a
+    // database CHECK.
+    return sendJson(response, 201, app.memory.remember(await readBody(request)), app)
+  }
+  if (method === 'GET' && segments[1] === 'memory' && segments[2] === 'search') {
+    const query = url.searchParams.get('q') ?? ''
+    return sendJson(response, 200, { query, results: app.memory.searchMemories(query, { topK: Number(url.searchParams.get('limit') ?? 10) }) }, app)
+  }
+  if (method === 'POST' && segments[1] === 'memory' && segments[2] === 'candidates' && segments.length === 3) {
+    // Exactly three segments: without the length check this route also matched
+    // /api/memory/candidates/<id>/decide and proposed a candidate instead of deciding
+    // one, which is how the decide endpoint returned 'pending' for an approval.
+    return sendJson(response, 201, app.memory.propose(await readBody(request)), app)
+  }
+  if (method === 'POST' && segments[1] === 'memory' && segments[2] === 'candidates' && segments[3] && segments[4] === 'decide') {
+    const body = await readBody(request)
+    return sendJson(response, 200, app.memory.decideCandidate(segments[3], { approve: body.approve === true, kind: body.kind, subject: body.subject ?? null, tags: body.tags }), app)
+  }
+  if (method === 'DELETE' && segments[1] === 'memory' && segments[2] === 'forget-all') {
+    return sendJson(response, 200, app.memory.forgetAll(await readBody(request)), app)
+  }
+  if (method === 'PATCH' && segments[1] === 'memory' && segments[2]) {
+    return sendJson(response, 200, app.memory.updateMemory(segments[2], await readBody(request)), app)
+  }
+  if (method === 'DELETE' && segments[1] === 'memory' && segments[2]) {
+    // readBody, not a fetch-style request.text(): this is a Node request, and readBody
+    // already maps an absent body to {} rather than throwing.
+    const body = await readBody(request)
+    return sendJson(response, 200, app.memory.forget(segments[2], { reason: body.reason ?? null, requestedBy: 'user' }), app)
+  }
+
+  // --- session recall -----------------------------------------------------
+  if (method === 'POST' && path === '/api/sessions') {
+    const body = await readBody(request)
+    return sendJson(response, 201, app.memory.startSession({ title: body.title ?? null }), app)
+  }
+  if (method === 'GET' && path === '/api/sessions') {
+    return sendJson(response, 200, { sessions: app.memory.listSessions({ limit: Number(url.searchParams.get('limit') ?? 50) }) }, app)
+  }
+  if (method === 'GET' && segments[1] === 'sessions' && segments[2] === 'recall') {
+    const query = url.searchParams.get('q') ?? ''
+    return sendJson(response, 200, app.memory.recall(query, { topK: Number(url.searchParams.get('limit') ?? 10) }), app)
+  }
+  if (method === 'GET' && segments[1] === 'sessions' && segments[2]) {
+    const session = app.memory.getSession(segments[2])
+    if (!session) {
+      const error = new Error(`no session '${segments[2]}'`)
+      error.code = 'not_found'
+      error.status = 404
+      throw error
+    }
+    return sendJson(response, 200, session, app)
+  }
+  if (method === 'DELETE' && segments[1] === 'sessions' && segments[2]) {
+    return sendJson(response, 200, app.memory.deleteSession(segments[2]), app)
+  }
+
   // --- tasks (God Core) ---------------------------------------------------
   if (method === 'POST' && path === '/api/tasks') {
     const body = await readBody(request)
@@ -1058,6 +1221,23 @@ function publicModel(model) {
 
 function routeSummary(route) {
   return { modelId: route.modelId, explanation: route.explanation, candidates: route.candidates, rejected: route.rejected, policy: route.policy }
+}
+
+/**
+ * What memory contributed, reported without quoting it.
+ *
+ * The reply says how many remembered items were used and at what classification, so a
+ * user can see that memory was consulted and that it raised the sensitivity of the
+ * request. It does not echo the memories, because they are already in the UI.
+ */
+function memorySummary(memory) {
+  if (!memory) return null
+  return {
+    used: memory.hasMemories === true,
+    count: memory.memories?.length ?? 0,
+    matched: memory.matched ?? null,
+    dataClasses: [...new Set((memory.memories ?? []).map((m) => m.dataClass))],
+  }
 }
 
 function groundingSummary(grounding) {

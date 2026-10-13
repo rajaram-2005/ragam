@@ -10,6 +10,7 @@
 import { readFile } from 'node:fs/promises'
 import { basename, extname, resolve, sep } from 'node:path'
 import { Bm25Index, reciprocalRankFusion, retrievalMetrics } from './bm25.mjs'
+import { mostSensitiveDataClass } from '../policy/egress.mjs'
 import { chunkText, tokenize, contentKey } from './text.mjs'
 import { KnowledgeStore } from './store.mjs'
 
@@ -321,12 +322,19 @@ export class KnowledgePipeline {
       ].join('\n')
     })
 
+    const citations = results.map((entry, i) => ({ ref: `E${i + 1}`, ...entry.citation }))
     return {
       query,
       method,
       indexStats,
       evidenceCount: results.length,
-      citations: results.map((entry, i) => ({ ref: `E${i + 1}`, ...entry.citation })),
+      citations,
+      // The classification of the evidence itself, not of the question. The caller needs
+      // it before deciding whether the assembled request may leave the device: without
+      // this, a public question that retrieves a confidential chunk produces a
+      // confidential request that looks public. Egress is decided on what would actually
+      // be sent, not on how the turn started.
+      dataClass: mostSensitiveDataClass(...citations.map((c) => c.classification)),
       hasEvidence: results.length > 0,
       // Instruction block that enforces the sourced/inference distinction.
       promptContext: results.length

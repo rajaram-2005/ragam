@@ -73,6 +73,8 @@ async function startCore({ env = {}, withModel = true } = {}) {
     call,
     get: (path, headers) => call('GET', path, undefined, headers),
     post: (path, body, headers) => call('POST', path, body ?? {}, headers),
+    patch: (path, body, headers) => call('PATCH', path, body ?? {}, headers),
+    del: (path, body, headers) => call('DELETE', path, body ?? {}, headers),
     close: async () => {
       await new Promise((resolve) => server.close(resolve))
       app.close()
@@ -817,6 +819,146 @@ test('no route leaks a configured credential', async () => {
     const chat = await core.post('/api/chat', { prompt: 'go online' })
     assert.ok([200, 503].includes(chat.status))
     assert.equal(chat.json.sentExternally ?? false, false, 'nothing may be sent externally under strict_offline')
+  } finally {
+    await core.close()
+  }
+})
+
+// --- memory and session recall over real HTTP ------------------------------------
+
+test('memory: a candidate proposed over HTTP never reaches the prompt until approved', async () => {
+  const core = await startCore()
+  try {
+    const created = await core.post('/api/memory', { text: 'Release builds are cut on Tuesdays.', kind: 'constraint' })
+    assert.equal(created.status, 201)
+    assert.equal(created.json.memory.approvedBy, 'user')
+    assert.equal(created.json.memory.trainingUse, 'prohibited')
+
+    const proposed = await core.post('/api/memory/candidates', {
+      text: 'The reviewer prefers small pull requests.',
+      rationale: 'stated while rejecting a large diff',
+      proposedFrom: 'conversation',
+    })
+    assert.equal(proposed.json.status, 'pending')
+
+    const listed = await core.get('/api/memory')
+    assert.equal(listed.json.memories.length, 1, 'the candidate is not a memory yet')
+    assert.equal(listed.json.candidates.length, 1)
+    assert.equal(listed.json.stats.pendingCandidates, 1)
+
+    // Search must not surface the candidate either.
+    assert.equal((await core.get('/api/memory/search?q=reviewer')).json.results.length, 0)
+
+    const decided = await core.post(`/api/memory/candidates/${proposed.json.id}/decide`, { approve: true })
+    assert.equal(decided.json.approved, true)
+    assert.equal(decided.json.memory.approvedBy, 'user')
+    assert.equal((await core.get('/api/memory/search?q=reviewer')).json.results.length, 1)
+  } finally {
+    await core.close()
+  }
+})
+
+test('memory: edit, then real deletion with a tombstone that does not quote it', async () => {
+  const core = await startCore({ withModel: false })
+  try {
+    const created = await core.post('/api/memory', { text: 'Uses Node 20.' })
+    const edited = await core.patch(`/api/memory/${created.json.memory.id}`, { text: 'Uses Node 22.' })
+    assert.equal(edited.json.text, 'Uses Node 22.')
+
+    const forgotten = await core.del(`/api/memory/${created.json.memory.id}`, { reason: 'wrong version' })
+    assert.equal(forgotten.json.deleted, true)
+    const listed = await core.get('/api/memory')
+    assert.equal(listed.json.memories.length, 0)
+    assert.equal(listed.json.stats.deletionsRecorded, 1)
+    assert.ok(!JSON.stringify(listed.json).includes('Uses Node 22'), 'the deletion log must not quote the memory')
+
+    const missing = await core.del(`/api/memory/${created.json.memory.id}`)
+    assert.equal(missing.status, 404, 'forgetting a memory twice is reported, not ignored')
+  } finally {
+    await core.close()
+  }
+})
+
+test('memory: a full wipe clears memories and candidates and says how many', async () => {
+  const core = await startCore({ withModel: false })
+  try {
+    await core.post('/api/memory', { text: 'one' })
+    await core.post('/api/memory', { text: 'two' })
+    await core.post('/api/memory/candidates', { text: 'pending', proposedFrom: 'conversation' })
+    const wiped = await core.del('/api/memory/forget-all')
+    assert.deepEqual(wiped.json, { deletedMemories: 2, deletedCandidates: 1 })
+    assert.equal((await core.get('/api/memory')).json.stats.memories, 0)
+  } finally {
+    await core.close()
+  }
+})
+
+test('sessions: a chat with a session records turns that recall can find with their origin', async () => {
+  const core = await startCore()
+  try {
+    const session = await core.post('/api/sessions', { title: 'Ingest troubleshooting' })
+    assert.equal(session.status, 201)
+    assert.equal(session.json.turnCount, 0)
+
+    const chat = await core.post('/api/chat', {
+      prompt: 'Which delimiter does the ingest job expect?',
+      sessionId: session.json.id,
+    })
+    assert.ok(chat.json.text.length > 0, 'the fixture model answered')
+
+    const stored = await core.get(`/api/sessions/${session.json.id}`)
+    assert.equal(stored.json.turnCount, 2)
+    assert.equal(stored.json.turns[0].role, 'user')
+    assert.equal(stored.json.turns[1].role, 'assistant')
+    assert.match(stored.json.turns[0].content, /delimiter/)
+
+    const recall = await core.get('/api/sessions/recall?q=delimiter')
+    // Both turns can match -- the fixture model echoes the question -- so the assertion
+    // is about provenance rather than about a count: every hit says which session it came
+    // from, and the user's own question is among them.
+    assert.ok(recall.json.hits.length >= 1, 'the turn should be findable')
+    for (const hit of recall.json.hits) {
+      assert.equal(hit.sessionId, session.json.id)
+      assert.equal(hit.sessionTitle, 'Ingest troubleshooting')
+      assert.ok(hit.excerpt.text.includes('delimiter'))
+      assert.ok(['user', 'assistant'].includes(hit.role))
+    }
+    assert.ok(recall.json.hits.some((h) => h.role === 'user'))
+
+    const removed = await core.del(`/api/sessions/${session.json.id}`)
+    assert.equal(removed.json.turnsRemoved, 2)
+    assert.equal((await core.get('/api/sessions/recall?q=delimiter')).json.hits.length, 0)
+    assert.equal((await core.get(`/api/sessions/${session.json.id}`)).status, 404)
+  } finally {
+    await core.close()
+  }
+})
+
+test('chat: useMemory injects approved memory and raises the classification of the request', async () => {
+  const core = await startCore()
+  try {
+    await core.post('/api/memory', { text: 'The internal codename is Falcon.', dataClass: 'confidential' })
+    const chat = await core.post('/api/chat', { prompt: 'What is the codename?', useMemory: true })
+    assert.equal(chat.json.memory.used, true)
+    assert.equal(chat.json.memory.count, 1)
+    assert.deepEqual(chat.json.memory.dataClasses, ['confidential'])
+    // A public question plus a confidential memory is a confidential request. This is
+    // the assertion that stops memory injection becoming an exfiltration path.
+    assert.equal(chat.json.classification, 'confidential')
+    assert.equal(chat.json.sentExternally, false)
+  } finally {
+    await core.close()
+  }
+})
+
+test('chat: without useMemory nothing from the store is injected', async () => {
+  const core = await startCore()
+  try {
+    await core.post('/api/memory', { text: 'The internal codename is Falcon.', dataClass: 'confidential' })
+    const chat = await core.post('/api/chat', { prompt: 'What is the codename?' })
+    assert.equal(chat.json.memory, null)
+    assert.equal(chat.json.classification, 'public')
+    assert.equal(chat.json.sentExternally, false, 'still local: the fixture serves it')
   } finally {
     await core.close()
   }

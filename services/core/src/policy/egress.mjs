@@ -190,6 +190,39 @@ export function installGlobalEgressGuard(guard) {
 }
 
 /**
+ * Severity order for the data classes. Exported because "which of these two is more
+ * sensitive" is asked in more than one place, and two copies of the ordering would
+ * eventually disagree.
+ */
+export const DATA_CLASS_RANK = Object.freeze({
+  [DATA_CLASSES.PUBLIC]: 0,
+  [DATA_CLASSES.INTERNAL]: 1,
+  [DATA_CLASSES.CONFIDENTIAL]: 2,
+  [DATA_CLASSES.RESTRICTED]: 3,
+})
+
+/** An unknown class is treated as the most sensitive, never as the least. */
+export const dataClassRank = (dataClass) => DATA_CLASS_RANK[dataClass] ?? DATA_CLASS_RANK[DATA_CLASSES.RESTRICTED]
+
+/**
+ * The more sensitive of two classes.
+ *
+ * This exists for one specific reason: text that is *added to* a request must be able to
+ * raise its classification. A memory injected into a prompt, or a retrieved document
+ * spliced into it, is part of what would be sent -- so a public question plus a
+ * confidential memory is a confidential request. Without this, memory injection would be
+ * an exfiltration channel with a friendly name.
+ */
+export function mostSensitiveDataClass(...classes) {
+  let worst = DATA_CLASSES.PUBLIC
+  for (const candidate of classes) {
+    if (!candidate) continue
+    if (dataClassRank(candidate) > dataClassRank(worst)) worst = candidate
+  }
+  return worst
+}
+
+/**
  * Hybrid mode additionally gates *what* may be sent, not just *where*.
  * Company-private material defaults to local processing.
  */
@@ -197,11 +230,13 @@ export function createDataPolicy(options = {}) {
   // Anything at or above this class requires explicit per-request authorisation
   // before it may be sent to an external provider.
   const externalCeiling = options.externalCeiling || DATA_CLASSES.INTERNAL
-  const rank = { public: 0, internal: 1, confidential: 2, restricted: 3 }
 
   function authorizeExternalSend(dataClass, authorization = {}) {
-    const level = rank[dataClass] ?? rank.restricted
-    if (level <= rank[externalCeiling]) return { allowed: true, dataClass, reason: 'within external ceiling' }
+    // One ranking, one function: an unknown class ranks as restricted, and the ceiling is
+    // compared with the same ranking rather than a second copy of it.
+    if (dataClassRank(dataClass) <= dataClassRank(externalCeiling)) {
+      return { allowed: true, dataClass, reason: 'within external ceiling' }
+    }
     if (authorization.explicit === true && authorization.scope === dataClass) {
       return { allowed: true, dataClass, reason: 'explicit authorization granted', authorizedBy: authorization.by ?? null }
     }

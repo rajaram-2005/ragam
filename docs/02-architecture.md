@@ -70,11 +70,11 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 9,160 source lines, 6,945 test lines
+### `services/core` — 10,049 source lines, 7,548 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
-| `app.mjs` | 1,144 | Composition root, the HTTP route table, error→status mapping, chat/image/video entry points, readiness |
+| `app.mjs` | 1,324 | Composition root, the HTTP route table, error→status mapping, chat/image/video entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
 | `media/jobs.mjs` | 359 | Job queue, progress, cancellation, timeouts, artifact storage |
@@ -83,19 +83,20 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `router/registry.mjs` | 322 | Model descriptors, capability matching, candidate scoring |
 | `plugins/registry.mjs` | 510 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation |
 | `mcp/layer.mjs` | 502 | Servers, tools, risk tiers, approval gates, output neutralisation |
-| `knowledge/pipeline.mjs` | 462 | Ingest, dedupe, chunk, index, search, grounded context, purge |
+| `knowledge/pipeline.mjs` | 470 | Ingest, dedupe, chunk, index, search, grounded context, purge |
 | `knowledge/store.mjs` | 385 | SQLite metadata, chunks, ACL rows, deletion records |
 | `mcp/schema.mjs` | 246 | JSON Schema subset: validation of schemas *and* of arguments/output |
 | `knowledge/bm25.mjs` | 224 | BM25 index (k1=1.5, b=0.75), rebuilt from stored chunks |
 | `plugins/manifest.mjs` | 216 | Manifest validation, scope vocabulary, semver |
 | `config.mjs` | 234 | Environment → config, secret loading, `publicConfig` redaction |
-| `policy/egress.mjs` | 216 | The egress guard, runtime policies, data classes, `*` allow-all, global fetch hook |
+| `policy/egress.mjs` | 251 | The egress guard, runtime policies, data classes, `*` allow-all, global fetch hook |
 | `server.mjs` | 151 | Entry point, startup banner, graceful shutdown |
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
 | `media/validate.mjs` | 143 | Magic-byte sniffing, video genuineness check |
 | `providers/base.mjs` | 136 | Provider contract, timeout and retry helpers |
 | `policy/classify.mjs` | 143 | Secret and sensitivity classification, redaction |
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
+| `memory/store.mjs` | 666 | User-approved memory, candidates that need approval before use, and session recall with citations |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
 | `klyvaron/tiers.mjs` | 412 | The three-tier model family, backing records, and the validator that refuses a capability with no artifact behind it |
 | `skills/registry.mjs` | 305 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
@@ -360,8 +361,9 @@ the artifact route serves bytes by job id.
 
 ## 7. HTTP surface
 
-31 literal routes plus segment-matched routes under `/api/tasks`, `/api/plugins`,
-`/api/mcp`, `/api/media` and `/api/knowledge`. There is no `/api/routes`.
+33 literal routes plus segment-matched routes under `/api/tasks`, `/api/plugins`,
+`/api/mcp`, `/api/media`, `/api/knowledge`, `/api/memory` and `/api/sessions`. There is
+no `/api/routes`.
 
 Domain errors map to accurate statuses through `ERROR_STATUS`/`statusForError` —
 `unknown_task` and `unknown_server` are 404, `approval_required` is 409,
