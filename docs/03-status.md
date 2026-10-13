@@ -62,7 +62,7 @@ instead.
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
 | 3 | Unified app, five areas | **Complete** | `apps/web`; 66 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
 | 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now exists and runs here — trained from scratch, no weights needed ([`08-aetheris-lite.md`](./08-aetheris-lite.md)). The *chat* half is still unmet: it is a 625K-parameter base model that is not wired to `/api/chat`, and doing so would misrepresent it. The adapter half remains proven only against a loopback fixture ("Phase 4 in detail", below) |
-| 5 | FreeLLMAPI online integration | **Implemented — requires external credentials** | Client written to contracts read from source; no key here |
+| 5 | Online provider integration | **Not met — removed by decision** | No external provider is configured, vendored or bundled. Image and video requests are refused with an explicit limitation, and the UI states that no provider exists rather than implying one can be enabled with a key |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
 | 8 | Multimodal pipelines | **Complete** | Job queue, validation, video genuineness check |
@@ -136,7 +136,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local chat inference with an actually installed model | **Not met — requires weights** | Adapter tested against a real loopback server; no LM installed here. Reported as `degraded`, never faked |
 | Strict offline mode verifiably blocks network | **Met** | Recording-`fetch` spy: 4 external hosts rejected, call log empty, no socket, no DNS. Guard also installed over `globalThis.fetch` |
 | Hybrid sends only authorized requests externally | **Met** | Exact-host allowlist + classification ceiling; `confidential`/`restricted` need explicit authorization |
-| FreeLLMAPI uses supported endpoints and handles provider failure | **Met in code — requires credentials to exercise live** | Contracts read from source; error envelope and status clamping handled; images JSON vs video raw binary distinguished |
+| An external provider, when one is configured, uses supported endpoints and handles provider failure | **Not applicable — no external provider is configured** | The provider adapter was removed with the rest of the external integration. The router still supports `online` descriptors, so the gate this criterion describes would be re-established by a new adapter rather than assumed |
 | Private knowledge indexed / retrieved / cited / managed locally | **Met** | Ingest, content-hash dedupe, chunk, BM25, cited grounding, ACL, purge, audit |
 | Plugin + MCP enforce capability permissions | **Met** | Scope allowlist, elevated-scope approvals, forbidden scopes, risk-tier gates, schema validation of arguments and output |
 | God Mode tasks observable / pausable / resumable / cancellable / verifiable | **Met** | All five exercised by tests; pause→resume checkpoints at `phaseIndex=1` (2 → 9 steps) |
@@ -160,7 +160,6 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Audit ledger | **Implemented and tested** | Append-only SQLite; refusals audited; NDJSON export; subject purge |
 | Model registry & router | **Implemented and tested** | Capability gating before scoring; unknown latency scores 0.5, not 0 |
 | Ollama / llama.cpp providers | **Implemented and tested against a fixture server** | Real protocol handling; no real LM installed here |
-| FreeLLMAPI provider | **Implemented — requires external credentials** | Never exercised against the live service |
 | Knowledge pipeline | **Implemented and tested** | SQLite + filesystem + in-memory rebuildable BM25 |
 | Media queue & validation | **Implemented and tested** | Progress, cancellation, timeouts, retry-after, state history |
 | Plugin registry & manifests | **Implemented and tested** | Preflight vs invoke distinction; uninstall keeps a record |
@@ -392,10 +391,13 @@ Ordered by how much it blocks the acceptance criteria.
    network access to a registry, then re-probe. No code change is expected — that
    is the claim the loopback test supports, and it is the single largest gap
    between this repository and a usable product.
-2. **Configure FreeLLMAPI** (Phase 5) with a key via `FREELLMAPI_API_KEY_FILE`,
-   policy `hybrid`, and the gateway's host on `AETHERIS_ONLINE_ALLOWLIST`. Then
-   exercise image and video generation live. Until then those paths are
-   code-complete but unexercised against the real service.
+2. **Decide whether to add an external provider at all** (Phase 5). The online
+   integration was removed rather than configured: there is no provider, no
+   credential and no allowlisted gateway in this build. Adding one back is a new
+   decision with its own adapter, credential handling and classification gate —
+   not a configuration change. Until that decision is taken, image and video
+   requests are refused with an explicit limitation, and the readiness view reports
+   those capabilities as unavailable.
 3. **Run the pipeline against a real corpus.** The fixture corpus is generated
    engineering documentation; retrieval quality on real company documents is
    unknown and is recorded as a limitation on the model card.

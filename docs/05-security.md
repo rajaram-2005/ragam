@@ -80,7 +80,7 @@ The proof that blocking is real, not hidden:
 cd services/core && node --test test/offline.test.mjs
 ```
 
-A recording `fetch` stand-in shows `api.openai.com`, `freellmapi.co`,
+A recording `fetch` stand-in shows `api.openai.com`, `api.example.com`,
 `huggingface.co` and `api.anthropic.com` rejected while its call log stays empty.
 
 ---
@@ -556,13 +556,11 @@ Stated plainly, because an unstated gap is worse than a stated one.
    publication lag, and neither gate covers a vulnerability that has not yet been
    assigned an identifier. A scheduled failure also only reaches whoever watches the
    repository's Actions tab; there is no alerting routed to a person.
-6. **FreeLLMAPI was never exercised live.** No key was available, so its error
-   handling is code-complete and contract-derived, not integration-tested.
-7. **Model-weight licences for any future fine-tuned base are unassessed.** No
+6. **Model-weight licences for any future fine-tuned base are unassessed.** No
    weights could be downloaded here. Several candidate families carry
    community-licence or acceptable-use restrictions that are **not** MIT-compatible
    and would constrain redistribution. Any such base must have its licence recorded
    in its model card before release.
-8. **No signed artifacts.** Weights and media are identified by sha256, which gives
+7. **No signed artifacts.** Weights and media are identified by sha256, which gives
    integrity but not authenticity. There is no signature chain from a release to its
    producer.

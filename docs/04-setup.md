@@ -313,50 +313,38 @@ cd services/core && node --test test/offline.test.mjs
 
 This starts a real HTTP server speaking the Ollama protocol, completes a genuine
 chat round-trip under `strict_offline`, and proves with a recording `fetch` spy
-that `api.openai.com`, `freellmapi.co`, `huggingface.co` and `api.anthropic.com`
+that `api.openai.com`, `api.example.com`, `huggingface.co` and `api.anthropic.com`
 are rejected without opening a socket or resolving DNS.
 
 ---
 
-## 8. Enabling the online gateway
+## 8. External providers — removed, and what it would take
 
-Optional, and off unless both a key and a base URL are present.
+**This build has no external provider.** There is no gateway to enable, no
+provider key to set, and no provider block in `.env.example`: the integration was
+removed entirely, along with its adapter, its environment variables and its place
+in the readiness view.
 
-```bash
-printf '%s' 'your-key' > /run/secrets/freellmapi_key && chmod 600 /run/secrets/freellmapi_key
+That is a capability decision, not an oversight, and the interface says so:
 
-AETHERIS_RUNTIME_POLICY=hybrid \
-FREELLMAPI_BASE_URL=https://your-gateway.example.com \
-FREELLMAPI_API_KEY_FILE=/run/secrets/freellmapi_key \
-node services/core/src/server.mjs
-```
+- The Image and Video areas report **no provider** and their requests are refused
+  with a machine-readable limitation. A still image is never substituted for a
+  video, and nothing is sent anywhere without a policy decision recorded in the
+  audit ledger.
+- `AETHERIS_ONLINE_ALLOWLIST` still exists and still governs external hosts for any
+  code path that reaches out, but with no provider configured it has nothing to
+  authorise. Under `strict_offline` it is inert, and the loader warns when an
+  allowlist is present.
+- The router still understands `online` model descriptors. Re-adding a provider is
+  therefore an adapter plus a credential path, not a redesign — but it is a
+  deliberate change, and it must come with the classification ceiling described in
+  [`05-security.md`](./05-security.md) rather than being enabled by a stray
+  environment variable.
 
-The gateway is a **separately versioned service**; its code is not vendored here.
-Deploy it from [its own repository](https://github.com/tashfeenahmed/freellmapi)
-and read its "*Personal experimentation only*" note before pointing production
-traffic at it.
-
-Three things to know before enabling it:
-
-1. **`hybrid`, not `online_enabled`,** unless you have a reason. `hybrid` keeps the
-   data-classification ceiling: `confidential` and `restricted` content still
-   needs explicit authorization per request. A fully online gateway needs
-   `AETHERIS_ONLINE_ALLOWLIST=*` as well — an automatic host list is not implied by
-   the policy, see [`05-security.md`](./05-security.md).
-2. **The gateway's host is added to the allowlist automatically** from
-   `FREELLMAPI_BASE_URL`. Allowlist matching is exact-host — no wildcards, no
-   suffix matching.
-3. **Video support is narrower than image support.** The gateway serves video on
-   two platforms against eight for images, and marks video unsupported on custom
-   endpoints. Chat working does not imply video works. See
-   [`03-status.md`](./03-status.md) §3 and [`01-audit.md`](./01-audit.md) §3.
-
-Prefer `*_FILE` over the inline variable so the secret never appears in the
-process environment. A `VITE_*` variable whose name looks like a secret is
-reported as a warning at config load, because Vite ships `VITE_*` into the browser
-bundle.
-
----
+If you are re-introducing one, prefer `hybrid` over `online_enabled` so the
+data-classification ceiling stays enforced, keep the credential in a `*_FILE` path
+rather than the process environment, and allowlist the exact host — matching is
+exact-host, with no wildcards and no suffix matching.
 
 ## 9. Data locations
 
@@ -389,7 +377,7 @@ record rather than leaving an unexplained gap.
 | UI works locally but not behind a proxy | Dev server rejecting the host | Already handled: `allowedHosts: true`. Check the proxy forwards `/api` |
 | `No module named pytest` | System interpreter has no pytest | `AETHERIS_PYTHON=/path/to/venv/bin/python` |
 | `Database opened` / sqlite errors | Node < 22.5 | Upgrade Node; `node:sqlite` is required |
-| Image/video refuse with `capability_unavailable` | No provider under the current policy | Expected. §8 to enable the gateway, or accept the refusal |
+| Image/video refuse with `capability_unavailable` | No image or video provider is configured | Expected in this build: §8 explains why there is nothing to enable, and the refusal is audited |
 | Video refuses with `needs_hardware` | No local video runtime | Expected on this hardware class. The refusal never substitutes a still image |
 | Fabric `POST /pipeline/run` returns `failed` | Trained MRR below the 0.60 release floor | Correct behaviour. Raise `epochs`; see the model card's release requirements |
 | Fabric returns 413 | Body over 1 MB | Expected; this service takes small JSON commands, not datasets |

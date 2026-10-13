@@ -39,7 +39,6 @@ async function startCore({ env = {}, withModel = true } = {}) {
     OLLAMA_ENABLED: withModel ? 'true' : 'false',
     ...(model ? { OLLAMA_BASE_URL: model.baseUrl } : {}),
     LLAMACPP_ENABLED: 'false',
-    FREELLMAPI_ENABLED: 'false',
     ...env,
   })
 
@@ -799,10 +798,8 @@ test('no route leaks a configured credential', async () => {
   const secret = 'sk-super-secret-value-do-not-log'
   const core = await startCore({
     env: {
-      FREELLMAPI_ENABLED: 'true',
-      FREELLMAPI_BASE_URL: 'https://gateway.freellmapi.co/v1',
-      FREELLMAPI_API_KEY: secret,
-      AETHERIS_ONLINE_ALLOWLIST: 'gateway.freellmapi.co',
+      LLAMACPP_ENABLED: 'true',
+      LLAMACPP_API_KEY: secret,
     },
   })
   try {
@@ -813,10 +810,11 @@ test('no route leaks a configured credential', async () => {
     }
     // The config view says a key exists without revealing it.
     const config = await core.get('/api/config')
-    assert.equal(config.json.freellmapi.keyConfigured, true)
-    assert.equal(config.json.freellmapi.endpoint, 'https://gateway.freellmapi.co/v1')
+    assert.equal(config.json.llamaCpp.keyConfigured, true)
+    assert.equal(config.json.llamaCpp.baseUrl, 'http://127.0.0.1:8080/v1')
 
-    // strict_offline still blocks the gateway even though it is configured.
+    // strict_offline still refuses to reach out, even though a runtime holding a
+    // credential is configured.
     const chat = await core.post('/api/chat', { prompt: 'go online' })
     assert.ok([200, 503].includes(chat.status))
     assert.equal(chat.json.sentExternally ?? false, false, 'nothing may be sent externally under strict_offline')

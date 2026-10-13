@@ -18,8 +18,6 @@ export const DEFAULT_CONFIG = Object.freeze({
   // Local runtimes: loopback only, so they stay reachable in strict_offline.
   ollama: { enabled: true, baseUrl: 'http://127.0.0.1:11434' },
   llamaCpp: { enabled: false, baseUrl: 'http://127.0.0.1:8080/v1', runtime: 'llama.cpp', apiKey: null },
-  // Online gateway. Off unless explicitly configured AND the policy allows it.
-  freellmapi: { enabled: false, baseUrl: null, apiKey: null },
   onlineAllowlist: [],
   localAllowlist: [],
   fabric: { enabled: false, baseUrl: 'http://127.0.0.1:8791' },
@@ -80,22 +78,7 @@ export function loadConfig(env = process.env, overrides = {}) {
     warnings.push(`AETHERIS_EXTERNAL_DATA_CEILING='${externalCeiling}' is not valid; falling back to internal`)
   }
 
-  const freellmapiKey = readSecret(env, 'FREELLMAPI_API_KEY', 'FREELLMAPI_API_KEY_FILE')
-  const freellmapiBaseUrl = env.FREELLMAPI_BASE_URL || null
-  const freellmapiEnabled = parseBoolean(env.FREELLMAPI_ENABLED, Boolean(freellmapiKey && freellmapiBaseUrl))
-  if (freellmapiEnabled && (!freellmapiKey || !freellmapiBaseUrl)) {
-    warnings.push('FREELLMAPI_ENABLED is set but the key or base URL is missing; the online gateway stays disabled')
-  }
-
   const onlineAllowlist = parseList(env.AETHERIS_ONLINE_ALLOWLIST)
-  if (freellmapiEnabled && freellmapiBaseUrl) {
-    try {
-      const host = new URL(freellmapiBaseUrl).hostname
-      if (!onlineAllowlist.includes(host)) onlineAllowlist.push(host)
-    } catch {
-      warnings.push(`FREELLMAPI_BASE_URL='${freellmapiBaseUrl}' is not a valid absolute URL`)
-    }
-  }
 
   if (resolvedPolicy === RUNTIME_POLICIES.STRICT_OFFLINE && onlineAllowlist.length) {
     warnings.push(`an online allowlist is configured but policy is strict_offline; ${onlineAllowlist.length} host(s) will still be blocked`)
@@ -148,12 +131,6 @@ export function loadConfig(env = process.env, overrides = {}) {
       runtime: env.LLAMACPP_RUNTIME || DEFAULT_CONFIG.llamaCpp.runtime,
       apiKey: readSecret(env, 'LLAMACPP_API_KEY', 'LLAMACPP_API_KEY_FILE'),
     },
-    freellmapi: {
-      enabled: freellmapiEnabled && Boolean(freellmapiKey && freellmapiBaseUrl),
-      baseUrl: freellmapiBaseUrl,
-      apiKey: freellmapiKey,
-      videoTimeoutMs: Number(env.FREELLMAPI_VIDEO_TIMEOUT_MS || DEFAULT_CONFIG.media.videoTimeoutMs),
-    },
     onlineAllowlist,
     localAllowlist: parseList(env.AETHERIS_LOCAL_ALLOWLIST),
     fabric: {
@@ -162,7 +139,7 @@ export function loadConfig(env = process.env, overrides = {}) {
     },
     media: {
       concurrency: Number(env.AETHERIS_MEDIA_CONCURRENCY || DEFAULT_CONFIG.media.concurrency),
-      videoTimeoutMs: Number(env.FREELLMAPI_VIDEO_TIMEOUT_MS || DEFAULT_CONFIG.media.videoTimeoutMs),
+      videoTimeoutMs: Number(env.AETHERIS_VIDEO_TIMEOUT_MS || DEFAULT_CONFIG.media.videoTimeoutMs),
       imageTimeoutMs: Number(env.AETHERIS_IMAGE_TIMEOUT_MS || DEFAULT_CONFIG.media.imageTimeoutMs),
     },
     knowledge: {
@@ -206,8 +183,15 @@ export function publicConfig(config) {
       config.policy !== RUNTIME_POLICIES.STRICT_OFFLINE && config.onlineAllowlist.includes(ALLOW_ALL_HOSTS),
     onlineAllowlist: [...config.onlineAllowlist],
     dataDir: config.dataDir,
-    ollama: { enabled: config.ollama.enabled, baseUrl: config.ollama.baseUrl },
-    llamaCpp: { enabled: config.llamaCpp.enabled, baseUrl: config.llamaCpp.baseUrl, runtime: config.llamaCpp.runtime, keyConfigured: Boolean(config.llamaCpp.apiKey) },
+    // URLs that cross the HTTP boundary are reduced to protocol://host/path. A query
+    // string is where a token ends up, and this view is served to the browser.
+    ollama: { enabled: config.ollama.enabled, baseUrl: redactUrl(config.ollama.baseUrl) },
+    llamaCpp: {
+      enabled: config.llamaCpp.enabled,
+      baseUrl: redactUrl(config.llamaCpp.baseUrl),
+      runtime: config.llamaCpp.runtime,
+      keyConfigured: Boolean(config.llamaCpp.apiKey),
+    },
     plugins: {
       signaturesRequired: config.plugins.requireSignature,
       // The path is reported; the keys are not. A caller that needs them reads them here.
@@ -218,14 +202,7 @@ export function publicConfig(config) {
       allowlist: [...config.mcp.allowlist],
       restricted: config.mcp.allowlist.length > 0,
     },
-    freellmapi: {
-      enabled: config.freellmapi.enabled,
-      // Host and path only — never a query string or credentials.
-      endpoint: redactUrl(config.freellmapi.baseUrl),
-      keyConfigured: Boolean(config.freellmapi.apiKey),
-      keyTransport: process.env.FREELLMAPI_API_KEY_FILE ? 'file' : 'server environment',
-    },
-    fabric: config.fabric,
+    fabric: { ...config.fabric, baseUrl: redactUrl(config.fabric.baseUrl) },
     onlineAllowlist: config.onlineAllowlist,
     localAllowlist: config.localAllowlist,
     media: config.media,
@@ -236,11 +213,19 @@ export function publicConfig(config) {
   }
 }
 
+/**
+ * Reduce a URL to `protocol://host/path` for display.
+ *
+ * The query string is dropped — that is where a token ends up — and a bare host is
+ * reported without an added `/`, so a published value still matches the configured
+ * one character for character.
+ */
 export function redactUrl(value) {
   if (!value) return null
   try {
     const url = new URL(value)
-    return `${url.protocol}//${url.host}${url.pathname}`
+    const path = url.pathname === '/' ? '' : url.pathname
+    return `${url.protocol}//${url.host}${path}`
   } catch {
     return '[configured endpoint]'
   }

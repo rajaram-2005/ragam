@@ -36,7 +36,7 @@ them rather than restating them.
 
 | Capability | Status | Note |
 |---|---|---|
-| Text-to-image generation | **Partial** | Works through the gateway (JSON response). *Requires external credentials* |
+| Text-to-image generation | **Unsupported** | No image provider is configured in this build — no local runtime and no online one — so a request is refused with an explicit limitation. The queue, magic-byte validation and storage that a provider would feed are implemented and tested, but nothing generates an image |
 | Local image generation | **Planned** | Needs weights and a GPU; this host has neither |
 | Image understanding | **Partial** | Adapters declared; no vision model is installed |
 | Upload validation before processing | **Completed** | Magic-byte sniffing; a mislabelled file is refused |
@@ -48,8 +48,8 @@ them rather than restating them.
 
 | Capability | Status | Note |
 |---|---|---|
-| Text-to-video generation | **Partial** | Raw MP4 through the gateway. *Requires external credentials* |
-| Local video generation | **Unsupported** | Too demanding for this hardware class. The limitation is stated rather than hidden, and the user is offered the online path as an explicit choice |
+| Text-to-video generation | **Unsupported** | No video provider is configured in this build, so a request is refused with an explicit limitation and a still image is never substituted. The job queue, container sniffing and genuineness check are implemented and tested |
+| Local video generation | **Unsupported** | Too demanding for this hardware class. The limitation is stated rather than hidden, and the refusal is explicit rather than routed somewhere else |
 | Video input handling | **Partial** | Magic-byte genuineness check; no frame-level analysis |
 | Honest quality reporting | **Completed** | No quality adjective is attached to a generated video; the parameters are shown |
 | Long-form / multi-shot | **Planned** | Requires a real video model |
@@ -173,9 +173,13 @@ of it:
 - **Completed** rows are the majority, and they cluster in the areas a user touches
   most: conversation controls, plugins, MCP, privacy enforcement and the five-area
   interface.
-- **Partial** rows cluster around *quality* rather than *existence*: generation that
-  depends on an external gateway, retrieval whose precision is unmeasured, a sandbox that
-  is enforced by scopes rather than by kernel isolation.
+- **Partial** rows cluster around *quality* rather than *existence*: retrieval whose
+  precision is unmeasured, a sandbox that is enforced by scopes rather than by kernel
+  isolation.
+- **Image and video generation are Unsupported, not Partial.** With the online
+  integration removed there is no provider of any kind, and calling that "implemented
+  with a named limitation" would overstate it. What exists — the queue, the
+  validation and the refusals — is recorded in the rows below.
 - **Planned** rows are mostly model-dependent. They fail together if a model cannot be
   obtained, which is why the from-scratch Lite artifact matters: it is the one path that
   does not depend on a download.

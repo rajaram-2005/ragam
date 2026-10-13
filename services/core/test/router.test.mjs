@@ -20,12 +20,12 @@ function sampleRegistry() {
     costWeight: 1,
   })
   registry.register({
-    id: 'freellmapi:auto',
+    id: 'gateway:auto',
     kind: MODEL_KINDS.ONLINE_LLM,
-    displayName: 'FreeLLMAPI auto-routed chat',
+    displayName: 'Gateway auto-routed chat',
     capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT],
     location: 'online',
-    provider: 'freellmapi',
+    provider: 'gateway',
     contextWindow: 128000,
     toolCalling: true,
     streaming: true,
@@ -46,21 +46,21 @@ function sampleRegistry() {
     costWeight: 0.5,
   })
   registry.register({
-    id: 'freellmapi:image',
+    id: 'gateway:image',
     kind: MODEL_KINDS.ONLINE_IMAGE_GEN,
-    displayName: 'FreeLLMAPI image generation',
+    displayName: 'Gateway image generation',
     capabilities: [MODALITIES.TEXT_IN, MODALITIES.IMAGE_OUT],
     location: 'online',
-    provider: 'freellmapi',
+    provider: 'gateway',
     costWeight: 2,
   })
   registry.register({
-    id: 'freellmapi:video',
+    id: 'gateway:video',
     kind: MODEL_KINDS.ONLINE_VIDEO_GEN,
-    displayName: 'FreeLLMAPI video generation',
+    displayName: 'Gateway video generation',
     capabilities: [MODALITIES.TEXT_IN, MODALITIES.VIDEO_OUT],
     location: 'online',
-    provider: 'freellmapi',
+    provider: 'gateway',
     costWeight: 3,
   })
   // Mark everything ready unless a test says otherwise.
@@ -95,7 +95,7 @@ test('routing is capability-aware, not name-based', () => {
   // online one advertises a bigger context window and more features.
   const offline = router.route({ capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT] }, { policy: 'strict_offline' })
   assert.equal(offline.modelId, 'ollama:qwen2.5:1.5b')
-  assert.ok(offline.rejected.some((entry) => entry.id === 'freellmapi:auto' && /strict_offline/.test(entry.reason)))
+  assert.ok(offline.rejected.some((entry) => entry.id === 'gateway:auto' && /strict_offline/.test(entry.reason)))
 
   // Embedding capability must select the embedding model, never a chat model.
   const embedding = router.route({ capabilities: [MODALITIES.TEXT_IN, MODALITIES.EMBEDDING_OUT] }, { policy: 'strict_offline' })
@@ -104,8 +104,8 @@ test('routing is capability-aware, not name-based', () => {
   // Image and video are distinct capabilities and must not be substituted for each other.
   const image = router.route({ capabilities: [MODALITIES.TEXT_IN, MODALITIES.IMAGE_OUT] }, { policy: 'online_enabled', allowExternal: true })
   const video = router.route({ capabilities: [MODALITIES.TEXT_IN, MODALITIES.VIDEO_OUT] }, { policy: 'online_enabled', allowExternal: true })
-  assert.equal(image.modelId, 'freellmapi:image')
-  assert.equal(video.modelId, 'freellmapi:video')
+  assert.equal(image.modelId, 'gateway:image')
+  assert.equal(video.modelId, 'gateway:video')
   assert.notEqual(image.modelId, video.modelId)
 })
 
@@ -120,7 +120,7 @@ test('an unsupported capability yields a clear explanation, never a silent subst
 
 test('hybrid mode requires explicit external authorization', () => {
   const registry = new ModelRegistry()
-  registry.register({ id: 'online-only', kind: MODEL_KINDS.ONLINE_LLM, displayName: 'O', capabilities: ['text_in', 'text_out'], location: 'online', provider: 'freellmapi' })
+  registry.register({ id: 'online-only', kind: MODEL_KINDS.ONLINE_LLM, displayName: 'O', capabilities: ['text_in', 'text_out'], location: 'online', provider: 'gateway' })
   registry.observe('online-only', { availability: AVAILABILITY.READY })
   const router = new ModelRouter({ registry })
 
@@ -151,7 +151,7 @@ test('each unavailable state produces its own distinct reason', () => {
   ]
   for (const [availability, pattern] of cases) {
     const registry = new ModelRegistry()
-    registry.register({ id: 'm', kind: MODEL_KINDS.ONLINE_LLM, displayName: 'M', capabilities: ['text_in', 'text_out'], location: 'online', provider: 'freellmapi' })
+    registry.register({ id: 'm', kind: MODEL_KINDS.ONLINE_LLM, displayName: 'M', capabilities: ['text_in', 'text_out'], location: 'online', provider: 'gateway' })
     registry.observe('m', { availability })
     const router = new ModelRouter({ registry })
     const result = router.route({ capabilities: ['text_in', 'text_out'] }, { policy: 'online_enabled', allowExternal: true })
@@ -195,7 +195,7 @@ test('a pinned model wins when it passes the same gates', () => {
   const result = router.route({ capabilities: ['text_in', 'text_out'], preferId: 'ollama:qwen2.5:1.5b' }, { policy: 'online_enabled', allowExternal: true })
   assert.equal(result.modelId, 'ollama:qwen2.5:1.5b')
   // A pin cannot override policy.
-  const blocked = router.route({ capabilities: ['text_in', 'text_out'], preferId: 'freellmapi:auto' }, { policy: 'strict_offline' })
+  const blocked = router.route({ capabilities: ['text_in', 'text_out'], preferId: 'gateway:auto' }, { policy: 'strict_offline' })
   assert.equal(blocked.modelId, 'ollama:qwen2.5:1.5b')
 })
 
@@ -237,7 +237,7 @@ test('local models are preferred over external ones at equal capability', () => 
 
 test('observe() rejects unknown availability values', () => {
   const registry = sampleRegistry()
-  assert.throws(() => registry.observe('freellmapi:auto', { availability: 'feeling_lucky' }), TypeError)
+  assert.throws(() => registry.observe('gateway:auto', { availability: 'feeling_lucky' }), TypeError)
 })
 
 test('unknown model lookups throw rather than returning undefined', () => {

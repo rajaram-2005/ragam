@@ -80,7 +80,7 @@ function varsReadByCode() {
       const text = readFileSync(path, 'utf8')
       for (const match of text.matchAll(/(?:process\.)?env\.([A-Z][A-Z0-9_]*)/g)) found.add(match[1])
       for (const match of text.matchAll(/env\[['"]([A-Z][A-Z0-9_]*)['"]\]/g)) found.add(match[1])
-      // readSecret(env, 'FREELLMAPI_API_KEY', 'FREELLMAPI_API_KEY_FILE') passes the
+      // readSecret(env, 'LLAMACPP_API_KEY', 'LLAMACPP_API_KEY_FILE') passes the
       // names as plain string arguments, so neither pattern above sees them. Without
       // this the suite would report a complete inventory while missing every secret.
       for (const match of text.matchAll(/readSecret\(\s*env\s*,\s*'([A-Z][A-Z0-9_]*)'\s*,\s*'([A-Z][A-Z0-9_]*)'/g)) {
@@ -152,9 +152,7 @@ test('.env.example states the real defaults, not plausible ones', async () => {
   assert.equal(documented('LLAMACPP_BASE_URL'), loaded.llamaCpp.baseUrl)
   assert.equal(documented('AETHERIS_FABRIC_URL'), loaded.fabric.baseUrl)
   assert.equal(documented('AETHERIS_MEDIA_CONCURRENCY'), String(loaded.media.concurrency))
-  // The video timeout is read from the provider-namespaced variable, not an
-  // AETHERIS_MEDIA_* one: config.mjs:128 reads FREELLMAPI_VIDEO_TIMEOUT_MS.
-  assert.equal(documented('FREELLMAPI_VIDEO_TIMEOUT_MS'), String(loaded.media.videoTimeoutMs))
+  assert.equal(documented('AETHERIS_VIDEO_TIMEOUT_MS'), String(loaded.media.videoTimeoutMs))
   assert.equal(documented('AETHERIS_IMAGE_TIMEOUT_MS'), String(loaded.media.imageTimeoutMs))
   assert.equal(documented('AETHERIS_CHUNK_TARGET'), String(loaded.knowledge.chunkTargetChars))
   assert.equal(documented('AETHERIS_CHUNK_MAX'), String(loaded.knowledge.chunkMaxChars))
@@ -166,13 +164,12 @@ test('.env.example states the real defaults, not plausible ones', async () => {
   const truthy = (value) => ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase())
   assert.equal(truthy(documented('OLLAMA_ENABLED')), loaded.ollama.enabled)
   assert.equal(truthy(documented('LLAMACPP_ENABLED')), loaded.llamaCpp.enabled)
-  assert.equal(truthy(documented('FREELLMAPI_ENABLED')), loaded.freellmapi.enabled)
   assert.equal(truthy(documented('AETHERIS_FABRIC_ENABLED')), loaded.fabric.enabled)
   assert.equal(truthy(documented('AETHERIS_GODMODE_ENABLED')), loaded.godMode.enabled)
 
   // Nothing that looks like a credential may carry a sample value, and the *_FILE
   // form must be offered so a secret need not sit in the process environment.
-  for (const name of ['FREELLMAPI_API_KEY', 'LLAMACPP_API_KEY']) {
+  for (const name of ['LLAMACPP_API_KEY']) {
     assert.equal(documented(name), '', `${name} must be documented empty, never with a sample secret`)
     assert.equal(documented(`${name}_FILE`).length > 0, true, `${name}_FILE must show a usable path`)
     assert.ok(new RegExp(`^#\\s*${name}=$`, 'm').test(text),
@@ -189,7 +186,6 @@ test('DEFAULT_CONFIG still holds the security-relevant defaults', () => {
   assert.equal(DEFAULT_CONFIG.policy, 'strict_offline', 'default policy must be the most restrictive one')
   assert.equal(DEFAULT_CONFIG.externalCeiling, 'internal')
   assert.equal(DEFAULT_CONFIG.allowedOrigin, null, 'cross-origin must be an explicit choice')
-  assert.equal(DEFAULT_CONFIG.freellmapi.enabled, false, 'the online gateway must default to off')
   assert.equal(DEFAULT_CONFIG.llamaCpp.enabled, false)
   assert.equal(DEFAULT_CONFIG.fabric.enabled, false)
   assert.equal(DEFAULT_CONFIG.ollama.baseUrl, 'http://127.0.0.1:11434')
@@ -520,7 +516,6 @@ test('the quoted licence texts are byte-identical to the checked-in copies', () 
 
   // A hand-transcribed licence is how attribution silently breaks. Compare exactly.
   assert.equal(quoted('MIT — Aetheris-'), read('third-party/licenses/aetheris-MIT.txt').trim())
-  assert.equal(quoted('MIT — freellmapi'), read('third-party/licenses/freellmapi-MIT.txt').trim())
   assert.equal(quoted('Unlicense — sparsiz'), read('third-party/licenses/sparsiz-Unlicense.txt').trim())
 
   // NumPy's LICENSE.txt bundles component licences; only its own terms are quoted
@@ -531,7 +526,7 @@ test('the quoted licence texts are byte-identical to the checked-in copies', () 
   assert.ok(squash(notices).includes('bundles the licences of its individual components'))
 
   // MIT texts must really be MIT, and the Unlicense really the Unlicense.
-  for (const file of ['aetheris-MIT.txt', 'freellmapi-MIT.txt']) {
+  for (const file of ['aetheris-MIT.txt']) {
     const text = read(`third-party/licenses/${file}`)
     assert.ok(text.includes('Permission is hereby granted, free of charge'), `${file} must be the MIT licence`)
     assert.ok(text.includes('THE SOFTWARE IS PROVIDED "AS IS"'), `${file} must carry the MIT disclaimer`)
@@ -894,7 +889,7 @@ test('every documented file actually exists', () => {
     'docs/01-audit.md', 'docs/02-architecture.md', 'docs/03-status.md', 'docs/04-setup.md',
     'docs/05-security.md', 'docs/06-benchmarks.md', '.env.example', 'LICENSE', 'README.md',
     'third-party/NOTICES.md', 'third-party/licenses/aetheris-MIT.txt',
-    'third-party/licenses/freellmapi-MIT.txt', 'third-party/licenses/sparsiz-Unlicense.txt',
+    'third-party/licenses/sparsiz-Unlicense.txt',
     'third-party/licenses/numpy-BSD-3-Clause.txt', 'services/fabric/README.md',
     'docs/model-cards/aetheris-lite-retriever-0.1.0.md',
     'docs/model-cards/aetheris-lite-retriever-0.1.0.json',
@@ -1178,8 +1173,8 @@ test('the feature matrix uses the four statuses and claims no parity', () => {
     'the matrix must not introduce a sixth top-level area')
   // And the honesty clauses that keep the matrix from becoming a sales table.
   assert.ok(/no row claims parity with a named competitor/i.test(text))
-  assert.ok(/Requires external credentials/.test(text),
-    'the gateway-dependent rows must be labelled')
+  assert.ok(/No (image|video) provider is configured/.test(text),
+    'a capability with no provider must say so rather than imply one is available')
 })
 
 test('the learning-level tables match the modules that implement them', () => {

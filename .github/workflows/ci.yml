@@ -254,7 +254,6 @@ jobs:
             fi
           done
           test -f third-party/licenses/aetheris-MIT.txt
-          test -f third-party/licenses/freellmapi-MIT.txt
           test -f third-party/licenses/sparsiz-Unlicense.txt
           test -f third-party/licenses/numpy-BSD-3-Clause.txt
           # NumPy's licence bundles component licences and must not be truncated.
@@ -263,4 +262,4 @@ jobs:
             echo "::error::NumPy licence truncated to $numpy_size bytes; the bundled component licences must be preserved"
             exit 1
           fi
-          echo "all four licence copies present and untruncated"
+          echo "all licence copies present and untruncated"

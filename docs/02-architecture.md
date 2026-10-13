@@ -38,15 +38,11 @@ Three processes, one product surface.
 │ (reachable offline)   │                │ experiment ledger          │
 └───────────────────────┘                │ model release + rollback   │
                                          └────────────────────────────┘
-        ┌────────────────────────────────────────┐
-        │ FreeLLMAPI — NOT vendored. Consumed as │
-        │ a separately versioned service over    │
-        │ /v1, only when policy allows it.       │
-        └────────────────────────────────────────┘
 ```
 
 The dependency direction is strict: `web → core`, and `core → fabric` only over
-HTTP when enabled. Nothing depends on FreeLLMAPI being present. Each arrow that
+HTTP when enabled. There is no online provider in this build, so every model call
+resolves to a runtime on this machine, or to an audited refusal. Each arrow that
 crosses a process boundary is a place where a credential, a policy decision or an
 output validation happens — never in the browser.
 
@@ -60,9 +56,11 @@ output validation happens — never in the browser.
   runs as its own service on `:8791`, so a training run can never take down
   request handling, and so its (deliberately minimal) dependency set stays
   separate.
-- **FreeLLMAPI is consumed, not copied** (see [`01-audit.md`](./01-audit.md) §3).
-  A 33k-star TypeScript gateway with a native SQLite dependency does not belong
-  inside this repository. Aetheris must — and does — work when it is absent.
+- **No online gateway is bundled.** External providers were removed rather than
+  vendored: a gateway with a native SQLite dependency does not belong inside this
+  repository, and a build with no external provider is one where the offline
+  guarantee has nothing to leak past. The router still supports `online` model
+  descriptors, so adding one later is a provider adapter, not a redesign.
 
 ---
 
@@ -70,16 +68,15 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 11,275 source lines, 8,774 test lines
+### `services/core` — 10,839 source lines, 8,765 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
-| `app.mjs` | 1,639 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
+| `app.mjs` | 1,547 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
-| `media/jobs.mjs` | 359 | Job queue, progress, cancellation, timeouts, artifact storage |
+| `media/jobs.mjs` | 360 | Job queue, progress, cancellation, timeouts, artifact storage |
 | `providers/local.mjs` | 329 | Ollama and OpenAI-compatible local providers |
-| `providers/freellmapi.mjs` | 330 | The online gateway client: chat, images (JSON), video (raw binary) |
 | `router/registry.mjs` | 322 | Model descriptors, capability matching, candidate scoring |
 | `plugins/registry.mjs` | 617 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation, signature checks |
 | `mcp/layer.mjs` | 611 | Servers, tools, risk tiers, approval gates, allowlist, output neutralisation |
@@ -89,7 +86,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `knowledge/bm25.mjs` | 224 | BM25 index (k1=1.5, b=0.75), rebuilt from stored chunks |
 | `plugins/manifest.mjs` | 216 | Manifest validation, scope vocabulary, semver |
 | `plugins/signing.mjs` | 262 | Ed25519 manifest signatures, canonical form, the local trust store |
-| `config.mjs` | 260 | Environment → config, secret loading, `publicConfig` redaction |
+| `config.mjs` | 245 | Environment → config, secret loading, `publicConfig` redaction |
 | `policy/egress.mjs` | 251 | The egress guard, runtime policies, data classes, `*` allow-all, global fetch hook |
 | `server.mjs` | 151 | Entry point, startup banner, graceful shutdown |
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
@@ -114,7 +111,7 @@ release manager, and a hand-written dual encoder whose **five parameter gradient
 all match central finite differences to ~3e-10**. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 4,477 source lines, 1,312 test lines
+### `apps/web` — 4,464 source lines, 1,311 test lines
 
 Five area components, a shell, shared primitives, an API client and three test
 files. Design tokens and the shell's visual structure come from upstream Aetheris
@@ -243,7 +240,7 @@ and are **not the same decision** — the first keeps the ceiling, the second do
 The loader warns specifically when the bypass is combined with wide-open egress. A blank or
 invalid policy **fails safe to `strict_offline`** and records a warning; it never
 fails open. `offline.test.mjs` proves the blocking with a recording `fetch` spy:
-`api.openai.com`, `freellmapi.co`, `huggingface.co` and `api.anthropic.com` are
+`api.openai.com`, `api.example.com`, `huggingface.co` and `api.anthropic.com` are
 all rejected while the spy's call log stays empty, and a real loopback
 Ollama-protocol server still completes a genuine chat round-trip under
 `strict_offline`. Offline must not mean "nothing works".
@@ -264,7 +261,7 @@ the Chat UI shows a `redacted N` chip rather than hiding it.
 booleans (`keyConfigured`), never values. `redactUrl` reduces a URL to
 `protocol://host/path` — no query string. A `VITE_*(KEY|TOKEN|SECRET|PASSWORD)`
 variable is reported as a warning at load, because Vite ships `VITE_*` into the
-browser bundle. Seven endpoints were swept for `FREELLMAPI_API_KEY` leakage.
+browser bundle. Seven endpoints were swept for `LLAMACPP_API_KEY` leakage.
 
 ### 5.4 Plugins
 
@@ -389,7 +386,9 @@ Recorded so the absence is a decision rather than an oversight.
 - **No `system`-risk MCP tools and no `external`-risk tools.** The former is
   refused by `allowedRisks`; the latter has no configured endpoint. Neither is
   stubbed to look complete.
-- **No vendored FreeLLMAPI.** Optional, external, separately versioned.
+- **No online provider at all.** No external gateway is vendored, consumed or
+  configured; the image and video areas refuse with an explicit limitation rather
+  than route a prompt anywhere.
 - **No speculative acceleration.** No quantum, neuromorphic, bare-metal, BCI or
   industrial-control features. Everything runs on 2 CPUs and 3.85 GB RAM with no
   GPU, which is the point: the first implementation must be portable and testable

@@ -1,9 +1,10 @@
 // Media job queue: real lifecycle, progress, cancellation, storage, validation.
 //
-// Built around the verified FreeLLMAPI video semantics (docs/01-audit.md §3.2):
-// the gateway holds one bounded request for minutes and cancels upstream work when
-// the caller disconnects. So a "job" here owns an AbortController; cancelling the
-// job aborts the fetch, which genuinely stops the provider-side poll.
+// A media provider may hold one bounded request open for minutes and stop upstream
+// work when the caller disconnects. So a "job" here owns an AbortController;
+// cancelling the job aborts the fetch, which genuinely stops the provider-side work.
+// No provider is configured in this build (see src/app.mjs), but the queue is kept
+// as the single path any future runtime must go through.
 //
 // Nothing is ever reported as complete until its bytes pass validateMedia().
 
@@ -110,8 +111,8 @@ export class MediaJobQueue {
 
   /**
    * Cancel a job. For a running provider call this aborts the HTTP request, which
-   * makes FreeLLMAPI stop polling upstream — cancellation has a real effect, it is
-   * not a UI-only state change.
+   * stops the provider-side work — cancellation has a real effect, it is not a
+   * UI-only state change.
    */
   cancel(id, reason = 'cancelled by user') {
     const job = this.jobs.get(id)

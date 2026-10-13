@@ -68,7 +68,6 @@ const CONFIG = {
   dataDir: '/tmp/aetheris-run',
   ollama: { enabled: true, baseUrl: 'http://127.0.0.1:11434' },
   llamaCpp: { enabled: false, baseUrl: 'http://127.0.0.1:8080/v1', runtime: 'llama.cpp', keyConfigured: false },
-  freellmapi: { enabled: false, endpoint: null, keyConfigured: false, keyTransport: 'server environment' },
   fabric: { enabled: false },
   browserKeyExposure: false,
 }

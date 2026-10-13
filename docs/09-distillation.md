@@ -20,7 +20,7 @@ learns decides what infrastructure it needs.
 
 Logit distillation matches the teacher's full next-token distribution. That requires
 the teacher's weights, which rules out any model behind an API — including every
-provider FreeLLMAPI fronts. Sequence distillation only needs the teacher's *text*, so
+model that lives behind an API. Sequence distillation only needs the teacher's *text*, so
 it works across HTTP, at the cost of the teacher's uncertainty: the student sees one
 sampled continuation instead of a distribution over all of them.
 
@@ -28,7 +28,7 @@ So the split is forced by the interface, not chosen for convenience.
 
 ### The teacher that was already here
 
-The blocker for external distillation is not technique. `gateway.freellmapi.co`,
+The blocker for external distillation is not technique. `api.openai.com`,
 `text.pollinations.ai`, `api.openai.com` and `generativelanguage.googleapis.com` are
 **all unreachable from this sandbox** (HTTP 000 before credentials are even
 considered), and no API key is configured. Nothing in this repository has ever
@@ -86,8 +86,8 @@ bit-identical across three configurations, including one with an untied output h
 
 ## 3. Sequence distillation: the credentialed path
 
-`fabric/lm/teacher.py` speaks `/v1/chat/completions` to anything OpenAI-compatible,
-including FreeLLMAPI. It takes evenly spaced prefixes of real repository text, asks the
+`fabric/lm/teacher.py` speaks `/v1/chat/completions` to anything OpenAI-compatible.
+It takes evenly spaced prefixes of real repository text, asks the
 teacher to continue each one, and writes the continuations into a corpus that the
 existing trainer consumes as ordinary data.
 

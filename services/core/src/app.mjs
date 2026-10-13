@@ -16,7 +16,6 @@ import { classifyText, redactDeep } from './policy/classify.mjs'
 import { familyReport, tierClaimFor } from './klyvaron/tiers.mjs'
 import { ModelRegistry, ModelRouter, MODEL_KINDS, MODALITIES, AVAILABILITY } from './router/registry.mjs'
 import { OllamaProvider, OpenAiCompatLocalProvider, normalizeMessages } from './providers/local.mjs'
-import { FreellmapiProvider } from './providers/freellmapi.mjs'
 import { KnowledgePipeline } from './knowledge/pipeline.mjs'
 import { CANDIDATE_STATES, MemoryStore } from './memory/store.mjs'
 import { MediaJobQueue, JOB_STATES } from './media/jobs.mjs'
@@ -30,7 +29,7 @@ import { validateManifest, SCOPES, ELEVATED_SCOPES } from './plugins/manifest.mj
 import { McpRegistry, RISK, SERVER_KINDS } from './mcp/layer.mjs'
 import { GodCore, TASK_STATES, LIFECYCLE } from './godcore/lifecycle.mjs'
 import { registerBuiltins } from './builtins.mjs'
-import { publicConfig, redactUrl } from './config.mjs'
+import { publicConfig } from './config.mjs'
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024
 
@@ -186,15 +185,6 @@ export class AetherisOmniApp {
         onEvent: (e) => this.#onEvent(e),
       })
     }
-    if (config.freellmapi.enabled) {
-      this.providers.freellmapi = new FreellmapiProvider({
-        baseUrl: config.freellmapi.baseUrl,
-        apiKey: config.freellmapi.apiKey,
-        guard: this.guard,
-        onEvent: (e) => this.#onEvent(e),
-        videoTimeoutMs: config.freellmapi.videoTimeoutMs ?? config.media.videoTimeoutMs,
-      })
-    }
   }
 
   /**
@@ -275,61 +265,6 @@ export class AetherisOmniApp {
           })
           this.registry.observe(id, { availability: AVAILABILITY.READY, detail: { discoveredVia: `${name} /v1/models` } })
         }
-      } else if (name === 'freellmapi') {
-        const models = await provider.listModels({ readyOnly: true }).catch(() => [])
-        // Register one online chat entry plus the media capabilities the gateway
-        // genuinely serves. The catalog is not enumerated into hundreds of rows:
-        // 'auto' is the documented routing behaviour.
-        this.registry.upsert({
-          id: 'freellmapi:auto',
-          kind: MODEL_KINDS.ONLINE_LLM,
-          displayName: 'FreeLLMAPI auto-routed chat',
-          capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT],
-          location: 'online',
-          provider: 'freellmapi',
-          toolCalling: true,
-          streaming: true,
-          structuredOutput: true,
-          licence: 'provider-terms',
-          costWeight: 1.4,
-          tags: ['gateway'],
-        })
-        this.registry.observe('freellmapi:auto', { availability: AVAILABILITY.READY, detail: { readyModels: models.length } })
-        this.registry.upsert({
-          id: 'freellmapi:embeddings',
-          kind: MODEL_KINDS.ONLINE_EMBEDDING,
-          displayName: 'FreeLLMAPI embeddings',
-          capabilities: [MODALITIES.TEXT_IN, MODALITIES.EMBEDDING_OUT],
-          location: 'online',
-          provider: 'freellmapi',
-          licence: 'provider-terms',
-          costWeight: 1.1,
-        })
-        this.registry.observe('freellmapi:embeddings', { availability: AVAILABILITY.READY })
-        this.registry.upsert({
-          id: 'freellmapi:image',
-          kind: MODEL_KINDS.ONLINE_IMAGE_GEN,
-          displayName: 'FreeLLMAPI image generation',
-          capabilities: [MODALITIES.TEXT_IN, MODALITIES.IMAGE_OUT],
-          location: 'online',
-          provider: 'freellmapi',
-          licence: 'provider-terms',
-          costWeight: 2,
-        })
-        this.registry.observe('freellmapi:image', { availability: AVAILABILITY.READY })
-        this.registry.upsert({
-          id: 'freellmapi:video',
-          kind: MODEL_KINDS.ONLINE_VIDEO_GEN,
-          displayName: 'FreeLLMAPI video generation',
-          capabilities: [MODALITIES.TEXT_IN, MODALITIES.VIDEO_OUT],
-          location: 'online',
-          provider: 'freellmapi',
-          licence: 'provider-terms',
-          costWeight: 3,
-          // Documented limitation, recorded so the UI can state it honestly.
-          tags: ['gateway', 'video-platforms:pollinations|huggingface', 'not-supported-on-custom-endpoints'],
-        })
-        this.registry.observe('freellmapi:video', { availability: AVAILABILITY.READY })
       }
     } catch (error) {
       this.ledger.record({ category: 'model', action: `register_discovered:${name}`, outcome: AUDIT_OUTCOMES.FAILURE, detail: { error: error?.message } })
@@ -608,7 +543,16 @@ export class AetherisOmniApp {
   }
 
   #providerFor(model) {
-    const key = model.location === 'online' ? 'freellmapi' : model.id.startsWith('ollama:') ? 'ollama' : 'llamacpp'
+    if (model.location === 'online') {
+      // This build ships no online provider. A descriptor that still claims the
+      // online location is refused here rather than attempted, so the failure names
+      // the missing provider instead of surfacing as a network error later.
+      const error = new Error(`no online provider is configured for model '${model.id}' in this build`)
+      error.code = 'provider_not_configured'
+      error.status = 503
+      throw error
+    }
+    const key = model.id.startsWith('ollama:') ? 'ollama' : 'llamacpp'
     const provider = this.providers[key]
     if (!provider) {
       const error = new Error(`no provider is configured for model '${model.id}' (expected '${key}')`)
@@ -620,11 +564,13 @@ export class AetherisOmniApp {
   }
 
   #providerModelId(model) {
-    if (model.location === 'online') return model.id === 'freellmapi:auto' ? undefined : model.id.split(':').slice(1).join(':') || undefined
     return model.id.split(':').slice(1).join(':')
   }
 
-  /** Image generation. Returns a job; the artifact exists only after validation. */
+  /**
+   * Image generation. Refused honestly on this host: no runtime is configured, so
+   * no job is created and no placeholder is returned in its place.
+   */
   async generateImage({ prompt, model = null, n = 1, size = null, principal = null, dataClass = null, externalAuthorization = null }) {
     if (!prompt || !String(prompt).trim()) throw badRequest('prompt is required')
     const classification = dataClass ? { dataClass } : classifyText(String(prompt))
@@ -638,40 +584,30 @@ export class AetherisOmniApp {
       error.route = { explanation: route.explanation, rejected: route.rejected }
       return this.#refuse('model', 'image_refused', error, { policy: this.config.policy, rejected: route.rejected.length })
     }
+    // No image runtime ships in this build. A route that resolves therefore reaches
+    // a refusal, not a generation: there is no local image model and no online
+    // provider, and inventing a placeholder would present it as a result — the
+    // failure mode §9 exists to prevent.
     const chosen = route.chosen
-    if (chosen.location !== 'online') {
+    if (chosen.location === 'local') {
       const error = new Error(`local image generation is not implemented for '${chosen.id}' in this build`)
       error.code = 'not_implemented'
       error.status = 501
+      error.limitation = 'no image-capable provider is configured on this host; a substitute image is NOT returned'
       return this.#refuse('model', 'image_refused', error, { modelId: chosen.id })
     }
-    const provider = this.providers.freellmapi
-    if (!provider) throw providerMissing('freellmapi')
-
-    return this.media.enqueue({
-      kind: MEDIA_KINDS.IMAGE,
-      params: { prompt: String(prompt).slice(0, 500), n, size, modelId: chosen.id },
-      subject: principal,
-      timeoutMs: this.config.media.imageTimeoutMs,
-      run: async ({ signal, progress }) => {
-        progress(10, 'submitting')
-        const result = await provider.generateImage({ prompt: String(prompt), model: this.#providerModelId(chosen), n, size, signal, timeoutMs: this.config.media.imageTimeoutMs })
-        progress(80, 'downloading')
-        // If the provider returned URLs rather than b64, fetch them through the guard.
-        if (!result.images.some((entry) => typeof entry.b64_json === 'string') && result.images[0]?.url) {
-          const response = await this.guard.fetch(result.images[0].url, { signal })
-          if (!response.ok) throw new Error(`image download failed with HTTP ${response.status}`)
-          const buffer = Buffer.from(await response.arrayBuffer())
-          return { bytes: new Uint8Array(buffer), contentType: response.headers.get('content-type'), platform: result.platform, model: result.model }
-        }
-        return result
-      },
-    })
+    const error = new Error(`image generation is unavailable: '${chosen.id}' is registered as online, but this build configures no online provider`)
+    error.code = 'provider_not_configured'
+    error.status = 503
+    error.limitation = 'no online provider is configured; a substitute image is NOT returned'
+    return this.#refuse('model', 'image_refused', error, { modelId: chosen.id })
   }
 
   /**
-   * Video generation. Enqueues a real job whose cancellation aborts the gateway
-   * request, which in turn stops the provider-side poll.
+   * Video generation.
+   *
+   * As with images, this build has no video runtime and no online provider, so the
+   * refusal states the limitation instead of substituting a still image (§9).
    */
   async generateVideo({ prompt, model = null, duration = null, aspectRatio = null, image = null, seed = null, audio = null, principal = null, dataClass = null, externalAuthorization = null }) {
     if (!prompt || !String(prompt).trim()) throw badRequest('prompt is required')
@@ -689,39 +625,18 @@ export class AetherisOmniApp {
       return this.#refuse('model', 'video_refused', error, { policy: this.config.policy, rejected: route.rejected.length })
     }
     const chosen = route.chosen
-    if (chosen.location !== 'online') {
+    if (chosen.location === 'local') {
       const error = new Error(`local video generation is not available: '${chosen.id}' has no implemented runtime on this hardware profile (${this.hardware.ramGb}GB RAM, no GPU)`)
       error.code = 'needs_hardware'
       error.status = 501
+      error.limitation = 'no video-capable provider is configured on this host; a still image is NOT offered as a substitute'
       return this.#refuse('model', 'video_refused', error, { modelId: chosen.id, hardware: this.hardware })
     }
-    const provider = this.providers.freellmapi
-    if (!provider) throw providerMissing('freellmapi')
-
-    return this.media.enqueue({
-      kind: MEDIA_KINDS.VIDEO,
-      params: { prompt: String(prompt).slice(0, 500), duration, aspectRatio, seed, audio, modelId: chosen.id, providerLimitations: chosen.tags },
-      subject: principal,
-      timeoutMs: this.config.media.videoTimeoutMs,
-      run: async ({ signal, progress }) => {
-        progress(5, 'submitted to gateway')
-        // The gateway holds one bounded request; we cannot observe its internal poll,
-        // so progress is reported honestly as elapsed-time based, not fabricated.
-        const startedAt = Date.now()
-        const ticker = setInterval(() => {
-          const elapsed = Date.now() - startedAt
-          const estimate = Math.min(90, Math.round((elapsed / this.config.media.videoTimeoutMs) * 100) + 5)
-          progress(estimate, `awaiting provider (${Math.round(elapsed / 1000)}s elapsed)`)
-        }, 2000)
-        try {
-          const result = await provider.generateVideo({ prompt: String(prompt), model: this.#providerModelId(chosen), duration, aspectRatio, image, seed, audio, signal, timeoutMs: this.config.media.videoTimeoutMs })
-          progress(95, 'validating mp4')
-          return result
-        } finally {
-          clearInterval(ticker)
-        }
-      },
-    })
+    const error = new Error(`video generation is unavailable: '${chosen.id}' is registered as online, but this build configures no online provider`)
+    error.code = 'provider_not_configured'
+    error.status = 503
+    error.limitation = 'no online provider is configured; a still image is NOT offered as a substitute'
+    return this.#refuse('model', 'video_refused', error, { modelId: chosen.id })
   }
 
   /** Readiness: what actually works right now, with reasons for what does not. */
@@ -1610,13 +1525,6 @@ function badRequest(message) {
   const error = new Error(message)
   error.code = 'invalid_request'
   error.status = 400
-  return error
-}
-
-function providerMissing(name) {
-  const error = new Error(`provider '${name}' is not configured`)
-  error.code = 'provider_not_configured'
-  error.status = 503
   return error
 }
 

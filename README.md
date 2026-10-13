@@ -1,12 +1,12 @@
 # Aetheris Omni
 
-A local-first AI platform built by integrating three repositories into one system:
+A local-first AI platform built by integrating two repositories into one system:
 [`Aetheris-`](https://github.com/rajaram-2005/Aetheris-) (application and
-orchestration), [`sparsiz`](https://github.com/rajaram-2005/sparsiz) (research and
-compute optimisation), and [`freellmapi`](https://github.com/tashfeenahmed/freellmapi)
-(optional online-model gateway, consumed as a service — not vendored).
+orchestration) and [`sparsiz`](https://github.com/rajaram-2005/sparsiz) (research and
+compute optimisation). Everything runs on this machine: there is no online provider,
+by design, so no prompt can leave the host without a policy decision recorded for it.
 
-This is **not** a concatenation of the three. Each was audited first
+This is **not** a concatenation of the two. Each was audited first
 ([`docs/01-audit.md`](docs/01-audit.md)), responsibilities were assigned by
 capability, duplication was removed, and conflicting interfaces were resolved.
 Provenance for every adopted piece is in
@@ -92,7 +92,7 @@ re-probe, and the same code path serves real inference
 Verified by test, on this host, with no external service:
 
 - **Offline enforcement is real, not cosmetic.** A recording `fetch` spy proves
-  `api.openai.com`, `freellmapi.co`, `huggingface.co` and `api.anthropic.com` are
+  `api.openai.com`, `api.example.com`, `huggingface.co` and `api.anthropic.com` are
   rejected under `strict_offline` without opening a socket or resolving DNS — while
   a real loopback server speaking the Ollama wire protocol still completes a genuine
   chat round-trip. Offline does not mean nothing works.
@@ -118,9 +118,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 11,275 | 8,774 | **zero npm packages** | 422 |
+| `services/core` | Node 22 ESM | 10,839 | 8,765 | **zero npm packages** | 422 |
 | `services/fabric` | Python 3.11 | 8,621 | 6,599 | NumPy only | 555 |
-| `apps/web` | React 18 + Vite | 4,477 | 1,312 | react, react-dom | 67 |
+| `apps/web` | React 18 + Vite | 4,464 | 1,311 | react, react-dom | 67 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web
@@ -217,7 +217,7 @@ Enforcement lives entirely in `services/core`. The browser is a display.
   capability refusals with no ledger entry, meaning the most security-relevant
   events were the ones missing.
 
-Details, including sixteen open items stated plainly:
+Details, including seven open items stated plainly:
 [`docs/05-security.md`](docs/05-security.md).
 
 ---

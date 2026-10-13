@@ -63,7 +63,7 @@ test('strict_offline blocks external hosts before a socket is opened', async () 
 
   for (const url of [
     'https://api.openai.com/v1/chat/completions',
-    'https://freellmapi.co/v1/models',
+    'https://api.example.com/v1/models',
     'https://huggingface.co/api/models',
     'http://10.0.0.5:11434/api/tags', // RFC1918 is treated as local, see its own test
   ]) {
@@ -151,12 +151,12 @@ test('hybrid sends only allowlisted hosts externally and blocks the rest', async
   const real = recordingFetch(async () => new Response('{}', { status: 200 }))
   const guard = createEgressGuard({
     policy: RUNTIME_POLICIES.HYBRID,
-    onlineAllowlist: ['gateway.freellmapi.co'],
+    onlineAllowlist: ['gateway.example.com'],
     fetch: real,
   })
 
-  assert.equal(guard.inspect('https://gateway.freellmapi.co/v1/chat/completions').allowed, true)
-  assert.equal(guard.inspect('https://gateway.freellmapi.co/v1/chat/completions').allowlisted, true)
+  assert.equal(guard.inspect('https://gateway.example.com/v1/chat/completions').allowed, true)
+  assert.equal(guard.inspect('https://gateway.example.com/v1/chat/completions').allowlisted, true)
   assert.equal(guard.inspect('http://127.0.0.1:11434/api/tags').allowed, true)
 
   const blocked = guard.inspect('https://evil.example.com/exfil')
@@ -165,8 +165,8 @@ test('hybrid sends only allowlisted hosts externally and blocks the rest', async
   await assert.rejects(() => guard.fetch('https://evil.example.com/exfil'), EgressBlockedError)
 
   // Subdomains and port variations must not sneak past an exact-host allowlist.
-  assert.equal(guard.inspect('https://sub.gateway.freellmapi.co/v1').allowed, false)
-  assert.equal(guard.inspect('https://gateway.freellmapi.co.evil.example/v1').allowed, false)
+  assert.equal(guard.inspect('https://sub.gateway.example.com/v1').allowed, false)
+  assert.equal(guard.inspect('https://gateway.example.com.evil.example/v1').allowed, false)
   assert.equal(real.calls.length, 0, 'only blocked URLs were attempted here')
 })
 
@@ -343,7 +343,6 @@ test('a real local chat round-trip completes under strict_offline', async () => 
         OLLAMA_ENABLED: 'true',
         OLLAMA_BASE_URL: local.baseUrl,
         LLAMACPP_ENABLED: 'false',
-        FREELLMAPI_ENABLED: 'false',
       },
       {},
     )
@@ -394,7 +393,6 @@ test('strict_offline reports degraded readiness honestly when no model is instal
         OLLAMA_ENABLED: 'true',
         OLLAMA_BASE_URL: 'http://127.0.0.1:1',
         LLAMACPP_ENABLED: 'false',
-        FREELLMAPI_ENABLED: 'false',
       },
       {},
     )
@@ -418,7 +416,7 @@ test('strict_offline reports degraded readiness honestly when no model is instal
   }
 })
 
-test('an online provider stays disabled under strict_offline even when configured', async () => {
+test('an allowlisted external host stays blocked under strict_offline', async () => {
   const dataDir = makeDataDir()
   try {
     const config = loadConfig(
@@ -426,32 +424,32 @@ test('an online provider stays disabled under strict_offline even when configure
         AETHERIS_RUNTIME_POLICY: RUNTIME_POLICIES.STRICT_OFFLINE,
         AETHERIS_DATA_DIR: dataDir,
         OLLAMA_ENABLED: 'false',
-        LLAMACPP_ENABLED: 'false',
-        FREELLMAPI_ENABLED: 'true',
-        FREELLMAPI_BASE_URL: 'https://gateway.freellmapi.co/v1',
-        FREELLMAPI_API_KEY: 'test-key-not-a-real-secret',
-        AETHERIS_ONLINE_ALLOWLIST: 'gateway.freellmapi.co',
+        LLAMACPP_ENABLED: 'true',
+        LLAMACPP_API_KEY: 'test-key-not-a-real-secret',
+        AETHERIS_ONLINE_ALLOWLIST: 'gateway.example.com',
       },
       {},
     )
     const app = new AetherisOmniApp({ config })
 
-    // Configured and allowlisted, but the policy still wins: no external request
-    // may be attempted while strict_offline is in force.
-    assert.equal(app.guard.inspect('https://gateway.freellmapi.co/v1/chat/completions').allowed, false)
+    // Allowlisted, but the policy still wins: no external request may be attempted
+    // while strict_offline is in force.
+    assert.equal(app.guard.inspect('https://gateway.example.com/v1/chat/completions').allowed, false)
     assert.throws(
-      () => app.guard.assertReachable('https://gateway.freellmapi.co/v1/chat/completions'),
+      () => app.guard.assertReachable('https://gateway.example.com/v1/chat/completions'),
       EgressBlockedError,
     )
     await assert.rejects(
-      () => app.guard.fetch('https://gateway.freellmapi.co/v1/chat/completions'),
+      () => app.guard.fetch('https://gateway.example.com/v1/chat/completions'),
       EgressBlockedError,
     )
     assert.equal(app.guard.offlineEnforced, true)
 
-    // The public config view served at /api/config must not leak the key.
+    // The public config view served at /api/config reports that a credential
+    // exists without containing it.
     const exposed = JSON.stringify(publicConfig(config))
     assert.equal(exposed.includes('test-key-not-a-real-secret'), false, 'credentials must never appear in a config view')
+    assert.equal(publicConfig(config).llamaCpp.keyConfigured, true, 'the config view must still say a key is configured')
     assert.equal(JSON.stringify(config).includes('test-key-not-a-real-secret'), true, 'the app itself still holds the key in memory')
     app.close()
   } finally {
