@@ -608,11 +608,11 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 25)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**448 / 448**'), 'core total must be stated')
+  assert.ok(status.includes('**449 / 449**'), 'core total must be stated')
   assert.ok(status.includes('**563 / 563**'), 'fabric total must be stated')
   assert.ok(status.includes('**67 / 67**'), 'web total must be stated')
-  assert.ok(status.includes('1078 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1078 tests: core 448, web 67, fabric 563'),
+  assert.ok(status.includes('1079 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1079 tests: core 449, web 67, fabric 563'),
     'README must state the same totals')
   assert.ok(status.includes('(20 files'), 'the file count must move with the suite')
 
@@ -625,14 +625,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(448), `core heading must say 448, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(449), `core heading must say 449, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(563), `fabric heading must say 563, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(67), `web heading must say 67, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1078,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1078`,
+    1079,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1079`,
   )
 })
 

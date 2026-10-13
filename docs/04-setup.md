@@ -162,24 +162,30 @@ python services/fabric/scripts/export_lm.py --parity-fixture \
     services/core/test/fixtures/klyvaron-lite-parity.json
 ```
 
-Install it through the store, which is the only thing that may write under
-`<AETHERIS_DATA_DIR>/klyvaron/models`:
+Install it with the operator's command, which drives the store — the only thing that may
+write under `<AETHERIS_DATA_DIR>/klyvaron/models`:
 
 ```bash
-node -e "import('./services/core/src/klyvaron/store.mjs').then(({ KlyvaronStore}) =>
-  new KlyvaronStore({ root: process.env.AETHERIS_DATA_DIR + '/klyvaron' })
-    .install(process.argv[1]))" <artifact-dir>
+node services/core/scripts/klyvaron.mjs install <artifact-dir>   # verify, budget, copy, re-verify, record
+node services/core/scripts/klyvaron.mjs list
+node services/core/scripts/klyvaron.mjs verify [<artifact-id>]
+node services/core/scripts/klyvaron.mjs status                    # what the app reports, no server needed
+node services/core/scripts/klyvaron.mjs remove <artifact-id> --yes
 ```
 
-`install()` takes four gates in order — verify the artifact, ask the storage budget,
-copy, re-verify what landed and record its digest — and refuses rather than warns. Copying
-an artifact into `<AETHERIS_DATA_DIR>/klyvaron/models/<id>/` by hand also works, and the
-core still verifies the digests at startup and reports the model over `/api/models`,
-`/api/ready` and `/api/storage`; what a hand copy skips is the budget check and the install
-record, so the device's own accounting will not have seen the artifact arrive. A model that
-fails verification is reported as broken and left on disk, never deleted.
+`install` takes four gates in order — verify the artifact, ask the storage budget, copy,
+re-verify what landed and record its digest — and refuses rather than warns: results are
+JSON on stdout, a refusal is JSON on stderr with exit code 1, `list` and `verify` exit 1
+when an artifact is broken, and `remove` without `--yes` prints the artifact it would
+delete and exits 2. Copying an artifact into `<AETHERIS_DATA_DIR>/klyvaron/models/<id>/` by hand
+also works, and the core still verifies the digests at startup and reports the model over
+`/api/models`, `/api/ready` and `/api/storage`; what a hand copy skips is the budget check
+and the install record, so the device's own accounting will not have seen the artifact
+arrive. A model that fails verification is reported as broken and left on disk, never
+deleted.
 
-Both write to `services/fabric/artifacts/`, which is **gitignored by policy**:
+The training runs and the export both write to `services/fabric/artifacts/`, which is
+**gitignored by policy**:
 weights are referenced by digest from a model card and never redistributed through
 this repository. Each run also writes a report JSON carrying the corpus manifest
 digest, tokenizer digest, configuration digest, code revision, all three seeds, wall
@@ -202,8 +208,8 @@ Full design, evaluation methodology and limitations:
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1078 tests)
-npm run test:core         # 448
+npm test                  # all three suites (1079 tests)
+npm run test:core         # 449
 npm run test:web          # 67
 npm run test:fabric       # 563 — needs numpy + pytest on the interpreter
 ```
@@ -248,7 +254,7 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 448 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Core service** | 449 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
 | **Fabric** | 563 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 67 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 37-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |

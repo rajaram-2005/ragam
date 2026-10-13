@@ -8,10 +8,12 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { CATEGORIES, MobileStorageBudget } from '../src/storage/budget.mjs'
 import { KlyvaronStore, ModelStoreError } from '../src/klyvaron/store.mjs'
@@ -86,6 +88,66 @@ test('an artifact installs into the library, and the copy is verified, not assum
   const replaced = store.install(sourceArtifact(), { replace: true })
   assert.equal(replaced.sha256, fixture.manifest.weights.sha256)
   assert.equal(store.list().length, 1, 'replace must not leave a second copy behind')
+})
+
+test("the operator CLI applies the store's own gates, and removal needs a word for it", async () => {
+  // scripts/klyvaron.mjs is documented as a wrapper over the store rather than a second
+  // install path. That is only true while it stays one, so this drives the real command in
+  // a real child process and checks the contract it documents: refusals on stderr with exit
+  // 1, `remove` without --yes refused on stdout with exit 2 and nothing deleted.
+  const cli = fileURLToPath(new URL('../scripts/klyvaron.mjs', import.meta.url))
+  const dataDir = mkdtempSync(join(tmpdir(), 'klyvaron-cli-'))
+  // NODE_NO_WARNINGS keeps the runtime's own warnings off stderr: the core opens SQLite
+  // through node:sqlite and Node prints an experimental-feature notice for it, which would
+  // otherwise sit in front of the CLI's JSON.
+  const run = (...args) => new Promise((resolvePromise) => {
+    execFile(process.execPath, [cli, ...args],
+      { encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' } },
+      (error, stdout, stderr) => resolvePromise({ code: error?.code ?? 0, stdout, stderr }))
+  })
+
+  try {
+    const installed = await run('install', sourceArtifact(), '--data-dir', dataDir)
+    assert.equal(installed.code, 0, installed.stderr)
+    const record = JSON.parse(installed.stdout)
+    assert.equal(record.installed.id, fixture.manifest.id)
+    assert.equal(record.installed.weightsSha256, fixture.manifest.weights.sha256,
+      "the digest reported must be the store's, of the weights file it copied")
+    assert.deepEqual(record.verification.map((entry) => entry.ok), [true])
+
+    const listed = await run('list', '--data-dir', dataDir)
+    assert.equal(listed.code, 0)
+    assert.equal(JSON.parse(listed.stdout).installed.length, 1)
+
+    // A corrupt artifact is refused with the store's own code and exit 1: the wrapper must
+    // not soften a failed verification into a warning.
+    const corrupt = sourceArtifact()
+    const weights = join(corrupt, 'parity.npz')
+    const bytes = readFileSync(weights)
+    bytes[0] ^= 0xff
+    writeFileSync(weights, bytes)
+    const refused = await run('install', corrupt, '--data-dir', dataDir, '--replace')
+    assert.equal(refused.code, 1, `a refusal is exit 1, not ${refused.code}`)
+    assert.equal(JSON.parse(refused.stderr).error, 'digest_mismatch')
+
+    const naked = await run('remove', fixture.manifest.id, '--data-dir', dataDir)
+    assert.equal(naked.code, 2, 'removal without --yes must refuse, not proceed')
+    const refusal = JSON.parse(naked.stdout)
+    assert.equal(refusal.refused, 'removal needs --yes')
+    assert.equal(refusal.wouldRemove.id, fixture.manifest.id, 'the refusal must show what it would delete')
+    assert.ok(existsSync(join(dataDir, 'klyvaron', 'models', fixture.manifest.id)),
+      'the artifact must still be there after the refusal')
+
+    const removed = await run('remove', fixture.manifest.id, '--data-dir', dataDir, '--yes')
+    assert.equal(removed.code, 0, removed.stderr)
+    const payload = JSON.parse(removed.stdout)
+    assert.equal(payload.removed.removed, true)
+    assert.ok(payload.removed.freedBytes > 0)
+    assert.ok(!existsSync(join(dataDir, 'klyvaron', 'models', fixture.manifest.id)),
+      'the confirmed removal must delete the artifact directory')
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true })
+  }
 })
 
 test('replacing one version with another leaves nothing of the first behind', () => {
