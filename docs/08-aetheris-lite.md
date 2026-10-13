@@ -280,6 +280,21 @@ python services/fabric/scripts/export_lm.py --from-run services/fabric/artifacts
 python services/fabric/scripts/export_lm.py --verify <dir>
 ```
 
+Putting it on a device is `services/core/scripts/klyvaron.mjs`, which is a wrapper over
+the store rather than a second install path — it takes the same four gates, so a scripted
+install cannot skip one:
+
+```bash
+node services/core/scripts/klyvaron.mjs install <artifact-dir>   # verify, budget, copy, re-verify, record
+node services/core/scripts/klyvaron.mjs list
+node services/core/scripts/klyvaron.mjs verify [<artifact-id>]
+node services/core/scripts/klyvaron.mjs status                   # what the app reports, no server needed
+node services/core/scripts/klyvaron.mjs remove <artifact-id> --yes
+```
+
+`remove` refuses without `--yes` and prints what it would delete: a model the user asked
+for is user data, and a cleanup that silently drops it is not a cleanup.
+
 The runtime is `services/core/src/klyvaron/runtime.mjs`: the same pre-LayerNorm
 transformer, the same parameter names, the same order of operations, in plain
 JavaScript. It is not a second model and it is deliberately not an approximation — the
