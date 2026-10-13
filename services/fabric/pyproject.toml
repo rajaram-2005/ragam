@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aetheris-fabric"
+version = "0.1.0"
+description = "Training, evaluation and experiment control for Aetheris Omni (Sparsiz lineage)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "RAJARAM K" }]
+
+# NumPy is the only runtime dependency, deliberately.
+#
+# This host has no GPU and no access to download.pytorch.org, so a real
+# LoRA/QLoRA or distillation run cannot be executed here. Rather than depend on
+# a framework that cannot run, the one model family this service actually trains
+# (the Aetheris Lite dual-encoder retriever) is implemented from scratch on
+# NumPy, where every gradient can be checked and every result reproduced on two
+# CPU cores. Stages that genuinely need weights or a GPU report that honestly
+# instead of pretending; see fabric/pipeline.py.
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+# Floor is 9.0.3, not 8.0: CVE-2025-71176 / GHSA-6w46-j5rx-g56g (medium) affects
+# every pytest below 9.0.3, where the /tmp/pytest-of-{user} temp directory can be
+# pre-created or symlinked by another local user on a shared UNIX host. Test-only
+# and never redistributed, but the declared range should not permit a known-bad
+# version. The fabric suite was verified green under pytest 9.1.1. The count is
+# deliberately absent: an unguarded number in a comment is a stale number, and this
+# one had already drifted. docs/03-status.md reports the current totals.
+dev = ["pytest>=9.0.3"]
+
+[project.scripts]
+aetheris-fabric = "fabric.server:main"
+
+[tool.setuptools.packages.find]
+include = ["fabric*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]

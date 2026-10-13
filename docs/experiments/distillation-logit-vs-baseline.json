@@ -1,0 +1,302 @@
+{
+  "experiment": "logit-distillation-vs-baseline",
+  "teacher": {
+    "parameterCount": 359904,
+    "weightsDigest": "c034a15095fc57ea9c9f1210079377a079209d9b8ac5e79db33466c83267390a",
+    "configDigest": "4f33c2cd55fdfe00c2766466224db739cab984bdfdd076798a0df66636f183ed",
+    "note": "logit distillation: the teacher's full distribution, not its text"
+  },
+  "teacherConfig": {
+    "vocab_size": 151,
+    "d_model": 96,
+    "n_layers": 3,
+    "n_heads": 4,
+    "d_ff": 384,
+    "seq_len": 128,
+    "dropout": 0.0,
+    "tie_embeddings": true,
+    "init_scale": 0.02,
+    "layernorm_eps": 1e-05
+  },
+  "teacherConfigSource": "model_config in the run report",
+  "teacherFile": {
+    "filename": "aetheris-lite-lm-c034a15095fc.npz",
+    "digest": "62d26427228f8ac078c9bb2b12edf18f12b612a8b40050f18aa7bd520baa3978"
+  },
+  "studentConfig": {
+    "vocab_size": 151,
+    "d_model": 48,
+    "n_layers": 2,
+    "n_heads": 4,
+    "d_ff": 192,
+    "seq_len": 96,
+    "dropout": 0.0,
+    "tie_embeddings": true,
+    "init_scale": 0.02,
+    "layernorm_eps": 1e-05
+  },
+  "distillConfig": {
+    "temperature": 2.0,
+    "alpha": 0.5
+  },
+  "budget": {
+    "steps": 300,
+    "batchSize": 12,
+    "seqLen": 96,
+    "seeds": 3,
+    "dataSeed": 0,
+    "splitSeed": 20251012
+  },
+  "corpus": {
+    "manifestDigest": "6c81638dd0c965ca0c4d01239d769c7895b876fe95a3ce127e88478728010e57",
+    "root": "<repository>",
+    "snapshot": "aetheris-lite-lm-c034a15095fc.corpus.json",
+    "trainFiles": 121,
+    "validationFiles": 14,
+    "trainTokens": 2081732,
+    "validationTokens": 132984
+  },
+  "tokenizer": {
+    "size": 151,
+    "vocabularyDigest": "b1e92f96d6251a0ab34d3ddf6a0333b3cc53d6ab908e28279c9b3d1f63ad40c2"
+  },
+  "runs": [
+    {
+      "seed": 0,
+      "arm": "baseline",
+      "alpha": 1.0,
+      "temperature": 2.0,
+      "nllNatsPerToken": 2.8571784252437586,
+      "perplexity": 17.412327375730733,
+      "bitsPerCharacter": 4.122037145034109,
+      "finalLoss": 2.5667173862457275,
+      "weightDigest": "2ae6bb340503302cc6557205ad6ee74f6224b6d233a5035e7c5cb1fef6d324ba",
+      "parameterCount": 67632,
+      "teacherForwards": 0,
+      "baselines": [
+        {
+          "name": "uniform",
+          "description": "every token equally likely, ln(151)",
+          "nllNatsPerToken": 5.017279836814924,
+          "perplexity": 151.0,
+          "bitsPerCharacter": 7.238404739325079
+        },
+        {
+          "name": "unigram",
+          "description": "training-set token frequencies, add-0.1 smoothing, no context",
+          "nllNatsPerToken": 3.598278349064573,
+          "perplexity": 36.53527926808189,
+          "bitsPerCharacter": 5.191218329933586
+        },
+        {
+          "name": "bigram",
+          "description": "P(next|prev) from training adjacencies, add-0.1 smoothing",
+          "nllNatsPerToken": 2.8182423838226236,
+          "perplexity": 16.747389306463926,
+          "bitsPerCharacter": 4.06586431116399
+        }
+      ]
+    },
+    {
+      "seed": 0,
+      "arm": "distilled",
+      "alpha": 0.5,
+      "temperature": 2.0,
+      "nllNatsPerToken": 2.952825215290313,
+      "perplexity": 19.160008483045864,
+      "bitsPerCharacter": 4.260026294711221,
+      "finalLoss": 2.5965704917907715,
+      "weightDigest": "cfb60e6d2c716110f5e77bdd7ea9651d677e0a1df2af7950fa5dc192275cdbc6",
+      "parameterCount": 67632,
+      "teacherForwards": 300,
+      "baselines": [
+        {
+          "name": "uniform",
+          "description": "every token equally likely, ln(151)",
+          "nllNatsPerToken": 5.017279836814924,
+          "perplexity": 151.0,
+          "bitsPerCharacter": 7.238404739325079
+        },
+        {
+          "name": "unigram",
+          "description": "training-set token frequencies, add-0.1 smoothing, no context",
+          "nllNatsPerToken": 3.598278349064573,
+          "perplexity": 36.53527926808189,
+          "bitsPerCharacter": 5.191218329933586
+        },
+        {
+          "name": "bigram",
+          "description": "P(next|prev) from training adjacencies, add-0.1 smoothing",
+          "nllNatsPerToken": 2.8182423838226236,
+          "perplexity": 16.747389306463926,
+          "bitsPerCharacter": 4.06586431116399
+        }
+      ]
+    },
+    {
+      "seed": 1,
+      "arm": "baseline",
+      "alpha": 1.0,
+      "temperature": 2.0,
+      "nllNatsPerToken": 2.860410032031338,
+      "perplexity": 17.46868819001137,
+      "bitsPerCharacter": 4.1266993681206525,
+      "finalLoss": 2.5494823455810547,
+      "weightDigest": "2c40914b4366099d986af8f953ada611b444144b9ce15d9793a8a86b424c18bf",
+      "parameterCount": 67632,
+      "teacherForwards": 0,
+      "baselines": [
+        {
+          "name": "uniform",
+          "description": "every token equally likely, ln(151)",
+          "nllNatsPerToken": 5.017279836814924,
+          "perplexity": 151.0,
+          "bitsPerCharacter": 7.238404739325079
+        },
+        {
+          "name": "unigram",
+          "description": "training-set token frequencies, add-0.1 smoothing, no context",
+          "nllNatsPerToken": 3.598278349064573,
+          "perplexity": 36.53527926808189,
+          "bitsPerCharacter": 5.191218329933586
+        },
+        {
+          "name": "bigram",
+          "description": "P(next|prev) from training adjacencies, add-0.1 smoothing",
+          "nllNatsPerToken": 2.8182423838226236,
+          "perplexity": 16.747389306463926,
+          "bitsPerCharacter": 4.06586431116399
+        }
+      ]
+    },
+    {
+      "seed": 1,
+      "arm": "distilled",
+      "alpha": 0.5,
+      "temperature": 2.0,
+      "nllNatsPerToken": 2.955125592044688,
+      "perplexity": 19.20413445489528,
+      "bitsPerCharacter": 4.263345036846934,
+      "finalLoss": 2.5915732383728027,
+      "weightDigest": "ffd721ee43a4a33bfc266a41f578358125e416c235217eaee57e3ff492026a0c",
+      "parameterCount": 67632,
+      "teacherForwards": 300,
+      "baselines": [
+        {
+          "name": "uniform",
+          "description": "every token equally likely, ln(151)",
+          "nllNatsPerToken": 5.017279836814924,
+          "perplexity": 151.0,
+          "bitsPerCharacter": 7.238404739325079
+        },
+        {
+          "name": "unigram",
+          "description": "training-set token frequencies, add-0.1 smoothing, no context",
+          "nllNatsPerToken": 3.598278349064573,
+          "perplexity": 36.53527926808189,
+          "bitsPerCharacter": 5.191218329933586
+        },
+        {
+          "name": "bigram",
+          "description": "P(next|prev) from training adjacencies, add-0.1 smoothing",
+          "nllNatsPerToken": 2.8182423838226236,
+          "perplexity": 16.747389306463926,
+          "bitsPerCharacter": 4.06586431116399
+        }
+      ]
+    },
+    {
+      "seed": 2,
+      "arm": "baseline",
+      "alpha": 1.0,
+      "temperature": 2.0,
+      "nllNatsPerToken": 2.848976871568517,
+      "perplexity": 17.270103264718216,
+      "bitsPerCharacter": 4.1102048042192525,
+      "finalLoss": 2.565739631652832,
+      "weightDigest": "2fad86508209f4275801c5f54dd1388a829eaf05655a1cf3ed92eb0561d39170",
+      "parameterCount": 67632,
+      "teacherForwards": 0,
+      "baselines": [
+        {
+          "name": "uniform",
+          "description": "every token equally likely, ln(151)",
+          "nllNatsPerToken": 5.017279836814924,
+          "perplexity": 151.0,
+          "bitsPerCharacter": 7.238404739325079
+        },
+        {
+          "name": "unigram",
+          "description": "training-set token frequencies, add-0.1 smoothing, no context",
+          "nllNatsPerToken": 3.598278349064573,
+          "perplexity": 36.53527926808189,
+          "bitsPerCharacter": 5.191218329933586
+        },
+        {
+          "name": "bigram",
+          "description": "P(next|prev) from training adjacencies, add-0.1 smoothing",
+          "nllNatsPerToken": 2.8182423838226236,
+          "perplexity": 16.747389306463926,
+          "bitsPerCharacter": 4.06586431116399
+        }
+      ]
+    },
+    {
+      "seed": 2,
+      "arm": "distilled",
+      "alpha": 0.5,
+      "temperature": 2.0,
+      "nllNatsPerToken": 2.9352328138661297,
+      "perplexity": 18.82588555221985,
+      "bitsPerCharacter": 4.234645824419223,
+      "finalLoss": 2.5806167125701904,
+      "weightDigest": "cd495f5a3f2f62aec16763f76e7ff7750ffc85190a07c15e506f9ec11dd386a2",
+      "parameterCount": 67632,
+      "teacherForwards": 300,
+      "baselines": [
+        {
+          "name": "uniform",
+          "description": "every token equally likely, ln(151)",
+          "nllNatsPerToken": 5.017279836814924,
+          "perplexity": 151.0,
+          "bitsPerCharacter": 7.238404739325079
+        },
+        {
+          "name": "unigram",
+          "description": "training-set token frequencies, add-0.1 smoothing, no context",
+          "nllNatsPerToken": 3.598278349064573,
+          "perplexity": 36.53527926808189,
+          "bitsPerCharacter": 5.191218329933586
+        },
+        {
+          "name": "bigram",
+          "description": "P(next|prev) from training adjacencies, add-0.1 smoothing",
+          "nllNatsPerToken": 2.8182423838226236,
+          "perplexity": 16.747389306463926,
+          "bitsPerCharacter": 4.06586431116399
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "seedCount": 3,
+    "gainsNatsPerToken": [
+      -0.0956467900465543,
+      -0.09471556001335024,
+      -0.0862559422976128
+    ],
+    "meanGain": -0.09220609745250578,
+    "stdevGain": 0.00517397884796217,
+    "seedsImproved": 0,
+    "seedsReversed": 3,
+    "gainExceedsSeedSpread": true,
+    "improvedOnEverySeed": false,
+    "reversedOnEverySeed": true,
+    "maxGain": -0.0862559422976128,
+    "minGain": -0.0956467900465543
+  },
+  "verdict": "reject",
+  "rationale": "distillation was worse on every one of 3 seeds and the mean loss clears the spread across seeds",
+  "wallSeconds": 367.335,
+  "note": "Committed record of a measured run. Absolute paths from the machine that produced it are canonicalised; every measured value is unchanged."
+}

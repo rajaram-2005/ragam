@@ -1,0 +1,50 @@
+{
+  "name": "aetheris-omni",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aetheris Omni \u2014 a local-first AI platform with exactly five product areas: Chat, Image, Video, Plugins, MCP",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "core": "node services/core/src/server.mjs",
+    "fabric": "cd services/fabric && ${AETHERIS_PYTHON:-python3} -m fabric.server",
+    "web": "cd apps/web && npm run dev",
+    "web:build": "cd apps/web && npm run build",
+    "web:install": "cd apps/web && npm install",
+    "test": "npm run test:core && npm run test:web && npm run test:fabric",
+    "test:core": "cd services/core && node --test test/*.test.mjs",
+    "test:web": "cd apps/web && node --test test/*.test.mjs",
+    "test:fabric": "cd services/fabric && ${AETHERIS_PYTHON:-python3} -m pytest -q",
+    "train": "cd services/fabric && ${AETHERIS_PYTHON:-python3} -c \"from fabric.pipeline import Pipeline, PipelineConfig; r = Pipeline(PipelineConfig(epochs=25)).run(); print(r.status, r.run_id)\"",
+    "cycle": "cd services/fabric && ${AETHERIS_PYTHON:-python3} scripts/sparsiz_cycle.py",
+    "robustness": "cd services/fabric && ${AETHERIS_PYTHON:-python3} scripts/robustness.py",
+    "lm:train": "cd services/fabric && ${AETHERIS_PYTHON:-python3} scripts/train_lm.py",
+    "verify": "npm run test && npm run web:build",
+    "fabric:run": "curl -sS -X POST http://127.0.0.1:8791/pipeline/run -H \"content-type: application/json\" -d \"{}\"",
+    "lm:quick": "cd services/fabric && ${AETHERIS_PYTHON:-python3} scripts/train_lm.py --steps 60 --d-model 48 --n-layers 2 --d-ff 128 --warmup-steps 10 --output-dir /tmp/aetheris-lite-quick"
+  },
+  "//": [
+    "This is a script runner, not an npm workspace, on purpose.",
+    "",
+    "services/core has ZERO npm dependencies (Node standard library only, including",
+    "node:sqlite, hence engines.node >= 22.5.0). services/fabric is Python and needs",
+    "only NumPy. apps/web is the single component with a dependency tree, and it",
+    "installs into its own node_modules.",
+    "",
+    "Hoisting those into a root workspace would give the core service and the",
+    "training service a dependency tree they do not have and do not want, and would",
+    "make the zero-dependency property of services/core untestable. Each component",
+    "is installed and tested independently; `npm test` runs all three suites.",
+    "",
+    "Python tests need an interpreter with numpy and pytest. They do not need torch,",
+    "and installing torch here is actively harmful: on a GPU-less host pip pulls the",
+    "entire CUDA stack. See docs/04-setup.md.",
+    "Python scripts honour $AETHERIS_PYTHON (default: python3). Set it when numpy and pytest live in a virtualenv rather than on the system interpreter \u2014 e.g. AETHERIS_PYTHON=/path/to/venv/bin/python npm run test:fabric. Do not install torch to satisfy them; nothing here needs it.",
+    "Training is a library call or an HTTP POST to the Fabric service, not a CLI: fabric/run.py is the RunRecord module. `npm run train` runs the pipeline in-process; `npm run fabric:run` triggers it through the service (start `npm run fabric` first).",
+    "Aetheris Lite training is a pure-NumPy from-scratch language model: `npm run lm:train` runs the release configuration and `npm run lm:quick` a 60-step smoke run. No torch, no GPU, no downloads. Artifacts go to services/fabric/artifacts/, which is gitignored by policy: weights are referenced by digest from a model card, never redistributed through this repository."
+  ],
+  "workspaces": []
+}

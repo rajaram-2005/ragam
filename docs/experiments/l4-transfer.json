@@ -1,0 +1,2498 @@
+{
+  "experiment": "l4-transfer",
+  "what": "whether a retrieval strategy selected on one task family (half the topics, lexically hard queries) transfers to held-out topics and to the lexically easy condition",
+  "generatedAt": "2026-10-13T12:53:21Z",
+  "durationSeconds": 3.558,
+  "config": {
+    "dataSeedPerRun": "the seed itself, so each seed is an independent corpus",
+    "conditions": [
+      "low",
+      "high"
+    ],
+    "encoder": {
+      "dModel": 48,
+      "epochs": 25,
+      "note": "the pipeline's own serving configuration; not tuned for this experiment"
+    },
+    "corpus": {
+      "topics": 24,
+      "documentsPerTopic": 4,
+      "queriesPerTopic": 3,
+      "evaluationFraction": 0.25
+    }
+  },
+  "hardware": {
+    "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+    "machine": "x86_64",
+    "processor": null,
+    "cpuCount": 2,
+    "python": "3.11.2",
+    "numpy": "2.4.6"
+  },
+  "report": {
+    "protocol": {
+      "primaryMetric": "mrr",
+      "secondaryMetric": "recall@5",
+      "minGain": 0.01,
+      "minSeeds": 3,
+      "baseline": "equal-trust",
+      "candidates": [
+        "lexical-only",
+        "dense-only",
+        "equal-trust",
+        "coverage-weighted",
+        "coverage-inverse"
+      ],
+      "seeds": [
+        11,
+        22,
+        33,
+        44,
+        55,
+        66,
+        77,
+        88
+      ],
+      "lessonRule": "mean delta >= 0.01 and every seed the same direction",
+      "transferRule": "transferred needs mean delta >= 0.01, no seed against, and >= 3 seeds up"
+    },
+    "families": {
+      "development-low": {
+        "topics": [
+          "calibration",
+          "connector",
+          "coolant",
+          "emc",
+          "fuse",
+          "isolation",
+          "precharge",
+          "regen",
+          "soc",
+          "storage",
+          "torque",
+          "watchdog"
+        ],
+        "topicCount": 12,
+        "condition": "low",
+        "role": "development"
+      },
+      "development-high": {
+        "topics": [
+          "calibration",
+          "connector",
+          "coolant",
+          "emc",
+          "fuse",
+          "isolation",
+          "precharge",
+          "regen",
+          "soc",
+          "storage",
+          "torque",
+          "watchdog"
+        ],
+        "topicCount": 12,
+        "condition": "high",
+        "role": "target"
+      },
+      "held-out-low": {
+        "topics": [
+          "balancing",
+          "canbus",
+          "contactor",
+          "disposal",
+          "firmware",
+          "inverter",
+          "logging",
+          "redundancy",
+          "sensor",
+          "soh",
+          "thermal",
+          "transport"
+        ],
+        "topicCount": 12,
+        "condition": "low",
+        "role": "target"
+      },
+      "held-out-high": {
+        "topics": [
+          "balancing",
+          "canbus",
+          "contactor",
+          "disposal",
+          "firmware",
+          "inverter",
+          "logging",
+          "redundancy",
+          "sensor",
+          "soh",
+          "thermal",
+          "transport"
+        ],
+        "topicCount": 12,
+        "condition": "high",
+        "role": "target"
+      }
+    },
+    "development": {
+      "family": "development-low",
+      "seeds": 8,
+      "seedValues": [
+        11,
+        22,
+        33,
+        44,
+        55,
+        66,
+        77,
+        88
+      ],
+      "baseline": "equal-trust",
+      "ranking": [
+        {
+          "strategy": "equal-trust",
+          "mean": 0.842142,
+          "seeds": 8,
+          "missing": [],
+          "rank": 1
+        },
+        {
+          "strategy": "coverage-weighted",
+          "mean": 0.808767,
+          "seeds": 8,
+          "missing": [],
+          "rank": 2
+        },
+        {
+          "strategy": "dense-only",
+          "mean": 0.763302,
+          "seeds": 8,
+          "missing": [],
+          "rank": 3
+        },
+        {
+          "strategy": "coverage-inverse",
+          "mean": 0.740431,
+          "seeds": 8,
+          "missing": [],
+          "rank": 4
+        },
+        {
+          "strategy": "lexical-only",
+          "mean": 0.474983,
+          "seeds": 8,
+          "missing": [],
+          "rank": 5
+        }
+      ],
+      "winner": "equal-trust",
+      "perStrategy": {
+        "lexical-only": {
+          "mean": 0.474983,
+          "meanDelta": -0.367159,
+          "deltas": [
+            -0.232407,
+            -0.366534,
+            -0.341799,
+            -0.312269,
+            -0.275,
+            -0.5,
+            -0.356481,
+            -0.552778
+          ],
+          "secondaryMeanDelta": -0.104167,
+          "secondaryDeltas": [
+            -0.083333,
+            -0.083333,
+            -0.166667,
+            0.0,
+            -0.083333,
+            -0.25,
+            -0.166667,
+            0.0
+          ],
+          "missing": []
+        },
+        "dense-only": {
+          "mean": 0.763302,
+          "meanDelta": -0.07884,
+          "deltas": [
+            -0.108929,
+            -0.258333,
+            -0.027778,
+            0.010747,
+            -0.15754,
+            0.0,
+            -0.080556,
+            -0.008333
+          ],
+          "secondaryMeanDelta": -0.09375,
+          "secondaryDeltas": [
+            -0.166667,
+            -0.166667,
+            0.0,
+            0.0,
+            -0.333333,
+            0.0,
+            -0.083333,
+            0.0
+          ],
+          "missing": []
+        },
+        "equal-trust": {
+          "mean": 0.842142,
+          "meanDelta": 0.0,
+          "deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "secondaryMeanDelta": 0.0,
+          "secondaryDeltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": []
+        },
+        "coverage-weighted": {
+          "mean": 0.808767,
+          "meanDelta": -0.033375,
+          "deltas": [
+            -0.076389,
+            -0.128571,
+            0.022222,
+            -0.060185,
+            -0.087963,
+            0.0,
+            0.072222,
+            -0.008333
+          ],
+          "secondaryMeanDelta": -0.020833,
+          "secondaryDeltas": [
+            0.0,
+            -0.083333,
+            0.083333,
+            -0.083333,
+            -0.083333,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "missing": []
+        },
+        "coverage-inverse": {
+          "mean": 0.740431,
+          "meanDelta": -0.101711,
+          "deltas": [
+            -0.055556,
+            -0.073611,
+            -0.097222,
+            -0.081382,
+            -0.135417,
+            -0.201389,
+            -0.114947,
+            -0.054167
+          ],
+          "secondaryMeanDelta": 0.0,
+          "secondaryDeltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.083333,
+            -0.083333,
+            0.0,
+            -0.083333,
+            0.083333
+          ],
+          "missing": []
+        }
+      },
+      "versusBaseline": [
+        {
+          "strategy": "coverage-weighted",
+          "meanDelta": -0.033375,
+          "minDelta": -0.128571,
+          "maxDelta": 0.072222,
+          "deltas": [
+            -0.076389,
+            -0.128571,
+            0.022222,
+            -0.060185,
+            -0.087963,
+            0.0,
+            0.072222,
+            -0.008333
+          ],
+          "positiveSeeds": 2,
+          "negativeSeeds": 5,
+          "tiedSeeds": 1,
+          "missing": false
+        },
+        {
+          "strategy": "dense-only",
+          "meanDelta": -0.07884,
+          "minDelta": -0.258333,
+          "maxDelta": 0.010747,
+          "deltas": [
+            -0.108929,
+            -0.258333,
+            -0.027778,
+            0.010747,
+            -0.15754,
+            0.0,
+            -0.080556,
+            -0.008333
+          ],
+          "positiveSeeds": 1,
+          "negativeSeeds": 6,
+          "tiedSeeds": 1,
+          "missing": false
+        },
+        {
+          "strategy": "coverage-inverse",
+          "meanDelta": -0.101711,
+          "minDelta": -0.201389,
+          "maxDelta": -0.054167,
+          "deltas": [
+            -0.055556,
+            -0.073611,
+            -0.097222,
+            -0.081382,
+            -0.135417,
+            -0.201389,
+            -0.114947,
+            -0.054167
+          ],
+          "positiveSeeds": 0,
+          "negativeSeeds": 8,
+          "tiedSeeds": 0,
+          "missing": false
+        },
+        {
+          "strategy": "lexical-only",
+          "meanDelta": -0.367159,
+          "minDelta": -0.552778,
+          "maxDelta": -0.232407,
+          "deltas": [
+            -0.232407,
+            -0.366534,
+            -0.341799,
+            -0.312269,
+            -0.275,
+            -0.5,
+            -0.356481,
+            -0.552778
+          ],
+          "positiveSeeds": 0,
+          "negativeSeeds": 8,
+          "tiedSeeds": 0,
+          "missing": false
+        }
+      ],
+      "versusBaselineSecondary": [
+        {
+          "strategy": "coverage-inverse",
+          "meanDelta": 0.0,
+          "minDelta": -0.083333,
+          "maxDelta": 0.083333,
+          "deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.083333,
+            -0.083333,
+            0.0,
+            -0.083333,
+            0.083333
+          ],
+          "positiveSeeds": 2,
+          "negativeSeeds": 2,
+          "tiedSeeds": 4,
+          "missing": false
+        },
+        {
+          "strategy": "coverage-weighted",
+          "meanDelta": -0.020833,
+          "minDelta": -0.083333,
+          "maxDelta": 0.083333,
+          "deltas": [
+            0.0,
+            -0.083333,
+            0.083333,
+            -0.083333,
+            -0.083333,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positiveSeeds": 1,
+          "negativeSeeds": 3,
+          "tiedSeeds": 4,
+          "missing": false
+        },
+        {
+          "strategy": "dense-only",
+          "meanDelta": -0.09375,
+          "minDelta": -0.333333,
+          "maxDelta": 0.0,
+          "deltas": [
+            -0.166667,
+            -0.166667,
+            0.0,
+            0.0,
+            -0.333333,
+            0.0,
+            -0.083333,
+            0.0
+          ],
+          "positiveSeeds": 0,
+          "negativeSeeds": 4,
+          "tiedSeeds": 4,
+          "missing": false
+        },
+        {
+          "strategy": "lexical-only",
+          "meanDelta": -0.104167,
+          "minDelta": -0.25,
+          "maxDelta": 0.0,
+          "deltas": [
+            -0.083333,
+            -0.083333,
+            -0.166667,
+            0.0,
+            -0.083333,
+            -0.25,
+            -0.166667,
+            0.0
+          ],
+          "positiveSeeds": 0,
+          "negativeSeeds": 6,
+          "tiedSeeds": 2,
+          "missing": false
+        }
+      ],
+      "secondaryMetric": "recall@5",
+      "lesson": null,
+      "verdict": "no_lesson",
+      "rule": "mean delta >= 0.01 on mrr and the same direction in every seed"
+    },
+    "targets": [
+      {
+        "family": "development-high",
+        "subject": "equal-trust",
+        "subjectIsLesson": false,
+        "baseline": 0.903311,
+        "lessonMean": 0.903311,
+        "meanDelta": 0.0,
+        "deltas": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "secondaryMetric": "recall@5",
+        "secondaryMeanDelta": 0.0,
+        "secondaryDeltas": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "positiveSeeds": 0,
+        "negativeSeeds": 0,
+        "tiedSeeds": 8,
+        "verdict": "observed",
+        "ranking": [
+          {
+            "strategy": "equal-trust",
+            "mean": 0.903311,
+            "seeds": 8,
+            "missing": [],
+            "rank": 1
+          },
+          {
+            "strategy": "coverage-weighted",
+            "mean": 0.895395,
+            "seeds": 8,
+            "missing": [],
+            "rank": 2
+          },
+          {
+            "strategy": "coverage-inverse",
+            "mean": 0.889538,
+            "seeds": 8,
+            "missing": [],
+            "rank": 3
+          },
+          {
+            "strategy": "dense-only",
+            "mean": 0.843266,
+            "seeds": 8,
+            "missing": [],
+            "rank": 4
+          },
+          {
+            "strategy": "lexical-only",
+            "mean": 0.755093,
+            "seeds": 8,
+            "missing": [],
+            "rank": 5
+          }
+        ],
+        "versusBaseline": [
+          {
+            "strategy": "coverage-weighted",
+            "meanDelta": -0.007916,
+            "minDelta": -0.032407,
+            "maxDelta": 0.008466,
+            "deltas": [
+              -0.004167,
+              -0.004167,
+              -0.032407,
+              -0.017956,
+              0.002778,
+              0.0,
+              -0.015873,
+              0.008466
+            ],
+            "positiveSeeds": 2,
+            "negativeSeeds": 5,
+            "tiedSeeds": 1,
+            "missing": false
+          },
+          {
+            "strategy": "coverage-inverse",
+            "meanDelta": -0.013773,
+            "minDelta": -0.089583,
+            "maxDelta": 0.061806,
+            "deltas": [
+              0.002778,
+              -0.059722,
+              0.009259,
+              0.061806,
+              0.006944,
+              -0.041667,
+              0.0,
+              -0.089583
+            ],
+            "positiveSeeds": 4,
+            "negativeSeeds": 3,
+            "tiedSeeds": 1,
+            "missing": false
+          },
+          {
+            "strategy": "dense-only",
+            "meanDelta": -0.060045,
+            "minDelta": -0.139683,
+            "maxDelta": -0.017857,
+            "deltas": [
+              -0.017857,
+              -0.083003,
+              -0.046296,
+              -0.021528,
+              -0.088657,
+              -0.055556,
+              -0.027778,
+              -0.139683
+            ],
+            "positiveSeeds": 0,
+            "negativeSeeds": 8,
+            "tiedSeeds": 0,
+            "missing": false
+          },
+          {
+            "strategy": "lexical-only",
+            "meanDelta": -0.148218,
+            "minDelta": -0.268519,
+            "maxDelta": 0.002778,
+            "deltas": [
+              0.002778,
+              -0.170833,
+              -0.268519,
+              -0.12338,
+              -0.108333,
+              -0.177778,
+              -0.188889,
+              -0.150794
+            ],
+            "positiveSeeds": 1,
+            "negativeSeeds": 7,
+            "tiedSeeds": 0,
+            "missing": false
+          }
+        ],
+        "versusBaselineSecondary": [
+          {
+            "strategy": "lexical-only",
+            "meanDelta": 0.020833,
+            "minDelta": 0.0,
+            "maxDelta": 0.083333,
+            "deltas": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.083333,
+              0.0,
+              0.0,
+              0.083333
+            ],
+            "positiveSeeds": 2,
+            "negativeSeeds": 0,
+            "tiedSeeds": 6,
+            "missing": false
+          },
+          {
+            "strategy": "coverage-inverse",
+            "meanDelta": 0.010417,
+            "minDelta": -0.083333,
+            "maxDelta": 0.083333,
+            "deltas": [
+              0.0,
+              0.0,
+              0.0,
+              0.083333,
+              0.083333,
+              0.0,
+              0.0,
+              -0.083333
+            ],
+            "positiveSeeds": 2,
+            "negativeSeeds": 1,
+            "tiedSeeds": 5,
+            "missing": false
+          },
+          {
+            "strategy": "coverage-weighted",
+            "meanDelta": -0.010417,
+            "minDelta": -0.083333,
+            "maxDelta": 0.083333,
+            "deltas": [
+              0.0,
+              0.0,
+              0.0,
+              -0.083333,
+              0.083333,
+              0.0,
+              -0.083333,
+              0.0
+            ],
+            "positiveSeeds": 1,
+            "negativeSeeds": 2,
+            "tiedSeeds": 5,
+            "missing": false
+          },
+          {
+            "strategy": "dense-only",
+            "meanDelta": -0.072917,
+            "minDelta": -0.166667,
+            "maxDelta": 0.0,
+            "deltas": [
+              -0.166667,
+              -0.166667,
+              0.0,
+              0.0,
+              -0.083333,
+              0.0,
+              -0.083333,
+              -0.083333
+            ],
+            "positiveSeeds": 0,
+            "negativeSeeds": 5,
+            "tiedSeeds": 3,
+            "missing": false
+          }
+        ],
+        "winner": "equal-trust",
+        "winnerAgreesWithDevelopment": true
+      },
+      {
+        "family": "held-out-low",
+        "subject": "equal-trust",
+        "subjectIsLesson": false,
+        "baseline": 0.865596,
+        "lessonMean": 0.865596,
+        "meanDelta": 0.0,
+        "deltas": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "secondaryMetric": "recall@5",
+        "secondaryMeanDelta": 0.0,
+        "secondaryDeltas": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "positiveSeeds": 0,
+        "negativeSeeds": 0,
+        "tiedSeeds": 8,
+        "verdict": "observed",
+        "ranking": [
+          {
+            "strategy": "coverage-weighted",
+            "mean": 0.865914,
+            "seeds": 8,
+            "missing": [],
+            "rank": 1
+          },
+          {
+            "strategy": "equal-trust",
+            "mean": 0.865596,
+            "seeds": 8,
+            "missing": [],
+            "rank": 2
+          },
+          {
+            "strategy": "dense-only",
+            "mean": 0.839352,
+            "seeds": 8,
+            "missing": [],
+            "rank": 3
+          },
+          {
+            "strategy": "coverage-inverse",
+            "mean": 0.793386,
+            "seeds": 8,
+            "missing": [],
+            "rank": 4
+          },
+          {
+            "strategy": "lexical-only",
+            "mean": 0.566758,
+            "seeds": 8,
+            "missing": [],
+            "rank": 5
+          }
+        ],
+        "versusBaseline": [
+          {
+            "strategy": "coverage-weighted",
+            "meanDelta": 0.000318,
+            "minDelta": -0.111111,
+            "maxDelta": 0.055556,
+            "deltas": [
+              -0.076389,
+              0.037963,
+              0.041667,
+              0.024306,
+              0.0,
+              0.055556,
+              -0.111111,
+              0.030556
+            ],
+            "positiveSeeds": 5,
+            "negativeSeeds": 2,
+            "tiedSeeds": 1,
+            "missing": false
+          },
+          {
+            "strategy": "dense-only",
+            "meanDelta": -0.026244,
+            "minDelta": -0.14537,
+            "maxDelta": 0.055556,
+            "deltas": [
+              -0.052778,
+              0.021296,
+              -0.013889,
+              0.013889,
+              -0.011574,
+              0.055556,
+              -0.14537,
+              -0.077083
+            ],
+            "positiveSeeds": 3,
+            "negativeSeeds": 5,
+            "tiedSeeds": 0,
+            "missing": false
+          },
+          {
+            "strategy": "coverage-inverse",
+            "meanDelta": -0.07221,
+            "minDelta": -0.18125,
+            "maxDelta": -0.011111,
+            "deltas": [
+              -0.18125,
+              -0.011111,
+              -0.086806,
+              -0.092262,
+              -0.048611,
+              -0.059028,
+              -0.05,
+              -0.048611
+            ],
+            "positiveSeeds": 0,
+            "negativeSeeds": 8,
+            "tiedSeeds": 0,
+            "missing": false
+          },
+          {
+            "strategy": "lexical-only",
+            "meanDelta": -0.298838,
+            "minDelta": -0.433796,
+            "maxDelta": -0.063889,
+            "deltas": [
+              -0.341667,
+              -0.290873,
+              -0.326058,
+              -0.433796,
+              -0.369246,
+              -0.314815,
+              -0.063889,
+              -0.250364
+            ],
+            "positiveSeeds": 0,
+            "negativeSeeds": 8,
+            "tiedSeeds": 0,
+            "missing": false
+          }
+        ],
+        "versusBaselineSecondary": [
+          {
+            "strategy": "coverage-weighted",
+            "meanDelta": -0.010417,
+            "minDelta": -0.083333,
+            "maxDelta": 0.083333,
+            "deltas": [
+              0.0,
+              0.083333,
+              0.0,
+              -0.083333,
+              0.0,
+              0.0,
+              -0.083333,
+              0.0
+            ],
+            "positiveSeeds": 1,
+            "negativeSeeds": 2,
+            "tiedSeeds": 5,
+            "missing": false
+          },
+          {
+            "strategy": "coverage-inverse",
+            "meanDelta": -0.041667,
+            "minDelta": -0.166667,
+            "maxDelta": 0.166667,
+            "deltas": [
+              -0.166667,
+              0.0,
+              -0.083333,
+              -0.083333,
+              0.0,
+              -0.083333,
+              0.166667,
+              -0.083333
+            ],
+            "positiveSeeds": 1,
+            "negativeSeeds": 5,
+            "tiedSeeds": 2,
+            "missing": false
+          },
+          {
+            "strategy": "dense-only",
+            "meanDelta": -0.041667,
+            "minDelta": -0.083333,
+            "maxDelta": 0.0,
+            "deltas": [
+              0.0,
+              0.0,
+              0.0,
+              -0.083333,
+              -0.083333,
+              0.0,
+              -0.083333,
+              -0.083333
+            ],
+            "positiveSeeds": 0,
+            "negativeSeeds": 4,
+            "tiedSeeds": 4,
+            "missing": false
+          },
+          {
+            "strategy": "lexical-only",
+            "meanDelta": -0.125,
+            "minDelta": -0.166667,
+            "maxDelta": 0.166667,
+            "deltas": [
+              -0.166667,
+              -0.166667,
+              -0.166667,
+              -0.166667,
+              -0.166667,
+              -0.166667,
+              0.166667,
+              -0.166667
+            ],
+            "positiveSeeds": 1,
+            "negativeSeeds": 7,
+            "tiedSeeds": 0,
+            "missing": false
+          }
+        ],
+        "winner": "coverage-weighted",
+        "winnerAgreesWithDevelopment": false
+      },
+      {
+        "family": "held-out-high",
+        "subject": "equal-trust",
+        "subjectIsLesson": false,
+        "baseline": 0.918924,
+        "lessonMean": 0.918924,
+        "meanDelta": 0.0,
+        "deltas": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "secondaryMetric": "recall@5",
+        "secondaryMeanDelta": 0.0,
+        "secondaryDeltas": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "positiveSeeds": 0,
+        "negativeSeeds": 0,
+        "tiedSeeds": 8,
+        "verdict": "observed",
+        "ranking": [
+          {
+            "strategy": "coverage-weighted",
+            "mean": 0.925198,
+            "seeds": 8,
+            "missing": [],
+            "rank": 1
+          },
+          {
+            "strategy": "equal-trust",
+            "mean": 0.918924,
+            "seeds": 8,
+            "missing": [],
+            "rank": 2
+          },
+          {
+            "strategy": "dense-only",
+            "mean": 0.910615,
+            "seeds": 8,
+            "missing": [],
+            "rank": 3
+          },
+          {
+            "strategy": "coverage-inverse",
+            "mean": 0.890972,
+            "seeds": 8,
+            "missing": [],
+            "rank": 4
+          },
+          {
+            "strategy": "lexical-only",
+            "mean": 0.719742,
+            "seeds": 8,
+            "missing": [],
+            "rank": 5
+          }
+        ],
+        "versusBaseline": [
+          {
+            "strategy": "coverage-weighted",
+            "meanDelta": 0.006275,
+            "minDelta": -0.027778,
+            "maxDelta": 0.041667,
+            "deltas": [
+              0.003571,
+              0.0,
+              -0.015873,
+              0.006944,
+              0.041667,
+              0.0,
+              0.041667,
+              -0.027778
+            ],
+            "positiveSeeds": 4,
+            "negativeSeeds": 2,
+            "tiedSeeds": 2,
+            "missing": false
+          },
+          {
+            "strategy": "dense-only",
+            "meanDelta": -0.008309,
+            "minDelta": -0.063095,
+            "maxDelta": 0.0625,
+            "deltas": [
+              -0.063095,
+              -0.013889,
+              -0.027778,
+              0.0625,
+              0.025794,
+              0.0,
+              0.002778,
+              -0.052778
+            ],
+            "positiveSeeds": 3,
+            "negativeSeeds": 4,
+            "tiedSeeds": 1,
+            "missing": false
+          },
+          {
+            "strategy": "coverage-inverse",
+            "meanDelta": -0.027951,
+            "minDelta": -0.138889,
+            "maxDelta": 0.013889,
+            "deltas": [
+              -0.008333,
+              -0.016667,
+              0.0,
+              -0.004167,
+              -0.055556,
+              -0.138889,
+              -0.013889,
+              0.013889
+            ],
+            "positiveSeeds": 1,
+            "negativeSeeds": 6,
+            "tiedSeeds": 1,
+            "missing": false
+          },
+          {
+            "strategy": "lexical-only",
+            "meanDelta": -0.199182,
+            "minDelta": -0.333333,
+            "maxDelta": -0.069444,
+            "deltas": [
+              -0.230556,
+              -0.213095,
+              -0.238095,
+              -0.1875,
+              -0.196429,
+              -0.333333,
+              -0.069444,
+              -0.125
+            ],
+            "positiveSeeds": 0,
+            "negativeSeeds": 8,
+            "tiedSeeds": 0,
+            "missing": false
+          }
+        ],
+        "versusBaselineSecondary": [
+          {
+            "strategy": "coverage-inverse",
+            "meanDelta": -0.010417,
+            "minDelta": -0.083333,
+            "maxDelta": 0.0,
+            "deltas": [
+              0.0,
+              -0.083333,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "positiveSeeds": 0,
+            "negativeSeeds": 1,
+            "tiedSeeds": 7,
+            "missing": false
+          },
+          {
+            "strategy": "coverage-weighted",
+            "meanDelta": -0.020833,
+            "minDelta": -0.083333,
+            "maxDelta": 0.0,
+            "deltas": [
+              0.0,
+              0.0,
+              -0.083333,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.083333
+            ],
+            "positiveSeeds": 0,
+            "negativeSeeds": 2,
+            "tiedSeeds": 6,
+            "missing": false
+          },
+          {
+            "strategy": "dense-only",
+            "meanDelta": -0.03125,
+            "minDelta": -0.083333,
+            "maxDelta": 0.0,
+            "deltas": [
+              0.0,
+              0.0,
+              -0.083333,
+              0.0,
+              -0.083333,
+              0.0,
+              0.0,
+              -0.083333
+            ],
+            "positiveSeeds": 0,
+            "negativeSeeds": 3,
+            "tiedSeeds": 5,
+            "missing": false
+          },
+          {
+            "strategy": "lexical-only",
+            "meanDelta": -0.041667,
+            "minDelta": -0.166667,
+            "maxDelta": 0.083333,
+            "deltas": [
+              0.0,
+              -0.166667,
+              -0.083333,
+              -0.083333,
+              -0.083333,
+              0.0,
+              0.083333,
+              0.0
+            ],
+            "positiveSeeds": 1,
+            "negativeSeeds": 4,
+            "tiedSeeds": 3,
+            "missing": false
+          }
+        ],
+        "winner": "coverage-weighted",
+        "winnerAgreesWithDevelopment": false
+      }
+    ],
+    "verdicts": {
+      "development-low": "no_lesson",
+      "development-high": "observed",
+      "held-out-low": "observed",
+      "held-out-high": "observed"
+    },
+    "notes": [
+      "the best strategy on the development family is the baseline 'equal-trust' itself, so the paired deltas below are zero by construction. The evidence in this run is the per-strategy comparison against that baseline on each family, not the subject line.",
+      "no candidate beat the a-priori baseline 'equal-trust' under the registered rule, so there was no lesson to transfer. The target families below are still measured and reported as observations, without a transfer claim.",
+      "the development winner 'equal-trust' is not the winner on held-out-low ('coverage-weighted' is). No transfer claim is made here: nothing cleared the development bar, so this says the best strategy is family-dependent, nothing more.",
+      "the development winner 'equal-trust' is not the winner on held-out-high ('coverage-weighted' is). No transfer claim is made here: nothing cleared the development bar, so this says the best strategy is family-dependent, nothing more."
+    ]
+  },
+  "rawMetrics": [
+    {
+      "family": "development-high",
+      "seed": 11,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8777777777777778,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 11,
+      "strategy": "coverage-weighted",
+      "mrr": 0.8708333333333332,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 11,
+      "strategy": "dense-only",
+      "mrr": 0.8571428571428571,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 11,
+      "strategy": "equal-trust",
+      "mrr": 0.875,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 11,
+      "strategy": "lexical-only",
+      "mrr": 0.8777777777777777,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 22,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8777777777777777,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 22,
+      "strategy": "coverage-weighted",
+      "mrr": 0.9333333333333332,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 22,
+      "strategy": "dense-only",
+      "mrr": 0.8544973544973544,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 22,
+      "strategy": "equal-trust",
+      "mrr": 0.9375,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 22,
+      "strategy": "lexical-only",
+      "mrr": 0.7666666666666666,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 33,
+      "strategy": "coverage-inverse",
+      "mrr": 0.9259259259259259,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 33,
+      "strategy": "coverage-weighted",
+      "mrr": 0.8842592592592592,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 33,
+      "strategy": "dense-only",
+      "mrr": 0.8703703703703703,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 33,
+      "strategy": "equal-trust",
+      "mrr": 0.9166666666666666,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 33,
+      "strategy": "lexical-only",
+      "mrr": 0.6481481481481481,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 44,
+      "strategy": "coverage-inverse",
+      "mrr": 0.9333333333333332,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 44,
+      "strategy": "coverage-weighted",
+      "mrr": 0.8535714285714285,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 44,
+      "strategy": "dense-only",
+      "mrr": 0.85,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 44,
+      "strategy": "equal-trust",
+      "mrr": 0.8715277777777777,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 44,
+      "strategy": "lexical-only",
+      "mrr": 0.7481481481481481,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 55,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8819444444444445,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 55,
+      "strategy": "coverage-weighted",
+      "mrr": 0.8777777777777778,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 55,
+      "strategy": "dense-only",
+      "mrr": 0.7863425925925925,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 55,
+      "strategy": "equal-trust",
+      "mrr": 0.875,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 55,
+      "strategy": "lexical-only",
+      "mrr": 0.7666666666666666,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 66,
+      "strategy": "coverage-inverse",
+      "mrr": 0.9583333333333334,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 66,
+      "strategy": "coverage-weighted",
+      "mrr": 1.0,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 66,
+      "strategy": "dense-only",
+      "mrr": 0.9444444444444445,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 66,
+      "strategy": "equal-trust",
+      "mrr": 1.0,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 66,
+      "strategy": "lexical-only",
+      "mrr": 0.8222222222222221,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 77,
+      "strategy": "coverage-inverse",
+      "mrr": 0.888888888888889,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 77,
+      "strategy": "coverage-weighted",
+      "mrr": 0.873015873015873,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 77,
+      "strategy": "dense-only",
+      "mrr": 0.8611111111111112,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 77,
+      "strategy": "equal-trust",
+      "mrr": 0.888888888888889,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 77,
+      "strategy": "lexical-only",
+      "mrr": 0.6999999999999998,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 88,
+      "strategy": "coverage-inverse",
+      "mrr": 0.7723214285714285,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 88,
+      "strategy": "coverage-weighted",
+      "mrr": 0.8703703703703703,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 88,
+      "strategy": "dense-only",
+      "mrr": 0.7222222222222222,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 88,
+      "strategy": "equal-trust",
+      "mrr": 0.8619047619047618,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-high",
+      "seed": 88,
+      "strategy": "lexical-only",
+      "mrr": 0.7111111111111111,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 11,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8361111111111111,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 11,
+      "strategy": "coverage-weighted",
+      "mrr": 0.8152777777777778,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 11,
+      "strategy": "dense-only",
+      "mrr": 0.7827380952380952,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 11,
+      "strategy": "equal-trust",
+      "mrr": 0.8916666666666666,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 11,
+      "strategy": "lexical-only",
+      "mrr": 0.6592592592592592,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 22,
+      "strategy": "coverage-inverse",
+      "mrr": 0.7577380952380951,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 22,
+      "strategy": "coverage-weighted",
+      "mrr": 0.7027777777777778,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 22,
+      "strategy": "dense-only",
+      "mrr": 0.5730158730158731,
+      "recall@5": 0.75,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 22,
+      "strategy": "equal-trust",
+      "mrr": 0.8313492063492062,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 22,
+      "strategy": "lexical-only",
+      "mrr": 0.4648148148148148,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 33,
+      "strategy": "coverage-inverse",
+      "mrr": 0.7083333333333334,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 33,
+      "strategy": "coverage-weighted",
+      "mrr": 0.8277777777777778,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 33,
+      "strategy": "dense-only",
+      "mrr": 0.7777777777777778,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 33,
+      "strategy": "equal-trust",
+      "mrr": 0.8055555555555555,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 33,
+      "strategy": "lexical-only",
+      "mrr": 0.4637566137566138,
+      "recall@5": 0.6666666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 44,
+      "strategy": "coverage-inverse",
+      "mrr": 0.6882936507936508,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 44,
+      "strategy": "coverage-weighted",
+      "mrr": 0.7094907407407408,
+      "recall@5": 0.6666666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 44,
+      "strategy": "dense-only",
+      "mrr": 0.7804232804232804,
+      "recall@5": 0.75,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 44,
+      "strategy": "equal-trust",
+      "mrr": 0.7696759259259259,
+      "recall@5": 0.75,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 44,
+      "strategy": "lexical-only",
+      "mrr": 0.45740740740740743,
+      "recall@5": 0.75,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 55,
+      "strategy": "coverage-inverse",
+      "mrr": 0.7006944444444444,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 55,
+      "strategy": "coverage-weighted",
+      "mrr": 0.7481481481481481,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 55,
+      "strategy": "dense-only",
+      "mrr": 0.6785714285714285,
+      "recall@5": 0.6666666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 55,
+      "strategy": "equal-trust",
+      "mrr": 0.8361111111111111,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 55,
+      "strategy": "lexical-only",
+      "mrr": 0.561111111111111,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 66,
+      "strategy": "coverage-inverse",
+      "mrr": 0.7569444444444445,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 66,
+      "strategy": "coverage-weighted",
+      "mrr": 0.9583333333333334,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 66,
+      "strategy": "dense-only",
+      "mrr": 0.9583333333333334,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 66,
+      "strategy": "equal-trust",
+      "mrr": 0.9583333333333334,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 66,
+      "strategy": "lexical-only",
+      "mrr": 0.4583333333333334,
+      "recall@5": 0.75,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 77,
+      "strategy": "coverage-inverse",
+      "mrr": 0.6878306878306878,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 77,
+      "strategy": "coverage-weighted",
+      "mrr": 0.875,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 77,
+      "strategy": "dense-only",
+      "mrr": 0.7222222222222222,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 77,
+      "strategy": "equal-trust",
+      "mrr": 0.8027777777777777,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 77,
+      "strategy": "lexical-only",
+      "mrr": 0.44629629629629636,
+      "recall@5": 0.75,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 88,
+      "strategy": "coverage-inverse",
+      "mrr": 0.7875,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 88,
+      "strategy": "coverage-weighted",
+      "mrr": 0.8333333333333334,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 88,
+      "strategy": "dense-only",
+      "mrr": 0.8333333333333334,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 88,
+      "strategy": "equal-trust",
+      "mrr": 0.8416666666666667,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "development-low",
+      "seed": 88,
+      "strategy": "lexical-only",
+      "mrr": 0.2888888888888889,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 11,
+      "strategy": "coverage-inverse",
+      "mrr": 0.9166666666666666,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 11,
+      "strategy": "coverage-weighted",
+      "mrr": 0.9285714285714285,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 11,
+      "strategy": "dense-only",
+      "mrr": 0.8619047619047618,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 11,
+      "strategy": "equal-trust",
+      "mrr": 0.9249999999999999,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 11,
+      "strategy": "lexical-only",
+      "mrr": 0.6944444444444443,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 22,
+      "strategy": "coverage-inverse",
+      "mrr": 0.875,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 22,
+      "strategy": "coverage-weighted",
+      "mrr": 0.8916666666666666,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 22,
+      "strategy": "dense-only",
+      "mrr": 0.8777777777777778,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 22,
+      "strategy": "equal-trust",
+      "mrr": 0.8916666666666666,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 22,
+      "strategy": "lexical-only",
+      "mrr": 0.6785714285714285,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 33,
+      "strategy": "coverage-inverse",
+      "mrr": 0.9444444444444445,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 33,
+      "strategy": "coverage-weighted",
+      "mrr": 0.9285714285714285,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 33,
+      "strategy": "dense-only",
+      "mrr": 0.9166666666666666,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 33,
+      "strategy": "equal-trust",
+      "mrr": 0.9444444444444445,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 33,
+      "strategy": "lexical-only",
+      "mrr": 0.7063492063492062,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 44,
+      "strategy": "coverage-inverse",
+      "mrr": 0.9333333333333332,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 44,
+      "strategy": "coverage-weighted",
+      "mrr": 0.9444444444444445,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 44,
+      "strategy": "dense-only",
+      "mrr": 1.0,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 44,
+      "strategy": "equal-trust",
+      "mrr": 0.9375,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 44,
+      "strategy": "lexical-only",
+      "mrr": 0.75,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 55,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8472222222222223,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 55,
+      "strategy": "coverage-weighted",
+      "mrr": 0.9444444444444445,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 55,
+      "strategy": "dense-only",
+      "mrr": 0.9285714285714285,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 55,
+      "strategy": "equal-trust",
+      "mrr": 0.9027777777777778,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 55,
+      "strategy": "lexical-only",
+      "mrr": 0.7063492063492062,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 66,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8611111111111112,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 66,
+      "strategy": "coverage-weighted",
+      "mrr": 1.0,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 66,
+      "strategy": "dense-only",
+      "mrr": 1.0,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 66,
+      "strategy": "equal-trust",
+      "mrr": 1.0,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 66,
+      "strategy": "lexical-only",
+      "mrr": 0.6666666666666666,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 77,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8333333333333334,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 77,
+      "strategy": "coverage-weighted",
+      "mrr": 0.8888888888888888,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 77,
+      "strategy": "dense-only",
+      "mrr": 0.85,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 77,
+      "strategy": "equal-trust",
+      "mrr": 0.8472222222222222,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 77,
+      "strategy": "lexical-only",
+      "mrr": 0.7777777777777778,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 88,
+      "strategy": "coverage-inverse",
+      "mrr": 0.9166666666666666,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 88,
+      "strategy": "coverage-weighted",
+      "mrr": 0.875,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 88,
+      "strategy": "dense-only",
+      "mrr": 0.85,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 88,
+      "strategy": "equal-trust",
+      "mrr": 0.9027777777777778,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-high",
+      "seed": 88,
+      "strategy": "lexical-only",
+      "mrr": 0.7777777777777778,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 11,
+      "strategy": "coverage-inverse",
+      "mrr": 0.69375,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 11,
+      "strategy": "coverage-weighted",
+      "mrr": 0.7986111111111112,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 11,
+      "strategy": "dense-only",
+      "mrr": 0.8222222222222223,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 11,
+      "strategy": "equal-trust",
+      "mrr": 0.875,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 11,
+      "strategy": "lexical-only",
+      "mrr": 0.5333333333333333,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 22,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8175925925925925,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 22,
+      "strategy": "coverage-weighted",
+      "mrr": 0.8666666666666667,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 22,
+      "strategy": "dense-only",
+      "mrr": 0.85,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 22,
+      "strategy": "equal-trust",
+      "mrr": 0.8287037037037037,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 22,
+      "strategy": "lexical-only",
+      "mrr": 0.5378306878306879,
+      "recall@5": 0.75,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 33,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8715277777777778,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 33,
+      "strategy": "coverage-weighted",
+      "mrr": 1.0,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 33,
+      "strategy": "dense-only",
+      "mrr": 0.9444444444444445,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 33,
+      "strategy": "equal-trust",
+      "mrr": 0.9583333333333334,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 33,
+      "strategy": "lexical-only",
+      "mrr": 0.6322751322751322,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 44,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8105158730158729,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 44,
+      "strategy": "coverage-weighted",
+      "mrr": 0.9270833333333334,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 44,
+      "strategy": "dense-only",
+      "mrr": 0.9166666666666666,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 44,
+      "strategy": "equal-trust",
+      "mrr": 0.9027777777777778,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 44,
+      "strategy": "lexical-only",
+      "mrr": 0.4689814814814815,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 55,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8888888888888888,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 55,
+      "strategy": "coverage-weighted",
+      "mrr": 0.9375,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 55,
+      "strategy": "dense-only",
+      "mrr": 0.9259259259259259,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 55,
+      "strategy": "equal-trust",
+      "mrr": 0.9375,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 55,
+      "strategy": "lexical-only",
+      "mrr": 0.5682539682539682,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 66,
+      "strategy": "coverage-inverse",
+      "mrr": 0.8854166666666666,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 66,
+      "strategy": "coverage-weighted",
+      "mrr": 1.0,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 66,
+      "strategy": "dense-only",
+      "mrr": 1.0,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 66,
+      "strategy": "equal-trust",
+      "mrr": 0.9444444444444445,
+      "recall@5": 1.0,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 66,
+      "strategy": "lexical-only",
+      "mrr": 0.6296296296296295,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 77,
+      "strategy": "coverage-inverse",
+      "mrr": 0.6398148148148147,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 77,
+      "strategy": "coverage-weighted",
+      "mrr": 0.5787037037037036,
+      "recall@5": 0.6666666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 77,
+      "strategy": "dense-only",
+      "mrr": 0.5444444444444444,
+      "recall@5": 0.6666666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 77,
+      "strategy": "equal-trust",
+      "mrr": 0.6898148148148149,
+      "recall@5": 0.75,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 77,
+      "strategy": "lexical-only",
+      "mrr": 0.6259259259259259,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 88,
+      "strategy": "coverage-inverse",
+      "mrr": 0.7395833333333334,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 88,
+      "strategy": "coverage-weighted",
+      "mrr": 0.81875,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 88,
+      "strategy": "dense-only",
+      "mrr": 0.7111111111111111,
+      "recall@5": 0.8333333333333334,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 88,
+      "strategy": "equal-trust",
+      "mrr": 0.7881944444444445,
+      "recall@5": 0.9166666666666666,
+      "queries": 12
+    },
+    {
+      "family": "held-out-low",
+      "seed": 88,
+      "strategy": "lexical-only",
+      "mrr": 0.5378306878306878,
+      "recall@5": 0.75,
+      "queries": 12
+    }
+  ]
+}

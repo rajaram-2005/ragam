@@ -1,0 +1,266 @@
+name: CI
+
+# Three independent components, three independent jobs. They share no dependency
+# tree: services/core has zero npm packages, services/fabric is Python + NumPy, and
+# apps/web is the only component with an npm install. Splitting them means a failure
+# names the component that broke instead of surfacing as one red check.
+#
+# Nothing here installs torch. services/fabric is NumPy-only by design, and on a
+# GPU-less runner pip resolves torch to the CUDA build and downloads gigabytes that
+# cannot be used. See docs/04-setup.md.
+
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+    branches: [main]
+  schedule:
+    # Advisories are published continuously, and a commit that was clean when it merged
+    # can become vulnerable afterwards. Without this the audit gates only re-run when
+    # something else changes, so a newly published advisory against already-merged
+    # code would wait for the next unrelated build. Weekly, at an off-peak
+    # non-round minute: GitHub documents that top-of-hour cron jobs are heavily
+    # contended and may be delayed or dropped.
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Core service (Node, zero dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # node:sqlite requires Node >= 22.5.0; it is what the knowledge store and the
+      # audit ledger use, so an older runtime fails immediately rather than subtly.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify the zero-dependency property
+        run: |
+          # This is a load-bearing property, not a stylistic one: it is what keeps the
+          # core service auditable and lets it run without a supply chain.
+          node -e '
+            const pkg = require("./services/core/package.json");
+            const deps = {...(pkg.dependencies||{}), ...(pkg.devDependencies||{})};
+            const names = Object.keys(deps);
+            if (names.length) {
+              console.error("services/core must have no dependencies, found:", names.join(", "));
+              process.exit(1);
+            }
+            console.log("services/core declares zero dependencies");
+          '
+          if [ -d services/core/node_modules ]; then
+            echo "::error::services/core/node_modules exists; the core service must not have an install step"
+            exit 1
+          fi
+
+      - name: Test (260 tests)
+        working-directory: services/core
+        run: node --test test/*.test.mjs
+
+  fabric:
+    name: Fabric training service (Python + NumPy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install NumPy and pytest only
+        run: python -m pip install --upgrade pip && pip install numpy pytest
+
+      - name: Confirm no GPU is assumed
+        run: |
+          # The whole pipeline must run on CPU. If anything ever starts importing a
+          # GPU-only dependency, this fails here rather than on a runner that has one.
+          python -c "import numpy; print('numpy', numpy.__version__)"
+          if python -c "import torch" 2>/dev/null; then
+            echo "::error::torch is importable; services/fabric must not depend on it"
+            exit 1
+          fi
+          echo "no torch present, as intended"
+
+      - name: Audit Python dependencies for known advisories
+        working-directory: services/fabric
+        env:
+          # The advisory API is public, but a runner's shared egress IP can hit the
+          # unauthenticated rate limit. The token Actions already provides lifts it.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # npm audit covers the web tree; pip has no equivalent, so this queries the
+          # GitHub Advisory Database directly. Standard library plus `packaging`,
+          # which pytest already depends on — no dependency added for the check.
+          #
+          # Exit codes are deliberate: 0 clean, 1 a known-vulnerable version is
+          # installed, 2 the database could not be consulted. Exit 2 fails the build
+          # on purpose, because a dependency gate that cannot reach the database has
+          # verified nothing and must not report green.
+          #
+          # Verified in both directions before being added: against numpy 2.1.3 and
+          # pytest 9.1.1 it exits 0, and against pytest==8.3.4 it exits 1 naming
+          # GHSA-6w46-j5rx-g56g / CVE-2025-71176. The unreachable-database,
+          # malformed-argument and no-target paths were each confirmed to exit 2.
+          python scripts/audit_python_deps.py
+
+      - name: Test (256 tests)
+        working-directory: services/fabric
+        run: python -m pytest
+
+      - name: Reproduce the released model card
+        working-directory: services/fabric
+        run: |
+          # The release gate is the point of the pipeline: an undertrained model must
+          # fail to release rather than quietly become the current one.
+          python - <<'PY'
+          from fabric.pipeline import Pipeline, PipelineConfig
+
+          p = Pipeline(PipelineConfig(epochs=25))
+          record = p.run()
+          card = p.registry.current()
+          print("run status:", record.status)
+          print("released:  ", card.identifier)
+          print("mrr:       ", card.metrics["mrr"])
+
+          assert record.status == "partial", (
+              f"3 of 8 stages cannot run without weights or a GPU; expected 'partial', "
+              f"got '{record.status}'. A 'completed' status here would mean the pipeline "
+              "started claiming work it did not do."
+          )
+          assert card is not None, "the low-overlap run must release a model"
+          assert card.base_checkpoint is None, "trained from scratch; not a fine-tune"
+          assert card.metrics["mrr"] >= 0.60, "below the release floor"
+
+          # And the negative control: the same pipeline must refuse to release junk.
+          weak = Pipeline(PipelineConfig(epochs=3, evaluate_topic_split=False))
+          weak_record = weak.run()
+          assert weak_record.status == "failed", (
+              f"an undertrained run must fail, got '{weak_record.status}'"
+          )
+          assert weak.registry.current() is None, (
+              "an undertrained run must not become the current released model"
+          )
+          print("undertrained run correctly refused release")
+          PY
+
+  web:
+    name: Web app (React + Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Test (56 tests)
+        working-directory: apps/web
+        run: node --test test/*.test.mjs
+
+      - name: Audit dependencies for known vulnerabilities
+        working-directory: apps/web
+        run: |
+          # Two different policies, because two different things are at stake.
+          #
+          # Production dependencies are what actually ships to a user's browser, so
+          # ANY known vulnerability there is a release blocker at any severity.
+          echo "== production dependencies (must be clean at every severity) =="
+          npm audit --omit=dev --audit-level=low
+          #
+          # The full tree includes build tooling whose advisories are mostly about
+          # the dev server. Those are worth failing on when severe, but a moderate
+          # dev-server issue should not block a merge, so the bar is high/critical.
+          # The full report is printed either way, so moderate findings stay visible
+          # in the log instead of being silently tolerated.
+          echo "== full tree (fails on high/critical; full report printed) =="
+          npm audit || true
+          npm audit --audit-level=high
+          #
+          # Both commands were verified against a known-vulnerable tree before being
+          # committed here: at vite@5.4.11 the second exits 1 (thirteen Vite
+          # advisories plus GHSA-67mh-4wv8-2f99 in esbuild) and at vite@8.3.4 both
+          # exit 0. An audit step that cannot fail is worse than no audit step.
+
+      - name: Build
+        working-directory: apps/web
+        run: npm run build
+
+      - name: Verify the bundle carries no backend URL or credential
+        working-directory: apps/web
+        run: |
+          # Browser-facing code must use relative /api paths only, so the same build
+          # works against any origin that proxies /api. A baked-in host or a leaked
+          # secret in the artifact is a release blocker, not a warning.
+          bundle=$(ls dist/assets/*.js)
+          echo "checking $bundle"
+          if grep -Eq 'https?://(127\.0\.0\.1|localhost)' "$bundle"; then
+            echo "::error::bundle contains an absolute loopback backend URL"
+            exit 1
+          fi
+          if grep -Eiq '(api[_-]?key|secret|token|password)"?\s*[:=]\s*"?[A-Za-z0-9_-]{16,}' "$bundle"; then
+            echo "::error::bundle appears to contain a credential"
+            exit 1
+          fi
+          echo "bundle is clean"
+
+  docs:
+    name: Documentation matches implementation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # docs.test.mjs asserts the model card records a real git SHA and that it
+          # was re-verified at a *different* revision, so history must be present.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Docs accuracy suite (23 tests)
+        working-directory: services/core
+        run: node --test test/docs.test.mjs
+
+      - name: Confirm the licence copies are byte-identical
+        run: |
+          # Hand-transcribed licences are how attribution silently breaks. The texts
+          # in third-party/licenses/ are the authoritative copies; this checks they
+          # are non-trivial and that NOTICES quotes them exactly.
+          for f in third-party/licenses/*.txt; do
+            size=$(wc -c < "$f")
+            echo "$f: $size bytes"
+            if [ "$size" -lt 100 ]; then
+              echo "::error::$f looks truncated ($size bytes)"
+              exit 1
+            fi
+          done
+          test -f third-party/licenses/aetheris-MIT.txt
+          test -f third-party/licenses/freellmapi-MIT.txt
+          test -f third-party/licenses/sparsiz-Unlicense.txt
+          test -f third-party/licenses/numpy-BSD-3-Clause.txt
+          # NumPy's licence bundles component licences and must not be truncated.
+          numpy_size=$(wc -c < third-party/licenses/numpy-BSD-3-Clause.txt)
+          if [ "$numpy_size" -lt 40000 ]; then
+            echo "::error::NumPy licence truncated to $numpy_size bytes; the bundled component licences must be preserved"
+            exit 1
+          fi
+          echo "all four licence copies present and untruncated"
