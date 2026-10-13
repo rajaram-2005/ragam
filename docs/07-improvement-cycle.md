@@ -376,3 +376,146 @@ it. `aetheris-lite-retriever@0.1.0` remains the released retriever and its recor
 digests are unchanged; this pass produced an accepted *candidate* improvement and
 the regression cases that guard it. Promoting it would be a separate, versioned
 release decision — see [`docs/model-cards/`](./model-cards/).
+
+## 9. L4: does the lesson generalise across task families?
+
+§5 asked whether the accepted fusion weight survived more seeds. It did not. This
+section asks the question one level up, which is the question Level 4 of the learning
+model is defined by: **a strategy that wins on one family of tasks — is it still the
+winner on tasks it was never selected on?**
+
+The protocol was written down and committed *before* it produced a number
+(`services/fabric/fabric/transfer.py`, five strategies, thresholds, baseline and
+verdict vocabulary), because a transfer test whose rules are chosen after seeing the
+results cannot report a non-transfer. Those rules are not tuned below; the run
+reported here is the run that protocol describes.
+
+### 9.1 Protocol
+
+Five candidates, all ranking the same queries with the same two component rankings
+inside each seed:
+
+| Strategy | Lexical weight | What it reads as |
+|---|---|---|
+| `lexical-only` | 1.0 | the baseline the corpus was built around |
+| `dense-only` | 0.0 | the failure that started §1 |
+| `equal-trust` | 0.5 | the a-priori choice from §4 — **the baseline for this test** |
+| `coverage-weighted` | share of the query the index can match | the §4 failure read forwards |
+| `coverage-inverse` | the complement | the same failure read backwards |
+
+- Primary metric `mrr`; secondary `recall@5`, recorded for every cell.
+- A candidate is a **lesson** only if its mean *paired* gain over the baseline is
+  ≥ 0.01 **and** every seed moves the same direction. (Reason, recorded in §5.2: an
+  accepted mean gain here already reversed in 3 of 3 re-runs once.)
+- Selection sees **one family only**: `development-low` — 12 of the 24 topics, taken
+  as every second topic of the sorted list, under the harder low-overlap condition.
+- The other three cells are held out, and they separate two different kinds of shift:
+  same topics with the condition changed (`development-high`), different topics with
+  the condition unchanged (`held-out-low`), and both at once (`held-out-high`).
+- Eight seeds (11–88). Each seed generates its own corpus, trains its own encoder and
+  builds its own index; every strategy is scored on that same encoder and index, so a
+  paired difference cannot come from one strategy drawing a better model.
+
+### 9.2 Result: no lesson was available to transfer
+
+`development-low`, 8 seeds, mean `mrr` and paired difference against `equal-trust`:
+
+| Rank | Strategy | mean mrr | Δ vs baseline | seeds up/down/tie |
+|---|---|---|---|---|
+| 1 | `equal-trust` (baseline) | **0.8421** | — | — |
+| 2 | `coverage-weighted` | 0.8088 | −0.0334 | 2 / 5 / 1 |
+| 3 | `dense-only` | 0.7633 | −0.0788 | 1 / 6 / 1 |
+| 4 | `coverage-inverse` | 0.7404 | −0.1017 | 0 / 8 / 0 |
+| 5 | `lexical-only` | 0.4750 | −0.3672 | 0 / 8 / 0 |
+
+The a-priori baseline is the best strategy on the family it was chosen for, and
+**every candidate is worse**. No candidate cleared the bar, so the protocol recorded
+`no_lesson` and had nothing to transport. The three held-out families were still
+measured; they are reported as **observations**, which is a different label from a
+transfer and never gets promoted to one.
+
+### 9.3 Observations on the held-out families
+
+Mean paired difference against `equal-trust`, primary (`mrr`) and secondary
+(`recall@5`):
+
+| Family | Strategy | Δ mrr | seeds up/down/tie | Δ recall@5 | seeds up/down/tie |
+|---|---|---|---|---|---|
+| `development-high` | `coverage-weighted` | −0.0079 | 2 / 5 / 1 | −0.0104 | 1 / 2 / 5 |
+| `development-high` | `coverage-inverse` | −0.0138 | 4 / 3 / 1 | +0.0104 | 2 / 1 / 5 |
+| `development-high` | `dense-only` | −0.0600 | 0 / 8 / 0 | −0.0729 | 0 / 5 / 3 |
+| `development-high` | `lexical-only` | −0.1482 | 1 / 7 / 0 | **+0.0208** | 2 / 0 / 6 |
+| `held-out-low` | `coverage-weighted` | **+0.0003** | 5 / 2 / 1 | −0.0104 | 1 / 2 / 5 |
+| `held-out-low` | `dense-only` | −0.0262 | 3 / 5 / 0 | −0.0417 | 0 / 4 / 4 |
+| `held-out-low` | `coverage-inverse` | −0.0722 | 0 / 8 / 0 | −0.0417 | 1 / 5 / 2 |
+| `held-out-low` | `lexical-only` | −0.2988 | 0 / 8 / 0 | −0.1250 | 1 / 7 / 0 |
+| `held-out-high` | `coverage-weighted` | +0.0063 | 4 / 2 / 2 | −0.0208 | 0 / 2 / 6 |
+| `held-out-high` | `dense-only` | −0.0083 | 3 / 4 / 1 | −0.0312 | 0 / 3 / 5 |
+| `held-out-high` | `coverage-inverse` | −0.0280 | 1 / 6 / 1 | −0.0104 | 0 / 1 / 7 |
+| `held-out-high` | `lexical-only` | −0.1992 | 0 / 8 / 0 | −0.0417 | 1 / 4 / 3 |
+
+Five readings, in the order they matter:
+
+1. **The best strategy is family-dependent, and the margin is noise.** The ranking
+   order changes between families: `coverage-weighted` is 2nd on `development-low`,
+   2nd on `development-high` and 1st on both held-out families — by **+0.0003** on
+   `held-out-low` (5 seeds up, 2 down, 1 tie) and **+0.0063** on `held-out-high`.
+   Both are below the 0.01 bar and both have seeds against them: had a lesson existed,
+   these would have been `inconclusive`, not `transferred`. Reading the third decimal
+   of a mean as a finding is exactly what the paired per-seed counts are here to stop.
+2. **The coarse conclusion reproduces; the fine one does not.** `lexical-only` is
+   worse than the fused baseline on `mrr` in **8 of 8 seeds on all four families**
+   (−0.15 to −0.37). `dense-only` is worse in 8/8 on both low-overlap families and 3
+   up / 4 down / 1 tie on `held-out-high`. So §4's mechanism — fuse a ranker that
+   keeps recall with one that orders well — holds up. *Which* weights fuse best does
+   not, at this scale.
+3. **The winner is not even stable inside the selection family.** Across the eight
+   seeds on `development-low`, the top strategy is `equal-trust` 4 times,
+   `coverage-weighted` twice, `dense-only` once, and a three-way tie once (seed 66,
+   three strategies at 0.9583). A method that reported "the best strategy" from one
+   seed would have reported a coin flip.
+4. **The secondary metric would have picked a different winner.** On
+   `development-high`, `lexical-only` is *above* the baseline on `recall@5`
+   (+0.0208, no seed against) while being the worst strategy on `mrr` by −0.1482. Had
+   `recall@5` been the selection metric, the run would have declared a lesson for the
+   strategy that *is* the problem this pass started from. That is the argument for
+   pinning one metric in advance, made by the data rather than by policy: verdicts
+   here are computed from the primary metric only, and the secondary is reported.
+5. **Nothing was tuned afterwards.** The serving configuration is unchanged. The
+   released retriever and the a-priori 0.5/0.5 fusion stay exactly as they were; what
+   changed is that there is now a measured reason to keep the a-priori choice instead
+   of replacing it with the more interesting-looking one.
+
+### 9.4 What this does not establish
+
+- **These are not semantic domains.** The two families are interleaved halves of the
+  24 generated topics: different topics, but from one generator and one vocabulary
+  distribution. "Unseen family" here is weaker than "unseen domain", and this is the
+  largest limitation of the pass.
+- **Fixture scale.** 96 documents, 72 queries (48 training, 24 evaluation per
+  condition), a ~326-term vocabulary, 18,784-parameter encoder, 2 CPU cores, no GPU.
+- **Seeds bundle corpus and model variance.** The data seed and the model seed are the
+  same value, so a seed varies both at once — the same limitation §5.2 records.
+- **Direction counts, not a hypothesis test.** No confidence intervals and no
+  multiplicity correction. The bar (mean ≥ 0.01 and 8/8 agreement) was set
+  conservatively enough that it does not need one, and it still rejected everything.
+- **`mrr` at this size is not precise.** The rankings move by thousandths between
+  seeds; the honest summary is that the four fusion policies are indistinguishable
+  here, not that one is best.
+
+### 9.5 Reproducing
+
+```bash
+cd services/fabric
+python scripts/l4_transfer.py                              # 8 seeds, ~4 s
+python scripts/l4_transfer.py --json ../docs/experiments/l4-transfer.json
+python scripts/l4_transfer.py --quick                      # 3 seeds, 8 epochs: smoke only
+python -m pytest tests/test_transfer.py -q                 # 27 tests
+```
+
+The recorded run is [`docs/experiments/l4-transfer.json`](./experiments/l4-transfer.json):
+every cell (family × seed × strategy × metric), the protocol block, the hardware and
+the notes. `tests/test_transfer.py` pins the decision procedure, including the cases
+where it must *refuse* a conclusion — a lesson that reverses in one seed must not
+become one, target data must not reach selection, and observations must never be
+labelled as transfers.

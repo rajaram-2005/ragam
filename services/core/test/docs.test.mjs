@@ -60,6 +60,7 @@ const doc = {
   matrix: () => read('docs/12-feature-matrix.md'),
   distillation: () => read('docs/09-distillation.md'),
   distillVerdict: () => read('docs/experiments/distillation-logit-vs-baseline.json'),
+  l4Transfer: () => read('docs/experiments/l4-transfer.json'),
   readme: () => read('README.md'),
   env: () => read('.env.example'),
   notices: () => read('third-party/NOTICES.md'),
@@ -297,6 +298,16 @@ test('the documented route surface is the real route surface', () => {
     assert.ok(!/policy|training|benchmark|safety|godcore|admin|research/.test(route),
       `${route} gives an internal service its own route group`)
   }
+})
+
+test('the docs-suite count in docs/04 matches the tests in this file', () => {
+  // docs/04 describes this suite by size, and that number was the one count in the
+  // repository with no guard on it: it read 28 while the file held 34 tests. A count a
+  // document states is a claim like any other, so it is counted rather than trusted.
+  const own = readFileSync(resolve(REPO, 'services/core/test/docs.test.mjs'), 'utf8')
+  const tests = own.split('\n').filter((line) => line.startsWith('test(')).length
+  assert.ok(squash(doc.setup()).includes(`${tests}-test documentation-accuracy suite`),
+    `docs/04 must describe this suite as the ${tests}-test suite it is`)
 })
 
 test('every document that restates a suite total agrees with docs/03', () => {
@@ -593,14 +604,14 @@ test('the status doc reports the real test totals', () => {
   // docs/03-status.md and README.md have to move with it.
   assert.equal(count('services/core/test', /\.test\.mjs$/), 17)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
-  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 23)
+  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 24)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**420 / 420**'), 'core total must be stated')
-  assert.ok(status.includes('**528 / 528**'), 'fabric total must be stated')
+  assert.ok(status.includes('**422 / 422**'), 'core total must be stated')
+  assert.ok(status.includes('**555 / 555**'), 'fabric total must be stated')
   assert.ok(status.includes('**67 / 67**'), 'web total must be stated')
-  assert.ok(status.includes('1015 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1015 tests: core 420, web 67, fabric 528'),
+  assert.ok(status.includes('1044 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1044 tests: core 422, web 67, fabric 555'),
     'README must state the same totals')
   assert.ok(status.includes('(17 files'), 'the file count must move with the suite')
 
@@ -613,14 +624,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(420), `core heading must say 420, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(528), `fabric heading must say 528, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(422), `core heading must say 422, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(555), `fabric heading must say 555, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(67), `web heading must say 67, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1015,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1015`,
+    1044,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1044`,
   )
 })
 
@@ -1311,4 +1322,67 @@ test('the memory interface the documents describe is the one in the app', () => 
   // rather than left to the web suite alone.
   assert.match(chat, /const \[useMemory, setUseMemory\] = useState\(false\)/,
     'memory must not reach a prompt unless the person switches it on')
+})
+
+test('the L4 transfer numbers quoted in the documents are the recorded ones', () => {
+  // docs/03, docs/06, docs/07, docs/11 and docs/12 all state what the transfer
+  // experiment found. Five documents quoting one result is five chances for the
+  // result to drift, and a drifted benchmark number is worse than a missing one
+  // because it reads as measured. The recorded artifact is the source, so the
+  // documents are checked against it rather than against each other.
+  const recorded = JSON.parse(doc.l4Transfer())
+  const report = recorded.report
+  assert.ok(report, 'the recorded artifact must carry a report block')
+
+  // The verdict vocabulary, not just the word: "no_lesson" here means nothing cleared
+  // the pre-registered bar, and every held-out family is an observation.
+  assert.equal(report.verdicts['development-low'], 'no_lesson',
+    'the recorded verdict is what the documents must describe')
+  for (const family of ['held-out-low', 'held-out-high', 'development-high']) {
+    assert.equal(report.verdicts[family], 'observed',
+      `${family} was never a transfer and must stay recorded as an observation`)
+  }
+  assert.equal(report.development['lesson'], null, 'no lesson qualified, so none may be recorded')
+
+  // The protocol the documents quote as "registered in advance".
+  assert.equal(report.protocol.minGain, 0.01)
+  assert.equal(report.protocol.baseline, 'equal-trust')
+  assert.equal(report.protocol.seeds.length, 8)
+
+  const benchmark = squash(doc.benchmarks())
+  const cycle = squash(doc.cycle())
+  for (const [label, text] of [['docs/06', benchmark], ['docs/07', cycle]]) {
+    assert.ok(text.includes('no_lesson'), `${label} must state the recorded verdict`)
+    assert.ok(text.includes('equal-trust'), `${label} must name the baseline`)
+  }
+
+  // The figures the documents print, taken from the artifact rather than typed here.
+  const ranking = report.development.ranking
+  const top = ranking[0]
+  assert.equal(top.strategy, 'equal-trust')
+  for (const row of ranking) {
+    const shown = row.mean.toFixed(4)
+    assert.ok(benchmark.includes(shown) || cycle.includes(shown),
+      `the recorded mean ${shown} for ${row.strategy} is not stated in docs/06 or docs/07`)
+  }
+  // And the two held-out families whose order changed: the honest reading is that the
+  // margin is below the bar, so the document must print the delta and the bar together.
+  for (const family of ['held-out-low', 'held-out-high']) {
+    const target = report.targets.find((entry) => entry.family === family)
+    const winner = target.ranking[0]
+    const row = target.versusBaseline.find((entry) => entry.strategy === winner.strategy)
+    assert.ok(row.meanDelta < report.protocol.minGain,
+      `${family}: the winner must be below the registered bar for the document to say so`)
+    const shown = `+${row.meanDelta.toFixed(4)}`
+    assert.ok(benchmark.includes(shown) || cycle.includes(shown),
+      `${family}: the quoted delta ${shown} does not match the recorded ${row.meanDelta}`)
+  }
+
+  // The pre-registration claim is only true if the rules live in code that runs before
+  // the measurements, so the thresholds are read from the module rather than the prose.
+  const protocol = read('services/fabric/fabric/transfer.py')
+  assert.ok(protocol.includes('MIN_GAIN = 0.01'), 'the registered threshold must be in the module')
+  assert.ok(protocol.includes('MIN_SEEDS = 3'), 'the registered seed floor must be in the module')
+  assert.ok(exists(resolve(REPO, 'services/fabric/scripts/l4_transfer.py')),
+    'the documents claim a runner; the runner must exist')
 })

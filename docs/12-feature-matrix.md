@@ -113,7 +113,7 @@ them rather than restating them.
 | L1 contextual adaptation | **Completed** | Session only; nothing stored |
 | L2 user-approved memory | **Implemented and tested** | Approval is a database `CHECK`; deletion is real; the store attempts no network call |
 | L3 procedural skills | **Partial** | Stored on disk, evidence-gated promotion, rollback, deletion tombstones and relevance matching are reachable over 12 routes and from a review panel in Chat; nothing loads a procedure automatically during a task yet |
-| L4 strategy across tasks | **Partial** | Failure recurrence is implemented; cross-task transfer is not tested |
+| L4 strategy across tasks | **Partial** | Failure recurrence is implemented, and the cross-task transfer test has been run over 8 seeds and 4 task families — `docs/07` §9. Its verdict was `no_lesson`: nothing beat the a-priori baseline on the selection family, so nothing was transferred and the held-out families are recorded as observations. The remaining gap is that no component selects a strategy at request time |
 | L5 model adaptation | **Partial** | SFT, preference and distillation paths exist; three stages are blocked on this host and say so |
 | L6 verified release improvement | **Completed** | One promotion, one recorded rejection |
 
@@ -141,6 +141,7 @@ them rather than restating them.
 | Comparison against named competitor models | **Unsupported** | No competitor weights are obtainable on this host. Reporting a comparison would require fabricating it, so none is reported |
 | Benchmark contamination checks | **Completed** | Development and evaluation data are separated and the check is automated |
 | Published limitation of every result | **Completed** | Every result carries what it does not show |
+| Pre-registered transfer experiment | **Completed** | Thresholds, baseline and verdict vocabulary were frozen in `fabric/transfer.py` before the run; the result was a recorded non-transfer, not a tuned one |
 
 ---
 
@@ -178,8 +179,15 @@ of it:
 - **Planned** rows are mostly model-dependent. They fail together if a model cannot be
   obtained, which is why the from-scratch Lite artifact matters: it is the one path that
   does not depend on a download.
-- **Memory moved from Planned to implemented** this round, with the interface still
-  missing: the honest mark is Partial, not Completed.
+- **Memory moved from Planned to implemented**, and its interface with it: memory can be
+  listed, added, edited, deleted, exported and searched from Chat, and proposals are
+  approved or rejected by hand. What keeps it Partial is superseding, not existence.
+- **Learned procedures moved from module to surface and from untested to measured.** The
+  skills subsystem is stored, served, versioned, rollback-able and reviewable in Chat, and
+  the cross-task transfer question has now been *run* rather than deferred — with a null
+  result. L3 stays Partial because nothing loads a procedure automatically, and L4 stays
+  Partial because nothing selects a strategy from experience; both notes say exactly that
+  instead of claiming a level is finished because its test exists.
 - **Unsupported** rows are deliberate. Local video generation, competitor-model
   benchmarking and a multi-tier local family are not blocked by effort; they are blocked
   by hardware, weights and honesty respectively.

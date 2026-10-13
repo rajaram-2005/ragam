@@ -141,7 +141,7 @@ what has to be verified before it does.**
 | **L1** Contextual adaptation | The current conversation's context | No — session only | n/a, nothing is stored | **Implemented and tested** |
 | **L2** User-approved memory | Facts the user explicitly asked to keep | Yes, inspectable | User approval is the gate | **Implemented and tested** |
 | **L3** Procedural skills | How to perform a recurring task | Yes, as versioned documents | Recorded checks that all passed | **Implemented and tested** |
-| **L4** Strategy across tasks | Which approach works, generally | Yes, as regression cases | A validated failure must join the suite | **Partial** — failure recurrence is implemented; cross-task transfer is not tested |
+| **L4** Strategy across tasks | Which approach works, generally | Yes, as regression cases | A validated failure must join the suite | **Partial** — failure recurrence is implemented and the cross-task transfer test has now been run over eight seeds, which found no lesson to transfer; nothing selects a strategy from experience at run time yet |
 | **L5** Model adaptation | Changed weights | Yes, as artifacts | Held-out evaluation, and the release gate | **Partial** — SFT, preference and distillation paths exist; stages 4–6 are blocked here |
 | **L6** Verified release improvement | A newer artifact replacing an older one | Yes, with rollback | Data manifest, digest, benchmarks, regression + safety checks | **Implemented and tested** |
 
@@ -312,15 +312,23 @@ without a list of what does not is a sales document:
   memory with a corrected one while keeping the link to what it used to say — is implemented
   and tested but still has no control. Editing a memory in place is offered instead, which
   loses the history that superseding preserves.
-- **L4 transfer testing is not implemented.** A lesson that helps on task A is not
-  currently tested for whether it helps on task B; the directive's requirement to record
-  non-generalisation is met only for the failure-recurrence case.
+- **L4 transfer testing produced a null, and nothing selects a strategy at run time.**
+  The transfer test is implemented (`services/fabric/fabric/transfer.py`) and has been
+  run over eight seeds and four task families: the a-priori baseline was the best
+  strategy on the selection family, so no lesson qualified to be transferred and the
+  held-out families are recorded as observations. That is the requirement — *test
+  transfer and record non-generalisation* — met with a negative result, not a positive
+  one. The platform still serves the a-priori 0.5/0.5 fusion; no component picks a
+  strategy from experience while serving a request.
 - **LoRA/PEFT, external distillation and local video generation cannot be exercised here.**
   The external distillation path exists behind an explicit authorization object and a
   redaction gate, and **has never been run against a real provider** — it is
   *Requires external credentials*, not working code.
-- **The skills subsystem is not yet reachable from the API.** It is a tested module with
-  no route wired to it; that is the next integration step, not a finished feature.
+- **Loading a learned procedure is still the user's decision.** The skills subsystem is
+  reachable over fourteen routes and from the review panel in Chat, but nothing loads a
+  procedure automatically while a task is running: a skill is matched, shown and loaded
+  on request. Auto-proposal from a live task is the remaining gap at this level, and
+  `docs/03-status.md` §"what remains" tracks it.
 
 Nothing in this document should be read as a claim of parity with any other model family.
 Lite is a 359,136-parameter character model that beats three computed baselines on

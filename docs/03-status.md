@@ -9,12 +9,12 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1015 passing, 0 failing.**
+**Test totals: 1044 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **420 / 420** (17 files, ~48 s) |
-| `services/fabric` | `pytest -q` | **528 / 528** (23 files, ~35 s) |
+| `services/core` | `node --test test/*.test.mjs` | **422 / 422** (17 files, ~48 s) |
+| `services/fabric` | `pytest -q` | **555 / 555** (24 files, ~20 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **67 / 67** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 243.42 kB → **71.99 kB gzip**, single chunk, no warnings |
 
@@ -151,7 +151,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (420 tests)
+### `services/core` — Implemented and tested (422 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -171,7 +171,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (528 tests)
+### `services/fabric` — Implemented and tested (555 tests)
 
 | Stage | Status |
 |---|---|
@@ -189,6 +189,18 @@ pieces all tested: failure taxonomy, failure memory (`E_{t+1} = E_t ∪ F_t`),
 experiment ledger (baseline → experiment → verdict), metrics with a latency noise
 floor, DataForge, the Node↔Python text-parity fixture, model cards, and the HTTP
 server (23 tests).
+
+**Cross-task transfer (L4) is implemented and was run as a pre-registered
+experiment.** `fabric/transfer.py` holds the protocol — five fusion strategies, one
+a-priori baseline, a one-metric decision rule, a family split decided in advance —
+and `scripts/l4_transfer.py` produces the measurements; `tests/test_transfer.py` (27
+tests) pins the decision procedure, including the cases where it must *refuse* a
+conclusion. The recorded run is a **null**: over eight seeds the a-priori baseline
+was the best strategy on the selection family, so no lesson qualified for transfer,
+and the held-out families are recorded as observations rather than as a transfer.
+Numbers: [`06-benchmarks.md`](./06-benchmarks.md) §9, narrative:
+[`07-improvement-cycle.md`](./07-improvement-cycle.md) §9, raw cells:
+[`experiments/l4-transfer.json`](./experiments/l4-transfer.json).
 
 `fabric/lm/` is the one part of this service that does **not** follow the
 `base_selection → domain_training → sft` path, because it does not need a base to
@@ -404,7 +416,13 @@ Ordered by how much it blocks the acceptance criteria.
    step that proposes one from a failure without being asked, are not implemented. Until
    they are, a procedure is something a person loads deliberately, and the release notes
    say so rather than implying the assistant teaches itself.
-8. **A competitive benchmark against named open models** (Phase 11). Requires
+8. **Select a strategy from experience while serving** (L4). The transfer test is
+   implemented and has been run, and its result was a null: nothing beat the a-priori
+   fusion weights, so there is nothing to select. The gap that remains is the plumbing
+   — no component chooses a strategy at request time from what past tasks showed —
+   and it is a gap that the measurement says should not be closed by tuning this
+   fixture.
+9. **A competitive benchmark against named open models** (Phase 11). Requires
    downloads that are blocked here. Until it exists, **no superiority claim over
    Mistral, Qwen, Llama, Gemma or DeepSeek is made or implied anywhere in this
    repository.**

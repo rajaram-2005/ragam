@@ -413,3 +413,58 @@ rules out.
    training, gradient correctness, evaluation, ledger judgement, release gating,
    provenance recording — works and tells the truth. They say nothing about
    behaviour at scale.
+
+## 9. Cross-task strategy transfer (L4)
+
+§3 and §4 measure a retriever against baselines. This section measures something
+different: whether a **strategy** chosen on one family of tasks is still the right
+choice on tasks it was never selected on. It is the benchmark half of §7 of the
+directive, and the protocol was committed before the run
+(`services/fabric/fabric/transfer.py`); the narrative and the full reading are in
+[`07-improvement-cycle.md`](./07-improvement-cycle.md) §9.
+
+Five fusion strategies, primary metric `mrr`, secondary `recall@5`, eight seeds
+(11–88), 12 topics per family, 8 epochs per training run inside a corpus of 96
+documents and 72 queries. Selection used the `development-low` family only.
+
+**Result — `no_lesson`, and every held-out family recorded as an observation:**
+
+| Family (12 topics each) | Winner | mean mrr | Δ vs `equal-trust` | seeds up/down/tie |
+|---|---|---|---|---|
+| `development-low` (selection) | `equal-trust` | **0.8421** | — | — |
+| `development-low` | `coverage-weighted` | 0.8088 | −0.0334 | 2 / 5 / 1 |
+| `development-low` | `dense-only` | 0.7633 | −0.0788 | 1 / 6 / 1 |
+| `development-low` | `coverage-inverse` | 0.7404 | −0.1017 | 0 / 8 / 0 |
+| `development-low` | `lexical-only` | 0.4750 | −0.3672 | 0 / 8 / 0 |
+| `development-high` | `equal-trust` | 0.9033 | — | — |
+| `held-out-low` | `coverage-weighted` | 0.8659 | **+0.0003** | 5 / 2 / 1 |
+| `held-out-high` | `coverage-weighted` | 0.9252 | **+0.0063** | 4 / 2 / 2 |
+
+The a-priori baseline `equal-trust` is the best strategy on the family it was chosen
+for, and no candidate beat it. On the held-out families the order changes, by
+**+0.0003** and **+0.0063** — below the 0.01 bar registered in advance and with seeds
+against them, so neither would have counted as a transfer even with a lesson to
+transfer. The stable finding is the coarse one: `lexical-only` loses to the fused
+baseline on `mrr` in 8 of 8 seeds on every family, and `dense-only` loses 8 of 8 on
+both low-overlap families, which reproduces §4's mechanism while showing that the
+choice *among* fusion policies is not identifiable at this scale.
+
+**Verdict: the transfer hypothesis is rejected, and recorded as rejected.** Nothing was
+tuned afterwards and the serving configuration is unchanged. Per-seed cells, both
+metrics, the protocol block and the hardware are in
+[`docs/experiments/l4-transfer.json`](./experiments/l4-transfer.json).
+
+### 9.1 What this section does not support
+
+In addition to everything in §8:
+
+1. **Not a claim about semantic domains.** The families are interleaved halves of 24
+   generated topics — different topics drawn from one generator, not different
+   subject areas.
+2. **Not a claim that these strategies are equivalent in general.** They are
+   indistinguishable *here*, on a fixture-scale corpus with 8 seeds and thousands-wide
+   differences in the third and fourth decimal.
+3. **Not a claim about any other metric.** The secondary metric is reported for every
+   cell; it is not used for any verdict, and §9.3 of
+   [`07-improvement-cycle.md`](./07-improvement-cycle.md) shows what would have
+   happened if it had been.

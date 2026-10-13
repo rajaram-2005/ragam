@@ -507,7 +507,7 @@ Stated plainly, because an unstated gap is worse than a stated one.
    exploiting it needs a second local account. `services/fabric/pyproject.toml`
    nonetheless raised its floor from `pytest>=8.0` to `pytest>=9.0.3`, because a
    declared range that permits a known-bad version is a defect in the declaration
-   even when the installed copy happens to be safe. All 528 Fabric tests were
+   even when the installed copy happens to be safe. All 555 Fabric tests were
    verified green under pytest 9.1.1 before the floor moved.
 
    **Scanning is now enforced in CI, not just run once by hand.** The `web` job
