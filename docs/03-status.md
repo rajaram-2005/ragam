@@ -9,12 +9,12 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1075 passing, 0 failing.**
+**Test totals: 1076 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
 | `services/core` | `node --test test/*.test.mjs` | **446 / 446** (20 files, ~50 s) |
-| `services/fabric` | `pytest -q` | **562 / 562** (25 files, ~21 s) |
+| `services/fabric` | `pytest -q` | **563 / 563** (25 files, ~21 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **67 / 67** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 242.71 kB → **71.78 kB gzip**, single chunk, no warnings |
 
@@ -180,7 +180,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (562 tests)
+### `services/fabric` — Implemented and tested (563 tests)
 
 | Stage | Status |
 |---|---|

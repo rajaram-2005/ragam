@@ -308,6 +308,29 @@ def test_the_matching_manifest_digest_is_accepted(corpus, tmp_path):
     assert report.corpus["manifestDigest"] == digest
 
 
+def test_the_revision_is_read_beside_the_corpus_not_after_training(corpus, tmp_path, monkeypatch):
+    """A revision read at the end describes a tree the run may never have seen.
+
+    The corpus is the working tree's own text, so the pair (revision, corpus digest) is
+    the whole reproducibility claim: "check out this revision and you get this corpus".
+    Reading the revision when the report is written -- after 12 steps here, after 35
+    minutes on the release configuration -- makes that pair unverifiable, because the
+    tree can be edited in between and the report still looks consistent.
+    """
+    import fabric.lm.train as train_module
+
+    seen = []
+
+    def spy(root):
+        seen.append(str(root))
+        return "revision-read-at-the-start"
+
+    monkeypatch.setattr(train_module, "code_revision", spy)
+    report = train(small_config(), output_dir=tmp_path, corpus_root=corpus, run_name="r")
+    assert report.provenance["codeRevision"] == "revision-read-at-the-start"
+    assert len(seen) == 1, f"the revision must be read exactly once, saw {len(seen)} reads"
+
+
 def test_the_report_digest_ignores_where_the_artifact_was_written(corpus, tmp_path):
     """Same run in two directories is the same run."""
     a = train(small_config(), output_dir=tmp_path / "a", corpus_root=corpus, run_name="r")

@@ -68,7 +68,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 12,346 source lines, 9,420 test lines
+### `services/core` — 12,346 source lines, 9,422 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -107,7 +107,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |
 | `skills/store.mjs` | 246 | Skills on disk: document + state split, version files for rollback, deletion tombstones |
 
-### `services/fabric` — 9,022 source lines, 6,816 test lines
+### `services/fabric` — 9,030 source lines, 6,839 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible
