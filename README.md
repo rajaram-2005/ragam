@@ -118,7 +118,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 12,442 | 9,799 | **zero npm packages** | 452 |
+| `services/core` | Node 22 ESM | 12,451 | 9,847 | **zero npm packages** | 452 |
 | `services/fabric` | Python 3.11 | 9,046 | 6,854 | NumPy only | 563 |
 | `apps/web` | React 18 + Vite | 4,464 | 1,311 | react, react-dom | 67 |
 
@@ -138,9 +138,10 @@ Two first-party models exist, and both are real.
 
 ### A language model, trained from nothing
 
-**`aetheris-lite-lm`** — a **359,136-parameter character-level transformer**
+**`aetheris-lite-lm@0.1.1`** — a **359,616-parameter character-level transformer**
 trained from random initialisation, in pure NumPy, on this repository's own text.
-No pretrained weights, no PyTorch, no GPU, no downloads.
+No pretrained weights, no PyTorch, no GPU, no downloads. It supersedes
+`@0.1.0` (359,136 parameters), whose figures stay published as a superseded record.
 
 This exists because every route to *fine-tuning someone else's* model was blocked —
 `huggingface.co` and `download.pytorch.org` are unreachable, `llama-cpp-python` ships

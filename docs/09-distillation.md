@@ -35,8 +35,10 @@ considered), and no API key is configured. Nothing in this repository has ever
 contacted a real provider.
 
 But logit distillation needs no provider. It needs a teacher whose weights are local —
-and `aetheris-lite-lm@0.1.0`, trained in `services/fabric` from random initialisation,
-is exactly that. 359,136 parameters, digest `82392ef89074…`, released through the gate
+and the released `aetheris-lite-lm@0.1.1`, trained in `services/fabric` from random
+initialisation, is exactly that — as is the superseded `@0.1.0`, and as was the run this
+experiment actually used (§5 names it: 359,904 parameters, weights `c034a15095fc…`). The
+released artifact is 359,616 parameters, digest `53ae59b2a777…`, released through the gate
 in [`08-aetheris-lite.md`](./08-aetheris-lite.md).
 
 That is the path that produced the result in §5.
@@ -146,7 +148,8 @@ reorder fails loudly.
   request shape, the header, the parsing and the gate — and proves nothing about any
   real provider's behaviour. Status: **Requires external credentials**.
 - **No logit distillation from a model we did not train.** Only
-  `aetheris-lite-lm@0.1.0` is available to act as a teacher.
+  the released `aetheris-lite-lm@0.1.1` is available to act as a teacher (and `@0.1.0`
+  before it).
 - **No instruction tuning.** The student is a base model, exactly like its teacher.
 
 ---

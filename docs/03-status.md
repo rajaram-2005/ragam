@@ -61,7 +61,7 @@ instead.
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
 | 3 | Unified app, five areas | **Complete** | `apps/web`; 67 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
-| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,136-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 9, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 26 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
+| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,616-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 9, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 26 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
 | 5 | Online provider integration | **Not met — removed by decision** | No external provider is configured, vendored or bundled. Image and video requests are refused with an explicit limitation, and the UI states that no provider exists rather than implying one can be enabled with a key |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
@@ -70,7 +70,7 @@ instead.
 | 9 | Sparsiz integration | **Complete** | Responsibility defined; taxonomies and `Q(x)` adopted, scoring replaced |
 | — | Klyvaron artifact format, runtime and model library | **Complete** | `klyvaron/format.mjs` (manifest + digest verification, a ZIP/`.npy` reader in the core), `klyvaron/runtime.mjs` (the forward pass in JavaScript, parity-checked against NumPy), `klyvaron/store.mjs` (install/verify/load/remove inside the storage budget), `providers/klyvaron.mjs` and `scripts/export_lm.py`; a committed parity fixture ties the two implementations together |
 | — | On-device storage accounting | **Complete** | `storage/budget.mjs` plus `klyvaron/footprint.mjs`; `/api/storage` reports measured bytes, verification results and headroom |
-| 10 | Aetheris Lite experiments | **Partial** | Two real first-party models: the trained retriever, and a from-scratch **359,136-parameter character-level LM** trained in pure NumPy with hand-derived, finite-difference-verified gradients. SFT and preference optimization remain unimplemented for want of data and compute, and are not simulated |
+| 10 | Aetheris Lite experiments | **Partial** | Two real first-party models: the trained retriever, and a from-scratch **359,616-parameter character-level LM** trained in pure NumPy with hand-derived, finite-difference-verified gradients. SFT and preference optimization remain unimplemented for want of data and compute, and are not simulated |
 | 11 | Competitive benchmark cycle | **Partial** | Real, reproducible BM25 comparison; **no** Mistral/Qwen/Llama/Gemma/DeepSeek comparison possible. Aetheris Lite is evaluated against computed uniform/unigram/bigram baselines on identical held-out tokens — never against a pretrained model, because none could be obtained |
 | — | Sparsiz improvement cycle on a real failure | **Complete** | [`07-improvement-cycle.md`](./07-improvement-cycle.md): rejected run diagnosed, hypothesis tested, regression cases promoted; the accepted `mrr` gain **did not replicate** across seeds and is recorded as such; 66 tests |
 | — | Selection-protocol correction | **Complete** | [`06-benchmarks.md`](./06-benchmarks.md) §5.3: base selection ran on the evaluation split; now runs on a training-side validation split. Released artifact unchanged (`weightsDigest db3366ea…`) |
@@ -116,11 +116,13 @@ refuses it with `model_not_instruction_tuned` (501) unless the caller pins it by
 **instruction-tuned** local model; the wiring for one is what this revision built.
 
 The second full-size run, on the clean revision `8d9cdf8`, makes the same journey with an
-ending that can be checked: 359,616 parameters, perplexity 4.8932 against a bigram baseline
-of 15.7588, gate verdict RELEASED, installed by the store in 1,451,765 bytes, served at
-26.2 tokens/s in JavaScript. Its corpus manifest digest `70c5b78c…` was recomputed from
-that revision's own text **before the run finished** and matched, so revision and corpus
-are known to be the same thing rather than assumed to be. Two artifacts of the same id with
+ending that can be checked — and its artifact is **the released `aetheris-lite-lm@0.1.1`**:
+359,616 parameters, perplexity 4.8932 against a bigram baseline of 15.7588, gate verdict
+RELEASED, installed by the store in 1,451,765 bytes, served at 26.2 tokens/s in JavaScript.
+Its corpus manifest digest `70c5b78c…` was recomputed from that revision's own text
+**before the run finished** and matched, so revision and corpus are known to be the same
+thing rather than assumed to be: that is the property the superseded `@0.1.0` lacks, and
+why the version that has it is the released one. Two artifacts of the same id with
 different weights (`2840150f…` and `165e150f…`) were then installed in sequence, replaced,
 and rolled back; that exercise is what exposed a real defect — a replace left the previous
 version's 1.4 MB weights in the library with no manifest referring to them, and reported
@@ -239,11 +241,17 @@ model (first loss 4.8057 against the release's 4.8380) and the first attempt at 
 distillation experiment was refused outright when eight characters entered the
 corpus. A run now writes its exact corpus beside its weights, and a reproduction can
 be demanded or refused by digest rather than assumed. The full release configuration
-was then run a second time, end to end, on the tree at `67cdd58`: 2,005 s of training,
-a corpus manifest of its own, a model of 359,520 parameters instead of 359,136, and a
-gate verdict of **RELEASED** (perplexity 5.3585 against the bigram's 16.7151, 0 hard
-failures). Its perplexity is not comparable with the release's — the same token budget
-went into a corpus about 1.8× larger — and it is not reported as an improvement. That
+was then run twice more, end to end. The first, on the tree at `67cdd58`: 2,005 s of
+training, a corpus manifest of its own, a model of 359,520 parameters, and a gate verdict of
+**RELEASED** (perplexity 5.3585 against the bigram's 16.7151, 0 hard failures). That run's
+corpus turned out to include this project's own build products — `artifacts/` was missing
+from the directories discovery skips — so it was fixed and the configuration re-run on the
+tree at `8d9cdf8`, whose corpus rebuilds byte for byte from the commit: **that artifact is
+the released `aetheris-lite-lm@0.1.1`** (359,616 parameters, perplexity 4.8932 against the
+bigram's 15.7588, ratio 0.310505, gate verdict RELEASED, 0 hard and 0 soft failures). The
+superseded `@0.1.0` (359,136 parameters) stays published with its own card; none of the
+three perplexities is comparable with another, because the same token budget went into
+corpora of different sizes, and none is reported as an improvement. That
 artifact was then installed into a core data directory through `KlyvaronStore.install`,
 loaded by the app, and served over HTTP: `/api/ready` reports `textCompletion: true`
 and `chat: false`, an unpinned `/api/chat` is refused with `model_not_instruction_tuned`
@@ -251,7 +259,7 @@ and `chat: false`, an unpinned `/api/chat` is refused with `model_not_instructio
 `route`/`delta`/`done` events. Python and JavaScript produce the same greedy text from
 the same bytes (max logit difference 8.2e-06). Record:
 [`experiments/lm-verification-run-67cdd58.json`](./experiments/lm-verification-run-67cdd58.json).
-And the model emits mush at this size — 359,136 parameters is enough to beat every
+And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
 ### `apps/web` — Implemented and tested (67 tests)

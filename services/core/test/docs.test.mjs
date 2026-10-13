@@ -53,7 +53,8 @@ const doc = {
   status: () => read('docs/03-status.md'),
   benchmarks: () => read('docs/06-benchmarks.md'),
   lite: () => read('docs/08-aetheris-lite.md'),
-  lmCard: () => read('docs/model-cards/aetheris-lite-lm-0.1.0.json'),
+  lmCard: () => read('docs/model-cards/aetheris-lite-lm-0.1.1.json'),
+  lmSupersededCard: () => read('docs/model-cards/aetheris-lite-lm-0.1.0.json'),
   cycle: () => read('docs/07-improvement-cycle.md'),
   hermes: () => read('docs/10-hermes-audit.md'),
   klyvaron: () => read('docs/11-klyvaron-family.md'),
@@ -640,11 +641,16 @@ test('the documented language-model results match its committed model card', () 
   // docs/08 states a perplexity, a baseline and a weights digest. The card JSON is
   // the artifact of record, generated from the run report. If the two disagree, one
   // of them is wrong and there is no way to tell which from reading either alone.
+  //
+  // The released card is 0.1.1; 0.1.0 stays committed as the superseded record and its
+  // own guards follow below, because superseding an artifact is a status change and not
+  // a licence to edit what it published.
   const card = JSON.parse(doc.lmCard())
   const text = squash(doc.lite())
   assert.equal(card.format, 'aetheris-model-card/v1')
-  assert.equal(card.card.identifier, 'aetheris-lite-lm@0.1.0')
+  assert.equal(card.card.identifier, 'aetheris-lite-lm@0.1.1')
   assert.equal(card.card.status, 'released')
+  assert.equal(card.card.supersededAt, null, 'a released card is not itself superseded')
 
   const metrics = card.card.metrics
   // Written out at the full precision the card records, not rounded for display.
@@ -691,28 +697,40 @@ test('the documented language-model results match its committed model card', () 
     'docs/08 must say the model does not follow instructions',
   )
 
-  // The card is an artifact of record, and one sentence in it was false: it said the model
-  // was "deliberately not wired into /api/chat" while the route had been resolving and
-  // refusing it with 501. Correcting a record silently is worse than leaving it wrong, so
-  // the correction is recorded on the card itself and every part of it is checked here --
-  // including that no measured value moved with it.
-  const envelope = JSON.parse(doc.lmCard())
-  assert.equal(envelope.corrections.length, 1, 'the one correction must be recorded, not implied')
-  const [correction] = envelope.corrections
-  assert.ok(correction.was.includes('not wired into'), 'the correction must quote what it replaced')
-  assert.ok(correction.now.includes('/api/chat') && correction.now.includes('model_not_instruction_tuned'))
-  assert.equal(correction.measuredValuesChanged, false)
-  assert.ok(!JSON.stringify(envelope.card).includes('not wired into'),
-    'the false sentence must be gone from the card body itself')
   assert.ok(
     card.card.limitations.some((l) => l.includes('model_not_instruction_tuned')),
     'the card must state the behaviour the route actually has',
   )
+  assert.equal(card.corrections, undefined, 'the released card has nothing to correct')
+
+  // The superseded card is still an artifact of record. One sentence in it was false: it
+  // said the model was "deliberately not wired into /api/chat" while the route had been
+  // resolving and refusing it with 501. Correcting a record silently is worse than leaving
+  // it wrong, so the correction is on the card itself and every part of it is checked here
+  // -- including that no measured value moved with it, and that the artifact it describes
+  // is now labelled superseded in the document rather than deleted from it.
+  const previous = JSON.parse(doc.lmSupersededCard())
+  assert.equal(previous.card.identifier, 'aetheris-lite-lm@0.1.0')
+  assert.equal(previous.corrections.length, 1, 'the one correction must be recorded, not implied')
+  const [correction] = previous.corrections
+  assert.ok(correction.was.includes('not wired into'), 'the correction must quote what it replaced')
+  assert.ok(correction.now.includes('/api/chat') && correction.now.includes('model_not_instruction_tuned'))
+  assert.equal(correction.measuredValuesChanged, false)
+  assert.ok(!JSON.stringify(previous.card).includes('not wired into'),
+    'the false sentence must be gone from the card body itself')
   // The Markdown card carries the same sentence twice and the same correction once.
   const markdown = squash(read('docs/model-cards/aetheris-lite-lm-0.1.0.md'))
   assert.ok(!markdown.includes('not wired into'))
   assert.ok(markdown.includes('model_not_instruction_tuned'))
   assert.ok(markdown.includes('Corrections'), 'the Markdown card must show the correction')
+
+  // And the document has to say which artifact is which: the superseded figures stay, with
+  // the reason, and the released card's figures are the headline.
+  assert.ok(text.includes('superseded'), 'docs/08 must record the supersession')
+  assert.ok(text.includes(previous.card.weightsDigest),
+    'docs/08 must keep the superseded artifact\'s published digest')
+  assert.ok(squash(read('docs/model-cards/aetheris-lite-lm-0.1.1.md')).includes('Supersedes'),
+    'the released Markdown card must name what it supersedes')
 })
 
 test('the documented verification run matches the committed record', () => {
@@ -753,13 +771,16 @@ test('the documented verification run matches the committed record', () => {
   )
 
   // It must not be confused with the released model: a different corpus gave different
-  // weights, and the released card is the record of the released weights.
-  const card = JSON.parse(doc.lmCard()).card
-  assert.notEqual(record.run.weightsDigest, card.weightsDigest)
-  assert.notEqual(record.corpus.manifestDigest, card.artifacts.corpusManifest)
+  // weights, and the cards are the records of the weights they describe.
+  const released = JSON.parse(doc.lmCard()).card
+  const superseded = JSON.parse(doc.lmSupersededCard()).card
+  assert.notEqual(record.run.weightsDigest, released.weightsDigest)
+  assert.notEqual(record.run.weightsDigest, superseded.weightsDigest)
+  assert.notEqual(record.corpus.manifestDigest, released.artifacts.corpusManifest)
   assert.notEqual(record.releaseRun.weightsDigest, record.run.weightsDigest)
 
-  assert.equal(record.releaseRun.weightsDigest, card.weightsDigest)
+  assert.equal(record.releaseRun.weightsDigest, superseded.weightsDigest,
+    'this record names the artifact that has since been superseded')
 
   // The serving evidence is the measured one: a base model loadable and reachable, and
   // refused where it would be misread as an assistant.
@@ -828,15 +849,25 @@ test('the clean-revision run matches its committed record', () => {
   assert.ok(text.includes(record.serving.chatPinned.tokensPerSecond.toFixed(1)),
     'docs/08 must state the measured pinned-chat throughput')
 
-  // Three runs, three corpora, three weight digests: none may be confused with another.
+  // Three artifacts, three corpora, three weight digests: none may be confused with another.
+  // This run's artifact is the released one, and the artifact it superseded is the one the
+  // record calls `releaseRun` -- so the released card and this record must agree, and the
+  // superseded card and `releaseRun` must agree.
   const card = JSON.parse(doc.lmCard()).card
   const previous = JSON.parse(doc.lmVerification())
-  const digests = new Set([record.run.weightsDigest, previous.run.weightsDigest, card.weightsDigest])
+  const superseded = JSON.parse(doc.lmSupersededCard()).card
+  const digests = new Set([record.run.weightsDigest, previous.run.weightsDigest, superseded.weightsDigest])
   assert.equal(digests.size, 3)
-  const corpora = new Set([record.corpus.manifestDigest, previous.corpus.manifestDigest, card.artifacts.corpusManifest])
+  const corpora = new Set([record.corpus.manifestDigest, previous.corpus.manifestDigest, superseded.artifacts.corpusManifest])
   assert.equal(corpora.size, 3)
   assert.equal(record.comparison.comparable, false, 'a different corpus is not a comparable measurement')
-  assert.equal(record.releaseRun.weightsDigest, card.weightsDigest)
+  assert.equal(record.run.weightsDigest, card.weightsDigest,
+    'this run is the released artifact, and the released card is its record')
+  assert.equal(record.run.fileDigest, card.artifacts.fileDigest)
+  assert.equal(record.run.bytes, card.artifacts.bytes)
+  assert.equal(record.corpus.manifestDigest, card.artifacts.corpusManifest)
+  assert.equal(record.releaseRun.weightsDigest, superseded.weightsDigest,
+    'the artifact this one superseded is the one the record calls the release run')
   assert.ok(squash(doc.klyvaron()).includes(record.run.evaluation.perplexity.toFixed(4)),
     'docs/11 must carry the same perplexity')
 
@@ -845,22 +876,26 @@ test('the clean-revision run matches its committed record', () => {
   // digest, the file digest, the file size and the parameter count all have to agree, and the
   // status has to be the one a non-release carries.
   const backing = KLYVARON.lite.capabilities['text.completion'].backing
-  const second = backing.verificationArtifact
-  assert.equal(second.weightsDigest, record.run.weightsDigest,
+  assert.equal(backing.weightsDigest, record.run.weightsDigest,
     'the tier record and the run record must name the same weights')
-  assert.equal(second.artifactSha256, record.run.fileDigest,
+  assert.equal(backing.artifactSha256, record.run.fileDigest,
     'the tier record and the run record must name the same file')
-  assert.equal(second.artifactBytes, record.run.bytes)
-  assert.equal(second.parameters, record.run.parameterCount)
-  assert.equal(second.status, 'not_a_release')
-  assert.ok(second.record.includes('lm-verification-run-8d9cdf8.json'),
-    'the record must point at the file the evidence lives in')
+  assert.equal(backing.artifactBytes, record.run.bytes)
+  assert.equal(backing.parameters, record.run.parameterCount)
   assert.equal(backing.artifact, `aetheris-lite-lm-${card.version}`,
     'the released artifact string must be the released card, id and version')
-  // And the tier may label both, because both are Lite artifacts -- which is the point: the
-  // label follows the backing record, while `not_a_release` says which one is published.
+  assert.equal(backing.measurementsRecord ?? 'docs/experiments/lm-verification-run-8d9cdf8.json',
+    'docs/experiments/lm-verification-run-8d9cdf8.json',
+    'the tier record must point at the file the evidence lives in')
+  // The superseded artifact's own record, checked against its own card.
+  assert.equal(backing.supersededArtifact.weightsDigest, superseded.weightsDigest)
+  assert.equal(backing.supersededArtifact.parameters, superseded.parameterCount)
+  assert.equal(backing.supersededArtifact.card, 'docs/model-cards/aetheris-lite-lm-0.1.0.json')
+  // And the tier may label all three names, because all three are Lite artifacts: the label
+  // follows the backing record, while `supersededArtifact` says which one is not current.
   assert.equal(tierClaimForArtifact('aetheris-lite-lm', card.version), TIERS.LITE)
   assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.1-verify'), TIERS.LITE)
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.0'), TIERS.LITE)
 
   // The serving evidence is measured, and the update/rollback exercise must be recorded with
   // the defect it found rather than only with the numbers that now look right.
@@ -1342,17 +1377,21 @@ test('the Klyvaron document matches the family it describes', () => {
   // Both sentences are pinned here because both are the kind of claim a document relaxes
   // first when it starts describing what it wishes were true.
   assert.ok(text.includes('lookup by artifact'), 'docs/11 must say a tier label is looked up')
-  assert.ok(text.includes("status: 'not_a_release'"), 'docs/11 must record the second artifact as not a release')
   assert.ok(text.includes('`tier: null`'), 'docs/11 must state what an unbacked declaration gets')
-  const verification = KLYVARON.lite.capabilities['text.completion'].backing.verificationArtifact
-  assert.equal(tierClaimForArtifact('aetheris-lite-lm', verification.artifact.replace('aetheris-lite-lm-', '')),
-    TIERS.LITE, 'the verification artifact must still be able to carry its own tier label')
+  // The hierarchy is a hierarchy: the released artifact and the superseded one are both
+  // named, and both may carry the label -- a device that has not updated is still running
+  // a Klyvaron Lite model, and a rolled-back device is running one on purpose.
+  const backing = KLYVARON.lite.capabilities['text.completion'].backing
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.1'), TIERS.LITE)
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.0'), TIERS.LITE, 'the superseded artifact')
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', backing.alsoKnownAs[0].replace('aetheris-lite-lm-', '')),
+    TIERS.LITE, 'the same bytes under the label the drill installed them with')
+  assert.ok(text.includes('superseded'), 'docs/11 must say which artifact was superseded')
 
   // And its measurements come from the card, so the two cannot disagree. Field paths are
   // taken from the card's real shape (`card.metrics.*`, `card.weightsDigest`), which the
   // first version of this check guessed at -- `card.evaluation` does not exist.
   const card = JSON.parse(doc.lmCard()).card
-  const backing = KLYVARON.lite.capabilities['text.completion'].backing
   assert.equal(backing.measured.validationPerplexity, card.metrics.validationPerplexity,
     'the family record and the model card must agree on perplexity')
   assert.equal(backing.measured.perplexityVsBestBaseline, card.metrics.perplexityVsBigram,

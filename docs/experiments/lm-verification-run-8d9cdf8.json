@@ -161,7 +161,7 @@
   }
  },
  "gate": {
-  "identifier": "aetheris-lite-lm@0.1.1-verify",
+  "identifier": "aetheris-lite-lm@0.1.1",
   "status": "released",
   "verdict": "released",
   "requirements": [
@@ -405,5 +405,5 @@
  },
  "verdict": "released",
  "rationale": "Gate released: 0 hard and 0 soft failures. perplexityVsBigram 0.310505 <= 1.0; validationUnknownRate 0.00001071 <= 0.02; lossImprovement 3.380646 >= 1.0. The verdict was produced by re-running the release gate on the run's own report.",
- "note": "Committed record of a measured run. Absolute paths from the machine that produced it are canonicalised; every measured value is unchanged. The weights and this report's own JSON are not committed: artifacts stay out of Git by policy and are referenced by digest."
+ "note": "Committed record of a measured run. Absolute paths from the machine that produced it are canonicalised; every measured value is unchanged. The weights and this report's own JSON are not committed: artifacts stay out of Git by policy and are referenced by digest. This run's artifact is the released aetheris-lite-lm@0.1.1 (see docs/model-cards/); the install and serve evidence below was captured before the version was promoted and therefore names the artifact as aetheris-lite-lm@0.1.1-verify -- the same weights and the same file digest, a different version string in the manifest."
 }
