@@ -150,6 +150,55 @@ def test_the_parity_fixture_is_deterministic_and_internally_consistent(tmp_path)
         assert case["topGap"] > 1e-2, "the fixture model has a near-tie; regenerate it with a different seed"
 
 
+def _describe_npz_difference(left_b64: str, right_b64: str) -> str:
+    """One line saying *how* two .npz payloads differ, for a fixture that drifted.
+
+    A byte comparison answers "yes/no"; the question that follows is always "which array
+    changed", and on a machine you do not have access to, the answer has to come out of the
+    failure message itself. Here it is: container lengths, member names, and for each member
+    whether the arrays are equal, their dtype and shape, and the largest absolute difference.
+    When every array is identical the containers still differ, so the ZIP metadata is compared
+    field by field and the first differing byte offset is named.
+    """
+    import io
+    import zipfile
+
+    left, right = base64.b64decode(left_b64), base64.b64decode(right_b64)
+    parts = [f"npz {len(left)} vs {len(right)} bytes; python {sys.version.split()[0]}, numpy {np.__version__}"]
+    try:
+        with zipfile.ZipFile(io.BytesIO(left)) as za, zipfile.ZipFile(io.BytesIO(right)) as zb:
+            if za.namelist() != zb.namelist():
+                parts.append(f"members differ: {za.namelist()} vs {zb.namelist()}")
+            else:
+                for name in za.namelist():
+                    a = np.load(io.BytesIO(za.read(name)))
+                    b = np.load(io.BytesIO(zb.read(name)))
+                    if a.shape != b.shape or a.dtype != b.dtype:
+                        parts.append(f"{name}: {a.dtype}{a.shape} vs {b.dtype}{b.shape}")
+                    elif not np.array_equal(a, b):
+                        delta = float(np.abs(a.astype(np.float64) - b.astype(np.float64)).max())
+                        parts.append(f"{name}: same shape {a.shape}, max abs delta {delta:.3e}")
+                if len(parts) == 1:
+                    for name in za.namelist():
+                        ia, ib = za.getinfo(name), zb.getinfo(name)
+                        if (ia.compress_type, ia.date_time, ia.create_system, ia.external_attr) != (
+                            ib.compress_type, ib.date_time, ib.create_system, ib.external_attr
+                        ):
+                            parts.append(
+                                f"{name}: zip metadata differs -- compress {ia.compress_type}/{ib.compress_type}, "
+                                f"date_time {ia.date_time}/{ib.date_time}, create_system {ia.create_system}/{ib.create_system}"
+                            )
+    except Exception as exc:  # noqa: BLE001 - a difference in the container itself, reported as one
+        parts.append(f"not both readable as zip: {type(exc).__name__}: {exc}")
+    if len(parts) == 1:
+        offset = next((i for i, (x, y) in enumerate(zip(left, right)) if x != y), min(len(left), len(right)))
+        parts.append(
+            f"no member differs; first differing byte at offset {offset}: "
+            f"{left[offset:offset + 16].hex()} vs {right[offset:offset + 16].hex()}"
+        )
+    return "; ".join(parts)
+
+
 def test_the_committed_core_fixture_is_regenerable(tmp_path):
     """The fixture services/core tests against is the one this code produces."""
     committed = json.loads(CORE_FIXTURE.read_text(encoding="utf-8"))
@@ -157,7 +206,9 @@ def test_the_committed_core_fixture_is_regenerable(tmp_path):
     assert committed["manifest"]["tokenizer"]["digest"] == regenerated["manifest"]["tokenizer"]["digest"]
     assert committed["npzBase64"] == regenerated["npzBase64"], (
         "the committed fixture no longer matches the exporter; regenerate it with "
-        "python services/fabric/scripts/export_lm.py --parity-fixture services/core/test/fixtures/klyvaron-lite-parity.json"
+        "python services/fabric/scripts/export_lm.py --parity-fixture "
+        "services/core/test/fixtures/klyvaron-lite-parity.json -- "
+        + _describe_npz_difference(committed["npzBase64"], regenerated["npzBase64"])
     )
 
 
