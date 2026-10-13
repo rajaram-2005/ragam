@@ -22,18 +22,18 @@ const fixture = JSON.parse(readFileSync(new URL('./fixtures/klyvaron-lite-parity
 const ARTIFACT_ID = fixture.manifest.id
 
 /** Install the parity artifact the way an operator would: files under the managed root. */
-function installFixture(dataDir) {
+function installFixture(dataDir, manifest = fixture.manifest) {
   const budget = new MobileStorageBudget({ root: join(dataDir, 'klyvaron') })
-  const directory = join(budget.pathFor(CATEGORIES.MODEL_WEIGHTS), ARTIFACT_ID)
+  const directory = join(budget.pathFor(CATEGORIES.MODEL_WEIGHTS), manifest.id)
   mkdirSync(directory, { recursive: true })
-  writeFileSync(join(directory, fixture.manifest.weights.file), Buffer.from(fixture.npzBase64, 'base64'))
-  writeFileSync(join(directory, `${ARTIFACT_ID}.klyvaron.json`), JSON.stringify(fixture.manifest, null, 2))
+  writeFileSync(join(directory, manifest.weights.file), Buffer.from(fixture.npzBase64, 'base64'))
+  writeFileSync(join(directory, `${manifest.id}.klyvaron.json`), JSON.stringify(manifest, null, 2))
   return directory
 }
 
-async function startCore({ install = true, env = {} } = {}) {
+async function startCore({ install = true, env = {}, manifest = null } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), 'aetheris-klyvaron-'))
-  if (install) installFixture(dataDir)
+  if (install) installFixture(dataDir, manifest ?? fixture.manifest)
   const config = loadConfig({
     AETHERIS_RUNTIME_POLICY: RUNTIME_POLICIES.STRICT_OFFLINE,
     AETHERIS_DATA_DIR: dataDir,
@@ -191,6 +191,50 @@ test('with no artifact installed the app still starts, and says so', async () =>
     const chat = await core.call('POST', '/api/chat', { messages: [{ role: 'user', content: 'hello' }] })
     assert.equal(chat.status, 503)
     assert.equal(chat.json.error, 'no_model_available')
+  } finally {
+    await core.close()
+  }
+})
+
+test('an artifact that declares a tier it cannot back loads, and gets no tier label', async () => {
+  // `tier` in a manifest is the artifact talking about itself. The tier table is a lookup
+  // (klyvaron/tiers.mjs), so this artifact -- real weights, real digest, loadable, and
+  // declaring `tier: 'pro'` -- must load without being handed a label that would read as
+  // laptop-class quality from a 6,264-parameter fixture.
+  const declared = { ...fixture.manifest, id: 'klyvaron-tier-impostor', tier: 'pro' }
+  const core = await startCore({ manifest: declared })
+  try {
+    const ready = await core.call('GET', '/api/ready')
+    assert.equal(ready.json.klyvaron.loaded.length, 1, 'the artifact must still load')
+    const loaded = ready.json.klyvaron.loaded[0]
+    assert.equal(loaded.tier, 'pro', 'the record keeps what the manifest declared')
+    assert.equal(loaded.tierClaim, null, 'nothing backs that declaration, so there is no claim')
+
+    const models = await core.call('GET', '/api/models')
+    const model = models.json.models.find((entry) => entry.id === `klyvaron:${declared.id}`)
+    assert.ok(model, 'a loaded artifact belongs in the routing table whatever it calls itself')
+    assert.equal(model.tier, null, 'the API must not repeat a declaration as a claim')
+    assert.ok(!model.tags.some((tag) => String(tag).startsWith('tier:')),
+      `no tier tag may be emitted for an unbacked artifact; tags were ${model.tags.join(', ')}`)
+    assert.ok(model.tags.includes('base_completion'), 'the honest part of the descriptor survives')
+
+    // The same join, from the other side: a claim that *is* backed has to reach the public
+    // row. The parity fixture cannot claim one (it is not a family artifact), so the
+    // observation is made directly -- and the row must read the claim rather than
+    // recompute it from an id that never matches, which is what returned null for every
+    // loaded artifact before this.
+    core.app.registry.observe(`klyvaron:${declared.id}`, { availability: 'ready', detail: { tierClaim: 'lite' } })
+    const claimed = (await core.call('GET', '/api/models')).json.models
+      .find((entry) => entry.id === `klyvaron:${declared.id}`)
+    assert.equal(claimed.tier, 'lite', 'a backed claim must appear in the public model row')
+    assert.equal(claimed.measured.probeDetail.tierClaim, 'lite')
+
+    // And the family table gained nothing: the declaration reached the model row's own
+    // record, not the table of what Aetheris has built.
+    const family = models.json.family
+    assert.equal(family.tiers.find((tier) => tier.id === 'lite').availableCapabilities.length, 2,
+      'an unbacked artifact must not add a capability to a tier')
+    assert.ok(!JSON.stringify(family).includes(declared.id), 'the artifact is not in the family record')
   } finally {
     await core.close()
   }

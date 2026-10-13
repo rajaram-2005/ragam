@@ -107,11 +107,31 @@ export class ModelFamilyError extends Error {
 }
 
 /**
- * The single artifact that exists today.
+ * The artifact this tier is backed by -- and the second artifact that also exists.
  *
- * It is a character-level language model trained from random initialisation on this
- * repository's own text. Its measurements come from its committed run report and model
- * card, not from a guess -- see docs/08-aetheris-lite.md and docs/model-cards/.
+ * The released artifact is the one with a committed card, benchmarks and limitations
+ * (`docs/model-cards/aetheris-lite-lm-0.1.0.json`, quoted in docs/08 and docs/11): a
+ * character-level language model trained from random initialisation on this repository's
+ * own text, from a run whose report is the source of every number here.
+ *
+ * A second, corrected-corpus artifact exists. `artifacts/` used to be visible to corpus
+ * discovery, so a run could train on the reports of the runs before it; the exclusion
+ * landed in `8d9cdf8`, and a full run of the same configuration afterwards is recorded at
+ * `docs/experiments/lm-verification-run-8d9cdf8.json`. It is recorded as **verification
+ * evidence, not as a release**, and the difference is measured rather than stylistic:
+ *
+ *  - its corpus is **1.849x** larger than the release's (2,646,300 bytes against
+ *    1,431,417), so its perplexity is not comparable with the release's and is offered as
+ *    neither an improvement nor a regression;
+ *  - the released figures are the ones published in a committed card, and renumbering a
+ *    released artifact to match a differently-corpus'd run would move every published
+ *    number for a model nobody measured;
+ *  - the release's corpus cannot be rebuilt from any commit (the gitignored files it read
+ *    are gone), while the verification run's corpus rebuilds byte-for-byte from its revision.
+ *    That asymmetry is why the artifact this repository can rebuild today is the
+ *    verification one, and why promoting it to a release is a deliberate step -- a new
+ *    card, re-run benchmarks, and a re-run of the install and serve evidence -- rather
+ *    than a silent edit.
  */
 const LITE_BACKING = Object.freeze({
   artifact: 'aetheris-lite-lm-0.1.0',
@@ -160,6 +180,27 @@ const LITE_BACKING = Object.freeze({
       + 'storage target is met, and it is met by being undersized.',
     'Trained on this repository\'s text, so it reproduces that text distribution and nothing else.',
   ],
+  // The second artifact. Kept in the same record as the release on purpose: a tier that
+  // mentions only the artifact with a card would be describing a repository nobody can
+  // rebuild, and a tier that quietly promoted the other one would be renumbering a
+  // release. `tierClaimForArtifact` reads both, so either version may carry the label.
+  verificationArtifact: Object.freeze({
+    artifact: 'aetheris-lite-lm-0.1.1-verify',
+    // Two digests, because the artifact has two and they mean different things: the run
+    // hashes the weight arrays themselves, and the store hashes the `.npz` file it ships
+    // and verifies on install. Recorded separately so neither can be read as the other.
+    weightsDigest: '53ae59b2a777be9d22f1f04b6cbc94aee3dad6144ac40e4e25c12f900164b60c',
+    artifactSha256: '165e150f6e290fe3a8162673f743037dcf15a3b63199ecd7661bdbc83652b6f7',
+    artifactBytes: 1_446_862,
+    parameters: 359_616,
+    status: 'not_a_release',
+    record: 'docs/experiments/lm-verification-run-8d9cdf8.json',
+    note: 'A second full run of the released configuration on the corrected corpus. It '
+      + 'passed the release gate with no hard and no soft failures and was installed, '
+      + 'served and rolled back on this machine, but it is evidence rather than a '
+      + 'release: its corpus is 1.849x larger than the released model\'s, so its '
+      + 'perplexity is not comparable with it and it is not a successor version.',
+  }),
 })
 
 /**
@@ -274,15 +315,37 @@ export function ownedArtifacts(tierId) {
  * Which Klyvaron tier, if any, may this model id carry as a label?
  *
  * This is the mechanism that makes directive §5A structural instead of aspirational.
- * A model cannot *declare* a tier -- there is no field for it. A tier label is a
- * lookup: it appears only if the model id IS the artifact named in a backing record
- * for a capability the tier actually provides. So rebranding an unchanged third-party
- * model as Klyvaron Pro is not a rule to be broken; it is a string that does not match
- * anything, and the label simply does not appear.
+ * A tier label is a lookup: it appears only if the model id IS the artifact named in a
+ * backing record for a capability the tier actually provides. So rebranding an unchanged
+ * third-party model as Klyvaron Pro is not a rule to be broken; it is a string that does
+ * not match anything, and the label simply does not appear.
  */
 export function tierClaimFor(modelId) {
   for (const tier of Object.values(KLYVARON)) {
     if (ownedArtifacts(tier.id).includes(modelId)) return tier.id
+  }
+  return null
+}
+
+/**
+ * The same lookup for a specific artifact version, which is the form the core uses.
+ *
+ * An artifact manifest carries a `tier` field, and that field is the artifact's own
+ * statement about itself -- useful metadata, and not evidence. `app.mjs` therefore emits
+ * a `tier:<name>` tag only when this function corroborates the declaration by finding
+ * `<id>-<version>` named in a backing record. A hand-built artifact that declares
+ * `tier: 'pro'` gets no tier label, no tier tag, and no place in the tier table: the
+ * declaration has nothing behind it.
+ */
+export function tierClaimForArtifact(id, version) {
+  const named = `${id}-${version}`
+  for (const tier of Object.values(KLYVARON)) {
+    for (const claim of Object.values(tier.capabilities)) {
+      if (claim.state !== CAPABILITY_STATES.AVAILABLE || !claim.backing) continue
+      const { backing } = claim
+      if (backing.artifact === named) return tier.id
+      if (backing.verificationArtifact?.artifact === named) return tier.id
+    }
   }
   return null
 }

@@ -70,6 +70,14 @@ second corpus is 1.849× the released one, and the run makes 2.25 passes over it
 the pair demonstrates is the pipeline, not progress: the released record stays
 `aetheris-lite-lm@0.1.0`.
 
+That distinction is enforced rather than described. A tier label is a **lookup by artifact
+id and version** in the backing records (`tierClaimForArtifact`), never a value a manifest
+declares about itself: the second artifact is recorded in the tier record as
+`status: 'not_a_release'` next to the released one, so neither can be mistaken for the
+other, and an artifact that declares a tier nothing backs is loaded and reported with
+`tier: null`, no `tier:<name>` tag and no place in the table above. `klyvaron-app.test.mjs`
+installs an artifact declaring `tier: 'pro'` and asserts exactly that.
+
 Its limitations are part of the record, not a footnote, and one of them is load-bearing:
 **Lite meets the storage target and no capability target.** It is smaller than the 1.5 GB
 per-model budget because it is tiny, not because it is efficient. The validator refuses a

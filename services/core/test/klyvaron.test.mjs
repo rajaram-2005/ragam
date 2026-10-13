@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 import {
   CAPABILITY_STATES, HARDWARE_CLASS, KLYVARON, MOBILE_TARGETS, ModelFamilyError, PROVENANCE, TIERS,
   TIER_STATUS,
-  familyReport, getTier, ownedArtifacts, tierClaimFor, tierFitsHardware, validateFamily,
+  familyReport, getTier, ownedArtifacts, tierClaimFor, tierClaimForArtifact, tierFitsHardware, validateFamily,
 } from '../src/klyvaron/tiers.mjs'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
@@ -181,6 +181,45 @@ test('the report is generated from the data, so a rename cannot add a capability
 })
 
 // --- integration: the family reaches the API, and a label cannot be faked ---------
+
+test('a tier label needs a backing record for the exact version, not a declaration', () => {
+  // The versioned form is what the core uses, because "is this model Klyvaron Lite?" is a
+  // question about an artifact, and an artifact is an id plus a version.
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.0'), TIERS.LITE, 'the released artifact')
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.1-verify'), TIERS.LITE,
+    'the corrected-corpus verification artifact is still a Lite artifact')
+  // And nothing else may carry the label, whatever its manifest declares.
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '9.9.9'), null, 'a version that does not exist')
+  assert.equal(tierClaimForArtifact('klyvaron-parity-tiny', '0.1.0'), null, 'a test fixture is not a family artifact')
+  assert.equal(tierClaimForArtifact('Qwen2.5-7B-Instruct', '0.1.0'), null, 'a renamed third-party model')
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm-pro', '0.1.0'), null)
+  // Pro and High have nothing behind them, so no version of anything is theirs yet.
+  assert.equal(tierClaimForArtifact('aetheris-pro-lm', '0.1.0'), null)
+  assert.equal(tierClaimForArtifact('aetheris-high-lm', '0.1.0'), null)
+})
+
+test('the second artifact is recorded as verification evidence, not as a release', () => {
+  // Two artifacts of this family exist, and the record says which one is the release.
+  // Without this, a tier that names only the artifact nobody can rebuild would look like
+  // an oversight, and one that named the other as the release would be renumbering.
+  const backing = KLYVARON.lite.capabilities['text.completion'].backing
+  const second = backing.verificationArtifact
+  assert.ok(second, 'the second artifact must be recorded, not omitted')
+  assert.equal(second.status, 'not_a_release')
+  assert.notEqual(second.artifact, backing.artifact, 'two artifacts must not share a name')
+  assert.notEqual(second.weightsDigest, backing.weightsDigest, 'a different corpus means different weights')
+  assert.match(second.weightsDigest, /^[0-9a-f]{64}$/)
+  assert.match(second.artifactSha256, /^[0-9a-f]{64}$/, 'the file the store verifies needs its own digest')
+  assert.notEqual(second.artifactSha256, second.weightsDigest,
+    'the weights hash and the file hash are different digests of different things')
+  assert.ok(second.artifactBytes > 0)
+  assert.ok(second.record.endsWith('.json'), 'evidence must point at the record that holds it')
+  assert.match(second.note, /not comparable|not a successor/,
+    'the record must say the numbers are not comparable with the release')
+  assert.ok(second.parameters > 0)
+  assert.ok(!ownedArtifacts(TIERS.LITE).includes(second.artifact),
+    'the capability is backed by the released artifact; the second one is evidence')
+})
 
 test('a tier label is looked up from the backing record, never declared', () => {
   assert.equal(tierClaimFor('aetheris-lite-lm-0.1.0'), TIERS.LITE)

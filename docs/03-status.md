@@ -9,11 +9,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1079 passing, 0 failing.**
+**Test totals: 1082 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **449 / 449** (20 files, ~50 s) |
+| `services/core` | `node --test test/*.test.mjs` | **452 / 452** (20 files, ~50 s) |
 | `services/fabric` | `pytest -q` | **563 / 563** (25 files, ~21 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **67 / 67** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 242.71 kB → **71.78 kB gzip**, single chunk, no warnings |
@@ -61,7 +61,7 @@ instead.
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
 | 3 | Unified app, five areas | **Complete** | `apps/web`; 67 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
-| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,136-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 9, `klyvaron-store.test.mjs` 9, `klyvaron-app.test.mjs` 6 — 25 tests; another 18 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
+| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,136-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 9, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 26 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
 | 5 | Online provider integration | **Not met — removed by decision** | No external provider is configured, vendored or bundled. Image and video requests are refused with an explicit limitation, and the UI states that no provider exists rather than implying one can be enabled with a key |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
@@ -174,7 +174,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (449 tests)
+### `services/core` — Implemented and tested (452 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|

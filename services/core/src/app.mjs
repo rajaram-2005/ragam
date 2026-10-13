@@ -13,7 +13,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { AuditLedger, AUDIT_OUTCOMES } from './audit/ledger.mjs'
 import { createEgressGuard, installGlobalEgressGuard, createDataPolicy, RUNTIME_POLICIES, mostSensitiveDataClass } from './policy/egress.mjs'
 import { classifyText, redactDeep } from './policy/classify.mjs'
-import { familyReport, tierClaimFor } from './klyvaron/tiers.mjs'
+import { familyReport, tierClaimFor, tierClaimForArtifact } from './klyvaron/tiers.mjs'
 import { ModelRegistry, ModelRouter, MODEL_KINDS, MODALITIES, AVAILABILITY } from './router/registry.mjs'
 import { OllamaProvider, OpenAiCompatLocalProvider, normalizeMessages } from './providers/local.mjs'
 import { KnowledgePipeline } from './knowledge/pipeline.mjs'
@@ -202,6 +202,11 @@ export class AetherisOmniApp {
       try {
         const { runtime, loadMs } = store.load(entry.id)
         const providerName = `klyvaron:${entry.id}`
+        // The artifact's manifest carries a `tier` field, and a manifest is the artifact
+        // talking about itself. The tag below is emitted only when a backing record in
+        // tiers.mjs names this exact id and version, so a hand-built artifact declaring
+        // `tier: 'pro'` gets `base_completion` and nothing else.
+        const tierClaim = tierClaimForArtifact(runtime.manifest.id, runtime.manifest.version)
         this.providers[providerName] = new KlyvaronProvider({
           runtime, guard: this.guard, loadMs, onEvent: (event) => this.#onEvent(event),
         })
@@ -222,7 +227,7 @@ export class AetherisOmniApp {
           version: runtime.manifest.version,
           // `base_completion` is the tag that stops a base model being chosen to answer
           // a question: it can satisfy [text_in, text_out] and still not be an assistant.
-          tags: ['first_party', 'klyvaron', `tier:${runtime.manifest.tier}`,
+          tags: ['first_party', 'klyvaron', ...(tierClaim ? [`tier:${tierClaim}`] : []),
             ...(runtime.instructionTuned ? [] : ['base_completion'])],
           costWeight: 0.5,
         })
@@ -232,10 +237,11 @@ export class AetherisOmniApp {
           availability: AVAILABILITY.READY,
           medianLatencyMs: loadMs,
           detail: { artifact: runtime.manifest.id, version: runtime.manifest.version,
-            weightsSha256: runtime.sha256, instructionTuned: runtime.instructionTuned, loadMs },
+            weightsSha256: runtime.sha256, instructionTuned: runtime.instructionTuned,
+            declaredTier: runtime.manifest.tier, tierClaim, loadMs },
         })
         library.loaded.push({ id: model.id, artifact: runtime.manifest.id, version: runtime.manifest.version,
-          tier: runtime.manifest.tier, parameters: runtime.parameterCount, contextTokens: runtime.contextTokens,
+          tier: runtime.manifest.tier, tierClaim, parameters: runtime.parameterCount, contextTokens: runtime.contextTokens,
           instructionTuned: runtime.instructionTuned, loadMs, weightsSha256: runtime.sha256,
           limitations: [...runtime.manifest.limitations] })
       } catch (error) {
@@ -1598,8 +1604,13 @@ function publicModel(model) {
     availability: model.measured?.availability ?? null,
     lastProbedAt: model.measured?.lastProbedAt ?? null,
     // Derived, not declared: present only when this model id IS the artifact behind a
-    // capability the tier actually provides. See klyvaron/tiers.mjs tierClaimFor().
-    tier: tierClaimFor(model.id),
+    // capability the tier actually provides. For a locally loaded artifact the claim is
+    // the versioned one, made at load time against the id and version in its manifest and
+    // carried in the observation detail; a model that exists only as a descriptor still
+    // falls back to the id lookup, which cannot claim a tier for an id that no backing
+    // record names. Both paths end at tiers.mjs -- this column never repeats a manifest's
+    // own `tier` field, which is the artifact talking about itself.
+    tier: model.measured?.probeDetail?.tierClaim ?? tierClaimFor(model.id),
     version: model.version,
     tags: model.tags,
     measured: model.measured,

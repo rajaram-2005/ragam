@@ -23,7 +23,7 @@ import { DEFAULT_CONFIG, loadConfig } from '../src/config.mjs'
 import { ELEVATED_SCOPES, FORBIDDEN_SCOPES } from '../src/plugins/manifest.mjs'
 import { LIFECYCLE, DEFAULT_BUDGET } from '../src/godcore/lifecycle.mjs'
 import { DEFAULT_ROUTING_WEIGHTS } from '../src/router/registry.mjs'
-import { KLYVARON, familyReport } from '../src/klyvaron/tiers.mjs'
+import { KLYVARON, TIERS, familyReport, tierClaimForArtifact } from '../src/klyvaron/tiers.mjs'
 
 // HERE is services/core/test, so the repo root is three levels up. Getting this
 // wrong made every doc lookup fail at once — which is the argument for comparing
@@ -608,11 +608,11 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 25)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**449 / 449**'), 'core total must be stated')
+  assert.ok(status.includes('**452 / 452**'), 'core total must be stated')
   assert.ok(status.includes('**563 / 563**'), 'fabric total must be stated')
   assert.ok(status.includes('**67 / 67**'), 'web total must be stated')
-  assert.ok(status.includes('1079 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1079 tests: core 449, web 67, fabric 563'),
+  assert.ok(status.includes('1082 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1082 tests: core 452, web 67, fabric 563'),
     'README must state the same totals')
   assert.ok(status.includes('(20 files'), 'the file count must move with the suite')
 
@@ -625,14 +625,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(449), `core heading must say 449, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(452), `core heading must say 452, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(563), `fabric heading must say 563, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(67), `web heading must say 67, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1079,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1079`,
+    1082,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1082`,
   )
 })
 
@@ -758,6 +758,7 @@ test('the documented verification run matches the committed record', () => {
   assert.notEqual(record.run.weightsDigest, card.weightsDigest)
   assert.notEqual(record.corpus.manifestDigest, card.artifacts.corpusManifest)
   assert.notEqual(record.releaseRun.weightsDigest, record.run.weightsDigest)
+
   assert.equal(record.releaseRun.weightsDigest, card.weightsDigest)
 
   // The serving evidence is the measured one: a base model loadable and reachable, and
@@ -838,6 +839,28 @@ test('the clean-revision run matches its committed record', () => {
   assert.equal(record.releaseRun.weightsDigest, card.weightsDigest)
   assert.ok(squash(doc.klyvaron()).includes(record.run.evaluation.perplexity.toFixed(4)),
     'docs/11 must carry the same perplexity')
+
+  // The tier record names this artifact too, and says what it is. Two records describing one
+  // artifact drift apart unless something compares them, and this is the comparison: the run
+  // digest, the file digest, the file size and the parameter count all have to agree, and the
+  // status has to be the one a non-release carries.
+  const backing = KLYVARON.lite.capabilities['text.completion'].backing
+  const second = backing.verificationArtifact
+  assert.equal(second.weightsDigest, record.run.weightsDigest,
+    'the tier record and the run record must name the same weights')
+  assert.equal(second.artifactSha256, record.run.fileDigest,
+    'the tier record and the run record must name the same file')
+  assert.equal(second.artifactBytes, record.run.bytes)
+  assert.equal(second.parameters, record.run.parameterCount)
+  assert.equal(second.status, 'not_a_release')
+  assert.ok(second.record.includes('lm-verification-run-8d9cdf8.json'),
+    'the record must point at the file the evidence lives in')
+  assert.equal(backing.artifact, `aetheris-lite-lm-${card.version}`,
+    'the released artifact string must be the released card, id and version')
+  // And the tier may label both, because both are Lite artifacts -- which is the point: the
+  // label follows the backing record, while `not_a_release` says which one is published.
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', card.version), TIERS.LITE)
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.1-verify'), TIERS.LITE)
 
   // The serving evidence is measured, and the update/rollback exercise must be recorded with
   // the defect it found rather than only with the numbers that now look right.
@@ -1315,6 +1338,16 @@ test('the Klyvaron document matches the family it describes', () => {
   assert.ok(text.includes('an unpinned chat request is refused with `model_not_instruction_tuned` (501)'),
     'docs/11 must describe the refusal rather than claiming the model is unreachable')
 
+  // A tier label is a lookup, and the second artifact is evidence rather than a release.
+  // Both sentences are pinned here because both are the kind of claim a document relaxes
+  // first when it starts describing what it wishes were true.
+  assert.ok(text.includes('lookup by artifact'), 'docs/11 must say a tier label is looked up')
+  assert.ok(text.includes("status: 'not_a_release'"), 'docs/11 must record the second artifact as not a release')
+  assert.ok(text.includes('`tier: null`'), 'docs/11 must state what an unbacked declaration gets')
+  const verification = KLYVARON.lite.capabilities['text.completion'].backing.verificationArtifact
+  assert.equal(tierClaimForArtifact('aetheris-lite-lm', verification.artifact.replace('aetheris-lite-lm-', '')),
+    TIERS.LITE, 'the verification artifact must still be able to carry its own tier label')
+
   // And its measurements come from the card, so the two cannot disagree. Field paths are
   // taken from the card's real shape (`card.metrics.*`, `card.weightsDigest`), which the
   // first version of this check guessed at -- `card.evaluation` does not exist.
@@ -1350,6 +1383,15 @@ test('the feature matrix uses the four statuses and claims no parity', () => {
   ]) {
     assert.ok(text.includes(definition), `the matrix must define every status: missing '${definition}'`)
   }
+  // The tier-label row names the enforcement that exists. The earlier wording credited a
+  // function that compared an unversioned id and therefore returned null for every loaded
+  // artifact; the row now has to name the versioned lookup and the refusal to label an
+  // unbacked declaration.
+  assert.ok(text.includes('tierClaimForArtifact()'),
+    'docs/12 must name the versioned lookup the core actually uses')
+  assert.ok(text.includes("declares `tier: 'pro'`"),
+    'docs/12 must name the test that proves an unbacked declaration gets no label')
+
   // The five areas, named.
   for (const area of ['## 1. Conversation (the Chat area)', '## 2. Image', '## 3. Video',
     '## 4. Plugins', '## 5. MCP']) {

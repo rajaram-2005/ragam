@@ -86,7 +86,7 @@ them rather than restating them.
 | Capability-aware routing across local and online models | **Completed** | Privacy restrictions override quality and cost |
 | Every adapter declares real capabilities, hardware and licence | **Completed** | An unknown licence is recorded as `unknown`, not guessed |
 | First-party model family with honest status | **Completed** | Three tiers; one partial, two recorded unbuilt |
-| A tier label that cannot be faked | **Completed** | `tierClaimFor()` is a lookup against backing records, not a field |
+| A tier label that cannot be faked | **Completed** | `tierClaimForArtifact()` looks the id *and version* up in the backing records, and the core emits no `tier:` tag or row value for a declaration nothing backs — asserted by installing an artifact that declares `tier: 'pro'` |
 | Embeddings and reranking | **Partial** | Declared in the router; no reranker model is installed |
 | Multi-tier local models (Pro, High) | **Unsupported** | No artifact and no way to obtain base weights on this host |
 | Model download and integrity verification | **Completed** | Digest checked before load; a truncated artifact is caught |
