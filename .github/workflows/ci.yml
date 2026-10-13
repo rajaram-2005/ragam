@@ -62,7 +62,9 @@ jobs:
             exit 1
           fi
 
-      - name: Test (260 tests)
+      # No count in the step name: a number in a string is a number that drifts, and this
+      # one already had. docs/03-status.md reports the current totals.
+      - name: Test
         working-directory: services/core
         run: node --test test/*.test.mjs
 
@@ -112,9 +114,25 @@ jobs:
           # malformed-argument and no-target paths were each confirmed to exit 2.
           python scripts/audit_python_deps.py
 
-      - name: Test (256 tests)
+      - name: Test
         working-directory: services/fabric
-        run: python -m pytest
+        run: |
+          # pytest's own output is the only description of what failed, and a job log is
+          # behind a sign-in wall for anyone reading the checks from outside the browser
+          # session that owns the repository. On failure the failing tests and the first
+          # assertion are emitted as annotations, which the checks API serves openly --
+          # without this, a red Fabric check is a red check with no stated reason.
+          set +e
+          python -m pytest -rf > /tmp/fabric-pytest.log 2>&1
+          status=$?
+          cat /tmp/fabric-pytest.log
+          if [ "$status" -ne 0 ]; then
+            grep -E '^(FAILED|ERROR) ' /tmp/fabric-pytest.log | head -n 5 |
+              while IFS= read -r line; do echo "::error::$line"; done
+            awk '/^=+ FAILURES =+$/{seen=1} seen' /tmp/fabric-pytest.log | head -n 25 |
+              while IFS= read -r line; do echo "::error::$(printf '%s' "$line" | cut -c1-300)"; done
+          fi
+          exit "$status"
 
       - name: Reproduce the released model card
         working-directory: services/fabric
