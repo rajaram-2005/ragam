@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { McpRegistry, RISK, SERVER_KINDS, McpError, ApprovalRequiredError, sanitizeUntrusted } from '../src/mcp/layer.mjs'
+import { McpRegistry, RISK, SERVER_KINDS, McpError, ApprovalRequiredError, sanitizeUntrusted, parseAllowlist } from '../src/mcp/layer.mjs'
 import { validateAgainstSchema, assertValidSchema, coerceToSchema, SchemaError, deepEqual } from '../src/mcp/schema.mjs'
 import { AuditLedger } from '../src/audit/ledger.mjs'
 
@@ -433,4 +433,62 @@ test('sanitisation is applied to tool output end to end', async () => {
   assert.equal(result.output.content.includes('\u001b'), false, 'escape sequences must be stripped')
   // The text is preserved as data — the defence is labelling, not censorship.
   assert.match(result.output.content, /IGNORE PREVIOUS RULES/)
+})
+
+// --- the server allowlist ---------------------------------------------------
+//
+// The allowlist bounds the servers this host would reach. Registration is one moment and
+// configuration is another, so the check runs at both: a server registered while the
+// allowlist was empty must not keep working after one is configured.
+
+test('an unlisted transport server is refused at registration', () => {
+  const { registry } = makeRegistry({ allowlist: ['id:permitted', 'origin:https://permitted.example.com'] })
+  const spec = (id, endpoint) => ({
+    id, kind: SERVER_KINDS.TRANSPORT, auth: { type: 'none' }, endpoint, tools: [toolSpec()],
+  })
+
+  assert.throws(() => registry.registerServer(spec('unlisted', 'https://other.example.com/rpc')),
+    (error) => error.code === 'mcp_server_not_allowed')
+  // Either the id or the origin is enough.
+  assert.ok(registry.registerServer(spec('permitted', 'https://other.example.com/rpc')))
+  assert.ok(registry.registerServer(spec('anything', 'https://permitted.example.com/rpc')))
+
+  // A lookalike host is not the listed one: matching on a prefix or a suffix is how an
+  // allowlist admits `permitted.example.com.attacker.net`.
+  for (const endpoint of ['https://permitted.example.com.attacker.net/rpc', 'https://attacker.net/permitted.example.com', 'http://permitted.example.com/rpc']) {
+    assert.throws(() => registry.registerServer(spec('x', endpoint)),
+      (error) => error.code === 'mcp_server_not_allowed', `${endpoint} must not be admitted`)
+  }
+})
+
+test('an in-process server is not subject to the host allowlist', () => {
+  // makeRegistry registers one in-process server before any allowlist is applied. They are
+  // code in this process, and a host allowlist is the control for hosts.
+  const { registry } = makeRegistry({ allowlist: ['id:permitted'] })
+  assert.ok(registry.listServers().some((server) => server.kind === SERVER_KINDS.IN_PROCESS))
+  assert.deepEqual(registry.permitServer({ id: 'anything', kind: SERVER_KINDS.IN_PROCESS }).allowed, true)
+})
+
+test('the allowlist is checked again when a server is called', async () => {
+  // Registered while nothing was restricted, then the allowlist arrives. Registration
+  // happened earlier; access does not survive it.
+  const { registry } = makeRegistry()
+  registry.registerServer({
+    id: 'remote',
+    kind: SERVER_KINDS.TRANSPORT,
+    auth: { type: 'none' },
+    endpoint: 'https://mcp.example.com/rpc',
+    transport: async () => ({ content: 'ok', bytes: 2 }),
+    tools: [toolSpec()],
+  })
+  assert.equal((await registry.callTool('remote', 'read_file', { path: '/a' })).output.content, 'ok')
+
+  registry.allowlist = parseAllowlist('id:someone-else')
+  await assert.rejects(
+    () => registry.callTool('remote', 'read_file', { path: '/a' }),
+    (error) => error.code === 'mcp_server_not_allowed',
+  )
+  // And the refusal is in the ledger, with the reason, not just in the response.
+  const denied = registry.ledger.query({ category: 'mcp' }).filter((entry) => entry.detail?.reason === 'allowlist')
+  assert.ok(denied.length >= 1, 'a refusal at the point of use must be audited')
 })

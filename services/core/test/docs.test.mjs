@@ -589,20 +589,20 @@ test('the docs record limitations instead of implying completeness', () => {
 test('the status doc reports the real test totals', () => {
   // Recomputed from the filesystem: one test file per suite.
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
-  // 15 includes this file. If a suite file is added or removed, the counts in
+  // 16 includes this file. If a suite file is added or removed, the counts in
   // docs/03-status.md and README.md have to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 15)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 16)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 23)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**389 / 389**'), 'core total must be stated')
+  assert.ok(status.includes('**409 / 409**'), 'core total must be stated')
   assert.ok(status.includes('**528 / 528**'), 'fabric total must be stated')
-  assert.ok(status.includes('**65 / 65**'), 'web total must be stated')
-  assert.ok(status.includes('982 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('982 tests: core 389, web 65, fabric 528'),
+  assert.ok(status.includes('**66 / 66**'), 'web total must be stated')
+  assert.ok(status.includes('1003 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1003 tests: core 409, web 66, fabric 528'),
     'README must state the same totals')
-  assert.ok(status.includes('(15 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(16 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -613,14 +613,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(389), `core heading must say 389, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(409), `core heading must say 409, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(528), `fabric heading must say 528, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(65), `web heading must say 65, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(66), `web heading must say 66, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    982,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 982`,
+    1003,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1003`,
   )
 })
 

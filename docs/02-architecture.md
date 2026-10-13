@@ -70,25 +70,26 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 10,096 source lines, 7,812 test lines
+### `services/core` — 10,652 source lines, 8,247 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
-| `app.mjs` | 1,335 | Composition root, the HTTP route table, error→status mapping, chat/image/video entry points, readiness |
+| `app.mjs` | 1,387 | Composition root, the HTTP route table, error→status mapping, chat/image/video entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
 | `media/jobs.mjs` | 359 | Job queue, progress, cancellation, timeouts, artifact storage |
 | `providers/local.mjs` | 329 | Ollama and OpenAI-compatible local providers |
 | `providers/freellmapi.mjs` | 330 | The online gateway client: chat, images (JSON), video (raw binary) |
 | `router/registry.mjs` | 322 | Model descriptors, capability matching, candidate scoring |
-| `plugins/registry.mjs` | 510 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation |
-| `mcp/layer.mjs` | 502 | Servers, tools, risk tiers, approval gates, output neutralisation |
+| `plugins/registry.mjs` | 617 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation, signature checks |
+| `mcp/layer.mjs` | 611 | Servers, tools, risk tiers, approval gates, allowlist, output neutralisation |
 | `knowledge/pipeline.mjs` | 470 | Ingest, dedupe, chunk, index, search, grounded context, purge |
 | `knowledge/store.mjs` | 385 | SQLite metadata, chunks, ACL rows, deletion records |
 | `mcp/schema.mjs` | 246 | JSON Schema subset: validation of schemas *and* of arguments/output |
 | `knowledge/bm25.mjs` | 224 | BM25 index (k1=1.5, b=0.75), rebuilt from stored chunks |
 | `plugins/manifest.mjs` | 216 | Manifest validation, scope vocabulary, semver |
-| `config.mjs` | 234 | Environment → config, secret loading, `publicConfig` redaction |
+| `plugins/signing.mjs` | 262 | Ed25519 manifest signatures, canonical form, the local trust store |
+| `config.mjs` | 260 | Environment → config, secret loading, `publicConfig` redaction |
 | `policy/egress.mjs` | 251 | The egress guard, runtime policies, data classes, `*` allow-all, global fetch hook |
 | `server.mjs` | 151 | Entry point, startup banner, graceful shutdown |
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
@@ -112,7 +113,7 @@ release manager, and a hand-written dual encoder whose **five parameter gradient
 all match central finite differences to ~3e-10**. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 4,000 source lines, 1,279 test lines
+### `apps/web` — 4,156 source lines, 1,297 test lines
 
 Five area components, a shell, shared primitives, an API client and three test
 files. Design tokens and the shell's visual structure come from upstream Aetheris

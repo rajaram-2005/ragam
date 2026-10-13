@@ -193,6 +193,29 @@ Controls:
 - **Elevated scopes are never granted by default** — an operator must opt in via
   the installation's `grantedScopes`.
 
+### 6.1 Publisher signatures
+
+A signature proves **who published a manifest**, and nothing more. It does not make the code
+safe, and it does not replace scopes, approvals or the sandbox: a signed plugin runs with
+exactly the permissions it was granted. That sentence is in the module, here, and in the
+feature matrix, because a signature is the control most often described as more than it is.
+
+| Property | How it works |
+|---|---|
+| Algorithm | Ed25519 from `node:crypto`. **No dependency is added** — a signature library is exactly the supply-chain risk a zero-dependency core exists to avoid |
+| What is signed | The manifest **as presented**, minus its `signature` block, under a domain separator (`aetheris-plugin-manifest/v1`) with keys sorted recursively |
+| Why presented, not normalised | Validation fills defaults and stamps `validatedAt: Date.now()`, so a digest over the normalised form changes on every call and could never match a publisher's signature. This was a real bug until a test caught it |
+| What cannot be moved | A signature over one plugin or version does not verify for another: the whole manifest is in the payload |
+| Trust | A local file of PEM public keys. Key ids are **derived from the keys on load**, so a file whose ids disagree with its keys cannot make one key look like another, and a private key pasted into it is refused rather than written to disk |
+| When it is required | `AETHERIS_PLUGIN_REQUIRE_SIGNATURE=true`. An untrusted or invalid signature is refused **either way**: presenting a signature claims a publisher, and an unverifiable claim is not the same as no claim |
+| Where it is checked | At install, and again before every invocation — the installed record is an object in this process, so "it was signed when we installed it" is weaker than "the capability is running from the bytes that were signed". The re-check distinguishes *the signature is gone*, *the signed bytes were replaced* and *the manifest the capability reads was edited* |
+| Status codes | `403` for a refusal, `400` for a malformed signature block. A rejected install is audited with its reason, and adding or removing a trusted key is audited too |
+
+Two limitations belong here rather than in a footnote: there is **no revocation** — removing
+a key stops future installs and does not retroactively invalidate an installed plugin — and
+**no review pipeline**. A key is trusted because a person put it in the file, and this
+document does not claim otherwise.
+
 ---
 
 ## 7. MCP security
@@ -227,6 +250,15 @@ Controls:
   advertised so an approver can see intent before consenting.
 - **Disabled servers are skipped by discovery**, so a turned-off server cannot
   advertise tools.
+- **An allowlist governs host-reached servers.** `id:<server>` and
+  `origin:<scheme://host:port>`, matched exactly — no wildcard and no suffix matching, so
+  `example.com` does not admit `example.com.evil.net`. A server must be listed **or** its
+  endpoint's origin must be, and the check runs again at every call, because a server
+  registered before the allowlist was configured must not keep its access. In-process
+  servers the product ships are not subject to it: they are code already in this process,
+  and a host allowlist is the wrong control for them. An entry that cannot be parsed
+  **stops the service from starting**; an allowlist that silently drops what it does not
+  understand is an allowlist that permits more than it says.
 
 ---
 
@@ -465,7 +497,7 @@ Stated plainly, because an unstated gap is worse than a stated one.
      oxc/rolldown. Re-adding esbuild would have reintroduced the very advisory the
      upgrade removed, so the test was switched to `rolldown` instead.
 
-   Vite 8 also produced a smaller, faster build: 230.38 kB (68.68 kB gzip) against
+   Vite 8 also produced a smaller, faster build: 234.31 kB (69.76 kB gzip) against
    218.97 kB (66.82 kB), in 145 ms against 1.13 s.
 
    For pytest, CVE-2025-71176 / GHSA-6w46-j5rx-g56g (medium) affects every version

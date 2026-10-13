@@ -222,6 +222,133 @@ function PluginDetail({ plugin, onChanged, busy, setBusy, setError }) {
   )
 }
 
+/**
+ * Trusted publishers: the keys this host will accept a signature from.
+ *
+ * The scope is on the panel, not in a tooltip: a signature says who published a manifest,
+ * and nothing about whether the code is safe. A plugin still runs only with the permissions
+ * that were granted to it, which is why this sits beside the scope controls rather than
+ * above them. Nothing is fetched — a key is trusted because someone pasted it here.
+ */
+function TrustedPublishers() {
+  const [state, setState] = useState(null)
+  const [pem, setPem] = useState('')
+  const [label, setLabel] = useState('')
+  const [busy, setBusy] = useState(null)
+  const [error, setError] = useState(null)
+  const [notice, setNotice] = useState(null)
+
+  const load = useCallback(async () => {
+    try {
+      setState(await api.trustedKeys())
+      setError(null)
+    } catch (caught) {
+      setError(caught)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const add = async (event) => {
+    event.preventDefault()
+    if (!pem.trim()) return
+    setBusy('add')
+    setError(null)
+    setNotice(null)
+    try {
+      const result = await api.trustKey({ pem: pem.trim(), label: label.trim() })
+      setNotice(result.added ? `Trusted ${result.keyId}.` : `${result.keyId} was already trusted.`)
+      setPem('')
+      setLabel('')
+      await load()
+    } catch (caught) {
+      setError(caught)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const remove = async (keyId) => {
+    setBusy(`del-${keyId}`)
+    setError(null)
+    try {
+      await api.untrustKey(keyId)
+      await load()
+    } catch (caught) {
+      setError(caught)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const keys = state?.keys ?? []
+
+  return (
+    <Panel
+      eyebrow="INTERNAL SERVICE"
+      title="Trusted publishers"
+      footer="A signature says which key signed a manifest. It does not say the code is safe: a plugin still runs only with the scopes you grant it. Removing a key stops future installs; it does not uninstall what is already here."
+    >
+      <div className="grid" style={{ gap: 14 }}>
+        {error ? <ErrorNote error={error} title="Trust store request failed" /> : null}
+        {notice ? <Banner tone="ok" title="Done"><span className="small">{notice}</span></Banner> : null}
+
+        <Stats>
+          <Stat
+            label="signatures"
+            value={state?.signaturesRequired ? 'required' : 'optional'}
+            note={state?.signaturesRequired ? 'an unsigned plugin is refused' : 'unsigned manifests still install'}
+          />
+          <Stat label="trusted keys" value={keys.length} note="used to check plugin signatures" />
+        </Stats>
+
+        {state && !state.signaturesRequired ? (
+          <span className="small">
+            Signatures are optional on this host, so an unsigned plugin can still be installed. A manifest carrying a
+            signature from an untrusted key is refused either way — that is a claim this host cannot check.
+          </span>
+        ) : null}
+
+        <form onSubmit={add}>
+          <Field label="Trust a publisher key" hint="A public key in PEM form. Private keys are refused, and nothing is fetched from the network.">
+            <textarea
+              className="textarea"
+              rows={4}
+              value={pem}
+              placeholder={'-----BEGIN PUBLIC KEY-----\n…\n-----END PUBLIC KEY-----'}
+              onChange={(event) => setPem(event.target.value)}
+            />
+          </Field>
+          <div className="row between">
+            <input className="input" value={label} placeholder="who this key belongs to" onChange={(event) => setLabel(event.target.value)} />
+            <Button type="submit" variant="primary" busy={busy === 'add'} disabled={!pem.trim()}>Trust this key</Button>
+          </div>
+        </form>
+
+        {keys.length ? (
+          <Table
+            columns={[
+              { key: 'keyId', label: 'Key', render: (key) => <span className="small">{key.keyId}</span> },
+              { key: 'label', label: 'Label', render: (key) => key.label || <span className="small">unlabelled</span> },
+              { key: 'actions', label: '', render: (key) => (
+                <Button variant="danger" busy={busy === `del-${key.keyId}`} onClick={() => remove(key.keyId)}>Stop trusting</Button>
+              ) },
+            ]}
+            rows={keys.map((key) => ({ ...key, key: key.keyId }))}
+          />
+        ) : (
+          <EmptyState title="No publisher keys are trusted">
+            <span className="small">
+              Plugin manifests can still be installed, but this host cannot check who published them. Add a key to
+              accept signed manifests from that publisher.
+            </span>
+          </EmptyState>
+        )}
+      </div>
+    </Panel>
+  )
+}
+
 export default function PluginsArea({ refreshReadiness }) {
   const [plugins, setPlugins] = useState([])
   const [catalog, setCatalog] = useState(null)
@@ -401,6 +528,8 @@ export default function PluginsArea({ refreshReadiness }) {
             ) : null}
           </div>
         </Panel>
+
+        <TrustedPublishers />
       </div>
     </div>
   )

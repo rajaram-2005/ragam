@@ -22,6 +22,7 @@ import { CANDIDATE_STATES, MemoryStore } from './memory/store.mjs'
 import { MediaJobQueue, JOB_STATES } from './media/jobs.mjs'
 import { validateMedia, MEDIA_KINDS } from './media/validate.mjs'
 import { PluginRegistry } from './plugins/registry.mjs'
+import { TrustStore } from './plugins/signing.mjs'
 import { validateManifest, SCOPES, ELEVATED_SCOPES } from './plugins/manifest.mjs'
 import { McpRegistry, RISK, SERVER_KINDS } from './mcp/layer.mjs'
 import { GodCore, TASK_STATES, LIFECYCLE } from './godcore/lifecycle.mjs'
@@ -103,16 +104,26 @@ export class AetherisOmniApp {
     })
 
     // --- plugins & MCP -----------------------------------------------------
+    // The trust store is read at startup. If the file names a key it cannot read, that is
+    // a configuration error worth stopping for: starting with an empty trust store while
+    // the operator believes they have one would silently refuse every signed plugin, and
+    // the failure would look like a bad signature.
+    this.trustStore = new TrustStore({ file: config.plugins?.trustStoreFile ?? null })
     this.plugins = new PluginRegistry({
       ledger: this.ledger,
       // Elevated scopes are never granted by default: an operator must opt in.
       grantedScopes: Object.values(SCOPES).filter((scope) => !ELEVATED_SCOPES.includes(scope)).concat(['fs.read', 'knowledge.read']),
+      trustStore: this.trustStore,
+      requireSignature: Boolean(config.plugins?.requireSignature),
       onEvent: (event) => this.#onEvent(event),
     })
     this.mcp = new McpRegistry({
       ledger: this.ledger,
       // SYSTEM-risk tools (terminal/process/device) are refused outright in this build.
       allowedRisks: [RISK.READ_ONLY, RISK.WRITE, RISK.DESTRUCTIVE, RISK.EXTERNAL],
+      // An entry that cannot be parsed throws here rather than being skipped, so a typo in
+      // the allowlist is not a silently wider allowlist.
+      allowlist: config.mcp?.allowlist ?? [],
       onEvent: (event) => this.#onEvent(event),
     })
 
@@ -1035,6 +1046,47 @@ async function handle(request, response, app) {
     // already maps an absent body to {} rather than throwing.
     const body = await readBody(request)
     return sendJson(response, 200, app.memory.forget(segments[2], { reason: body.reason ?? null, requestedBy: 'user' }), app)
+  }
+
+  // --- the plugin trust store ---------------------------------------------
+  // A key is added by a person deciding to trust a publisher. The route never returns key
+  // material other than the id and label, and every change is audited: adding a key is the
+  // root of trust, not a routine write.
+  if (method === 'GET' && segments[1] === 'plugins' && segments[2] === 'trust') {
+    return sendJson(response, 200, {
+      keys: app.trustStore.list(),
+      signaturesRequired: Boolean(app.config.plugins?.requireSignature),
+      file: app.trustStore.file,
+    }, app)
+  }
+  if (method === 'POST' && segments[1] === 'plugins' && segments[2] === 'trust') {
+    const body = await readBody(request)
+    const result = app.trustStore.add(String(body.pem ?? ''), { label: String(body.label ?? '') })
+    app.ledger.record({
+      category: 'plugin',
+      action: 'trust_key_added',
+      outcome: 'success',
+      subject: result.keyId,
+      detail: { keyId: result.keyId, label: result.label, alreadyPresent: !result.added },
+    })
+    return sendJson(response, result.added ? 201 : 200, result, app)
+  }
+  if (method === 'DELETE' && segments[1] === 'plugins' && segments[2] === 'trust' && segments[3]) {
+    const removed = app.trustStore.remove(segments[3])
+    app.ledger.record({
+      category: 'plugin',
+      action: 'trust_key_removed',
+      outcome: removed ? 'success' : 'denied',
+      subject: segments[3],
+      detail: { keyId: segments[3], removed },
+    })
+    if (!removed) {
+      const error = new Error(`no trusted key '${segments[3]}'`)
+      error.code = 'not_found'
+      error.status = 404
+      throw error
+    }
+    return sendJson(response, 200, { removed: true, keyId: segments[3] }, app)
   }
 
   // --- session recall -----------------------------------------------------

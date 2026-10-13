@@ -329,19 +329,22 @@ export default function McpArea({ refreshReadiness }) {
   const [filter, setFilter] = useState('')
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
+  const [policy, setPolicy] = useState(null)
 
   const load = useCallback(async () => {
     try {
-      const [serverPayload, toolPayload, resourcePayload, promptPayload] = await Promise.all([
+      const [serverPayload, toolPayload, resourcePayload, promptPayload, configPayload] = await Promise.all([
         api.mcpServers(),
         api.mcpTools(filter ? { q: filter } : {}),
         api.mcpResources(),
         api.mcpPrompts(),
+        api.config(),
       ])
       setServers(serverPayload.servers ?? [])
       setTools(toolPayload.tools ?? [])
       setResources(resourcePayload.resources ?? [])
       setPrompts(promptPayload.prompts ?? [])
+      setPolicy(configPayload.mcp ?? null)
       setError(null)
     } catch (caught) {
       setError(caught)
@@ -358,6 +361,25 @@ export default function McpArea({ refreshReadiness }) {
     <div className="split">
       <div className="grid" style={{ gap: 16 }}>
         {error ? <ErrorNote error={error} title="MCP request failed" /> : null}
+        {/* Whether servers are restricted is a fact about this host, not a warning about a
+            particular server, so it is stated once at the top of the area. */}
+        {policy ? (
+          policy.restricted ? (
+            <Banner tone="info" title="Only listed servers may be reached">
+              <span className="small">
+                Servers reached over a transport must be named here: {policy.allowlist.join(', ')}. Servers that run
+                inside this service are not affected, and are governed by their risk tier and approval gates.
+              </span>
+            </Banner>
+          ) : (
+            <Banner tone="warn" title="No server allowlist is configured">
+              <span className="small">
+                Any reachable MCP server may be registered and called. Set AETHERIS_MCP_ALLOWLIST to name the servers
+                or origins this host permits.
+              </span>
+            </Banner>
+          )
+        ) : null}
 
         <Panel
           eyebrow="PRODUCT AREA"

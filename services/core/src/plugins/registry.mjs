@@ -16,6 +16,7 @@
 import { randomUUID } from 'node:crypto'
 import { validateManifest, compareSemver, ELEVATED_SCOPES, SCOPES, PROTOCOLS, ManifestError } from './manifest.mjs'
 import { validateAgainstSchema } from '../mcp/schema.mjs'
+import { PluginSignatureError, SIGNATURE_STATE, canonicalJson, verifyManifest } from './signing.mjs'
 
 export const PLUGIN_STATES = Object.freeze({
   DISCOVERED: 'discovered',
@@ -50,8 +51,10 @@ export class PluginRegistry {
    * @param {string[]} [options.grantedScopes] scopes this installation permits at all
    * @param {string[]} [options.standingApprovals] elevated scopes pre-approved by the operator
    * @param {(e:object)=>void} [options.onEvent]
+   * @param {object} [options.trustStore]    public keys this host has chosen to trust
+   * @param {boolean} [options.requireSignature] refuse unsigned manifests outright
    */
-  constructor({ ledger = null, grantedScopes = null, standingApprovals = [], onEvent = () => {} } = {}) {
+  constructor({ ledger = null, grantedScopes = null, standingApprovals = [], onEvent = () => {}, trustStore = null, requireSignature = false } = {}) {
     /** @type {Map<string, object>} */
     this.plugins = new Map()
     /** @type {Map<string, Function>} capability key -> handler */
@@ -61,6 +64,8 @@ export class PluginRegistry {
     // null means "all declared scopes are grantable"; an array restricts them.
     this.grantedScopes = grantedScopes ? new Set(grantedScopes) : null
     this.onEvent = onEvent
+    this.trustStore = trustStore
+    this.requireSignature = requireSignature
   }
 
   // --- discovery & installation -------------------------------------------
@@ -77,7 +82,56 @@ export class PluginRegistry {
       downgradeAttempt: known ? compareSemver(normalized.version, known.version) < 0 : false,
       requiresApproval: normalized.elevated.length > 0,
       ungrantableScopes: this.#ungrantable(normalized.scopes),
+      // Reported before anything is installed, so a person can see what they are about to
+      // trust rather than discovering it afterwards.
+      signature: this.#signatureView(manifest),
+      signatureRequired: this.requireSignature,
     }
+  }
+
+  /**
+   * The signature state of a manifest **as presented**, plus what this installation would
+   * do about it.
+   *
+   * Presented, not normalised: `validateManifest` fills in defaults and stamps
+   * `validatedAt: Date.now()`, so a digest over its output changes on every call and could
+   * never match anything a publisher signed. The signature covers the bytes as they were
+   * distributed, which is also what makes the publisher's job one line of documentation.
+   */
+  #signatureView(manifest) {
+    const result = verifyManifest(manifest, { trustStore: this.trustStore })
+    return {
+      state: result.state,
+      keyId: result.keyId,
+      reason: result.reason ?? null,
+      digest: result.digest,
+      accepted: this.#signatureAcceptable(result.state),
+    }
+  }
+
+  /**
+   * Is the manifest a capability would run from the normalisation of the bytes that were
+   * signed?
+   *
+   * The signature covers what was presented; the record normalises that into the form the
+   * rest of the class reads `scopes` and `capabilities` from. Those two have to stay tied
+   * together, or a later edit to the normalised copy -- the one that decides which scopes a
+   * capability needs -- would run with the signature untouched.
+   */
+  #behaviourMatchesSignature(record) {
+    const renormalised = validateManifest(structuredClone(record.signedManifest)).manifest
+    const strip = ({ validatedAt, ...rest }) => rest
+    try {
+      return canonicalJson(strip(renormalised)) === canonicalJson(strip(record.manifest))
+    } catch {
+      return false
+    }
+  }
+
+  #signatureAcceptable(state) {
+    if (state === SIGNATURE_STATE.VERIFIED) return true
+    if (state === SIGNATURE_STATE.UNSIGNED) return !this.requireSignature
+    return false
   }
 
   #ungrantable(scopes) {
@@ -91,6 +145,29 @@ export class PluginRegistry {
    */
   install(manifest, { handler = null, allowDowngrade = false } = {}) {
     const { manifest: normalized } = validateManifest(manifest)
+    // A private copy of what was presented. It is what gets verified, what the digest is
+    // taken over, and what the normalised form above is checked back against before a
+    // capability runs.
+    const signedManifest = structuredClone(manifest)
+    const signature = this.#signatureView(signedManifest)
+    if (!signature.accepted) {
+      this.#audit('install', 'denied', {
+        pluginId: normalized.id, version: normalized.version, reason: 'signature', signature,
+      }, normalized.id)
+      throw new PluginSignatureError(
+        signature.reason
+          ?? `plugin '${normalized.id}' is ${signature.state} and this host requires a trusted signature`,
+        {
+          pluginId: normalized.id,
+          signatureState: signature.state,
+          keyId: signature.keyId,
+          signatureRequired: this.requireSignature,
+          // A malformed block is a bad request; an untrusted key or a missing signature is
+          // this host refusing to install. Two different answers, so two statuses.
+          status: signature.state === SIGNATURE_STATE.MALFORMED ? 400 : 403,
+        },
+      )
+    }
     const ungrantable = this.#ungrantable(normalized.scopes)
     if (ungrantable.length) {
       this.#audit('install', 'denied', { pluginId: normalized.id, version: normalized.version, ungrantable }, normalized.id)
@@ -119,6 +196,10 @@ export class PluginRegistry {
       id: normalized.id,
       version: normalized.version,
       manifest: normalized,
+      // Pinned at install: the state that was accepted, the key that signed it, and the
+      // digest of the bytes that were signed.
+      signature,
+      signedManifest,
       state: PLUGIN_STATES.INSTALLED,
       installedAt: Date.now(),
       updatedAt: existing ? Date.now() : null,
@@ -325,6 +406,31 @@ export class PluginRegistry {
     const record = this.require(pluginId)
     const capability = record.manifest.capabilities.find((entry) => entry.name === capabilityName)
 
+    // Re-verified here, not only at install: the installed record is an object in this
+    // process, and "it was signed when we installed it" is a weaker statement than "the
+    // manifest this capability is running from is the one that was signed".
+    const current = this.#signatureView(record.signedManifest)
+    // Which of the three failed is worth saying: "the signature is gone", "the signed bytes
+    // were replaced" and "the manifest the capability would read was edited" are three
+    // different incidents with three different responses.
+    const signatureCheck = !current.accepted
+      ? 'signature'
+      : current.digest !== record.signature.digest ? 'digest' : 'behaviour'
+    if (signatureCheck !== 'behaviour' || !this.#behaviourMatchesSignature(record)) {
+      this.#audit(`invoke:${capabilityName}`, 'denied', {
+        pluginId,
+        reason: 'signature_changed_since_install',
+        check: signatureCheck,
+        installed: record.signature.digest,
+        current: current.digest,
+        signatureState: current.state,
+      }, subject ?? pluginId)
+      throw new PluginSignatureError(
+        `refusing to run '${pluginId}:${capabilityName}': the manifest no longer matches the one that was signed and installed (${signatureCheck})`,
+        { pluginId, capability: capabilityName, check: signatureCheck, installedDigest: record.signature.digest, currentDigest: current.digest, signatureState: current.state },
+      )
+    }
+
     if (!check.allowed) {
       const needsApproval = check.needsApproval ?? []
       const outcome = needsApproval.length && !check.reasons.some((reason) => !/approval required/.test(reason)) ? 'approval_required' : 'denied'
@@ -442,6 +548,7 @@ export class PluginRegistry {
       protocol: record.manifest.protocol,
       state: record.state,
       builtin: record.manifest.builtin,
+      signature: { state: record.signature.state, keyId: record.signature.keyId, digest: record.signature.digest },
       description: record.manifest.description,
       author: record.manifest.author,
       license: record.manifest.license,

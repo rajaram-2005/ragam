@@ -25,6 +25,13 @@ export const DEFAULT_CONFIG = Object.freeze({
   fabric: { enabled: false, baseUrl: 'http://127.0.0.1:8791' },
   media: { concurrency: 1, videoTimeoutMs: 600_000, imageTimeoutMs: 300_000 },
   knowledge: { chunkTargetChars: 1200, chunkMaxChars: 2000, chunkOverlapChars: 160, embeddingModel: null },
+  // Publisher signatures for plugins. The trust store is a file of public keys this host
+  // has chosen to trust; it is never fetched, and signatures are required only when the
+  // operator says so. An empty list is not a control, and is reported as such.
+  plugins: { trustStoreFile: null, requireSignature: false },
+  // MCP servers permitted on this host. Empty means unrestricted, which is reported
+  // rather than dressed up as a control.
+  mcp: { allowlist: [] },
   godMode: { enabled: true, maxSteps: 12, maxDurationMs: 300_000 },
 })
 
@@ -165,6 +172,15 @@ export function loadConfig(env = process.env, overrides = {}) {
       embeddingModel: env.AETHERIS_EMBEDDING_MODEL || null,
       dbFile: resolve(dataDir, 'knowledge.sqlite'),
     },
+    plugins: {
+      // Default sits beside the memory database rather than in it: keys are not user data,
+      // and a wipe of user data must not take the keys with it.
+      trustStoreFile: resolve(env.AETHERIS_TRUST_STORE || resolve(dataDir, 'trusted-keys.json')),
+      requireSignature: parseBoolean(env.AETHERIS_PLUGIN_REQUIRE_SIGNATURE, DEFAULT_CONFIG.plugins.requireSignature),
+    },
+    mcp: {
+      allowlist: parseList(env.AETHERIS_MCP_ALLOWLIST),
+    },
     godMode: {
       enabled: parseBoolean(env.AETHERIS_GODMODE_ENABLED, DEFAULT_CONFIG.godMode.enabled),
       maxSteps: Number(env.AETHERIS_GODMODE_MAX_STEPS || DEFAULT_CONFIG.godMode.maxSteps),
@@ -192,6 +208,16 @@ export function publicConfig(config) {
     dataDir: config.dataDir,
     ollama: { enabled: config.ollama.enabled, baseUrl: config.ollama.baseUrl },
     llamaCpp: { enabled: config.llamaCpp.enabled, baseUrl: config.llamaCpp.baseUrl, runtime: config.llamaCpp.runtime, keyConfigured: Boolean(config.llamaCpp.apiKey) },
+    plugins: {
+      signaturesRequired: config.plugins.requireSignature,
+      // The path is reported; the keys are not. A caller that needs them reads them here.
+      trustStoreFile: config.plugins.trustStoreFile,
+      trustStoreConfigured: Boolean(config.plugins.trustStoreFile),
+    },
+    mcp: {
+      allowlist: [...config.mcp.allowlist],
+      restricted: config.mcp.allowlist.length > 0,
+    },
     freellmapi: {
       enabled: config.freellmapi.enabled,
       // Host and path only — never a query string or credentials.

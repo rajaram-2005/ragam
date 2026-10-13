@@ -136,6 +136,11 @@ export const api = {
   // --- plugins ------------------------------------------------------------
   plugins: (state) => request('GET', `/api/plugins${state ? `?state=${encodeURIComponent(state)}` : ''}`),
   pluginCapabilities: () => request('GET', '/api/plugins/capabilities'),
+  // The trust store: which publisher keys this host has decided to trust. The route returns
+  // key ids and labels, never key material.
+  trustedKeys: () => request('GET', '/api/plugins/trust'),
+  trustKey: (body) => request('POST', '/api/plugins/trust', body),
+  untrustKey: (keyId) => request('DELETE', `/api/plugins/trust/${encodeURIComponent(keyId)}`, {}),
   validateManifest: (manifest) => request('POST', '/api/plugins/validate', manifest),
   installPlugin: (manifest) => request('POST', '/api/plugins/install', manifest),
   pluginPreflight: (id, capability, body = {}) =>

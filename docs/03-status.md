@@ -9,14 +9,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 982 passing, 0 failing.**
+**Test totals: 1003 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **389 / 389** (15 files, ~45 s) |
+| `services/core` | `node --test test/*.test.mjs` | **409 / 409** (16 files, ~45 s) |
 | `services/fabric` | `pytest -q` | **528 / 528** (23 files, ~35 s) |
-| `apps/web` | `node --test test/*.test.mjs` | **65 / 65** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 230.38 kB → **68.68 kB gzip**, single chunk, no warnings |
+| `apps/web` | `node --test test/*.test.mjs` | **66 / 66** (4 files, ~1 s) |
+| `apps/web` build | `vite build` | 234.31 kB → **69.76 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as four jobs split so a
@@ -60,7 +60,7 @@ instead.
 |---|---|---|---|
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
-| 3 | Unified app, five areas | **Complete** | `apps/web`; 65 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
+| 3 | Unified app, five areas | **Complete** | `apps/web`; 66 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
 | 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now exists and runs here — trained from scratch, no weights needed ([`08-aetheris-lite.md`](./08-aetheris-lite.md)). The *chat* half is still unmet: it is a 625K-parameter base model that is not wired to `/api/chat`, and doing so would misrepresent it. The adapter half remains proven only against a loopback fixture ("Phase 4 in detail", below) |
 | 5 | FreeLLMAPI online integration | **Implemented — requires external credentials** | Client written to contracts read from source; no key here |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
@@ -150,7 +150,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (389 tests)
+### `services/core` — Implemented and tested (409 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -207,7 +207,7 @@ be demanded or refused by digest rather than assumed. And the model emits mush a
 this size — 359,136 parameters is enough to beat every baseline it was measured
 against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (65 tests)
+### `apps/web` — Implemented and tested (66 tests)
 
 | Area | Status |
 |---|---|

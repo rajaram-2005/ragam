@@ -22,6 +22,60 @@ import { ELEVATED_SCOPES } from '../plugins/manifest.mjs'
 
 export const SERVER_KINDS = Object.freeze({ IN_PROCESS: 'in_process', TRANSPORT: 'transport' })
 
+/**
+ * Parse an allowlist.
+ *
+ * Two entry forms, both exact rather than pattern-based, because pattern-based allowlists
+ * are where this control usually breaks:
+ *   `id:<server id>`      a specific server, matched exactly
+ *   `origin:<scheme://host:port>`   any server whose endpoint is on exactly that origin
+ *
+ * There is deliberately no wildcard, no suffix match and no regex. `evil-example.com` does
+ * not match `example.com`, `https://example.com.evil.net` does not match
+ * `https://example.com`, and an entry that cannot be parsed is refused at construction
+ * rather than silently ignored -- an allowlist that quietly drops the entries it does not
+ * understand is an allowlist that permits things.
+ */
+export function parseAllowlist(entries) {
+  if (entries === null || entries === undefined) return null
+  const list = Array.isArray(entries) ? entries : String(entries).split(',')
+  const ids = new Set()
+  const origins = new Set()
+  for (const raw of list) {
+    const entry = String(raw ?? '').trim()
+    if (!entry) continue
+    if (entry === '*') {
+      throw new McpError("'*' is not an allowlist entry: list the servers or origins you permit, or leave the allowlist unset", { code: 'invalid_allowlist' })
+    }
+    const separator = entry.indexOf(':')
+    if (separator === -1) {
+      throw new McpError(`allowlist entry '${entry}' must be 'id:<server id>' or 'origin:<scheme://host:port>'`, { code: 'invalid_allowlist' })
+    }
+    const kind = entry.slice(0, separator)
+    const value = entry.slice(separator + 1).trim()
+    if (!value) throw new McpError(`allowlist entry '${entry}' has no value`, { code: 'invalid_allowlist' })
+    if (kind === 'id') {
+      ids.add(value)
+    } else if (kind === 'origin') {
+      let parsed
+      try {
+        parsed = new URL(value)
+      } catch {
+        throw new McpError(`allowlist origin '${value}' is not a URL`, { code: 'invalid_allowlist' })
+      }
+      if (!parsed.host) throw new McpError(`allowlist origin '${value}' has no host`, { code: 'invalid_allowlist' })
+      origins.add(parsed.origin)
+    } else {
+      throw new McpError(`allowlist entry '${entry}' has unknown kind '${kind}'`, { code: 'invalid_allowlist' })
+    }
+  }
+  // An entry list that yields nothing is no allowlist at all. Returning an empty
+  // restriction instead would make "permitted" indistinguishable from a configured
+  // allowlist that happens to permit the server.
+  if (ids.size === 0 && origins.size === 0) return null
+  return { ids, origins, size: ids.size + origins.size }
+}
+
 /** Risk tiers drive whether a call needs an approval gate. */
 export const RISK = Object.freeze({
   READ_ONLY: 'read_only', // no state change
@@ -57,14 +111,53 @@ export class McpRegistry {
    * @param {string[]} [options.allowedRisks] risk tiers permitted at all (default: all but SYSTEM)
    * @param {(e:object)=>void} [options.onEvent]
    * @param {number} [options.maxOutputBytes] hard cap on tool output size
+   * @param {string[]|null} [options.allowlist] permitted servers and origins; null means
+   *        unrestricted, which is reported as such rather than presented as a control
    */
-  constructor({ ledger = null, allowedRisks = null, onEvent = () => {}, maxOutputBytes = 256 * 1024 } = {}) {
+  constructor({ ledger = null, allowedRisks = null, onEvent = () => {}, maxOutputBytes = 256 * 1024, allowlist = null } = {}) {
     /** @type {Map<string, object>} */
     this.servers = new Map()
     this.ledger = ledger
     this.allowedRisks = allowedRisks ? new Set(allowedRisks) : null
     this.onEvent = onEvent
     this.maxOutputBytes = maxOutputBytes
+    this.allowlist = parseAllowlist(allowlist)
+  }
+
+  /**
+   * Whether a server is permitted by the allowlist, and why.
+   *
+   * The allowlist governs servers this host would **reach**: transport servers, which have
+   * an endpoint or a transport function and cross a boundary the operator can name. An
+   * in-process server is code already running inside this service, and hosting it is not a
+   * network decision -- it is governed by risk tiers and approval gates instead. Applying a
+   * host allowlist to it would either break startup for the servers the product ships or
+   * tempt someone to add a blanket exemption, and both are worse than saying the scope out
+   * loud.
+   */
+  permitServer(spec) {
+    if (spec?.kind === SERVER_KINDS.IN_PROCESS) {
+      return { allowed: true, restricted: false, reason: 'in-process servers are not host-reached' }
+    }
+    if (!this.allowlist || this.allowlist.size === 0) {
+      return { allowed: true, restricted: false, reason: 'no allowlist is configured' }
+    }
+    if (this.allowlist.ids.has(spec.id)) {
+      return { allowed: true, restricted: true, reason: `'${spec.id}' is listed by id` }
+    }
+    if (spec.endpoint) {
+      let parsed = null
+      try {
+        parsed = new URL(String(spec.endpoint))
+      } catch {
+        return { allowed: false, restricted: true, reason: `endpoint '${spec.endpoint}' is not a URL, so it cannot be matched against an allowlist origin` }
+      }
+      if (this.allowlist.origins.has(parsed.origin)) {
+        return { allowed: true, restricted: true, reason: `${parsed.origin} is listed` }
+      }
+      return { allowed: false, restricted: true, reason: `neither '${spec.id}' nor the origin ${parsed.origin} is listed` }
+    }
+    return { allowed: false, restricted: true, reason: `'${spec.id}' is not listed, and it declares no endpoint to match` }
   }
 
   /**
@@ -85,6 +178,13 @@ export class McpRegistry {
     }
     if (this.servers.has(spec.id)) throw new McpError(`server '${spec.id}' is already registered`, { server: spec.id })
     if (!Array.isArray(spec.tools)) throw new McpError(`server '${spec.id}' must declare a tools array`, { server: spec.id })
+    // Checked before anything is recorded, and re-checked on every call: a registration
+    // that happened while the allowlist was empty must not survive the allowlist arriving.
+    const permit = this.permitServer(spec)
+    if (!permit.allowed) {
+      this.#audit('server_register', 'denied', { server: spec.id, reason: permit.reason }, spec.id)
+      throw new McpError(`server '${spec.id}' is not on the allowlist: ${permit.reason}`, { code: 'mcp_server_not_allowed', server: spec.id })
+    }
 
     const tools = spec.tools.map((tool) => normalizeTool(tool, spec))
     const resources = (spec.resources ?? []).map((resource) => {
@@ -258,6 +358,15 @@ export class McpRegistry {
     const server = this.#server(serverId)
     const tool = server.tools.find((entry) => entry.name === toolName)
     if (!tool) throw new McpError(`server '${serverId}' has no tool '${toolName}'`, { code: 'unknown_tool', server: serverId, tool: toolName })
+
+    // Re-checked at the point of use. Registration happened at some earlier moment and the
+    // allowlist is configuration: a server registered before the allowlist was set, or
+    // narrowed since, must not keep its access.
+    const permit = this.permitServer({ id: server.id, kind: server.kind, endpoint: server.endpoint })
+    if (!permit.allowed) {
+      this.#audit(`call:${toolName}`, 'denied', { server: serverId, reason: 'allowlist', detail: permit.reason }, subject ?? serverId)
+      throw new McpError(`cannot call '${serverId}:${toolName}': ${permit.reason}`, { code: 'mcp_server_not_allowed', server: serverId, tool: toolName })
+    }
 
     const check = this.preflight(serverId, toolName, { approvals, grantedScopes })
     if (check.needsApproval && !check.reasons.length) {

@@ -381,3 +381,21 @@ test('memory can be exported, not only deleted', () => {
   // claiming the copy is unrestricted.
   assert.match(chat, /marked \$\{envelope\.consent\} and training use \$\{envelope\.trainingUse\}/)
 })
+
+test('the security controls the product added are visible in their areas', () => {
+  // A control nobody can see is a control nobody can use. The trust store lives in Plugins
+  // and the allowlist state in MCP, because that is where the thing they govern lives --
+  // neither is a sixth area, and neither is an admin dashboard.
+  const plugins = read('areas/PluginsArea.jsx')
+  assert.match(plugins, /title="Trusted publishers"/)
+  assert.match(plugins, /api\.trustedKeys\(\)/)
+  assert.match(plugins, /api\.trustKey\(/)
+  assert.match(plugins, /api\.untrustKey\(/)
+  // The scope of a signature is stated where the key is added, not assumed.
+  assert.match(plugins, /It does not say the code is safe/)
+
+  const mcp = read('areas/McpArea.jsx')
+  assert.match(mcp, /No server allowlist is configured/)
+  assert.match(mcp, /Only listed servers may be reached/)
+  assert.match(mcp, /governed by their risk tier and approval gates/)
+})

@@ -62,7 +62,7 @@ them rather than restating them.
 | Scope model and least privilege | **Completed** | Declared scopes are enforced at invocation; elevated and forbidden scopes are separate sets |
 | Approval gates for destructive actions | **Completed** | A destructive call without approval returns 409, not a warning |
 | Built-in plugins | **Completed** | Two, both real |
-| Third-party plugin ecosystem | **Partial** | The registry works; there is no review pipeline or signing |
+| Third-party plugin ecosystem | **Partial** | The registry works and manifests can be signed (Ed25519, trust store, verified at install **and** before every invocation); there is still **no review pipeline**, and no revocation |
 | Community store UI | **Planned** | |
 
 ## 5. MCP
@@ -76,7 +76,8 @@ them rather than restating them.
 | Timeouts and output limits | **Completed** | Bounded per call |
 | In-process server | **Completed** | One, with four tools |
 | Remote server transports beyond stdio/HTTP | **Planned** | |
-| Server allowlist / signature verification | **Planned** | |
+| Server allowlist | **Completed** | `id:` and `origin:` entries, matched exactly, enforced at registration and again at every call; a malformed allowlist refuses to start |
+| Signature verification of MCP servers | **Planned** | Plugin manifests are signed; the MCP wire protocol carries no signature to check, so a server's provenance rests on the allowlist entry that admitted it |
 
 ## 6. Models and routing
 

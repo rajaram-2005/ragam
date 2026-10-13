@@ -26,6 +26,7 @@ import { startLocalModelServer } from './helpers/local-model-server.mjs'
 import { RUNTIME_POLICIES } from '../src/policy/egress.mjs'
 import { RISK, SERVER_KINDS } from '../src/mcp/layer.mjs'
 import { PROTOCOLS, SCOPES } from '../src/plugins/manifest.mjs'
+import { parseAllowlist } from '../src/mcp/layer.mjs'
 
 /** Boot the app plus a real HTTP listener on an ephemeral loopback port. */
 async function startCore({ env = {}, withModel = true } = {}) {
@@ -1117,4 +1118,116 @@ test('every field the web panels read comes back from the routes they call', asy
   } finally {
     await core.close()
   }
+})
+
+// --- plugin signing and the MCP allowlist, over the real HTTP surface ----------------
+
+test('a signed plugin installs over HTTP once its key is trusted, and not before', async () => {
+  const core = await startCore({ withModel: false })
+  try {
+    const { generateKeyPair, signManifest } = await import('../src/plugins/signing.mjs')
+    const publisher = generateKeyPair()
+    const manifest = {
+      id: 'acme.repo-inspector',
+      name: 'Repository Inspector',
+      version: '1.0.0',
+      protocol: PROTOCOLS.LOCAL_TOOL,
+      description: 'Reads repository metadata.',
+      scopes: [SCOPES.FS_READ],
+      capabilities: [{
+        name: 'summarize',
+        description: 'Summarise a path.',
+        inputSchema: { type: 'object', properties: { path: { type: 'string', minLength: 1 } }, required: ['path'], additionalProperties: false },
+        requiredScopes: [SCOPES.FS_READ],
+        readOnly: true,
+      }],
+    }
+    const signed = signManifest(manifest, publisher.privateKeyPem)
+
+    // The key is not trusted yet, so presenting this signature is worse than presenting
+    // none: it claims a publisher this host cannot check.
+    const refused = await core.post('/api/plugins/install', signed)
+    // 403, not 500: presenting a key this host does not know is a refusal, and reporting
+    // it as a server fault would hide a security decision inside an error page. The error
+    // envelope carries a code and a message, so the message has to say which key and why --
+    // there is no field for the client to read, and inventing one here would leave every
+    // other refusal with an empty version of it.
+    assert.equal(refused.status, 403)
+    assert.equal(refused.json.error, 'plugin_signature_rejected')
+    assert.match(refused.json.message, /is not in the trust store/)
+    assert.ok(refused.json.message.includes(publisher.keyId), 'the message must name the key')
+
+    // Trust the key. The route reports the id it derived, never the key material.
+    const trusted = await core.post('/api/plugins/trust', { pem: publisher.publicKeyPem, label: 'Acme' })
+    assert.equal(trusted.status, 201)
+    assert.equal(trusted.json.keyId, publisher.keyId)
+
+    const listed = (await core.get('/api/plugins/trust')).json
+    assert.deepEqual(listed.keys, [{ keyId: publisher.keyId, label: 'Acme', addedAt: listed.keys[0].addedAt }])
+    assert.ok(!JSON.stringify(listed).includes('PUBLIC KEY'), 'the route must not return key material')
+
+    const installed = await core.post('/api/plugins/install', signed)
+    assert.equal(installed.status, 201)
+    assert.equal(installed.json.signature.state, 'verified')
+    assert.equal(installed.json.signature.keyId, publisher.keyId)
+
+    // Removing the key does not retroactively bless the plugin: installing again now fails,
+    // and the refusal is the same one as before the key was ever added.
+    assert.equal((await core.del(`/api/plugins/trust/${publisher.keyId}`)).status, 200)
+    const afterRemoval = await core.post('/api/plugins/install', { ...signed, version: '1.0.1' })
+    assert.equal(afterRemoval.status, 403)
+    assert.equal(afterRemoval.json.error, 'plugin_signature_rejected')
+    assert.match(afterRemoval.json.message, /is not in the trust store/)
+
+    // Both changes to the root of trust are in the ledger.
+    const audit = (await core.get('/api/audit?limit=200')).json
+    const actions = audit.events.map((entry) => entry.action)
+    assert.ok(actions.includes('trust_key_added'), 'adding a key must be audited')
+    assert.ok(actions.includes('trust_key_removed'), 'removing a key must be audited')
+  } finally {
+    await core.close()
+  }
+})
+
+test('the MCP allowlist governs host-reached servers, and the service reports it that way', async () => {
+  const core = await startCore({ withModel: false, env: { AETHERIS_MCP_ALLOWLIST: 'id:notes,origin:https://mcp.example.com' } })
+  try {
+    // Reported as a configured restriction, with the entries as given.
+    const config = (await core.get('/api/config')).json
+    assert.equal(config.mcp.restricted, true)
+    assert.deepEqual(config.mcp.allowlist, ['id:notes', 'origin:https://mcp.example.com'])
+
+    // In-process servers the product ships keep working: they are code in this process, not
+    // a host this service reaches, and a host allowlist is not the control for them.
+    const servers = (await core.get('/api/mcp/servers')).json.servers
+    assert.ok(servers.length >= 1)
+    assert.ok(servers.every((server) => server.kind === 'in_process'))
+
+    // A transport server has to be named, by id or by the origin of its endpoint.
+    const list = core.app.mcp.allowlist
+    const permit = (spec) => core.app.mcp.permitServer(spec)
+    assert.equal(permit({ id: 'notes', kind: 'transport', endpoint: 'https://mcp.example.com/rpc' }).allowed, true)
+    assert.equal(permit({ id: 'anything', kind: 'transport', endpoint: 'https://mcp.example.com/rpc' }).allowed, true)
+    // Suffix and prefix lookalikes are not admitted: an allowlist that matches on a string
+    // prefix is how `mcp.example.com.attacker.net` gets in.
+    for (const endpoint of ['https://mcp.example.com.attacker.net/rpc', 'https://evil.net/mcp.example.com', 'http://mcp.example.com/rpc']) {
+      assert.equal(permit({ id: 'x', kind: 'transport', endpoint }).allowed, false, `${endpoint} must not be admitted`)
+    }
+    assert.equal(permit({ id: 'unlisted', kind: 'transport', endpoint: 'https://other.example.com/rpc' }).allowed, false)
+    assert.equal(list.size, 2)
+  } finally {
+    await core.close()
+  }
+})
+
+test('an unparseable allowlist is refused instead of being skipped', () => {
+  // '\*' is not a shorthand for "everything" here: a control that can be disabled by a
+  // character the operator thought meant more access is a control that fails open.
+  assert.throws(() => parseAllowlist('*'), /not an allowlist entry/)
+  assert.throws(() => parseAllowlist('notes'), /must be 'id:/)
+  assert.throws(() => parseAllowlist('id:'), /has no value/)
+  assert.throws(() => parseAllowlist('origin:not-a-url'), /is not a URL/)
+  assert.throws(() => parseAllowlist('whatever:notes'), /unknown kind/)
+  assert.equal(parseAllowlist(''), null)
+  assert.equal(parseAllowlist('id:notes,origin:https://example.com').size, 2)
 })
