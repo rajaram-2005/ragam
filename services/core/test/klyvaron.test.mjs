@@ -60,12 +60,14 @@ test('Lite reports the artifact that exists, and only the capabilities it backs'
 })
 
 test('Lite does not claim to chat, and says why', () => {
-  // The single most important negative claim in this file: the model that exists emits
-  // mush, and /api/chat deliberately does not serve it.
+  // The single most important negative claim in this file. The model that exists is
+  // reachable over /api/chat and still does not constitute a chat capability, so the
+  // reason has to say what actually happens rather than that nothing was wired up.
   const chat = getTier(TIERS.LITE).capabilities.chat
   assert.equal(chat.state, CAPABILITY_STATES.UNAVAILABLE)
   assert.equal(chat.backing, null)
-  assert.match(chat.reason, /not wired into \/api\/chat/)
+  assert.match(chat.reason, /No instruction-tuned artifact exists/)
+  assert.match(chat.reason, /refused there unless pinned by id/)
 })
 
 test('Pro and High are recorded as unbuilt rather than omitted', () => {

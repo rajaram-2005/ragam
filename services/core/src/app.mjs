@@ -30,6 +30,9 @@ import { McpRegistry, RISK, SERVER_KINDS } from './mcp/layer.mjs'
 import { GodCore, TASK_STATES, LIFECYCLE } from './godcore/lifecycle.mjs'
 import { registerBuiltins } from './builtins.mjs'
 import { publicConfig } from './config.mjs'
+import { KlyvaronStore } from './klyvaron/store.mjs'
+import { MobileFootprint } from './klyvaron/footprint.mjs'
+import { KlyvaronProvider } from './providers/klyvaron.mjs'
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024
 
@@ -167,9 +170,99 @@ export class AetherisOmniApp {
     // these the Plugins and MCP areas would have nothing real to inspect: a
     // browser cannot bind a local_tool handler, so they must be bound in code.
     this.builtins = registerBuiltins(this)
+
+    // --- the local model library -------------------------------------------
+    // Opened last so the ledger reads startup -> providers -> models. Nothing here
+    // reaches the network: a Klyvaron artifact is a file, and `loadArtifact` verifies
+    // it against its manifest before a single weight is used.
+    this.klyvaron = this.#openKlyvaron()
   }
 
   // --- wiring -------------------------------------------------------------
+
+  /**
+   * Open the on-device model library and load whatever is already installed.
+   *
+   * Loading at startup is a deliberate trade: it costs a few hundred milliseconds once
+   * and makes readiness a statement about a model in memory rather than a promise about
+   * a file. A model that fails verification is reported as broken and left alone -- it
+   * is never silently deleted, because it is the user's download.
+   */
+  #openKlyvaron() {
+    const root = resolve(this.config.dataDir, 'klyvaron')
+    const store = new KlyvaronStore({ root })
+    const library = { root, store, footprint: new MobileFootprint({ budget: store.budget }), loaded: [], broken: [], errors: [] }
+
+    for (const entry of store.list()) {
+      if (entry.broken) {
+        library.broken.push({ id: entry.id, reason: entry.broken })
+        this.#onEvent({ type: 'klyvaron_model_broken', id: entry.id, reason: entry.broken })
+        continue
+      }
+      try {
+        const { runtime, loadMs } = store.load(entry.id)
+        const providerName = `klyvaron:${entry.id}`
+        this.providers[providerName] = new KlyvaronProvider({
+          runtime, guard: this.guard, loadMs, onEvent: (event) => this.#onEvent(event),
+        })
+        const model = this.registry.register({
+          id: providerName,
+          kind: MODEL_KINDS.LOCAL_LLM,
+          displayName: `${runtime.manifest.id} ${runtime.manifest.version} (Klyvaron ${runtime.manifest.tier})`,
+          provider: providerName,
+          location: 'local',
+          capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT],
+          contextWindow: runtime.contextTokens,
+          streaming: true,
+          toolCalling: false,
+          structuredOutput: false,
+          parametersBillions: runtime.parameterCount / 1e9,
+          quantization: runtime.dtype === Float64Array ? 'none (float64)' : 'none (float32)',
+          licence: runtime.manifest.licence,
+          version: runtime.manifest.version,
+          // `base_completion` is the tag that stops a base model being chosen to answer
+          // a question: it can satisfy [text_in, text_out] and still not be an assistant.
+          tags: ['first_party', 'klyvaron', `tier:${runtime.manifest.tier}`,
+            ...(runtime.instructionTuned ? [] : ['base_completion'])],
+          costWeight: 0.5,
+        })
+        // Availability is *observed*, never declared: the descriptor starts NOT_INSTALLED
+        // and only a completed load moves it to READY, exactly like a provider probe.
+        this.registry.observe(model.id, {
+          availability: AVAILABILITY.READY,
+          medianLatencyMs: loadMs,
+          detail: { artifact: runtime.manifest.id, version: runtime.manifest.version,
+            weightsSha256: runtime.sha256, instructionTuned: runtime.instructionTuned, loadMs },
+        })
+        library.loaded.push({ id: model.id, artifact: runtime.manifest.id, version: runtime.manifest.version,
+          tier: runtime.manifest.tier, parameters: runtime.parameterCount, contextTokens: runtime.contextTokens,
+          instructionTuned: runtime.instructionTuned, loadMs, weightsSha256: runtime.sha256,
+          limitations: [...runtime.manifest.limitations] })
+      } catch (error) {
+        library.errors.push({ id: entry.id, code: error.code ?? 'load_failed', message: error.message })
+        this.ledger.record({ category: 'model', action: 'klyvaron_load_failed', outcome: AUDIT_OUTCOMES.FAILURE,
+          detail: { id: entry.id, code: error.code ?? 'load_failed', message: error.message } })
+      }
+    }
+    return library
+  }
+
+  /**
+   * A local library report for the storage surface: the bytes, in the user's terms.
+   */
+  storageReport() {
+    const report = this.klyvaron.footprint.report()
+    return {
+      ...report,
+      // The one sentence a settings screen can show as-is.
+      summary: this.klyvaron.footprint.summary(),
+      installed: this.klyvaron.store.list().map((entry) => ({
+        id: entry.id, version: entry.version, bytes: entry.bytes ?? null, broken: entry.broken ?? null,
+      })),
+      verification: this.klyvaron.store.verify(),
+      loaded: this.klyvaron.loaded.map((entry) => ({ id: entry.id, instructionTuned: entry.instructionTuned })),
+    }
+  }
 
   #registerProviders() {
     const { config } = this
@@ -434,6 +527,7 @@ export class AetherisOmniApp {
     }
 
     const chosen = route.chosen
+    this.#assertAnswerable(chosen, model)
     const isExternal = chosen.location === 'online'
 
     // Minimise transmitted data: redact secrets before an external send.
@@ -474,6 +568,10 @@ export class AetherisOmniApp {
         stream: false,
         modelId: chosen.id,
         providerModel: result.model ?? null,
+        // Present only for providers that make the distinction. A base completion model
+        // answering because it was pinned says so in the response, every time.
+        ...(result.instructionTuned === undefined ? {} : { instructionTuned: result.instructionTuned }),
+        ...(result.limitation ? { limitation: result.limitation } : {}),
         durationMs,
         usage: result.usage ?? null,
         routing: routeSummary(route),
@@ -542,6 +640,36 @@ export class AetherisOmniApp {
     })
   }
 
+  /**
+   * What a base completion model may be used for.
+   *
+   * Directive §5A: a model that continues text must not be presented as an assistant.
+   * Klyvaron Lite's artifact carries `instructionTuned: false`, which puts it behind
+   * this check: an ordinary chat request is refused with the model's own limitations,
+   * and the model can still be used deliberately by pinning it by id. The alternative --
+   * answering anyway and trusting a user to notice the output is a continuation -- is
+   * exactly the overclaim the tier registry exists to prevent.
+   */
+  #assertAnswerable(chosen, requestedModel) {
+    if (!(chosen.tags ?? []).includes('base_completion')) return
+    if (requestedModel && requestedModel === chosen.id) return
+    const provider = this.providers[chosen.id]
+    const limitations = provider?.runtime?.manifest?.limitations ?? []
+    this.ledger.record({
+      category: 'model', action: 'refuse_base_completion_chat', outcome: AUDIT_OUTCOMES.REFUSED,
+      detail: { modelId: chosen.id, limitations },
+    })
+    const error = new Error(
+      `'${chosen.id}' is a base completion model: it continues text and does not answer questions. `
+      + 'Pin it by id to use it for a continuation, or install an instruction-tuned model.',
+    )
+    error.code = 'model_not_instruction_tuned'
+    error.status = 501
+    error.limitation = limitations[0] ?? 'This model does not follow instructions.'
+    error.limitations = limitations
+    throw error
+  }
+
   #providerFor(model) {
     if (model.location === 'online') {
       // This build ships no online provider. A descriptor that still claims the
@@ -551,6 +679,16 @@ export class AetherisOmniApp {
       error.code = 'provider_not_configured'
       error.status = 503
       throw error
+    }
+    if (model.id.startsWith('klyvaron:')) {
+      const provider = this.providers[model.id]
+      if (!provider) {
+        const error = new Error(`the local model '${model.id}' is registered but not loaded`)
+        error.code = 'model_not_loaded'
+        error.status = 503
+        throw error
+      }
+      return provider
     }
     const key = model.id.startsWith('ollama:') ? 'ollama' : 'llamacpp'
     const provider = this.providers[key]
@@ -650,7 +788,12 @@ export class AetherisOmniApp {
       hardware: this.hardware,
       models: { total: models.length, ready: ready.length },
       capabilities: {
-        chat: ready.some((model) => model.capabilities.includes(MODALITIES.TEXT_OUT)),
+        // A base completion model can emit text and still cannot answer a question, so
+        // the two are reported separately rather than folded into one 'chat' flag.
+        chat: ready.some((model) => model.capabilities.includes(MODALITIES.TEXT_OUT)
+          && !(model.tags ?? []).includes('base_completion')),
+        textCompletion: ready.some((model) => model.capabilities.includes(MODALITIES.TEXT_OUT)
+          && (model.tags ?? []).includes('base_completion')),
         embeddings: ready.some((model) => model.capabilities.includes(MODALITIES.EMBEDDING_OUT)),
         imageGeneration: ready.some((model) => model.capabilities.includes(MODALITIES.IMAGE_OUT)),
         videoGeneration: ready.some((model) => model.capabilities.includes(MODALITIES.VIDEO_OUT)),
@@ -659,6 +802,13 @@ export class AetherisOmniApp {
       providers: Object.fromEntries(
         Object.entries(this.providers).map(([name, provider]) => [name, { configured: true, safe: provider.safeDescriptor ? provider.safeDescriptor() : { provider: name } }]),
       ),
+      klyvaron: {
+        root: this.klyvaron.root,
+        loaded: this.klyvaron.loaded,
+        broken: this.klyvaron.broken,
+        errors: this.klyvaron.errors,
+        storage: this.klyvaron.footprint.summary(),
+      },
       warnings: this.config.warnings,
       // Never claim a capability the probes did not confirm.
       notReady: models.filter((model) => model.measured.availability !== AVAILABILITY.READY).map((model) => ({ id: model.id, availability: model.measured.availability, detail: model.measured.probeDetail })),
@@ -713,8 +863,10 @@ export class AetherisOmniApp {
         return end()
       }
 
+      const chosen = route.chosen
+      this.#assertAnswerable(chosen, body.model ?? null)
       let outbound = workingMessages
-      const isExternal = route.chosen.location === 'online'
+      const isExternal = chosen.location === 'online'
       if (isExternal) {
         const redacted = redactDeep(workingMessages)
         outbound = redacted.value
@@ -888,6 +1040,9 @@ export function createHttpServer(app) {
           message: error?.message ?? 'internal error',
           ...(error?.route ? { route: error.route } : {}),
           ...(error?.limitation ? { limitation: error.limitation } : {}),
+          // A refusal that names a model should carry that model's own declared
+          // limitations, not a summary of them written at the refusal site.
+          ...(Array.isArray(error?.limitations) && error.limitations.length ? { limitations: error.limitations } : {}),
           ...(error?.errors ? { details: error.errors } : {}),
         }, app)
       } else {
@@ -921,6 +1076,8 @@ async function handle(request, response, app) {
   if (method === 'GET' && path === '/api/events') return sendJson(response, 200, { events: app.events.slice(-200) }, app)
 
   // --- models -------------------------------------------------------------
+  if (method === 'GET' && path === '/api/storage') return sendJson(response, 200, app.storageReport(), app)
+
   if (method === 'GET' && path === '/api/models') {
     const availableOnly = url.searchParams.get('ready') === 'true'
     return sendJson(response, 200, {

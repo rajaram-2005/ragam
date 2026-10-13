@@ -1,0 +1,443 @@
+// The Klyvaron artifact format: how a first-party model is described, and how a
+// description that does not match the bytes is refused.
+//
+// Phase 4 requires genuine local inference. "Genuine" is the load-bearing word: a
+// loader that silently loads the wrong checkpoint, or a checkpoint whose tail was
+// truncated, does not crash — it generates worse text, and worse text is attributed to
+// the model rather than to the loader. So the format carries integrity data and this
+// module refuses to hand back a model that does not match it.
+//
+// TWO FILES, ONE ARTIFACT
+//
+//   <id>.klyvaron.json   the manifest: architecture, vocabulary, digests, provenance,
+//                        measurements and limitations. Human-readable, diffable, and
+//                        what a model card is generated from.
+//   <id>.npz             the weights, written by `numpy.savez`. Read here without a
+//                        NumPy dependency: an .npz is a ZIP of .npy files, and both
+//                        containers are documented formats this module parses directly.
+//
+// WHY NOT REQUIRE NUMPY-COMPATIBLE NAMES ONLY
+//
+// The exporter writes the parameter names the Python training code uses
+// (`L0.wq`, `lnf_gain`, ...) and this module recomputes the *expected* name set from the
+// architecture. A checkpoint that has a parameter the architecture does not describe is
+// rejected rather than ignored: ignoring it is exactly how a config/weight mismatch
+// survives review.
+//
+// DIGEST SPECIFICATION
+//
+// `weights.sha256` is the SHA-256 of the .npz file's bytes, so it is trivially checkable
+// here and in any other language. `tokenizer.digest` is a domain-separated hash of the
+// vocabulary, defined by this repository so that Python and Node compute the same value
+// rather than one reimplementing the other's JSON serialiser:
+//
+//     sha256( "klyvaron.tokenizer.character/1\n"
+//             + concat( json.dumps(character, ensure_ascii=False) + "\n" for character ) )
+//
+// The character is JSON-quoted on its own line because the vocabulary contains newlines,
+// quotes and backslashes — every one of which would make an unescaped join ambiguous.
+
+import { createHash } from 'node:crypto'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { join, basename } from 'node:path'
+import { inflateRawSync } from 'node:zlib'
+
+export const ARTIFACT_FORMAT = 'klyvaron.artifact/1'
+export const MANIFEST_SUFFIX = '.klyvaron.json'
+export const TOKENIZER_FORMAT = 'klyvaron.tokenizer.character/1'
+export const UNK_CHARACTER = '\ufffd'
+
+export class ArtifactError extends Error {
+  constructor(message, { code = 'artifact_error', detail = {} } = {}) {
+    super(message)
+    this.name = 'ArtifactError'
+    this.code = code
+    this.detail = detail
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Container readers: ZIP (the .npz) and .npy
+// ---------------------------------------------------------------------------
+
+const EOCD_SIGNATURE = 0x06054b50
+const CENTRAL_SIGNATURE = 0x02014b50
+const LOCAL_SIGNATURE = 0x04034b50
+
+/**
+ * Read every member of a ZIP archive held in memory.
+ *
+ * Walks the central directory rather than scanning for local headers, because the
+ * central directory is the index and a scan would also match signatures appearing
+ * inside compressed data. `numpy.savez` writes stored (method 0) entries;
+ * `savez_compressed` writes deflated ones, and both are handled so an exporter that
+ * changes its mind does not silently produce an unreadable artifact.
+ */
+export function readZipEntries(buffer) {
+  const eocd = findEndOfCentralDirectory(buffer)
+  if (eocd < 0) throw new ArtifactError('not a ZIP container: no end-of-central-directory record', { code: 'not_a_zip' })
+  const entryCount = buffer.readUInt16LE(eocd + 10)
+  let offset = buffer.readUInt32LE(eocd + 16)
+  const entries = new Map()
+
+  for (let i = 0; i < entryCount; i += 1) {
+    if (buffer.readUInt32LE(offset) !== CENTRAL_SIGNATURE) {
+      throw new ArtifactError(`central directory entry ${i} has a bad signature`, { code: 'corrupt_zip' })
+    }
+    const method = buffer.readUInt16LE(offset + 10)
+    const compressedSize = buffer.readUInt32LE(offset + 20)
+    const uncompressedSize = buffer.readUInt32LE(offset + 24)
+    const nameLength = buffer.readUInt16LE(offset + 28)
+    const extraLength = buffer.readUInt16LE(offset + 30)
+    const commentLength = buffer.readUInt16LE(offset + 32)
+    const localOffset = buffer.readUInt32LE(offset + 42)
+    const name = buffer.toString('utf8', offset + 46, offset + 46 + nameLength)
+
+    if (buffer.readUInt32LE(localOffset) !== LOCAL_SIGNATURE) {
+      throw new ArtifactError(`'${name}' has a bad local header`, { code: 'corrupt_zip' })
+    }
+    const localNameLength = buffer.readUInt16LE(localOffset + 26)
+    const localExtraLength = buffer.readUInt16LE(localOffset + 28)
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength
+    const raw = buffer.subarray(dataStart, dataStart + compressedSize)
+
+    let data
+    if (method === 0) data = raw
+    else if (method === 8) data = inflateRawSync(raw)
+    else throw new ArtifactError(`'${name}' uses unsupported compression method ${method}`, { code: 'unsupported_compression' })
+    if (data.length !== uncompressedSize) {
+      throw new ArtifactError(`'${name}' is ${data.length} bytes, the directory says ${uncompressedSize}`, { code: 'corrupt_zip' })
+    }
+    entries.set(name, data)
+    offset += 46 + nameLength + extraLength + commentLength
+  }
+  return entries
+}
+
+function findEndOfCentralDirectory(buffer) {
+  // The record is at most 22 + 65535 bytes from the end; scan back from the end.
+  const minimum = Math.max(0, buffer.length - (22 + 0xffff))
+  for (let i = buffer.length - 22; i >= minimum; i -= 1) {
+    if (buffer.readUInt32LE(i) === EOCD_SIGNATURE) return i
+  }
+  return -1
+}
+
+const DTYPE_READERS = {
+  '<f4': { bytes: 4, read: (buffer, offset) => buffer.readFloatLE(offset), array: Float32Array },
+  '<f8': { bytes: 8, read: (buffer, offset) => buffer.readDoubleLE(offset), array: Float64Array },
+  '|i4': { bytes: 4, read: (buffer, offset) => buffer.readInt32LE(offset), array: Int32Array },
+  '<i4': { bytes: 4, read: (buffer, offset) => buffer.readInt32LE(offset), array: Int32Array },
+  '|u1': { bytes: 1, read: (buffer, offset) => buffer.readUInt8(offset), array: Uint8Array },
+}
+
+/**
+ * Parse one `.npy` member.
+ *
+ * Only the header fields that matter are read: `descr` (dtype), `fortran_order` and
+ * `shape`. Fortran order is refused rather than transposed, because silently
+ * transposing a weight matrix produces a model that runs and is wrong.
+ */
+export function readNpy(buffer, allowFortran = false) {
+  if (buffer.length < 10) throw new ArtifactError('a .npy member is too short to hold a header', { code: 'corrupt_npy' })
+  const magic = buffer.toString('latin1', 0, 6)
+  if (magic !== '\x93NUMPY') throw new ArtifactError('a .npy member has a bad magic string', { code: 'corrupt_npy' })
+  const major = buffer.readUInt8(6)
+  let headerLength
+  let headerStart
+  if (major === 1) {
+    headerLength = buffer.readUInt16LE(8)
+    headerStart = 10
+  } else if (major === 2 || major === 3) {
+    headerLength = buffer.readUInt32LE(8)
+    headerStart = 12
+  } else {
+    throw new ArtifactError(`unsupported .npy version ${major}`, { code: 'unsupported_npy' })
+  }
+  const header = buffer.toString('latin1', headerStart, headerStart + headerLength)
+
+  const descr = /'descr'\s*:\s*'([^']+)'/.exec(header)?.[1]
+  const fortran = /'fortran_order'\s*:\s*(True|False)/.exec(header)?.[1]
+  const shapeText = /'shape'\s*:\s*\(([^)]*)\)/.exec(header)?.[1]
+  if (!descr || !fortran || shapeText === undefined) {
+    throw new ArtifactError('.npy header is missing descr, fortran_order or shape', { code: 'corrupt_npy' })
+  }
+  if (fortran === 'True' && !allowFortran) {
+    throw new ArtifactError('the array is Fortran-ordered; transposing it silently would change the model', {
+      code: 'fortran_order',
+    })
+  }
+  const shape = shapeText.split(',').map((part) => part.trim()).filter(Boolean).map((part) => Number.parseInt(part, 10))
+  const reader = DTYPE_READERS[descr]
+  if (!reader) throw new ArtifactError(`unsupported dtype '${descr}'`, { code: 'unsupported_dtype' })
+
+  const count = shape.reduce((a, b) => a * b, 1)
+  const start = headerStart + headerLength
+  const expected = count * reader.bytes
+  if (buffer.length - start !== expected) {
+    throw new ArtifactError(
+      `array data is ${buffer.length - start} bytes, shape ${JSON.stringify(shape)} with ${descr} needs ${expected}`,
+      { code: 'corrupt_npy' },
+    )
+  }
+  const out = new reader.array(count)
+  for (let i = 0; i < count; i += 1) out[i] = reader.read(buffer, start + i * reader.bytes)
+  return { dtype: descr, shape, data: out, fortranOrder: fortran === 'True' }
+}
+
+/** Read every array in an .npz buffer, keyed by parameter name. */
+export function readNpz(buffer) {
+  const entries = readZipEntries(buffer)
+  const arrays = new Map()
+  for (const [name, data] of entries) {
+    if (!name.endsWith('.npy')) continue
+    arrays.set(basename(name, '.npy'), readNpy(data))
+  }
+  if (!arrays.size) throw new ArtifactError('the archive holds no .npy members', { code: 'empty_archive' })
+  return arrays
+}
+
+// ---------------------------------------------------------------------------
+// The vocabulary digest, computed identically in Python and here
+// ---------------------------------------------------------------------------
+
+export function vocabularyDigest(characters) {
+  const hash = createHash('sha256')
+  hash.update(`${TOKENIZER_FORMAT}\n`, 'utf8')
+  for (const character of characters) hash.update(`${JSON.stringify(character)}\n`, 'utf8')
+  return hash.digest('hex')
+}
+
+// ---------------------------------------------------------------------------
+// Manifest validation
+// ---------------------------------------------------------------------------
+
+const REQUIRED_MANIFEST_FIELDS = [
+  'format', 'tier', 'id', 'version', 'kind', 'instructionTuned', 'architecture',
+  'tokenizer', 'weights', 'generation', 'provenance', 'limitations', 'licence',
+]
+
+/** The parameter names this architecture must contain, in load order. */
+export function expectedParameterNames(architecture) {
+  const names = ['emb', 'pos']
+  for (let layer = 0; layer < architecture.n_layers; layer += 1) {
+    names.push(
+      `L${layer}.ln1_gain`, `L${layer}.ln1_bias`,
+      `L${layer}.wq`, `L${layer}.wk`, `L${layer}.wv`, `L${layer}.wo`,
+      `L${layer}.ln2_gain`, `L${layer}.ln2_bias`,
+      `L${layer}.w1`, `L${layer}.w2`,
+    )
+  }
+  names.push('lnf_gain', 'lnf_bias')
+  if (!architecture.tie_embeddings) names.push('head')
+  return names
+}
+
+/** Parameter count for a decoder-only pre-LayerNorm transformer with this config. */
+export function parameterCount(architecture) {
+  const { d_model: d, d_ff: ff, vocab_size: v, n_layers: L, seq_len } = architecture
+  const embedding = v * d
+  const perLayer = 4 * d * d + 2 * d * ff + 4 * d
+  return embedding + seq_len * d + L * perLayer + 2 * d + (architecture.tie_embeddings ? 0 : v * d)
+}
+
+function requireField(container, field, where) {
+  const value = container?.[field]
+  if (value === undefined || value === null) {
+    throw new ArtifactError(`${where} is missing '${field}'`, { code: 'invalid_manifest', detail: { field, where } })
+  }
+  return value
+}
+
+/**
+ * Validate a parsed manifest object.
+ *
+ * Strict on purpose: every field here is one a consumer acts on, and a manifest that
+ * omits a limitation is indistinguishable from a model that has none.
+ */
+export function validateManifest(manifest) {
+  if (manifest?.format !== ARTIFACT_FORMAT) {
+    throw new ArtifactError(
+      `unsupported artifact format ${JSON.stringify(manifest?.format)}; this build reads ${ARTIFACT_FORMAT}`,
+      { code: 'unsupported_format' },
+    )
+  }
+  for (const field of REQUIRED_MANIFEST_FIELDS) requireField(manifest, field, 'the manifest')
+
+  if (typeof manifest.instructionTuned !== 'boolean') {
+    throw new ArtifactError('instructionTuned must be a boolean — it decides whether the model may answer a question', {
+      code: 'invalid_manifest',
+    })
+  }
+  const arch = { ...manifest.architecture }
+  for (const field of ['vocab_size', 'd_model', 'n_layers', 'n_heads', 'd_ff', 'seq_len', 'tie_embeddings']) {
+    requireField(arch, field, 'architecture')
+  }
+  if (arch.d_model % arch.n_heads) {
+    throw new ArtifactError(`architecture: d_model ${arch.d_model} is not divisible by n_heads ${arch.n_heads}`, {
+      code: 'invalid_manifest',
+    })
+  }
+
+  const tokenizer = manifest.tokenizer
+  if (tokenizer.kind !== 'character') {
+    throw new ArtifactError(`unsupported tokenizer kind '${tokenizer.kind}'`, { code: 'unsupported_tokenizer' })
+  }
+  if (tokenizer.unkChar !== UNK_CHARACTER) {
+    throw new ArtifactError(`the unknown character must be ${JSON.stringify(UNK_CHARACTER)}, got ${JSON.stringify(tokenizer.unkChar)}`, {
+      code: 'invalid_manifest',
+    })
+  }
+  if (!Array.isArray(tokenizer.characters) || !tokenizer.characters.length) {
+    throw new ArtifactError('the tokenizer must carry its vocabulary', { code: 'invalid_manifest' })
+  }
+  if (new Set(tokenizer.characters).size !== tokenizer.characters.length) {
+    throw new ArtifactError('the vocabulary contains duplicate characters', { code: 'invalid_manifest' })
+  }
+  if (tokenizer.characters.includes(UNK_CHARACTER)) {
+    throw new ArtifactError('the vocabulary must not contain the reserved unknown character', { code: 'invalid_manifest' })
+  }
+  const computed = vocabularyDigest(tokenizer.characters)
+  if (tokenizer.digest !== computed) {
+    throw new ArtifactError(
+      `vocabulary digest is ${tokenizer.digest}, the characters hash to ${computed}`,
+      { code: 'vocabulary_mismatch' },
+    )
+  }
+  if (tokenizer.characters.length + 1 !== arch.vocab_size) {
+    throw new ArtifactError(
+      `vocabulary has ${tokenizer.characters.length} characters but the architecture expects ${arch.vocab_size - 1}`,
+      { code: 'invalid_manifest' },
+    )
+  }
+
+  const weights = manifest.weights
+  requireField(weights, 'file', 'weights')
+  requireField(weights, 'sha256', 'weights')
+  requireField(weights, 'bytes', 'weights')
+  if (!/^[0-9a-f]{64}$/.test(weights.sha256)) {
+    throw new ArtifactError("weights.sha256 must be a lowercase hex sha256", { code: 'invalid_manifest' })
+  }
+  const expected = expectedParameterNames(arch)
+  const declared = new Set(weights.names ?? [])
+  const missing = expected.filter((name) => !declared.has(name))
+  const unexpected = [...declared].filter((name) => !expected.includes(name))
+  if (missing.length || unexpected.length) {
+    throw new ArtifactError(
+      `the weight list and the architecture disagree (missing: ${missing.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'})`,
+      { code: 'name_mismatch', detail: { missing, unexpected } },
+    )
+  }
+
+  if (!Array.isArray(manifest.limitations) || !manifest.limitations.length) {
+    // A model with no declared limitations is a claim, not an artifact.
+    throw new ArtifactError('the manifest must declare at least one limitation', { code: 'invalid_manifest' })
+  }
+  return manifest
+}
+
+// ---------------------------------------------------------------------------
+// Loading a directory
+// ---------------------------------------------------------------------------
+
+/** Find the manifest in a directory. Exactly one is expected. */
+export function findManifest(directory) {
+  if (!existsSync(directory)) {
+    throw new ArtifactError(`no such model directory: ${directory}`, { code: 'not_installed' })
+  }
+  const candidates = readdirSync(directory).filter((name) => name.endsWith(MANIFEST_SUFFIX))
+  if (!candidates.length) {
+    throw new ArtifactError(`no *${MANIFEST_SUFFIX} manifest in ${directory}`, { code: 'not_installed' })
+  }
+  if (candidates.length > 1) {
+    throw new ArtifactError(
+      `${directory} holds ${candidates.length} manifests (${candidates.join(', ')}); a model directory holds one`,
+      { code: 'ambiguous_artifact' },
+    )
+  }
+  return join(directory, candidates[0])
+}
+
+/**
+ * Load and verify an artifact directory.
+ *
+ * Order matters: the manifest is validated first, then the weights file is hashed and
+ * parsed, then the arrays are checked against the architecture. Every failure names
+ * what disagreed, because "failed to load the model" is not actionable.
+ *
+ * @returns {{ manifest: object, weights: Map<string, {shape:number[], data:TypedArray, dtype:string}>, directory: string, manifestPath: string, weightsPath: string, sha256: string }}
+ */
+export function loadArtifact(directory, { verify = true } = {}) {
+  const manifestPath = findManifest(directory)
+  let manifest
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  } catch (error) {
+    throw new ArtifactError(`the manifest is not readable JSON: ${error.message}`, { code: 'invalid_manifest' })
+  }
+  validateManifest(manifest)
+
+  const weightsPath = join(directory, manifest.weights.file)
+  if (!existsSync(weightsPath)) {
+    throw new ArtifactError(`the manifest names '${manifest.weights.file}', which is not in ${directory}`, {
+      code: 'weights_missing',
+    })
+  }
+  const bytes = readFileSync(weightsPath)
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  if (verify) {
+    if (bytes.length !== manifest.weights.bytes) {
+      throw new ArtifactError(
+        `'${manifest.weights.file}' is ${bytes.length} bytes, the manifest says ${manifest.weights.bytes}`,
+        { code: 'size_mismatch' },
+      )
+    }
+    if (sha256 !== manifest.weights.sha256) {
+      throw new ArtifactError(
+        `'${manifest.weights.file}' hashes to ${sha256}, the manifest says ${manifest.weights.sha256}`,
+        { code: 'digest_mismatch' },
+      )
+    }
+  }
+
+  const weights = readNpz(bytes)
+  for (const name of expectedParameterNames(manifest.architecture)) {
+    if (!weights.has(name)) {
+      throw new ArtifactError(`the archive is missing parameter '${name}'`, { code: 'weights_incomplete' })
+    }
+  }
+  const extra = [...weights.keys()].filter((name) => !expectedParameterNames(manifest.architecture).includes(name))
+  if (extra.length) {
+    throw new ArtifactError(`the archive carries parameters the architecture does not describe: ${extra.join(', ')}`, {
+      code: 'weights_unexpected',
+    })
+  }
+  for (const [name, expectedShape] of Object.entries(shapeMap(manifest.architecture))) {
+    const found = weights.get(name).shape
+    if (found.join('x') !== expectedShape.join('x')) {
+      throw new ArtifactError(
+        `parameter '${name}' is ${found.join('x')}, the architecture expects ${expectedShape.join('x')}`,
+        { code: 'shape_mismatch', detail: { name, found, expected: expectedShape } },
+      )
+    }
+  }
+  return { manifest, weights, directory, manifestPath, weightsPath, sha256 }
+}
+
+/** Expected shape of every parameter, derived from the architecture. */
+export function shapeMap(architecture) {
+  const { d_model: d, d_ff: ff, vocab_size: v, n_layers: L, seq_len: T } = architecture
+  const shapes = { emb: [v, d], pos: [T, d] }
+  for (let layer = 0; layer < L; layer += 1) {
+    Object.assign(shapes, {
+      [`L${layer}.ln1_gain`]: [d], [`L${layer}.ln1_bias`]: [d],
+      [`L${layer}.wq`]: [d, d], [`L${layer}.wk`]: [d, d], [`L${layer}.wv`]: [d, d], [`L${layer}.wo`]: [d, d],
+      [`L${layer}.ln2_gain`]: [d], [`L${layer}.ln2_bias`]: [d],
+      [`L${layer}.w1`]: [d, ff], [`L${layer}.w2`]: [ff, d],
+    })
+  }
+  shapes.lnf_gain = [d]
+  shapes.lnf_bias = [d]
+  if (!architecture.tie_embeddings) shapes.head = [v, d]
+  return shapes
+}

@@ -9,14 +9,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1044 passing, 0 failing.**
+**Test totals: 1074 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **422 / 422** (17 files, ~48 s) |
-| `services/fabric` | `pytest -q` | **555 / 555** (24 files, ~20 s) |
+| `services/core` | `node --test test/*.test.mjs` | **445 / 445** (20 files, ~50 s) |
+| `services/fabric` | `pytest -q` | **562 / 562** (25 files, ~21 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **67 / 67** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 243.42 kB → **71.99 kB gzip**, single chunk, no warnings |
+| `apps/web` build | `vite build` | 242.71 kB → **71.78 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as four jobs split so a
@@ -61,13 +61,15 @@ instead.
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
 | 3 | Unified app, five areas | **Complete** | `apps/web`; 66 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
-| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now exists and runs here — trained from scratch, no weights needed ([`08-aetheris-lite.md`](./08-aetheris-lite.md)). The *chat* half is still unmet: it is a 625K-parameter base model that is not wired to `/api/chat`, and doing so would misrepresent it. The adapter half remains proven only against a loopback fixture ("Phase 4 in detail", below) |
+| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 625K-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs`, `klyvaron-app.test.mjs`, 23 tests). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
 | 5 | Online provider integration | **Not met — removed by decision** | No external provider is configured, vendored or bundled. Image and video requests are refused with an explicit limitation, and the UI states that no provider exists rather than implying one can be enabled with a key |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
 | 8 | Multimodal pipelines | **Complete** | Job queue, validation, video genuineness check |
 | — | Procedural skills (meta-learning L3) | **Partial** | Documents on disk with append-only history, evidence-gated promotion, rollback, deletion tombstones and lexical relevance matching — reachable over 12 routes and from a panel inside Chat. Nothing loads a procedure automatically when a task needs it, and no proposal is captured from a failure without being asked |
 | 9 | Sparsiz integration | **Complete** | Responsibility defined; taxonomies and `Q(x)` adopted, scoring replaced |
+| — | Klyvaron artifact format, runtime and model library | **Complete** | `klyvaron/format.mjs` (manifest + digest verification, a ZIP/`.npy` reader in the core), `klyvaron/runtime.mjs` (the forward pass in JavaScript, parity-checked against NumPy), `klyvaron/store.mjs` (install/verify/load/remove inside the storage budget), `providers/klyvaron.mjs` and `scripts/export_lm.py`; a committed parity fixture ties the two implementations together |
+| — | On-device storage accounting | **Complete** | `storage/budget.mjs` plus `klyvaron/footprint.mjs`; `/api/storage` reports measured bytes, verification results and headroom |
 | 10 | Aetheris Lite experiments | **Partial** | Two real first-party models: the trained retriever, and a from-scratch **625K-parameter character-level LM** trained in pure NumPy with hand-derived, finite-difference-verified gradients. SFT and preference optimization remain unimplemented for want of data and compute, and are not simulated |
 | 11 | Competitive benchmark cycle | **Partial** | Real, reproducible BM25 comparison; **no** Mistral/Qwen/Llama/Gemma/DeepSeek comparison possible. Aetheris Lite is evaluated against computed uniform/unigram/bigram baselines on identical held-out tokens — never against a pretrained model, because none could be obtained |
 | — | Sparsiz improvement cycle on a real failure | **Complete** | [`07-improvement-cycle.md`](./07-improvement-cycle.md): rejected run diagnosed, hypothesis tested, regression cases promoted; the accepted `mrr` gain **did not replicate** across seeds and is recorded as such; 66 tests |
@@ -104,6 +106,14 @@ limitation    no video generation model is available; /api/video will refuse rat
 `no model ready` chip and an empty model table. **No model is invented anywhere.**
 Install Ollama and pull any model, then re-probe, and the same code path serves
 real inference — that is the design, and the loopback test is its evidence.
+
+As of this revision the from-scratch model is no longer an offline artifact: it is
+exported with a manifest, verified, installed into `<dataDir>/klyvaron/models/`, loaded
+by the core in JavaScript and registered in the routing table. `/api/ready` reports
+`capabilities.chat = false` and `capabilities.textCompletion = true`, `/api/chat`
+refuses it with `model_not_instruction_tuned` (501) unless the caller pins it by id, and
+`/api/storage` reports the measured bytes. What is still missing is an
+**instruction-tuned** local model; the wiring for one is what this revision built.
 
 #### What was tried, in order, before accepting this
 
@@ -151,7 +161,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (422 tests)
+### `services/core` — Implemented and tested (445 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -170,7 +180,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (555 tests)
+### `services/fabric` — Implemented and tested (562 tests)
 
 | Stage | Status |
 |---|---|

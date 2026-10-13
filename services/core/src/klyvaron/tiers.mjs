@@ -198,8 +198,9 @@ const LITE = Object.freeze({
     chat: {
       state: CAPABILITY_STATES.UNAVAILABLE,
       backing: null,
-      reason: 'No instruction-tuned artifact exists. The released model emits mush and is '
-        + 'deliberately not wired into /api/chat, because presenting it as an assistant would be a fiction.',
+      reason: 'No instruction-tuned artifact exists. The released model is reachable over '
+        + '/api/chat and is refused there unless pinned by id, because a completion model '
+        + 'answering a question would be a fiction.',
     },
     'text.summarize': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
     'text.translate': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'No multilingual artifact; the tokenizer is a 143-character English-and-code vocabulary.' },

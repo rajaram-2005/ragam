@@ -37,10 +37,14 @@ from a committed run report and model card:
 | Weights digest | `82392ef8907455e56e1cee56bf4a074cb9337dc38f79775859b67efa5b822e94` |
 
 The two capabilities it backs are `text.completion` and `text.extract`. **It does not
-chat, and it is deliberately not wired into `/api/chat`.** Presenting it as an assistant
-would be a fiction: it continues text, its output is not fluent, and no instruction
-tuning has been done. The capability record for `chat` is `unavailable` with that reason
-attached, and `services/core/test/klyvaron.test.mjs` asserts the reason stays there.
+chat.** The artifact format, the JavaScript runtime, the on-device library and the
+provider are implemented and tested, so the model genuinely runs behind the chat
+route — as a completion model: an unpinned chat request is refused with
+`model_not_instruction_tuned` (501) and this limitation list, and pinning it by id
+returns a continuation labelled as one. Presenting it as an assistant would be a
+fiction: its output is not fluent and no instruction tuning has been done. The
+capability record for `chat` is `unavailable` with that reason attached, and
+`services/core/test/klyvaron.test.mjs` asserts the reason stays there.
 
 Its limitations are part of the record, not a footnote, and one of them is load-bearing:
 **Lite meets the storage target and no capability target.** It is smaller than the 1.5 GB

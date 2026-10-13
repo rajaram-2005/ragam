@@ -507,7 +507,7 @@ Stated plainly, because an unstated gap is worse than a stated one.
    exploiting it needs a second local account. `services/fabric/pyproject.toml`
    nonetheless raised its floor from `pytest>=8.0` to `pytest>=9.0.3`, because a
    declared range that permits a known-bad version is a defect in the declaration
-   even when the installed copy happens to be safe. All 555 Fabric tests were
+   even when the installed copy happens to be safe. All 562 Fabric tests were
    verified green under pytest 9.1.1 before the floor moved.
 
    **Scanning is now enforced in CI, not just run once by hand.** The `web` job
@@ -563,4 +563,8 @@ Stated plainly, because an unstated gap is worse than a stated one.
    in its model card before release.
 7. **No signed artifacts.** Weights and media are identified by sha256, which gives
    integrity but not authenticity. There is no signature chain from a release to its
-   producer.
+   producer. A Klyvaron artifact is verified against the digests in its own manifest
+   before a byte is used (at export, at install, and again at load), and a mismatch is
+   refused rather than loaded — but an attacker who can rewrite both the manifest and
+   the weights defeats a digest, and nothing here detects that. Signing the manifest is
+   the missing control.

@@ -247,13 +247,13 @@ test('the documented routing weights are the real weights', () => {
 test('the documented route surface is the real route surface', () => {
   const source = readFileSync(resolve(CORE, 'src/app.mjs'), 'utf8')
   const literal = new Set([...source.matchAll(/'(\/api\/[A-Za-z0-9/:._-]+)'/g)].map((m) => m[1]))
-  assert.equal(literal.size, 37, `literal /api routes changed: ${literal.size}`)
-  assert.ok(squash(doc.architecture()).includes('37 literal routes'))
+  assert.equal(literal.size, 38, `literal /api routes changed: ${literal.size}`)
+  assert.ok(squash(doc.architecture()).includes('38 literal routes'))
 
   for (const route of ['/api/health', '/api/ready', '/api/config', '/api/chat', '/api/chat/stream',
     '/api/models', '/api/models/probe', '/api/knowledge/search', '/api/plugins/validate',
     '/api/mcp/preflight', '/api/mcp/call', '/api/audit', '/api/hardware',
-    '/api/memory', '/api/sessions']) {
+    '/api/memory', '/api/sessions', '/api/storage']) {
     assert.ok(literal.has(route), `${route} is documented but no longer routed`)
   }
 
@@ -595,20 +595,20 @@ test('the docs record limitations instead of implying completeness', () => {
 test('the status doc reports the real test totals', () => {
   // Recomputed from the filesystem: one test file per suite.
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
-  // 16 includes this file. If a suite file is added or removed, the counts in
+  // 19 includes this file. If a suite file is added or removed, the counts in
   // docs/03-status.md and README.md have to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 17)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 20)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
-  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 24)
+  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 25)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**422 / 422**'), 'core total must be stated')
-  assert.ok(status.includes('**555 / 555**'), 'fabric total must be stated')
+  assert.ok(status.includes('**445 / 445**'), 'core total must be stated')
+  assert.ok(status.includes('**562 / 562**'), 'fabric total must be stated')
   assert.ok(status.includes('**67 / 67**'), 'web total must be stated')
-  assert.ok(status.includes('1044 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1044 tests: core 422, web 67, fabric 555'),
+  assert.ok(status.includes('1074 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1074 tests: core 445, web 67, fabric 562'),
     'README must state the same totals')
-  assert.ok(status.includes('(17 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(20 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -619,14 +619,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(422), `core heading must say 422, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(555), `fabric heading must say 555, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(445), `core heading must say 445, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(562), `fabric heading must say 562, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(67), `web heading must say 67, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1044,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1044`,
+    1074,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1074`,
   )
 })
 
@@ -677,7 +677,7 @@ test('the documented language-model results match its committed model card', () 
   )
   // docs/08 has to say the same thing, or the document and the card disagree about
   // the one claim most likely to be misread.
-  assert.ok(text.includes('/api/chat'), 'docs/08 must state the model is not wired into /api/chat')
+  assert.ok(text.includes('/api/chat'), 'docs/08 must state how the model behaves on /api/chat')
   // Tolerant on phrasing, strict on substance: the card's exact sentence and the
   // document's shorter phrasing both have to mean "this does not follow instructions".
   assert.ok(
@@ -1125,8 +1125,11 @@ test('the Klyvaron document matches the family it describes', () => {
   // The one claim the document most needs to keep: that Lite does not chat.
   const chat = KLYVARON.lite.capabilities.chat
   assert.equal(chat.state, 'unavailable')
-  assert.ok(text.includes('It does not chat, and it is deliberately not wired into `/api/chat`'),
-    'docs/11 must state that Lite is not wired into chat')
+  // The phrasing changed with the code: the model is now reachable over /api/chat and
+  // refused there, so the claim to guard is the refusal, not an absence of wiring.
+  assert.ok(text.includes('It does not chat.'), 'docs/11 must state that Lite does not chat')
+  assert.ok(text.includes('an unpinned chat request is refused with `model_not_instruction_tuned` (501)'),
+    'docs/11 must describe the refusal rather than claiming the model is unreachable')
 
   // And its measurements come from the card, so the two cannot disagree. Field paths are
   // taken from the card's real shape (`card.metrics.*`, `card.weightsDigest`), which the

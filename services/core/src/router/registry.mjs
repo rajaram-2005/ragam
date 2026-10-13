@@ -205,6 +205,9 @@ export class ModelRouter {
    * @param {number} [request.minContext]   required context window
    * @param {boolean} [request.localOnly]   forbid online candidates
    * @param {string} [request.preferId]     pin a specific model if able
+   * @param {string[]} [request.excludeTags] reject candidates carrying any of these tags
+   *                                        (a pinned model is exempt: an explicit choice
+   *                                        outranks a default exclusion)
    */
   route(request, { policy = 'strict_offline', allowExternal = false } = {}) {
     const needed = request.capabilities || []
@@ -257,6 +260,14 @@ export class ModelRouter {
   }
 
   #reject(model, request, { policy, allowExternal }) {
+    // Tag exclusion exists for capability *shape*, not for quality: a base completion
+    // model can technically satisfy [text_in, text_out] and must still never be chosen
+    // to answer a question. Selecting it explicitly (`preferId`) is exempt below, so the
+    // rule removes a silent substitution without removing the capability.
+    if (request.excludeTags?.length && request.preferId !== model.id) {
+      const hit = (model.tags ?? []).find((tag) => request.excludeTags.includes(tag))
+      if (hit) return `excluded by tag '${hit}'`
+    }
     if (request.toolCalling && !model.toolCalling) return 'does not support tool calling'
     if (request.streaming && !model.streaming) return 'does not support streaming'
     if (request.structuredOutput && !model.structuredOutput) return 'does not support structured output'

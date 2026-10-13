@@ -151,6 +151,22 @@ npm run lm:quick   # 60 steps, seconds — proves the pipeline end to end
 npm run lm:train   # the release configuration, ~55 minutes on 2 CPU cores
 ```
 
+### Export a model the core can load
+
+```
+python services/fabric/scripts/export_lm.py --from-run services/fabric/artifacts \
+    --id aetheris-lite-lm --version 0.1.0
+python services/fabric/scripts/export_lm.py --verify <output-dir>
+# the cross-language parity fixture services/core tests against
+python services/fabric/scripts/export_lm.py --parity-fixture \
+    services/core/test/fixtures/klyvaron-lite-parity.json
+```
+
+An exported `<id>.klyvaron.json` plus its `.npz` can be installed under
+`<AETHERIS_DATA_DIR>/klyvaron/models/<id>/`, where the core loads it at startup, verifies
+the digests, and reports it over `/api/models`, `/api/ready` and `/api/storage`. A
+model that fails verification is reported as broken and left on disk.
+
 Both write to `services/fabric/artifacts/`, which is **gitignored by policy**:
 weights are referenced by digest from a model card and never redistributed through
 this repository. Each run also writes a report JSON carrying the corpus manifest
@@ -174,10 +190,10 @@ Full design, evaluation methodology and limitations:
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1044 tests)
-npm run test:core         # 422
+npm test                  # all three suites (1074 tests)
+npm run test:core         # 445
 npm run test:web          # 67
-npm run test:fabric       # 555 — needs numpy + pytest on the interpreter
+npm run test:fabric       # 562 — needs numpy + pytest on the interpreter
 ```
 
 If NumPy and pytest live in a virtualenv rather than on the system interpreter,
@@ -220,8 +236,8 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 422 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
-| **Fabric** | 555 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
+| **Core service** | 445 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Fabric** | 562 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 67 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 35-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 
