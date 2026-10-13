@@ -1,0 +1,318 @@
+{
+ "experiment": "lm-release-configuration-reproduction",
+ "purpose": "Re-run the documented release configuration on the tree as it stands, to measure what reproduces and what cannot. The corpus is this repository's own text, so the model is a function of the corpus: a re-run after any commit is a different model, not a broken reproduction. This record states which numbers moved and why.",
+ "config": {
+  "d_model": 96,
+  "n_layers": 3,
+  "n_heads": 4,
+  "d_ff": 384,
+  "seq_len": 128,
+  "batch_size": 16,
+  "steps": 2600,
+  "learning_rate": 0.003,
+  "min_learning_rate_ratio": 0.1,
+  "warmup_steps": 200,
+  "weight_decay": 0.01,
+  "grad_clip": 1.0,
+  "beta1": 0.9,
+  "beta2": 0.95,
+  "eps": 1e-08,
+  "init_scale": 0.02,
+  "data_seed": 0,
+  "model_seed": 0,
+  "eval_batch_size": 8,
+  "eval_interval": 0,
+  "validation_fraction": 0.1,
+  "split_seed": 20251012,
+  "corpus_root": "/home/user/ragam",
+  "dtype": "float32"
+ },
+ "modelConfig": {
+  "vocab_size": 147,
+  "d_model": 96,
+  "n_layers": 3,
+  "n_heads": 4,
+  "d_ff": 384,
+  "seq_len": 128,
+  "dropout": 0.0,
+  "tie_embeddings": true,
+  "init_scale": 0.02,
+  "layernorm_eps": 1e-05
+ },
+ "corpus": {
+  "manifestDigest": "264a436ce256540e9393ca6b6d5681837794343fb8a3ecb40813b8f73cc04915",
+  "root": "<repository>",
+  "snapshot": "aetheris-lite-lm-f935f044fe81.corpus.json",
+  "snapshotDigest": "c2b4315db03b333dbbd399e2e7a5d7ae3a46bef89b2480007745c98c541d912d",
+  "trainFiles": 152,
+  "validationFiles": 17,
+  "trainBytes": 2433934,
+  "validationBytes": 180806,
+  "trainTokens": 2437975,
+  "validationTokens": 181365
+ },
+ "revision": "67cdd58b02dbfbd76cec3c7026168c898fbe9cdb-dirty",
+ "releaseRun": {
+  "runId": "82392ef89074",
+  "weightsDigest": "82392ef8907455e56e1cee56bf4a074cb9337dc38f79775859b67efa5b822e94",
+  "corpusManifestDigest": "c357293317e781f5d97dcf409146090e02517221108c7b9f8cac21832427c8dd",
+  "corpusSize": 1431417,
+  "parameterCount": 359136,
+  "vocabularySize": 143,
+  "metrics": {
+   "validationPerplexity": 4.40331790103542,
+   "perplexityVsBigram": 0.2767478454588419,
+   "bestBaselinePerplexity": 15.910938326312225,
+   "wallSeconds": 2220.146
+  }
+ },
+ "run": {
+  "runId": "f935f044fe81",
+  "weightsDigest": "f935f044fe815411d4f45c127945a6be34c6d1dc92f85a6fc459fdb637afb9b8",
+  "fileDigest": "2840150fa754b126d553a305661cdf1d9672814013f29e94cacde48ff0bb5fe8",
+  "bytes": 1446478,
+  "parameterCount": 359520,
+  "vocabularySize": 147,
+  "tokenizer": {
+   "characters": 146,
+   "vocabularyDigest": "55ddedf61e1a54b71508ef91cc42416958fe2d18e955b38ea83201ef9b3f739c"
+  },
+  "firstLoss": 4.931943416595459,
+  "finalLoss": 1.469921588897705,
+  "lossImprovement": 3.462022,
+  "evaluation": {
+   "nllNatsPerToken": 1.6786847006803178,
+   "perplexity": 5.358503298208151,
+   "bitsPerCharacter": 2.4218300928876686,
+   "tokensEvaluated": 181248,
+   "unknownRate": 1.654122901331569e-05,
+   "baselines": [
+    {
+     "name": "uniform",
+     "description": "every token equally likely, ln(147)",
+     "nllNatsPerToken": 4.990432586778736,
+     "perplexity": 146.99999999999997,
+     "bitsPerCharacter": 7.199672344836364
+    },
+    {
+     "name": "unigram",
+     "description": "training-set token frequencies, add-0.1 smoothing, no context",
+     "nllNatsPerToken": 3.515950011618199,
+     "perplexity": 33.647878620370435,
+     "bitsPerCharacter": 5.072443645775069
+    },
+    {
+     "name": "bigram",
+     "description": "P(next|prev) from training adjacencies, add-0.1 smoothing",
+     "nllNatsPerToken": 2.8163145876573465,
+     "perplexity": 16.715134853575016,
+     "bitsPerCharacter": 4.0630830891965
+    }
+   ],
+   "bestBaseline": "bigram",
+   "perplexityVsBestBaseline": 0.3205779280364035,
+   "beatsAllBaselines": true
+  },
+  "samples": {
+   "greedy": "contactor and the contactor and the contactor and the contactor and the contactor and thermal thermal the contactor and ",
+   "sampled": "pachars its\nidential blockwer on the two claim maters\n             control istronalCells out true. The the task path; th"
+  },
+  "resource": {
+   "wallSeconds": 2005.137,
+   "peakMemoryMb": 165.9,
+   "steps": 2600,
+   "tokensPerStep": 2048,
+   "tokensSeen": 5324800
+  }
+ },
+ "gate": {
+  "requirements": [
+   {
+    "metric": "perplexityVsBigram",
+    "minimum": null,
+    "maximum": 1.0,
+    "category": null,
+    "hard": true
+   },
+   {
+    "metric": "validationUnknownRate",
+    "minimum": null,
+    "maximum": 0.02,
+    "category": null,
+    "hard": true
+   },
+   {
+    "metric": "lossImprovement",
+    "minimum": 1.0,
+    "maximum": null,
+    "category": null,
+    "hard": true
+   },
+   {
+    "metric": "parameterCount",
+    "minimum": null,
+    "maximum": 5000000,
+    "category": null,
+    "hard": false
+   },
+   {
+    "metric": "wallSeconds",
+    "minimum": null,
+    "maximum": 3600.0,
+    "category": null,
+    "hard": false
+   }
+  ],
+  "metrics": {
+   "validationPerplexity": 5.358503298208151,
+   "bitsPerCharacter": 2.4218300928876686,
+   "perplexityVsBigram": 0.3205779280364035,
+   "bestBaselinePerplexity": 16.715134853575016,
+   "validationUnknownRate": 1.654122901331569e-05,
+   "validationTokens": 181248.0,
+   "lossImprovement": 3.462021827697754,
+   "finalLoss": 1.469921588897705,
+   "parameterCount": 359520.0,
+   "wallSeconds": 2005.137
+  },
+  "hardFailures": [],
+  "softFailures": [],
+  "verdict": "released",
+  "identifier": "aetheris-lite-lm@0.1.0-verify"
+ },
+ "comparison": {
+  "sameConfiguration": true,
+  "sameCorpus": false,
+  "corpusGrowth": 1.827,
+  "tokensSeen": 5324800,
+  "trainCorpusPasses": 2.184,
+  "explanation": "The fixed 5,324,800-token budget (2,600 steps x 16 batch x 128 tokens) was spent on a corpus about 1.8x larger than the release's, so the model made about 2.2 passes over its training text. Held-out perplexity depends on the corpus and the vocabulary, so this number is not comparable with the release's and is not presented as an improvement or a regression; it is the same configuration measured on a different input."
+ },
+ "serving": {
+  "installedAs": "aetheris-lite-lm-verify@0.1.0",
+  "installedBytes": 1451373,
+  "weightsSha256": "2840150fa754b126d553a305661cdf1d9672814013f29e94cacde48ff0bb5fe8",
+  "verification": [
+   {
+    "id": "aetheris-lite-lm-verify",
+    "version": "0.1.0",
+    "ok": true,
+    "problems": []
+   }
+  ],
+  "ready": {
+   "status": 200,
+   "app": "ready",
+   "capabilities": {
+    "chat": false,
+    "textCompletion": true,
+    "embeddings": false,
+    "imageGeneration": false,
+    "videoGeneration": false,
+    "knowledge": false
+   },
+   "loaded": [
+    {
+     "id": "klyvaron:aetheris-lite-lm-verify",
+     "artifact": "aetheris-lite-lm-verify",
+     "version": "0.1.0",
+     "tier": "lite",
+     "parameters": 359520,
+     "contextTokens": 128,
+     "instructionTuned": false,
+     "loadMs": 7,
+     "weightsSha256": "2840150fa754b126d553a305661cdf1d9672814013f29e94cacde48ff0bb5fe8",
+     "limitations": 4
+    }
+   ],
+   "storage": {
+    "text": "Aetheris is using 1.5 MB of storage on this device, within the 5.00 GB budget. 0 bytes can be freed without deleting anything you own.",
+    "withinBudget": true,
+    "totalBytes": 1451373
+   }
+  },
+  "storage": {
+   "status": 200,
+   "summary": {
+    "text": "Aetheris is using 1.5 MB of storage on this device, within the 5.00 GB budget. 0 bytes can be freed without deleting anything you own.",
+    "withinBudget": true,
+    "totalBytes": 1451373
+   },
+   "installed": [
+    {
+     "id": "aetheris-lite-lm-verify",
+     "version": "0.1.0",
+     "bytes": 1451373,
+     "broken": null
+    }
+   ],
+   "verification": [
+    {
+     "id": "aetheris-lite-lm-verify",
+     "version": "0.1.0",
+     "ok": true,
+     "problems": []
+    }
+   ],
+   "withinBudget": true,
+   "headroomBytes": 4998548627
+  },
+  "chatUnpinned": {
+   "status": 501,
+   "error": "model_not_instruction_tuned",
+   "message": "'klyvaron:aetheris-lite-lm-verify' is a base completion model: it continues text and does not answer questions. Pin it by id to use it for a continuation, or install an instruction-tuned model.",
+   "limitations": 4
+  },
+  "chatPinned": {
+   "status": 200,
+   "modelId": "klyvaron:aetheris-lite-lm-verify",
+   "instructionTuned": false,
+   "limitation": "Klyvaron Lite is a base completion model: it continues the text you give it. It does not follow instructions and its output is not an answer.",
+   "usage": {
+    "promptTokens": 26,
+    "completionTokens": 48,
+    "totalTokens": 74
+   },
+   "sentExternally": false,
+   "elapsedMs": 2025,
+   "tokensPerSecond": 23.71,
+   "text": " not a contactor and the control and the contact"
+  },
+  "stream": {
+   "httpStatus": 200,
+   "events": 18,
+   "kinds": [
+    "route",
+    "delta",
+    "done"
+   ]
+  },
+  "crossImplementation": {
+   "vocabularyDigest_charTokenizer": "55ddedf61e1a54b71508ef91cc42416958fe2d18e955b38ea83201ef9b3f739c",
+   "vocabularyDigest_exportSpec": "1a5f000d92055b2d130604aaad8267699a67e7eb67d1e55a010d6dc678b02248",
+   "vocabularyDigest_JS": "1a5f000d92055b2d130604aaad8267699a67e7eb67d1e55a010d6dc678b02248",
+   "parameters": 359520,
+   "argmax_python": 2,
+   "argmax_js": 2,
+   "topGap_python": 2.97023,
+   "topGap_js": 2.970229,
+   "maxAbsLogitDelta": 8.234576822419015e-06,
+   "meanAbsLogitDelta": 2.960336392702129e-06,
+   "greedy_identical": true,
+   "greedy_text": " not a contactor and the"
+  },
+  "deviceThroughput": {
+   "parameters": 359520,
+   "contextTokens": 128,
+   "promptTokens": 26,
+   "generatedTokens": 64,
+   "loadMs": 23,
+   "generateMs": 2428,
+   "tokensPerSecond": 26.4,
+   "rssMb": 72.7
+  }
+ },
+ "verdict": "released",
+ "rationale": "The gate released it: perplexity 0.320578 of the best computed baseline (bigram), unknown rate 0.0000165, loss fell by 3.462022, 0 hard failures and 0 soft failures. The artifact was then installed into a core data directory and served over HTTP, and its greedy continuation is identical in Python and JavaScript.",
+ "note": "Committed record of a measured run. Absolute paths from the machine that produced it are canonicalised; every measured value is unchanged. The weights, the report and the corpus snapshot stay in services/fabric/artifacts/, which is gitignored by policy."
+}

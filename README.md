@@ -52,13 +52,13 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 1074 tests: core 445, web 67, fabric 562
+npm test          # 1075 tests: core 446, web 67, fabric 562
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
-npm run lm:train  # the full from-scratch LM run (~55 min on 2 CPUs)
+npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
 ```
 
-All 1074 run in CI on every push and pull request
+All 1075 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -118,7 +118,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 12,346 | 9,358 | **zero npm packages** | 445 |
+| `services/core` | Node 22 ESM | 12,346 | 9,420 | **zero npm packages** | 446 |
 | `services/fabric` | Python 3.11 | 9,022 | 6,816 | NumPy only | 562 |
 | `apps/web` | React 18 + Vite | 4,464 | 1,311 | react, react-dom | 67 |
 
@@ -138,7 +138,7 @@ Two first-party models exist, and both are real.
 
 ### A language model, trained from nothing
 
-**`aetheris-lite-lm`** — a **625,920-parameter character-level transformer**
+**`aetheris-lite-lm`** — a **359,136-parameter character-level transformer**
 trained from random initialisation, in pure NumPy, on this repository's own text.
 No pretrained weights, no PyTorch, no GPU, no downloads.
 
@@ -158,9 +158,13 @@ reported `pos: exceeds tolerance by 1.6e-01` and nothing else would have noticed
 > baselines, a versioned card and a release gate that refuses. Its limitations are
 > generated onto its own model card, not tucked into a footnote.
 
-It is deliberately **not** wired into `/api/chat`: exposing a base model of this size
-as a chat assistant would misrepresent it. See
-[`docs/08-aetheris-lite.md`](docs/08-aetheris-lite.md).
+It **is** reachable from `/api/chat`, and that is the point rather than an oversight:
+the artifact is registered as a local provider, an ordinary request is refused with
+`model_not_instruction_tuned` (**501**) unless the model is pinned by id, and a pinned
+request returns a continuation labelled as one, carrying the model's own limitations.
+The model never answers as if it were an assistant. See
+[`docs/08-aetheris-lite.md`](docs/08-aetheris-lite.md) and
+[`docs/11-klyvaron-family.md`](docs/11-klyvaron-family.md).
 
 ### The retriever
 

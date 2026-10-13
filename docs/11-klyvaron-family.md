@@ -46,6 +46,16 @@ fiction: its output is not fluent and no instruction tuning has been done. The
 capability record for `chat` is `unavailable` with that reason attached, and
 `services/core/test/klyvaron.test.mjs` asserts the reason stays there.
 
+The table above is the released record. A second, independent run of the same
+configuration on a later tree is committed as
+[`experiments/lm-verification-run-67cdd58.json`](./experiments/lm-verification-run-67cdd58.json):
+359,520 parameters, perplexity 5.3585 against the bigram's 16.7151 (ratio 0.320578),
+gate verdict **RELEASED**, then installed into the on-device library and served over
+`/api/chat` as a labelled continuation. It is a verification model, not a version bump:
+the corpus is this repository, the repository moved, and the two numbers are not
+comparable with each other — the verification run spent the same token budget on a
+corpus about 1.8× larger.
+
 Its limitations are part of the record, not a footnote, and one of them is load-bearing:
 **Lite meets the storage target and no capability target.** It is smaller than the 1.5 GB
 per-model budget because it is tiny, not because it is efficient. The validator refuses a

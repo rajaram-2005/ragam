@@ -91,7 +91,7 @@ them rather than restating them.
 | Multi-tier local models (Pro, High) | **Unsupported** | No artifact and no way to obtain base weights on this host |
 | Model download and integrity verification | **Completed** | Digest checked before load; a truncated artifact is caught |
 | Managed storage accounting | **Completed** | Measured, not estimated; 5 GB mobile budget with a 500 MB reserve, and `/api/storage` reports the bytes plus the unmanaged files the category walk cannot see |
-| A first-party model that loads and runs locally | **Partial** | Klyvaron Lite loads from a verified artifact and generates in the core service; the model is a base completion model, so chat refuses it unless pinned. Real, and far below assistant quality |
+| A first-party model that loads and runs locally | **Partial** | Klyvaron Lite loads from a verified artifact and generates in the core service; the model is a base completion model, so chat refuses it unless pinned. A full-size artifact has been installed into the on-device library and served over HTTP (`docs/experiments/lm-verification-run-67cdd58.json`). Real, and far below assistant quality |
 | Local model integrity verification | **Completed** | The manifest's digests are re-checked before a byte is used; a corrupted install is reported and never loaded, silently deleted or described as ready |
 
 ## 7. Privacy and security

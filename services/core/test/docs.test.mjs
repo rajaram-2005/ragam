@@ -61,6 +61,7 @@ const doc = {
   distillation: () => read('docs/09-distillation.md'),
   distillVerdict: () => read('docs/experiments/distillation-logit-vs-baseline.json'),
   l4Transfer: () => read('docs/experiments/l4-transfer.json'),
+  lmVerification: () => read('docs/experiments/lm-verification-run-67cdd58.json'),
   readme: () => read('README.md'),
   env: () => read('.env.example'),
   notices: () => read('third-party/NOTICES.md'),
@@ -348,6 +349,8 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.setup, 'all three suites (930 tests)'], [doc.status, '**346 / 346**'],
     [doc.setup, 'all three suites (932 tests)'], [doc.status, '**348 / 348**'],
     [doc.setup, 'all three suites (934 tests)'], [doc.status, '**350 / 350**'],
+    [doc.setup, 'all three suites (1074 tests)'], [doc.status, '**445 / 445**'],
+    [doc.setup, '| **Core service** | 445 tests pass'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -602,11 +605,11 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 25)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**445 / 445**'), 'core total must be stated')
+  assert.ok(status.includes('**446 / 446**'), 'core total must be stated')
   assert.ok(status.includes('**562 / 562**'), 'fabric total must be stated')
   assert.ok(status.includes('**67 / 67**'), 'web total must be stated')
-  assert.ok(status.includes('1074 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1074 tests: core 445, web 67, fabric 562'),
+  assert.ok(status.includes('1075 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1075 tests: core 446, web 67, fabric 562'),
     'README must state the same totals')
   assert.ok(status.includes('(20 files'), 'the file count must move with the suite')
 
@@ -619,14 +622,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(445), `core heading must say 445, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(446), `core heading must say 446, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(562), `fabric heading must say 562, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(67), `web heading must say 67, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1074,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1074`,
+    1075,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1075`,
   )
 })
 
@@ -684,6 +687,65 @@ test('the documented language-model results match its committed model card', () 
     /follows no instructions|no instruction-following|does not follow instructions/.test(text),
     'docs/08 must say the model does not follow instructions',
   )
+})
+
+test('the documented verification run matches the committed record', () => {
+  // A second, independent training run of the released configuration. Its numbers are
+  // quoted in docs/08, docs/11 and docs/03, so they are checked against the record the run
+  // produced rather than against the prose that repeats them -- and the record is checked
+  // for the two things that would make the quotes misleading: being presented as an
+  // improvement, or being confused with the released model.
+  const record = JSON.parse(doc.lmVerification())
+  assert.equal(record.experiment, 'lm-release-configuration-reproduction')
+  assert.equal(record.gate.verdict, 'released')
+  assert.deepEqual(record.gate.hardFailures, [], 'the verification run must have passed the gate')
+  assert.deepEqual(record.gate.softFailures, [])
+
+  const text = squash(doc.lite())
+  const runId = record.run.weightsDigest.slice(0, 12)
+  assert.ok(text.includes(runId), `docs/08 must quote the verification digest ${runId}`)
+  assert.ok(
+    text.includes(record.run.parameterCount.toLocaleString('en-US')),
+    `docs/08 must state the verification parameter count ${record.run.parameterCount}`,
+  )
+  assert.ok(
+    text.includes(record.run.evaluation.perplexity.toFixed(4)),
+    `docs/08 must state the verification perplexity ${record.run.evaluation.perplexity.toFixed(4)}`,
+  )
+  const best = record.run.evaluation.baselines.find((entry) => entry.name === record.run.evaluation.bestBaseline)
+  assert.ok(
+    text.includes(best.perplexity.toFixed(4)),
+    `docs/08 must state the verification baseline ${best.perplexity.toFixed(4)}`,
+  )
+  assert.ok(
+    text.includes(record.run.evaluation.perplexityVsBestBaseline.toFixed(6)),
+    'docs/08 must state the verification ratio to the best baseline',
+  )
+  assert.ok(
+    squash(doc.klyvaron()).includes(record.run.evaluation.perplexity.toFixed(4)),
+    'docs/11 must carry the same verification perplexity',
+  )
+
+  // It must not be confused with the released model: a different corpus gave different
+  // weights, and the released card is the record of the released weights.
+  const card = JSON.parse(doc.lmCard()).card
+  assert.notEqual(record.run.weightsDigest, card.weightsDigest)
+  assert.notEqual(record.corpus.manifestDigest, card.artifacts.corpusManifest)
+  assert.notEqual(record.releaseRun.weightsDigest, record.run.weightsDigest)
+  assert.equal(record.releaseRun.weightsDigest, card.weightsDigest)
+
+  // The serving evidence is the measured one: a base model loadable and reachable, and
+  // refused where it would be misread as an assistant.
+  assert.equal(record.serving.ready.capabilities.chat, false)
+  assert.equal(record.serving.ready.capabilities.textCompletion, true)
+  assert.equal(record.serving.chatUnpinned.status, 501)
+  assert.equal(record.serving.chatUnpinned.error, 'model_not_instruction_tuned')
+  assert.equal(record.serving.chatPinned.status, 200)
+  assert.equal(record.serving.chatPinned.sentExternally, false)
+  assert.equal(record.serving.crossImplementation.greedy_identical, true, 'the two implementations must agree')
+  assert.ok(record.serving.crossImplementation.maxAbsLogitDelta < 1e-3)
+  assert.ok(squash(doc.klyvaron()).includes('not a version bump'),
+    'docs/11 must say the verification run is not a release')
 })
 
 test('the documented distillation result matches the committed experiment record', () => {

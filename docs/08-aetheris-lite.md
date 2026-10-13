@@ -121,14 +121,11 @@ paid for itself — so losing is reported as losing, not explained away.
 
 ## 6. Results
 
-Recorded from the release run. Every figure below is reproducible from the command
-in §8; the corpus manifest, tokenizer digest, configuration digest, code revision and
-seeds are all recorded in the run report.
-
-Recorded from the release run
-`aetheris-lite-lm-82392ef89074`. Every figure below is reproducible from the command
-in §8; the corpus manifest, tokenizer digest, configuration digest, code revision and
-all three seeds are in the run report and on the model card.
+Recorded from the release run `aetheris-lite-lm-82392ef89074`. Every figure below is
+reproducible from the command in §8 **against the same corpus**; the corpus manifest
+digest, tokenizer digest, configuration digest, code revision and all three seeds are
+in the run report and on the model card, which is what makes that possible despite the
+input being this repository's own text (see §8).
 
 **Held-out perplexity, against baselines computed from the same training statistics
 and scored on the same 165,120 held-out tokens:**
@@ -241,6 +238,27 @@ exactly that, on the weight bytes rather than on the loss. A differently-seeded 
 produces different weights — also asserted, because reproducibility would be
 meaningless if the seed did nothing.
 
+Both of those hold **for a fixed corpus, and the corpus is this repository**. The
+release figures are therefore reproducible against the release's corpus (manifest
+`c3572933…`) and not against a tree that has moved on since. That is measured rather
+than asserted: an independent run of the identical configuration on the tree at
+`67cdd58` produced a different model, and could not have done otherwise — corpus
+manifest `264a436c…`, vocabulary 147 characters instead of 143, **359,520** parameters
+instead of 359,136, weights digest `f935f044fe81…` instead of `82392ef89074…`. It still
+passed the release gate (perplexity **5.3585** against the bigram's **16.7151**, ratio
+**0.320578**, 0 hard failures, 0 soft failures).
+
+Its perplexity is *not* comparable with the release's 4.4033 and is not offered as an
+improvement or a regression: the same 5,324,800-token budget (2,600 steps × 16 × 128)
+was spent on a corpus about **1.8× larger** (2,614,740 bytes against the release's
+1,431,417), so the run made about 2.2 passes over its training text. Held-out perplexity
+is a function of the corpus and the vocabulary, and both moved. Every run writes its exact corpus next to its weights
+(`<run>.corpus.json`, digest recorded in the report) for exactly this reason, and
+`train(..., expect_manifest_digest=…)` turns silent drift into a refusal rather than a
+surprise. The whole record of that run — report figures, gate verdict, install and serve
+evidence — is committed at
+[`experiments/lm-verification-run-67cdd58.json`](./experiments/lm-verification-run-67cdd58.json).
+
 ---
 
 ## 8b. From checkpoint to a model the core can run
@@ -253,7 +271,7 @@ process anywhere near the device:
 |---|---|
 | Manifest | `<id>.klyvaron.json` — architecture, vocabulary, digests, provenance, measurements, limitations |
 | Weights | the `.npz` itself, parsed in the core (ZIP + `.npy`), with the manifest's SHA-256 re-checked before a byte is used |
-| Vocabulary digest | one specification implemented in both languages, checked by running the JavaScript implementation from the Python test suite |
+| Vocabulary digest | one specification implemented in both languages, checked by running the JavaScript implementation from the Python test suite. The run report records a *different* function over the same character set (`CharacterTokenizer.digest`); the two are not expected to agree, and both are recorded |
 | Cross-language parity | a committed fixture carries the exact weights, the NumPy logits and the greedy continuation; `klyvaron-runtime.test.mjs` asserts the JavaScript agrees |
 
 ```
@@ -272,6 +290,30 @@ Two things it does **not** do, both for honesty rather than effort: there is no 
 (each token re-runs the 128-token window, exactly like the reference) and no
 quantisation (shipping int8 without measuring its effect on this model's perplexity would
 be a quality claim with nothing behind it).
+
+### Measured on a full-size artifact, not only on the fixture
+
+The parity fixture is deliberately tiny. The same checks were then run against the
+359,520-parameter verification artifact — a model 57× its size — because a parity claim
+that holds at 6,264 parameters and nowhere else is not a parity claim:
+
+| | |
+|---|---|
+| NumPy vs JavaScript logits, all 147 of them, same prompt | maximum absolute difference **8.2e-06** (the fixture test's tolerance is 1e-3) |
+| Greedy continuation, 24 tokens, temperature 0 | the **same string** from both implementations (`" not a contactor and the"`) |
+| Vocabulary digest | the manifest's digest is the export specification and the JavaScript reproduces it exactly; the run report's separate `CharacterTokenizer.digest` is also reproduced, by Python |
+| Install | `KlyvaronStore.install()` — verified before copying, budget-checked, re-verified after, digest recorded: 1,451,373 bytes |
+| `/api/ready` | model loaded, `capabilities.chat` **false**, `textCompletion` **true** |
+| `/api/chat`, not pinned | **501** `model_not_instruction_tuned`, with the artifact's own four limitations attached |
+| `/api/chat`, pinned to `klyvaron:aetheris-lite-lm-verify` | **200**, 48 tokens, `sentExternally: false`, and the text labelled as a continuation rather than an answer |
+| `/api/chat/stream`, pinned | **200**, `route` / `delta` / `done` events |
+| Load and generate, in JavaScript, no Python and no GPU | **23–27 ms** to load; **24–26 tokens/s**; 72–81 MB resident |
+| The manifest's generation ceiling | honoured: a request for 128 tokens returns the 64 the manifest allows |
+
+The run behind those numbers, including its corpus manifest digest and gate verdict:
+[`experiments/lm-verification-run-67cdd58.json`](./experiments/lm-verification-run-67cdd58.json).
+It is a verification artifact, not a second release: `aetheris-lite-lm@0.1.0` remains the
+released model, and nothing here claims the verification model is better than it.
 
 ## 9. Limitations
 

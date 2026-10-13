@@ -9,11 +9,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1074 passing, 0 failing.**
+**Test totals: 1075 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **445 / 445** (20 files, ~50 s) |
+| `services/core` | `node --test test/*.test.mjs` | **446 / 446** (20 files, ~50 s) |
 | `services/fabric` | `pytest -q` | **562 / 562** (25 files, ~21 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **67 / 67** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 242.71 kB → **71.78 kB gzip**, single chunk, no warnings |
@@ -60,8 +60,8 @@ instead.
 |---|---|---|---|
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
-| 3 | Unified app, five areas | **Complete** | `apps/web`; 66 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
-| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 625K-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs`, `klyvaron-app.test.mjs`, 23 tests). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
+| 3 | Unified app, five areas | **Complete** | `apps/web`; 67 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
+| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,136-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 9, `klyvaron-store.test.mjs` 8, `klyvaron-app.test.mjs` 6 — 23 tests). A full-size artifact was trained, verified, installed into the model library and served over HTTP from the store (1.4 MB, 359,520 parameters; `docs/experiments/lm-verification-run-67cdd58.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested. What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
 | 5 | Online provider integration | **Not met — removed by decision** | No external provider is configured, vendored or bundled. Image and video requests are refused with an explicit limitation, and the UI states that no provider exists rather than implying one can be enabled with a key |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
@@ -70,7 +70,7 @@ instead.
 | 9 | Sparsiz integration | **Complete** | Responsibility defined; taxonomies and `Q(x)` adopted, scoring replaced |
 | — | Klyvaron artifact format, runtime and model library | **Complete** | `klyvaron/format.mjs` (manifest + digest verification, a ZIP/`.npy` reader in the core), `klyvaron/runtime.mjs` (the forward pass in JavaScript, parity-checked against NumPy), `klyvaron/store.mjs` (install/verify/load/remove inside the storage budget), `providers/klyvaron.mjs` and `scripts/export_lm.py`; a committed parity fixture ties the two implementations together |
 | — | On-device storage accounting | **Complete** | `storage/budget.mjs` plus `klyvaron/footprint.mjs`; `/api/storage` reports measured bytes, verification results and headroom |
-| 10 | Aetheris Lite experiments | **Partial** | Two real first-party models: the trained retriever, and a from-scratch **625K-parameter character-level LM** trained in pure NumPy with hand-derived, finite-difference-verified gradients. SFT and preference optimization remain unimplemented for want of data and compute, and are not simulated |
+| 10 | Aetheris Lite experiments | **Partial** | Two real first-party models: the trained retriever, and a from-scratch **359,136-parameter character-level LM** trained in pure NumPy with hand-derived, finite-difference-verified gradients. SFT and preference optimization remain unimplemented for want of data and compute, and are not simulated |
 | 11 | Competitive benchmark cycle | **Partial** | Real, reproducible BM25 comparison; **no** Mistral/Qwen/Llama/Gemma/DeepSeek comparison possible. Aetheris Lite is evaluated against computed uniform/unigram/bigram baselines on identical held-out tokens — never against a pretrained model, because none could be obtained |
 | — | Sparsiz improvement cycle on a real failure | **Complete** | [`07-improvement-cycle.md`](./07-improvement-cycle.md): rejected run diagnosed, hypothesis tested, regression cases promoted; the accepted `mrr` gain **did not replicate** across seeds and is recorded as such; 66 tests |
 | — | Selection-protocol correction | **Complete** | [`06-benchmarks.md`](./06-benchmarks.md) §5.3: base selection ran on the evaluation split; now runs on a training-side validation split. Released artifact unchanged (`weightsDigest db3366ea…`) |
@@ -161,7 +161,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (445 tests)
+### `services/core` — Implemented and tested (446 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -225,9 +225,21 @@ therefore the model**; the first attempt at a reproduction produced a different
 model (first loss 4.8057 against the release's 4.8380) and the first attempt at the
 distillation experiment was refused outright when eight characters entered the
 corpus. A run now writes its exact corpus beside its weights, and a reproduction can
-be demanded or refused by digest rather than assumed. And the model emits mush at
-this size — 359,136 parameters is enough to beat every baseline it was measured
-against and not enough to hold a conversation.
+be demanded or refused by digest rather than assumed. The full release configuration
+was then run a second time, end to end, on the tree at `67cdd58`: 2,005 s of training,
+a corpus manifest of its own, a model of 359,520 parameters instead of 359,136, and a
+gate verdict of **RELEASED** (perplexity 5.3585 against the bigram's 16.7151, 0 hard
+failures). Its perplexity is not comparable with the release's — the same token budget
+went into a corpus about 1.8× larger — and it is not reported as an improvement. That
+artifact was then installed into a core data directory through `KlyvaronStore.install`,
+loaded by the app, and served over HTTP: `/api/ready` reports `textCompletion: true`
+and `chat: false`, an unpinned `/api/chat` is refused with `model_not_instruction_tuned`
+(501), a pinned one returns a labelled continuation, and the streaming path emits
+`route`/`delta`/`done` events. Python and JavaScript produce the same greedy text from
+the same bytes (max logit difference 8.2e-06). Record:
+[`experiments/lm-verification-run-67cdd58.json`](./experiments/lm-verification-run-67cdd58.json).
+And the model emits mush at this size — 359,136 parameters is enough to beat every
+baseline it was measured against and not enough to hold a conversation.
 
 ### `apps/web` — Implemented and tested (67 tests)
 
