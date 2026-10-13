@@ -370,6 +370,20 @@ test('the memory panel renders its empty state honestly, before anything is load
   assert.ok(/Nothing is remembered automatically/.test(markup))
 })
 
+test('the skills panel renders its empty state and states what it guarantees', () => {
+  // Same pre-fetch state as the memory panel: no data, so the honest empty state has to
+  // be what a user sees first. The guarantees are asserted in the markup because a
+  // promise that is not on screen is a promise nobody can check.
+  const markup = render('ChatArea', React.createElement(components.ChatArea, { readiness: READINESS_READY, refreshReadiness: noop }))
+  assert.ok(/Procedures Aetheris learned/.test(markup), 'the skills panel must render in Chat')
+  assert.ok(/No verified procedures yet/.test(markup), 'the empty state must be shown, not a blank panel')
+  assert.ok(/never used until confirmed/.test(markup), 'a proposal must be labelled as unusable until confirmed')
+  assert.ok(/Only a verified procedure is ever used/.test(markup), 'the guarantee must be stated on the panel')
+  // Nothing is proposed in this state, so there must be nothing to verify: a button that
+  // offered to confirm a procedure that does not exist would be worse than no button.
+  assert.ok(!/I ran these steps/.test(markup), 'no proposal means no verify button')
+})
+
 test('the button variant reaches the stylesheet as a class', () => {
   // The stylesheet selects on `.btn.primary` / `.btn.danger`. The variant used to be
   // written to a data attribute that nothing selected, so fifteen call sites asking for a

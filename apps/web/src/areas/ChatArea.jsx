@@ -394,6 +394,304 @@ function KnowledgePanel() {
  *   - what has been PROPOSED (a candidate is not memory and is never injected)
  *   - what the store will refuse (its limits, and that nothing is trained on)
  */
+/** Plain-language names for the four skill states. The machine names stay in the API. */
+const SKILL_STATE_TEXT = {
+  candidate: 'not verified yet',
+  validated: 'verified',
+  stale: 'needs re-checking',
+  archived: 'set aside',
+}
+
+/**
+ * Procedures the assistant wrote down after something failed and then worked.
+ *
+ * This is the visible half of the promise that a skill is not a guess with numbered
+ * steps. Three things are enforced rather than described:
+ *
+ *   - a proposal is readable but is never used, and is not offered as relevant;
+ *   - verifying one is a person saying they ran the steps, and the record says exactly
+ *     that rather than implying the system tested it;
+ *   - setting one aside is the strongest thing the curator does on its own, and it is
+ *     reversible. Deleting is a separate act, by the person, with a reason.
+ */
+function SkillsPanel() {
+  const [data, setData] = useState(null)
+  const [busy, setBusy] = useState(null)
+  const [error, setError] = useState(null)
+  const [notice, setNotice] = useState(null)
+  const [open, setOpen] = useState(null)
+  const [asking, setAsking] = useState(null)
+  const [reason, setReason] = useState('')
+  const [question, setQuestion] = useState('')
+  const [matches, setMatches] = useState(null)
+
+  const load = useCallback(async () => {
+    setBusy('loading')
+    try {
+      setData(await api.skills())
+      setError(null)
+    } catch (caught) {
+      setError(caught)
+    } finally {
+      setBusy(null)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const run = async (key, action, message) => {
+    setBusy(key)
+    setError(null)
+    setNotice(null)
+    try {
+      const result = await action()
+      if (message) setNotice(typeof message === 'function' ? message(result) : message)
+      await load()
+      return true
+    } catch (caught) {
+      setError(caught)
+      return false
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const read = async (name) => {
+    setBusy(`read-${name}`)
+    setError(null)
+    try {
+      setOpen(await api.skillDocument(name))
+    } catch (caught) {
+      setError(caught)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  // Verification is an attestation. Nothing here can run the procedure itself, so the
+  // check is named for what it is and the note says who confirmed it.
+  const confirmSteps = (name) => run(
+    `attest-${name}`,
+    () => api.attestSkill(name, 'Confirmed by the person using the app after running the steps themselves.'),
+    'Verified. Your confirmation is recorded as an attestation by a person, not as a check the system ran.',
+  )
+
+  const confirmAsking = async () => {
+    const target = asking
+    if (!target || !reason.trim()) return
+    const done = target.mode === 'retire'
+      ? await run('confirm', () => api.retireSkill(target.name, reason.trim()),
+        'Set aside. The document and its history are still here, and you can restore it.')
+      : await run('confirm', () => api.forgetSkill(target.name, reason.trim()),
+        'Deleted. A record that the deletion happened is kept, without the procedure.')
+    if (done) {
+      setAsking(null)
+      setReason('')
+    }
+  }
+
+  const ask = async (event) => {
+    event.preventDefault()
+    if (!question.trim()) return
+    setBusy('ask')
+    setError(null)
+    try {
+      setMatches(await api.matchSkills(question.trim()))
+    } catch (caught) {
+      setError(caught)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const skills = data?.skills ?? []
+  const candidates = skills.filter((skill) => skill.state === 'candidate')
+  const active = skills.filter((skill) => skill.state === 'validated' || skill.state === 'stale')
+  const aside = skills.filter((skill) => skill.state === 'archived')
+
+  const describeOne = (skill) => (
+    <span className="small">
+      {skill.name} · v{skill.version} · {SKILL_STATE_TEXT[skill.state] ?? skill.state}
+      {skill.validation?.verifiedBy === 'user' ? ' · confirmed by a person' : ''}
+      {skill.pinned ? ' · pinned' : ''} · used {skill.usage?.useCount ?? 0} time{skill.usage?.useCount === 1 ? '' : 's'}
+    </span>
+  )
+
+  return (
+    <Panel
+      eyebrow="INTERNAL SERVICE"
+      title="Procedures Aetheris learned"
+      actions={<Button busy={busy === 'loading'} onClick={load}>Refresh</Button>}
+      footer="Only a verified procedure is ever used, and a procedure stays a proposal until a person confirms the steps worked."
+    >
+      <div className="grid" style={{ gap: 14 }}>
+        {error ? <ErrorNote error={error} title="Skill request failed" /> : null}
+        {notice ? <Banner tone="ok" title="Done"><span className="small">{notice}</span></Banner> : null}
+
+        <Stats>
+          <Stat label="verified" value={active.length} note="safe to reuse" />
+          <Stat label="awaiting review" value={candidates.length} note="never used until confirmed" />
+          <Stat label="times used" value={data?.stats?.totalUses ?? 0} note="counted each time one is loaded" small />
+          <Stat label="set aside" value={aside.length} note="kept, and restorable" small />
+        </Stats>
+
+        {data?.store?.failures?.length ? (
+          <Banner tone="warn" title={`${data.store.failures.length} procedure file(s) could not be read`}>
+            <span className="small">
+              The rest of the collection loaded normally. A file that cannot be read is reported here
+              rather than ignored, because a procedure that silently disappears is worse than one that
+              reports a problem.
+            </span>
+            {data.store.failures.map((failure) => (
+              <span className="small" key={failure.file}>· {failure.file}: {failure.reason}</span>
+            ))}
+          </Banner>
+        ) : null}
+
+        {candidates.length ? (
+          <Banner tone="warn" title={`${candidates.length} proposed procedure${candidates.length === 1 ? '' : 's'} to review`}>
+            <span className="small">
+              {skill.createdBy === 'agent'
+                ? 'Written down after a task failed and the fix worked.'
+                : 'Installed as a document rather than learned from a failure.'}{' '}
+              A proposal is readable and is never used, and it is not offered as relevant until you
+              confirm you ran the steps.
+            </span>
+            {candidates.map((skill) => (
+              <div className="row between" key={skill.name} style={{ marginTop: 8, gap: 10, alignItems: 'flex-start' }}>
+                <div className="grid" style={{ gap: 2 }}>
+                  <span><strong>{skill.description}</strong></span>
+                  {describeOne(skill)}
+                </div>
+                <div className="row" style={{ gap: 6 }}>
+                  <Button busy={busy === `read-${skill.name}`} onClick={() => read(skill.name)}>Read it</Button>
+                  <Button variant="primary" busy={busy === `attest-${skill.name}`} onClick={() => confirmSteps(skill.name)}>
+                    I ran these steps
+                  </Button>
+                  <Button busy={busy === `forget-${skill.name}`} onClick={() => { setAsking({ name: skill.name, mode: 'forget' }); setReason('') }}>
+                    Discard
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </Banner>
+        ) : null}
+
+        {active.length ? active.map((skill) => (
+          <div className="row between" key={skill.name} style={{ gap: 10, alignItems: 'flex-start' }}>
+            <div className="grid" style={{ gap: 2 }}>
+              <span><strong>{skill.description}</strong></span>
+              {describeOne(skill)}
+            </div>
+            <div className="row" style={{ gap: 6 }}>
+              <Button busy={busy === `read-${skill.name}`} onClick={() => read(skill.name)}>Read</Button>
+              <Button
+                busy={busy === `pin-${skill.name}`}
+                onClick={() => run(`pin-${skill.name}`, () => api.setSkillFlags(skill.name, { pinned: !skill.pinned }),
+                  (result) => (result.pinned ? 'Pinned: the curator will not set this one aside.' : 'Unpinned.'))}
+              >
+                {skill.pinned ? 'Unpin' : 'Pin'}
+              </Button>
+              <Button busy={busy === `retire-${skill.name}`} onClick={() => { setAsking({ name: skill.name, mode: 'retire' }); setReason('') }}>
+                Set aside
+              </Button>
+            </div>
+          </div>
+        )) : (
+          <EmptyState title="No verified procedures yet">
+            A procedure appears here when one is written down after a failure and then fixed, or installed as
+            a document. It waits as a proposal until a person confirms the steps worked. Nothing is captured
+            automatically in this version, and nothing here is used before it is verified.
+          </EmptyState>
+        )}
+
+        {aside.length ? (
+          <div className="grid" style={{ gap: 6 }}>
+            <span className="panel-eyebrow">SET ASIDE</span>
+            {aside.map((skill) => (
+              <div className="row between" key={skill.name} style={{ gap: 10, alignItems: 'flex-start' }}>
+                <div className="grid" style={{ gap: 2 }}>
+                  <span><strong>{skill.description}</strong></span>
+                  {describeOne(skill)}
+                </div>
+                <div className="row" style={{ gap: 6 }}>
+                  <Button busy={busy === `read-${skill.name}`} onClick={() => read(skill.name)}>Read</Button>
+                  <Button
+                    busy={busy === `restore-${skill.name}`}
+                    onClick={() => run(`restore-${skill.name}`, () => api.restoreSkill(skill.name), 'Restored.')}
+                  >
+                    Bring back
+                  </Button>
+                  <Button busy={busy === `forget-${skill.name}`} onClick={() => { setAsking({ name: skill.name, mode: 'forget' }); setReason('') }}>
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {asking ? (
+          <Banner tone="warn" title={asking.mode === 'retire' ? `Set aside ${asking.name}` : `Delete ${asking.name}`}>
+            <span className="small">
+              {asking.mode === 'retire'
+                ? 'A reason is recorded with it. Setting a procedure aside keeps the document and its history, and you can bring it back.'
+                : 'This deletes the procedure and its version history. A record that a deletion happened is kept, without the text.'}
+            </span>
+            <div className="row" style={{ gap: 8, marginTop: 6 }}>
+              <input
+                aria-label={asking.mode === 'retire' ? 'Reason for setting it aside' : 'Reason for deleting it'}
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                placeholder="why (recorded with the change)"
+              />
+              <Button variant="primary" busy={busy === 'confirm'} disabled={!reason.trim()} onClick={confirmAsking}>Confirm</Button>
+              <Button onClick={() => { setAsking(null); setReason('') }}>Cancel</Button>
+            </div>
+          </Banner>
+        ) : null}
+
+        <form className="row" style={{ gap: 8, alignItems: 'flex-end' }} onSubmit={ask}>
+          <Field label="What are you trying to do?" hint="Shows which verified procedures apply. Looking them up does not use them or change them.">
+            <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="a build does not pick up a changed dependency" />
+          </Field>
+          <Button type="submit" busy={busy === 'ask'}>Show what applies</Button>
+        </form>
+
+        {matches ? (matches.matches?.length ? (
+          <div className="grid" style={{ gap: 4 }}>
+            <span className="small">
+              Ranked by keyword overlap ({matches.method}), not by meaning, against {matches.considered} verified
+              procedure{matches.considered === 1 ? '' : 's'}.
+            </span>
+            {matches.matches.map((hit) => (
+              <span className="small" key={hit.name}>· <strong>{hit.description}</strong> — {hit.name}</span>
+            ))}
+          </div>
+        ) : (
+          <span className="small">
+            Nothing verified applies to that yet{matches.reason ? ` (${matches.reason})` : ''}.
+          </span>
+        )) : null}
+
+        {open ? (
+          <Panel
+            eyebrow="THE WRITTEN PROCEDURE"
+            title={`${open.name} v${open.version}`}
+            actions={<Button onClick={() => setOpen(null)}>Close</Button>}
+            footer={open.state === 'candidate'
+              ? 'This is a proposal. It will not be used until you confirm the steps worked.'
+              : undefined}
+            tight
+          >
+            <Code label={open.sections?.length ? open.sections.join(' · ') : 'document'} value={open.text} />
+          </Panel>
+        ) : null}
+      </div>
+    </Panel>
+  )
+}
+
 function MemoryPanel() {
   const [data, setData] = useState(null)
   const [draft, setDraft] = useState('')
@@ -1229,6 +1527,7 @@ export default function ChatArea({ readiness, refreshReadiness }) {
 
         <KnowledgePanel />
         <MemoryPanel />
+        <SkillsPanel />
       </div>
 
       <div className="grid" style={{ gap: 16 }}>

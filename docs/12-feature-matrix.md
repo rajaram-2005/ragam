@@ -112,7 +112,7 @@ them rather than restating them.
 |---|---|---|
 | L1 contextual adaptation | **Completed** | Session only; nothing stored |
 | L2 user-approved memory | **Implemented and tested** | Approval is a database `CHECK`; deletion is real; the store attempts no network call |
-| L3 procedural skills | **Completed** | Five invariants, each proven to bite |
+| L3 procedural skills | **Partial** | Stored on disk, evidence-gated promotion, rollback, deletion tombstones and relevance matching are reachable over 12 routes and from a review panel in Chat; nothing loads a procedure automatically during a task yet |
 | L4 strategy across tasks | **Partial** | Failure recurrence is implemented; cross-task transfer is not tested |
 | L5 model adaptation | **Partial** | SFT, preference and distillation paths exist; three stages are blocked on this host and say so |
 | L6 verified release improvement | **Completed** | One promotion, one recorded rejection |
@@ -127,6 +127,7 @@ them rather than restating them.
 | Responsive layout | **Completed** | |
 | Streaming, uploads, error-and-retry | **Completed** | A failure explains itself and offers a retry |
 | Export and deletion of user data | **Completed** | |
+| Learned procedures visible and controllable | **Completed** | Review, confirm, pin, set aside, restore and delete, in Chat's advanced view |
 | Accessibility audit against WCAG | **Partial** | Keyboard and semantics are covered; no formal conformance audit has been run |
 | Onboarding for a first-time user | **Partial** | Suggested prompts and plain language; no guided tour |
 | Mobile build | **Partial** | Storage accounting and a mobile tier exist; there is no mobile application |

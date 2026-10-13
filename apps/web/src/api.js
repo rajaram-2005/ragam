@@ -112,6 +112,28 @@ export const api = {
   deleteSession: (id) => request('DELETE', `/api/sessions/${encodeURIComponent(id)}`, {}),
   recall: (query) => request('GET', `/api/sessions/recall?q=${encodeURIComponent(query)}`),
 
+  // --- procedural skills ---------------------------------------------------
+  // A procedure the assistant wrote down after a task failed and then worked. Only a
+  // verified one is used; a candidate is readable for review and is never loaded as
+  // though it had been verified.
+  skills: () => request('GET', '/api/skills'),
+  matchSkills: (query) => request('GET', `/api/skills?q=${encodeURIComponent(query)}`),
+  skillDocument: (name) => request('GET', `/api/skills/${encodeURIComponent(name)}/document`),
+  skillDeletions: () => request('GET', '/api/skills/deletions'),
+  // Attestation, not a system check: the record says a person ran the steps and they
+  // worked. The check is named for what it is.
+  attestSkill: (name, note) => request('POST', `/api/skills/${encodeURIComponent(name)}/validate`, {
+    evidence: {
+      checks: [{ name: 'user-attestation', passed: true, note: note ?? null }],
+      verifiedBy: 'user',
+      note: note ?? null,
+    },
+  }),
+  setSkillFlags: (name, body) => request('PATCH', `/api/skills/${encodeURIComponent(name)}`, body),
+  retireSkill: (name, reason) => request('POST', `/api/skills/${encodeURIComponent(name)}/retire`, { reason }),
+  restoreSkill: (name) => request('POST', `/api/skills/${encodeURIComponent(name)}/restore`, {}),
+  forgetSkill: (name, reason) => request('DELETE', `/api/skills/${encodeURIComponent(name)}`, { reason: reason ?? null }),
+
   // --- tasks (God Core) ---------------------------------------------------
   tasks: (limit = 25) => request('GET', `/api/tasks?limit=${limit}`),
   task: (id) => request('GET', `/api/tasks/${encodeURIComponent(id)}`),

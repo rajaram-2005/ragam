@@ -332,6 +332,7 @@ test('Chat surfaces memory and history as internal services inside the area', ()
   const chat = read('areas/ChatArea.jsx')
   // Both are controls inside Chat, never a sixth navigation entry.
   assert.match(chat, /title="Memory you approved"/)
+  assert.match(chat, /title="Procedures Aetheris learned"/)
   assert.match(chat, /title="Conversation history"/)
   assert.match(chat, /<MemoryPanel \/>/)
   assert.match(chat, /<HistoryPanel sessionId=\{sessionId\} \/>/)

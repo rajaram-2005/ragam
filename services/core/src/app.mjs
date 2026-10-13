@@ -23,6 +23,9 @@ import { MediaJobQueue, JOB_STATES } from './media/jobs.mjs'
 import { validateMedia, MEDIA_KINDS } from './media/validate.mjs'
 import { PluginRegistry } from './plugins/registry.mjs'
 import { TrustStore } from './plugins/signing.mjs'
+import { SKILL_STATES, SkillRegistry } from './skills/registry.mjs'
+import { SkillStore } from './skills/store.mjs'
+import { curate, proposeFromExperience, restore as restoreSkill, retire as retireSkill } from './skills/lifecycle.mjs'
 import { validateManifest, SCOPES, ELEVATED_SCOPES } from './plugins/manifest.mjs'
 import { McpRegistry, RISK, SERVER_KINDS } from './mcp/layer.mjs'
 import { GodCore, TASK_STATES, LIFECYCLE } from './godcore/lifecycle.mjs'
@@ -102,6 +105,15 @@ export class AetherisOmniApp {
       ledger: this.ledger,
       onEvent: (event) => this.#onEvent(event),
     })
+
+    // --- procedural skills -------------------------------------------------
+    // Skills are loaded from disk at startup, so a validated procedure survives a restart.
+    // What could not be read is kept and reported rather than swallowed: a skill file a
+    // person edited by hand is the most likely thing to be malformed, and silence would
+    // look like the skill had never existed.
+    this.skills = new SkillRegistry()
+    this.skillStore = new SkillStore({ dir: resolve(config.dataDir, 'skills') })
+    this.skillLoad = this.skillStore.load(this.skills)
 
     // --- plugins & MCP -----------------------------------------------------
     // The trust store is read at startup. If the file names a key it cannot read, that is
@@ -875,6 +887,8 @@ const ERROR_STATUS = Object.freeze({
   unknown_job: 404,
   unknown_plugin: 404,
   not_found: 404,
+  unknown_skill: 404,
+  unknown_version: 404,
   artifact_not_found: 404,
 
   // The request itself was wrong.
@@ -885,6 +899,30 @@ const ERROR_STATUS = Object.freeze({
   validation_error: 400,
   ingestion_rejected: 400,
   body_too_large: 413,
+  // A skill document, a proposal or a flag name the client sent was wrong. These are the
+  // skills module's own codes: without them a malformed document reached the client as a
+  // 500, which blames the server for a bad request and tells the caller nothing.
+  invalid_skill_document: 400,
+  invalid_name: 400,
+  invalid_thresholds: 400,
+  not_a_setting: 400,
+  unknown_state: 400,
+  unknown_usage_kind: 400,
+  incomplete_experience: 400,
+  reason_required: 400,
+  skill_registry_error: 400,
+  skill_lifecycle_error: 400,
+  duplicate_version: 409,
+  evidence_required: 409,
+  validation_failed: 409,
+  skill_not_loadable: 409,
+  skill_disabled: 409,
+  not_archived: 409,
+  // The store could not read its own files: that is ours, not the caller's.
+  skill_store_error: 500,
+  state_unreadable: 500,
+  unrecognised_store: 500,
+  dir_required: 500,
   // Cancellation is client-initiated, so it is not a server fault.
   cancelled: 400,
 
@@ -1113,6 +1151,220 @@ async function handle(request, response, app) {
   }
   if (method === 'DELETE' && segments[1] === 'sessions' && segments[2]) {
     return sendJson(response, 200, app.memory.deleteSession(segments[2]), app)
+  }
+
+  // --- procedural skills --------------------------------------------------
+  // A validated procedure is worth keeping and a candidate is not loadable, so the state
+  // transitions are the interesting part of these routes: promotion needs evidence with at
+  // least one passing check, and every transition is audited. Nothing here accepts a
+  // procedure from an untrusted source without it becoming a candidate first.
+  if (method === 'GET' && path === '/api/skills') {
+    const query = url.searchParams.get('q')
+    if (query !== null && query !== '') {
+      // Relevance is a lookup, not a rewrite: matching a query never changes a skill's state
+      // or usage, so asking 'what applies here?' cannot itself promote or retire anything.
+      return sendJson(response, 200, app.skills.match(query, {
+        limit: Number(url.searchParams.get('limit') ?? 5),
+        includeUnvalidated: url.searchParams.get('includeCandidates') === 'true',
+      }), app)
+    }
+    return sendJson(response, 200, {
+      skills: app.skills.list({
+        state: url.searchParams.get('state'),
+        createdBy: url.searchParams.get('createdBy'),
+        loadableOnly: url.searchParams.get('loadableOnly') === 'true',
+        tag: url.searchParams.get('tag'),
+      }),
+      stats: app.skills.stats(),
+      store: { dir: app.skillStore.dir, restored: app.skillLoad.restored, failures: app.skillLoad.failures },
+    }, app)
+  }
+  if (method === 'POST' && path === '/api/skills') {
+    // Installing text someone handed us is untrusted input: the document validator decides
+    // whether it is a skill at all, and it always arrives as a candidate.
+    const body = await readBody(request)
+    const report = app.skills.install(String(body.document ?? ''), { state: SKILL_STATES.CANDIDATE })
+    app.skillStore.save(app.skills, report.name)
+    app.ledger.record({
+      category: 'skill',
+      action: 'skill_installed',
+      outcome: 'success',
+      subject: report.name,
+      detail: { name: report.name, state: report.state, createdBy: report.createdBy, digest: report.digest },
+    })
+    return sendJson(response, 201, report, app)
+  }
+  if (method === 'POST' && path === '/api/skills/propose') {
+    // Experience capture. The lifecycle refuses a proposal whose correction was never
+    // verified, which is the difference between a procedure and a guess.
+    const body = await readBody(request)
+    const proposal = proposeFromExperience(app.skills, body.experience ?? body)
+    app.skillStore.save(app.skills, proposal.name)
+    app.ledger.record({
+      category: 'skill',
+      action: 'skill_proposed',
+      outcome: 'success',
+      subject: proposal.name,
+      detail: { name: proposal.name, state: proposal.state, failureCategory: (body.experience ?? body).failureCategory },
+    })
+    return sendJson(response, 201, { ...proposal, stats: app.skills.stats() }, app)
+  }
+  if (method === 'POST' && segments[1] === 'skills' && segments[3] === 'validate') {
+    const body = await readBody(request)
+    const validation = app.skills.validate(segments[2], body.evidence ?? {})
+    app.skillStore.save(app.skills, segments[2])
+    app.ledger.record({
+      category: 'skill',
+      action: 'skill_validated',
+      outcome: 'success',
+      subject: segments[2],
+      detail: { name: segments[2], checks: validation.validation?.checks?.length ?? 0 },
+    })
+    return sendJson(response, 200, validation, app)
+  }
+  if (method === 'POST' && segments[1] === 'skills' && segments[3] === 'load') {
+    const body = await readBody(request)
+    const fallback = String(body.reason ?? 'task')
+    let loaded
+    try {
+      loaded = app.skills.load(segments[2], { reason: fallback })
+    } catch (error) {
+      if (error.code !== 'skill_not_loadable') throw error
+      // A candidate may still be read, but only deliberately and only as a candidate: the
+      // text comes back with its state so a caller cannot mistake it for a validated
+      // procedure. This is what makes reviewing a proposal possible at all.
+      const described = app.skills.describe(segments[2])
+      if (body.allowCandidate !== true) throw error
+      app.ledger.record({
+        category: 'skill',
+        action: 'skill_candidate_reviewed',
+        outcome: 'info',
+        subject: segments[2],
+        detail: { name: segments[2], state: described.state },
+      })
+      return sendJson(response, 200, {
+        // `document()` returns the document text, and a reviewed candidate is read-only:
+        // there is no usage to record, because nothing used it.
+        name: described.name,
+        version: described.version,
+        text: app.skills.document(segments[2]),
+        sections: described.sections,
+        state: described.state, loadable: false, validated: false,
+        loadedFor: fallback, note: 'this procedure is a candidate; it has not passed verification',
+      }, app)
+    }
+    loaded.sections = app.skills.describe(segments[2]).sections
+    // recordUsage returns the whole description, so the counters are one level in.
+    loaded.usage = app.skills.recordUsage(segments[2], { kind: 'use' }).usage
+    app.skillStore.save(app.skills, segments[2])
+    app.ledger.record({
+      category: 'skill',
+      action: 'skill_loaded',
+      outcome: 'success',
+      subject: segments[2],
+      detail: { name: segments[2], version: loaded.version, reason: fallback },
+    })
+    return sendJson(response, 200, loaded, app)
+  }
+  if (method === 'POST' && segments[1] === 'skills' && segments[3] === 'rollback') {
+    const body = await readBody(request)
+    const rolledBack = app.skills.rollback(segments[2], String(body.version ?? ''))
+    app.skillStore.save(app.skills, segments[2])
+    app.ledger.record({
+      category: 'skill',
+      action: 'skill_rolled_back',
+      outcome: 'success',
+      subject: segments[2],
+      detail: { name: segments[2], version: rolledBack.version },
+    })
+    return sendJson(response, 200, rolledBack, app)
+  }
+  if (method === 'POST' && segments[1] === 'skills' && segments[3] === 'retire') {
+    const body = await readBody(request)
+    const retired = retireSkill(app.skills, segments[2], body.reason ? String(body.reason) : '')
+    app.skillStore.save(app.skills, segments[2])
+    app.ledger.record({
+      category: 'skill',
+      action: 'skill_retired',
+      outcome: 'success',
+      subject: segments[2],
+      detail: { name: segments[2], from: retired.from, to: retired.to, reason: retired.reason, note: retired.note },
+    })
+    return sendJson(response, 200, retired, app)
+  }
+  if (method === 'POST' && segments[1] === 'skills' && segments[3] === 'restore') {
+    const restored = restoreSkill(app.skills, segments[2])
+    app.skillStore.save(app.skills, segments[2])
+    app.ledger.record({
+      category: 'skill',
+      action: 'skill_restored',
+      outcome: 'success',
+      subject: segments[2],
+      detail: { name: segments[2], state: app.skills.describe(segments[2]).state },
+    })
+    return sendJson(response, 200, restored, app)
+  }
+  if (method === 'PATCH' && segments[1] === 'skills' && segments[2] && segments.length === 3) {
+    const body = await readBody(request)
+    const updated = app.skills.update(segments[2], body)
+    app.skillStore.save(app.skills, segments[2])
+    app.ledger.record({
+      category: 'skill',
+      action: 'skill_updated',
+      outcome: 'success',
+      subject: segments[2],
+      detail: { name: segments[2], pinned: updated.pinned, enabled: updated.enabled },
+    })
+    return sendJson(response, 200, updated, app)
+  }
+  if (method === 'POST' && path === '/api/skills/curate') {
+    const body = await readBody(request)
+    const result = curate(app.skills, {
+      staleAfterDays: body.staleAfterDays === undefined ? undefined : Number(body.staleAfterDays),
+    })
+    for (const transition of result.transitions ?? []) app.skillStore.save(app.skills, transition.name)
+    app.ledger.record({
+      category: 'skill',
+      action: 'skills_curated',
+      outcome: 'info',
+      detail: { transitions: result.transitions?.length ?? 0, skipped: result.skipped?.length ?? 0 },
+    })
+    return sendJson(response, 200, result, app)
+  }
+  if (method === 'GET' && path === '/api/skills/deletions') {
+    return sendJson(response, 200, { deletions: app.skillStore.deletions() }, app)
+  }
+  if (method === 'DELETE' && segments[1] === 'skills' && segments[2] && segments.length === 3) {
+    const body = await readBody(request)
+    const removed = app.skillStore.remove(app.skills, segments[2], { reason: body.reason ?? null, requestedBy: 'user' })
+    app.ledger.record({
+      category: 'skill',
+      action: 'skill_deleted',
+      outcome: removed.deleted ? 'success' : 'denied',
+      subject: segments[2],
+      detail: { ...removed, reason: body.reason ?? null },
+    })
+    if (!removed.deleted) {
+      const error = new Error(`no skill named '${segments[2]}'`)
+      error.code = 'not_found'
+      error.status = 404
+      throw error
+    }
+    return sendJson(response, 200, removed, app)
+  }
+  if (method === 'GET' && segments[1] === 'skills' && segments[2] === 'document') {
+    const version = url.searchParams.get('version')
+    const described = app.skills.describe(segments[3])
+    return sendJson(response, 200, {
+      name: described.name,
+      version: version ?? described.version,
+      text: app.skills.document(segments[3], version),
+      sections: described.sections,
+      state: described.state,
+    }, app)
+  }
+  if (method === 'GET' && segments[1] === 'skills' && segments[2] && segments.length === 3) {
+    return sendJson(response, 200, app.skills.describe(segments[2]), app)
   }
 
   // --- tasks (God Core) ---------------------------------------------------

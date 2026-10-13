@@ -497,7 +497,7 @@ Stated plainly, because an unstated gap is worse than a stated one.
      oxc/rolldown. Re-adding esbuild would have reintroduced the very advisory the
      upgrade removed, so the test was switched to `rolldown` instead.
 
-   Vite 8 also produced a smaller, faster build: 234.31 kB (69.76 kB gzip) against
+   Vite 8 also produced a smaller, faster build: 243.42 kB (71.99 kB gzip) against
    218.97 kB (66.82 kB), in 145 ms against 1.13 s.
 
    For pytest, CVE-2025-71176 / GHSA-6w46-j5rx-g56g (medium) affects every version

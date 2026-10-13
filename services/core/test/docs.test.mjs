@@ -250,8 +250,8 @@ test('the documented routing weights are the real weights', () => {
 test('the documented route surface is the real route surface', () => {
   const source = readFileSync(resolve(CORE, 'src/app.mjs'), 'utf8')
   const literal = new Set([...source.matchAll(/'(\/api\/[A-Za-z0-9/:._-]+)'/g)].map((m) => m[1]))
-  assert.equal(literal.size, 33, `literal /api routes changed: ${literal.size}`)
-  assert.ok(squash(doc.architecture()).includes('33 literal routes'))
+  assert.equal(literal.size, 37, `literal /api routes changed: ${literal.size}`)
+  assert.ok(squash(doc.architecture()).includes('37 literal routes'))
 
   for (const route of ['/api/health', '/api/ready', '/api/config', '/api/chat', '/api/chat/stream',
     '/api/models', '/api/models/probe', '/api/knowledge/search', '/api/plugins/validate',
@@ -264,10 +264,10 @@ test('the documented route surface is the real route surface', () => {
   // was a bug in the first version of this test.
   const segments = new Set([...source.matchAll(/segments\[1\] === '([a-z]+)'/g)].map((m) => m[1]))
   assert.deepEqual([...segments].sort(),
-    ['knowledge', 'mcp', 'media', 'memory', 'plugins', 'sessions', 'tasks'])
+    ['knowledge', 'mcp', 'media', 'memory', 'plugins', 'sessions', 'skills', 'tasks'])
   assert.ok(/segments\[2\] === 'artifact'/.test(source), 'the artifact route must stay segment-matched')
   const architecture = squash(doc.architecture())
-  for (const prefix of ['tasks', 'plugins', 'mcp', 'media', 'knowledge', 'memory', 'sessions']) {
+  for (const prefix of ['tasks', 'plugins', 'mcp', 'media', 'knowledge', 'memory', 'sessions', 'skills']) {
     assert.ok(architecture.includes(`/api/${prefix}`), `docs/02 must mention segment routes under /api/${prefix}`)
   }
 
@@ -279,7 +279,7 @@ test('the documented route surface is the real route surface', () => {
   // The first is user-owned data: documents, memories, conversations. Each gets a route
   // group because the person needs to list, edit and delete it -- and each of those is a
   // deliberate addition to this list, so a new one cannot appear by accident.
-  const userDataGroups = new Set(['/api/knowledge', '/api/memory', '/api/sessions'])
+  const userDataGroups = new Set(['/api/knowledge', '/api/memory', '/api/sessions', '/api/skills'])
   for (const group of userDataGroups) {
     // A group can be expressed either way: /api/knowledge is routed by segments and
     // /api/memory by literals. Checking only the literals reported knowledge as unrouted,
@@ -591,18 +591,18 @@ test('the status doc reports the real test totals', () => {
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
   // 16 includes this file. If a suite file is added or removed, the counts in
   // docs/03-status.md and README.md have to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 16)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 17)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 23)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**409 / 409**'), 'core total must be stated')
+  assert.ok(status.includes('**420 / 420**'), 'core total must be stated')
   assert.ok(status.includes('**528 / 528**'), 'fabric total must be stated')
-  assert.ok(status.includes('**66 / 66**'), 'web total must be stated')
-  assert.ok(status.includes('1003 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1003 tests: core 409, web 66, fabric 528'),
+  assert.ok(status.includes('**67 / 67**'), 'web total must be stated')
+  assert.ok(status.includes('1015 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1015 tests: core 420, web 67, fabric 528'),
     'README must state the same totals')
-  assert.ok(status.includes('(16 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(17 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -613,14 +613,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(409), `core heading must say 409, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(420), `core heading must say 420, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(528), `fabric heading must say 528, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(66), `web heading must say 66, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(67), `web heading must say 67, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1003,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1003`,
+    1015,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1015`,
   )
 })
 
@@ -1267,4 +1267,48 @@ test('the memory interface the documents claim is the one that is in the app', (
     assert.ok(klyvaron.includes(`**${title}**`), `docs/11 must name the '${title}' panel`)
     assert.ok(chat.includes(`title="${title}"`), `docs/11 names a '${title}' panel the app does not render`)
   }
+})
+
+test('the memory interface the documents describe is the one in the app', () => {
+  // docs/11 §2.2b and docs/12 both tell a reader that the approval gate is reachable from
+  // Chat, that the panel lists, edits, deletes, searches and exports, and that the
+  // composer's memory switch starts off. Every one of those is a sentence a reader will
+  // act on, and until this test existed none of them was connected to any code: the panel
+  // could have been deleted and the documents would still have claimed it.
+  const chat = readFileSync(resolve(REPO, 'apps/web/src/areas/ChatArea.jsx'), 'utf8')
+  const matrix = squash(doc.matrix())
+  const store = readFileSync(resolve(REPO, 'services/core/src/memory/store.mjs'), 'utf8')
+
+  const affordances = [
+    ['the decision route Chat calls for approve and reject', () => chat.includes('decideMemory(candidate.id, true)') && chat.includes('decideMemory(candidate.id, false)')],
+    ['editing a memory in the panel', () => chat.includes('api.updateMemory(')],
+    ['deleting one memory', () => chat.includes('api.forgetMemory(')],
+    ['deleting all of them', () => chat.includes('api.forgetAllMemory(')],
+    ['searching memories', () => chat.includes('api.searchMemory(')],
+    ['searching past turns', () => chat.includes('api.recall(')],
+    ['exporting a copy', () => chat.includes('api.exportMemory()')],
+    ['the memory switch in the composer, off by default', () => /useState\(false\)/.test(chat) && /useMemory/.test(chat)],
+  ]
+  for (const [what, present] of affordances) {
+    assert.ok(present(), `docs describe ${what}, and apps/web/src/areas/ChatArea.jsx does not have it`)
+  }
+
+  // The rows that make claims about this surface must still say what is true of it.
+  assert.match(matrix, /L2 user-approved memory \| \*\*Implemented and tested\*\*/, 'the L2 row must stay honest about what it is')
+  assert.match(matrix, /Learned procedures visible and controllable \| \*\*Completed\*\*/,
+    'the skills surface is in the same panel area and must be stated in the matrix')
+  assert.match(chat, /SkillsPanel/, 'the matrix claims a skills surface; ChatArea must render it')
+
+  // And the history row: the note says the search is lexical rather than semantic, which
+  // is a claim about the implementation, so the implementation is what is checked.
+  assert.match(matrix, /Conversation history \+ search \| \*\*Partial\*\*/, 'the history row must stay Partial until its search is semantic')
+  assert.match(matrix, /search is lexical \(BM25 over your own turns\), not semantic/,
+    'the history note must name the method a reader is relying on')
+  assert.match(store, /this\.turnIndex = new Bm25Index\(\)/,
+    'the note says the search is BM25 over your own turns, so it has to be')
+
+  // The composer default is a safety property, not a style choice, so it is named here
+  // rather than left to the web suite alone.
+  assert.match(chat, /const \[useMemory, setUseMemory\] = useState\(false\)/,
+    'memory must not reach a prompt unless the person switches it on')
 })

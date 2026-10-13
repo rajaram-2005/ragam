@@ -70,11 +70,11 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 10,652 source lines, 8,247 test lines
+### `services/core` — 11,275 source lines, 8,700 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
-| `app.mjs` | 1,387 | Composition root, the HTTP route table, error→status mapping, chat/image/video entry points, readiness |
+| `app.mjs` | 1,639 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
 | `media/jobs.mjs` | 359 | Job queue, progress, cancellation, timeouts, artifact storage |
@@ -100,9 +100,10 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `memory/store.mjs` | 702 | User-approved memory, candidates that need approval before use, and session recall with citations |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
 | `klyvaron/tiers.mjs` | 412 | The three-tier model family, backing records, and the validator that refuses a capability with no artifact behind it |
-| `skills/registry.mjs` | 305 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
-| `skills/manifest.mjs` | 286 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
+| `skills/registry.mjs` | 397 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
+| `skills/manifest.mjs` | 319 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
 | `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |
+| `skills/store.mjs` | 246 | Skills on disk: document + state split, version files for rollback, deletion tombstones |
 
 ### `services/fabric` — 8,079 source lines, 6,220 test lines
 
@@ -113,7 +114,7 @@ release manager, and a hand-written dual encoder whose **five parameter gradient
 all match central finite differences to ~3e-10**. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 4,156 source lines, 1,297 test lines
+### `apps/web` — 4,477 source lines, 1,312 test lines
 
 Five area components, a shell, shared primitives, an API client and three test
 files. Design tokens and the shell's visual structure come from upstream Aetheris
@@ -353,6 +354,7 @@ One database would have been the wrong tool for four different access patterns.
 | Audit ledger | SQLite, append-only | ordered, paginated, exported, purged by subject |
 | Generated media | filesystem | blobs; addressed by sha256, served through `/api/media/artifact/:id` |
 | BM25 index | in-memory | **rebuildable** from stored chunks at startup; never a source of truth |
+| Learned procedures | filesystem (`<dataDir>/skills`) | a procedure is reviewed by a person, so its document stays a file that can be read and edited. State, usage counters and version metadata sit in a machine-maintained `.state.json` beside it, and `.versions/` is what makes rollback survive a restart. Not a database, because a failed review of a database row is not a review |
 | Model weights | not stored by default | `output_dir` opts in; digests are recorded either way |
 
 Absolute paths never reach the browser: `publicView` on media jobs omits them, and
@@ -362,9 +364,9 @@ the artifact route serves bytes by job id.
 
 ## 7. HTTP surface
 
-33 literal routes plus segment-matched routes under `/api/tasks`, `/api/plugins`,
-`/api/mcp`, `/api/media`, `/api/knowledge`, `/api/memory` and `/api/sessions`. There is
-no `/api/routes`.
+37 literal routes plus segment-matched routes under `/api/tasks`, `/api/plugins`,
+`/api/mcp`, `/api/media`, `/api/knowledge`, `/api/memory`, `/api/sessions` and
+`/api/skills`. There is no `/api/routes`.
 
 Domain errors map to accurate statuses through `ERROR_STATUS`/`statusForError` —
 `unknown_task` and `unknown_server` are 404, `approval_required` is 409,

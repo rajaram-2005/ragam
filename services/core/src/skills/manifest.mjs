@@ -93,17 +93,48 @@ export function parseFrontmatter(text) {
   let current = frontmatter
   let currentIndent = 0
   const stack = [[frontmatter, -1]]
+  // A key whose value is written as a block sequence. Set when a line ends in ':' with
+  // nothing after it, and used by the '- item' lines that follow.
+  let pendingList = null
 
   for (const raw of match[1].split(/\r?\n/)) {
     if (!raw.trim() || raw.trim().startsWith('#')) continue
     const indent = raw.length - raw.trimStart().length
     const line = raw.trim()
 
-    if (indent === 0) {
+    if (indent === 0 && !line.startsWith('- ')) {
       stack.length = 1
       stack[0] = [frontmatter, -1]
       current = frontmatter
       currentIndent = 0
+      pendingList = null
+    }
+
+    // A YAML block sequence, which is how hand-written skill documents usually write a
+    // list:
+    //
+    //   tags:
+    //     - docker
+    //     - build
+    //
+    // The parser claims to read a subset of YAML, and a list on its own line is part of
+    // the subset every real SKILL.md file uses. Refusing it would have made the format
+    // "compatible" only with documents this repository wrote itself.
+    if (line.startsWith('- ') || line === '-') {
+      const item = unquote(line.slice(1).trim())
+      if (!pendingList || indent <= pendingList.indent) {
+        errors.push(`list item has no key to belong to: '${line}'`)
+        continue
+      }
+      if (/^[A-Za-z_][A-Za-z0-9_-]*:\s/.test(item)) {
+        // Silently storing 'name: value' as a string would look parsed when it is not.
+        errors.push(`lists of mappings are not supported by this parser: '${line}'`)
+        continue
+      }
+      const { container, key } = pendingList
+      if (!Array.isArray(container[key])) container[key] = []
+      container[key].push(item)
+      continue
     }
 
     const colon = line.indexOf(':')
@@ -121,8 +152,10 @@ export function parseFrontmatter(text) {
     if (value === '') {
       current[key] = {}
       currentIndent = indent
+      pendingList = { container: current, key, indent }
       continue
     }
+    pendingList = null
 
     if (value.startsWith('[') && value.endsWith(']')) {
       current[key] = value.slice(1, -1).split(',').map((v) => unquote(v.trim())).filter(Boolean)

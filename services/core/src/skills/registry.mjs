@@ -30,6 +30,7 @@
 
 import { createHash } from 'node:crypto'
 import { SkillDocumentError, loadSkillDocument, parseSections, parseFrontmatter } from './manifest.mjs'
+import { Bm25Index } from '../knowledge/bm25.mjs'
 
 export const SKILL_STATES = Object.freeze({
   CANDIDATE: 'candidate',
@@ -152,6 +153,10 @@ export class SkillRegistry {
       validation: skill.validation,
       versionCount: skill.versions.length,
       procedureSteps: skill.versions.at(-1).procedureSteps,
+      // The section titles of the current version. Also exposed here rather than only
+      // inside `load()`, whose Map serialises to `{}` over HTTP and would have shipped a
+      // client an empty object where a list was promised.
+      sections: skill.versions.at(-1).sections ?? [],
       digest: skill.versions.at(-1).digest,
     }
   }
@@ -242,6 +247,28 @@ export class SkillRegistry {
     return this.describe(name)
   }
 
+  /**
+   * Apply the flags a person controls, in one step.
+   *
+   * Only these two are settable, and an unknown key is an error rather than a silent no-op:
+   * a caller that tries to set `state` here has confused a person's decision with the
+   * evidence-based promotion path, and saying so is better than quietly ignoring it.
+   */
+  update(name, changes = {}) {
+    const allowed = ['pinned', 'enabled']
+    const unknown = Object.keys(changes).filter((key) => !allowed.includes(key) && changes[key] !== undefined)
+    if (unknown.length) {
+      throw new SkillRegistryError(
+        `only ${allowed.join(' and ')} can be set directly; '${unknown.join(', ')}' is not a setting ` +
+        '(state changes go through validate/retire/restore, which carry evidence or a reason)',
+        'not_a_setting',
+      )
+    }
+    if (changes.pinned !== undefined) this.setPinned(name, changes.pinned)
+    if (changes.enabled !== undefined) this.setEnabled(name, changes.enabled)
+    return this.describe(name)
+  }
+
   setPinned(name, pinned) {
     const skill = this.#require(name)
     skill.pinned = Boolean(pinned)
@@ -282,8 +309,73 @@ export class SkillRegistry {
   }
 
   /** Internal accessor for the lifecycle module. Not part of the public surface. */
-  record(name) {
+  record(name, { optional = false } = {}) {
+    if (optional && !this.#skills.has(name)) return null
     return this.#require(name)
+  }
+
+  /**
+   * Drop a skill from the in-memory index.
+   *
+   * Only the store calls this, and only after a person asked for a deletion and the
+   * document is already gone from disk. The curator has no path here: its maximum is
+   * archive, which is a state rather than a removal.
+   */
+  forget(name) {
+    return this.#skills.delete(name)
+  }
+
+  /**
+   * Restore usage counters from a store.
+   *
+   * The curator decides what is stale from use counts and last-activity times, so losing
+   * them on every restart would make an unused skill indistinguishable from one that is
+   * used daily -- and would archive the wrong one. Values are coerced to non-negative
+   * integers rather than trusted.
+   */
+  restoreUsage(name, usage = {}) {
+    const skill = this.#require(name)
+    const count = (value) => Math.max(0, Math.trunc(Number(value) || 0))
+    skill.usage = {
+      useCount: count(usage.useCount),
+      viewCount: count(usage.viewCount),
+      patchCount: count(usage.patchCount),
+      lastActivityAt: Number.isFinite(Number(usage.lastActivityAt)) ? Number(usage.lastActivityAt) : null,
+    }
+    return { ...skill.usage }
+  }
+
+  /**
+   * The skills relevant to a query, for progressive disclosure.
+   *
+   * A skill costs context, so the listing is deliberately built from the short fields --
+   * name, description, tags, when-to-use -- and not from the procedure. The Hermes audit
+   * recorded why descriptions are capped at 60 characters: long ones bloat listings and
+   * dilute attention when many are considered at once. This is where that cap pays off.
+   *
+   * Ranking is lexical, and the caller is told the ranking method rather than being left to
+   * assume it was semantic. Only loadable skills are returned, because a candidate that
+   * influenced a task would be a procedure that was never verified.
+   */
+  match(query, { limit = 5, includeUnvalidated = false } = {}) {
+    const text = String(query ?? '').trim()
+    if (!text) return { query: text, method: 'none', matches: [], reason: 'empty query' }
+    const considered = this.list({ loadableOnly: !includeUnvalidated })
+    if (!considered.length) {
+      return { query: text, method: 'bm25', matches: [], considered: 0, reason: 'no loadable skills' }
+    }
+    const index = new Bm25Index()
+    for (const skill of considered) {
+      const record = this.#require(skill.name)
+      const current = record.versions.find((version) => version.version === record.currentVersion)
+      const whenToUse = /## When to Use\s*\n+([^\n]+)/.exec(current.text)?.[1] ?? ''
+      index.add(skill.name, [skill.name, skill.description, (skill.tags ?? []).join(' '), whenToUse].join(' '))
+    }
+    const matches = index.search(text, { topK: limit }).map((hit) => {
+      const skill = this.describe(hit.docId)
+      return { ...skill, score: hit.score, matchedTerms: hit.matchedTerms }
+    })
+    return { query: text, method: 'bm25', considered: considered.length, matches }
   }
 
   /** The set of names, for the lifecycle to iterate without copying records. */

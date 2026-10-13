@@ -9,14 +9,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1003 passing, 0 failing.**
+**Test totals: 1015 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **409 / 409** (16 files, ~45 s) |
+| `services/core` | `node --test test/*.test.mjs` | **420 / 420** (17 files, ~48 s) |
 | `services/fabric` | `pytest -q` | **528 / 528** (23 files, ~35 s) |
-| `apps/web` | `node --test test/*.test.mjs` | **66 / 66** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 234.31 kB → **69.76 kB gzip**, single chunk, no warnings |
+| `apps/web` | `node --test test/*.test.mjs` | **67 / 67** (4 files, ~1 s) |
+| `apps/web` build | `vite build` | 243.42 kB → **71.99 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as four jobs split so a
@@ -66,6 +66,7 @@ instead.
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
 | 8 | Multimodal pipelines | **Complete** | Job queue, validation, video genuineness check |
+| — | Procedural skills (meta-learning L3) | **Partial** | Documents on disk with append-only history, evidence-gated promotion, rollback, deletion tombstones and lexical relevance matching — reachable over 12 routes and from a panel inside Chat. Nothing loads a procedure automatically when a task needs it, and no proposal is captured from a failure without being asked |
 | 9 | Sparsiz integration | **Complete** | Responsibility defined; taxonomies and `Q(x)` adopted, scoring replaced |
 | 10 | Aetheris Lite experiments | **Partial** | Two real first-party models: the trained retriever, and a from-scratch **625K-parameter character-level LM** trained in pure NumPy with hand-derived, finite-difference-verified gradients. SFT and preference optimization remain unimplemented for want of data and compute, and are not simulated |
 | 11 | Competitive benchmark cycle | **Partial** | Real, reproducible BM25 comparison; **no** Mistral/Qwen/Llama/Gemma/DeepSeek comparison possible. Aetheris Lite is evaluated against computed uniform/unigram/bigram baselines on identical held-out tokens — never against a pretrained model, because none could be obtained |
@@ -150,7 +151,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (409 tests)
+### `services/core` — Implemented and tested (420 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -207,7 +208,7 @@ be demanded or refused by digest rather than assumed. And the model emits mush a
 this size — 359,136 parameters is enough to beat every baseline it was measured
 against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (66 tests)
+### `apps/web` — Implemented and tested (67 tests)
 
 | Area | Status |
 |---|---|
@@ -398,7 +399,12 @@ Ordered by how much it blocks the acceptance criteria.
 6. **SFT / preference optimization / distillation** (Phase 10). All three need
    weights and, for the first and third, a GPU. Not achievable on this host and
    not faked.
-7. **A competitive benchmark against named open models** (Phase 11). Requires
+7. **Connect a verified procedure to a running task** (L3). Skills are stored, verified,
+   served and visible, but the step that loads the relevant one while a task runs, and the
+   step that proposes one from a failure without being asked, are not implemented. Until
+   they are, a procedure is something a person loads deliberately, and the release notes
+   say so rather than implying the assistant teaches itself.
+8. **A competitive benchmark against named open models** (Phase 11). Requires
    downloads that are blocked here. Until it exists, **no superiority claim over
    Mistral, Qwen, Llama, Gemma or DeepSeek is made or implied anywhere in this
    repository.**

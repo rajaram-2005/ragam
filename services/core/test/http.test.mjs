@@ -1231,3 +1231,175 @@ test('an unparseable allowlist is refused instead of being skipped', () => {
   assert.equal(parseAllowlist(''), null)
   assert.equal(parseAllowlist('id:notes,origin:https://example.com').size, 2)
 })
+
+// ---------------------------------------------------------------------------
+// Procedural skills over HTTP
+// ---------------------------------------------------------------------------
+
+const SKILL_DOCUMENT = `---
+name: fix-stale-docker-cache
+description: Fixes a stale Docker build cache.
+version: 1.0.0
+createdBy: agent
+author: Aetheris experience capture
+license: MIT
+tags:
+  - docker
+  - build
+---
+
+## When to Use
+
+When a Docker build does not pick up a changed dependency.
+
+## Prerequisites
+
+- Docker is installed.
+
+## Procedure
+
+1. Reproduce the stale build.
+2. Rebuild without cache.
+3. Confirm the change is present.
+
+## Pitfalls
+
+- Clearing the cache also removes layers you wanted.
+
+## Verification
+
+Rebuild twice and confirm the second run is reproducible.
+`
+
+test('skills persist, promote only on evidence, and are served over HTTP', async () => {
+  const first = await startCore({ withModel: false })
+  let dataDir = null
+  try {
+    // An empty store is empty, and says where it looked. A skill listing that cannot be
+    // distinguished from a broken one is not a usable listing.
+    const empty = await first.get('/api/skills')
+    assert.equal(empty.status, 200)
+    assert.deepEqual(empty.json.skills, [])
+    assert.equal(empty.json.stats.total, 0)
+    assert.match(empty.json.store.dir, /skills$/)
+    dataDir = first.app.config.dataDir
+
+    // Installing is untrusted input: it lands as a candidate, never as a validated skill.
+    const installed = await first.post('/api/skills', { document: SKILL_DOCUMENT })
+    assert.equal(installed.status, 201)
+    assert.equal(installed.json.name, 'fix-stale-docker-cache')
+    assert.equal(installed.json.state, 'candidate')
+    assert.equal(installed.json.loadable, false)
+
+    // Text that is not a skill document is refused with a reason rather than stored.
+    const rejected = await first.post('/api/skills', { document: '# just a heading\n' })
+    assert.equal(rejected.status, 400)
+    assert.ok(rejected.json.message.length > 0, 'the refusal must say what was wrong')
+
+    // A candidate is not offered as relevant, and cannot be loaded as a procedure.
+    const listing = await first.get('/api/skills?q=stale%20docker%20build%20cache')
+    assert.equal(listing.json.method, 'bm25')
+    assert.deepEqual(listing.json.matches, [], 'an unverified procedure must not be offered as relevant')
+    const refused = await first.post('/api/skills/fix-stale-docker-cache/load', {})
+    assert.equal(refused.status, 409)
+    assert.match(refused.json.message, /has not been validated/)
+
+    // Reviewing a proposal is a deliberate act, and the response says what it is.
+    const reviewed = await first.post('/api/skills/fix-stale-docker-cache/load', { allowCandidate: true })
+    assert.equal(reviewed.status, 200)
+    assert.equal(reviewed.json.validated, false)
+    assert.equal(reviewed.json.loadable, false)
+    assert.match(reviewed.json.text, /Rebuild without cache/)
+    assert.deepEqual(reviewed.json.sections,
+      ['When to Use', 'Prerequisites', 'Procedure', 'Pitfalls', 'Verification'],
+      'a review must show the document structure, not a serialised Map')
+
+    // Promotion needs evidence, and a failing check is not evidence.
+    const noEvidence = await first.post('/api/skills/fix-stale-docker-cache/validate', {})
+    assert.equal(noEvidence.status, 409)
+    const failedCheck = await first.post('/api/skills/fix-stale-docker-cache/validate', {
+      evidence: { checks: [{ name: 'reproduced', passed: true }, { name: 'corrected', passed: false }] },
+    })
+    assert.equal(failedCheck.status, 409)
+    assert.match(failedCheck.json.message, /corrected/)
+
+    const validated = await first.post('/api/skills/fix-stale-docker-cache/validate', {
+      evidence: { checks: [{ name: 'reproduced', passed: true }, { name: 'corrected', passed: true }], verifiedBy: 'user' },
+    })
+    assert.equal(validated.status, 200)
+    assert.equal(validated.json.state, 'validated')
+
+    // Promotion is written when it happens, and not as a side effect of loading later:
+    // restarting here must already see a validated procedure. This ordering is deliberate.
+    // An earlier version of this test loaded first, which meant the load route's write
+    // covered for a missing write on the validate route, and removing that write failed
+    // nothing at all.
+    const second = await startCore({ withModel: false, env: { AETHERIS_DATA_DIR: dataDir } })
+    let third = null
+    try {
+      const restored = await second.get('/api/skills')
+      assert.deepEqual(restored.json.store.restored, ['fix-stale-docker-cache'])
+      assert.deepEqual(restored.json.store.failures, [])
+      assert.equal(restored.json.skills[0].state, 'validated')
+      // Reviewing a proposal is reading it, not using it, so no counter moved.
+      assert.equal(restored.json.skills[0].usage.useCount, 0)
+
+      // Now it is relevant, and loading it records the use.
+      const matched = await second.get('/api/skills?q=stale%20docker%20build%20cache')
+      assert.equal(matched.json.matches.length, 1)
+      assert.equal(matched.json.matches[0].name, 'fix-stale-docker-cache')
+      assert.ok(!matched.json.matches[0].text, 'the listing carries short fields, not the procedure')
+      const loaded = await second.post('/api/skills/fix-stale-docker-cache/load', { reason: 'task' })
+      assert.equal(loaded.status, 200)
+      assert.match(loaded.json.text, /Rebuild without cache/)
+      assert.equal(loaded.json.usage.useCount, 1)
+
+      // And the use is written at the moment of use, for the same reason.
+      third = await startCore({ withModel: false, env: { AETHERIS_DATA_DIR: dataDir } })
+      const after = await third.get('/api/skills')
+      assert.equal(after.json.skills[0].state, 'validated')
+      assert.equal(after.json.skills[0].usage.useCount, 1, 'usage decides what the curator archives, so it survives')
+
+      // Every transition is in the audit trail.
+      const audit = await third.get('/api/audit?limit=200')
+      const actions = audit.json.events.filter((entry) => entry.category === 'skill').map((entry) => entry.action)
+      for (const action of ['skill_installed', 'skill_validated', 'skill_candidate_reviewed', 'skill_loaded']) {
+        assert.ok(actions.includes(action), `${action} must be audited`)
+      }
+    } finally {
+      if (third) await third.close()
+      await second.close()
+    }
+  } finally {
+    await first.close()
+  }
+})
+
+test('deleting a skill removes the procedure and reports what was removed', async () => {
+  const core = await startCore({ withModel: false })
+  try {
+    await core.post('/api/skills', { document: SKILL_DOCUMENT })
+    await core.post('/api/skills/fix-stale-docker-cache/validate', {
+      evidence: { checks: [{ name: 'reproduced', passed: true }] },
+    })
+
+    const removed = await core.del('/api/skills/fix-stale-docker-cache', { reason: 'no longer accurate' })
+    assert.equal(removed.status, 200)
+    assert.equal(removed.json.deleted, true)
+    assert.equal(removed.json.versionsRemoved, 1)
+
+    assert.equal((await core.get('/api/skills')).json.skills.length, 0)
+    assert.equal((await core.get('/api/skills/fix-stale-docker-cache')).status, 404)
+
+    const deletions = await core.get('/api/skills/deletions')
+    assert.equal(deletions.json.deletions.length, 1)
+    assert.equal(deletions.json.deletions[0].reason, 'no longer accurate')
+    // The tombstone records that a deletion happened and never what was deleted.
+    assert.ok(!JSON.stringify(deletions.json.deletions).includes('Docker'))
+
+    const again = await core.del('/api/skills/fix-stale-docker-cache')
+    assert.equal(again.status, 404, 'deleting a skill that is not there is a 404, not a success')
+  } finally {
+    await core.close()
+  }
+})
