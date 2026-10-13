@@ -214,8 +214,9 @@ const LITE = Object.freeze({
   id: TIERS.LITE,
   displayName: 'Klyvaron Lite',
   status: 'partial',
-  statusNote: 'One small artifact exists and two capabilities are backed by it. Conversation, '
-    + 'summarisation, translation, vision and speech do not exist at this tier.',
+  statusNote: 'One small released artifact backs two capabilities, and the artifact it '
+    + 'superseded is kept as a record. Conversation, summarisation, translation, vision and '
+    + 'speech do not exist at this tier.',
   targetHardware: HARDWARE_CLASS.MOBILE,
   description: 'Compact intelligence for phones and constrained devices.',
   storageProfile: {

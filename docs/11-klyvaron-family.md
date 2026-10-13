@@ -375,5 +375,6 @@ without a list of what does not is a sales document:
   `docs/03-status.md` §"what remains" tracks it.
 
 Nothing in this document should be read as a claim of parity with any other model family.
-Lite is a 359,136-parameter character model that beats three computed baselines on
-perplexity. That is the whole claim.
+Lite is a 359,616-parameter character model that beats three computed baselines on
+perplexity, trained from random initialisation on this repository's own text. That is the
+whole claim.

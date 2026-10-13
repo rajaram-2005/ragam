@@ -403,6 +403,181 @@
    "finding": "This is where a real defect surfaced. Replacing one version with another used to merge the new files into the existing directory, leaving the previous version's 1.4 MB weights behind with no manifest referring to them -- invisible to verify(), never reclaimed, and counted twice by the install report (which measured the source directory rather than what the device ended up holding). After the rollback the library held 2,898,235 bytes for one artifact id. services/core/src/klyvaron/store.mjs now clears the artifact's own directory when replacing, charges the budget only the growth, and reports the measured result; klyvaron-store.test.mjs covers the version-to-version replace and fails against the old code. With the fix the same rollback leaves 1,451,373 bytes."
   }
  },
+ "servingReleased": {
+  "note": "Recorded after the promotion, with the export the model card describes: aetheris-lite-lm@0.1.1 with no qualifier. The install above was captured with a 0.1.1-verify manifest -- the same weights, the same file digest, a version string 14 bytes shorter. That is the whole difference between the two captures, and this pair is what makes it checkable.",
+  "installedAs": "aetheris-lite-lm@0.1.1",
+  "installedBytes": 1451751,
+  "weightsSha256": "165e150f6e290fe3a8162673f743037dcf15a3b63199ecd7661bdbc83652b6f7",
+  "sameWeightsAsDrill": true,
+  "verification": [
+   {
+    "id": "aetheris-lite-lm",
+    "version": "0.1.1",
+    "ok": true,
+    "problems": []
+   }
+  ],
+  "ready": {
+   "status": 200,
+   "app": "ready",
+   "capabilities": {
+    "chat": false,
+    "textCompletion": true,
+    "embeddings": false,
+    "imageGeneration": false,
+    "videoGeneration": false,
+    "knowledge": false
+   },
+   "loaded": [
+    {
+     "id": "klyvaron:aetheris-lite-lm",
+     "artifact": "aetheris-lite-lm",
+     "version": "0.1.1",
+     "tier": "lite",
+     "tierClaim": "lite",
+     "parameters": 359616,
+     "contextTokens": 128,
+     "instructionTuned": false,
+     "loadMs": 8,
+     "weightsSha256": "165e150f6e290fe3a8162673f743037dcf15a3b63199ecd7661bdbc83652b6f7",
+     "limitations": 4
+    }
+   ],
+   "storage": {
+    "text": "Aetheris is using 1.5 MB of storage on this device, within the 5.00 GB budget. 0 bytes can be freed without deleting anything you own.",
+    "withinBudget": true,
+    "totalBytes": 1451751
+   }
+  },
+  "models": {
+   "id": "klyvaron:aetheris-lite-lm",
+   "kind": "local_llm",
+   "displayName": "aetheris-lite-lm 0.1.1 (Klyvaron lite)",
+   "capabilities": [
+    "text_in",
+    "text_out"
+   ],
+   "location": "local",
+   "provider": "klyvaron:aetheris-lite-lm",
+   "contextWindow": 128,
+   "toolCalling": false,
+   "structuredOutput": false,
+   "streaming": true,
+   "quantization": "none (float32)",
+   "licence": "MIT",
+   "parametersBillions": 0.000359616,
+   "minRamGb": 0,
+   "minVramGb": 0,
+   "aetherisLite": true,
+   "availability": "ready",
+   "lastProbedAt": 1791908990611,
+   "tier": "lite",
+   "version": "0.1.1",
+   "tags": [
+    "first_party",
+    "klyvaron",
+    "tier:lite",
+    "base_completion"
+   ],
+   "measured": {
+    "availability": "ready",
+    "lastProbedAt": 1791908990611,
+    "medianLatencyMs": 8,
+    "tokensPerSecond": null,
+    "probeDetail": {
+     "artifact": "aetheris-lite-lm",
+     "version": "0.1.1",
+     "weightsSha256": "165e150f6e290fe3a8162673f743037dcf15a3b63199ecd7661bdbc83652b6f7",
+     "instructionTuned": false,
+     "declaredTier": "lite",
+     "tierClaim": "lite",
+     "loadMs": 8
+    }
+   }
+  },
+  "storage": {
+   "status": 200,
+   "summary": {
+    "text": "Aetheris is using 1.5 MB of storage on this device, within the 5.00 GB budget. 0 bytes can be freed without deleting anything you own.",
+    "withinBudget": true,
+    "totalBytes": 1451751
+   },
+   "installed": [
+    {
+     "id": "aetheris-lite-lm",
+     "version": "0.1.1",
+     "bytes": 1451751,
+     "broken": null
+    }
+   ],
+   "verification": [
+    {
+     "id": "aetheris-lite-lm",
+     "version": "0.1.1",
+     "ok": true,
+     "problems": []
+    }
+   ],
+   "withinBudget": true,
+   "headroomBytes": 4998548249
+  },
+  "chatUnpinned": {
+   "status": 501,
+   "error": "model_not_instruction_tuned",
+   "message": "'klyvaron:aetheris-lite-lm' is a base completion model: it continues text and does not answer questions. Pin it by id to use it for a continuation, or install an instruction-tuned model.",
+   "limitations": 4
+  },
+  "chatPinned": {
+   "status": 200,
+   "modelId": "klyvaron:aetheris-lite-lm",
+   "instructionTuned": false,
+   "limitation": "Klyvaron Lite is a base completion model: it continues the text you give it. It does not follow instructions and its output is not an answer.",
+   "usage": {
+    "promptTokens": 26,
+    "completionTokens": 48,
+    "totalTokens": 74
+   },
+   "sentExternally": false,
+   "elapsedMs": 2116,
+   "tokensPerSecond": 22.69,
+   "text": " a corpus a the comparison the contactor and the"
+  },
+  "stream": {
+   "httpStatus": 200,
+   "events": 18,
+   "kinds": [
+    "route",
+    "delta",
+    "done"
+   ]
+  },
+  "crossImplementation": {
+   "prompt": "The Aetheris Lite model is",
+   "parameters": 359616,
+   "argmax_python": 2,
+   "argmax_js": 2,
+   "topGap_python": 3.835862,
+   "topGap_js": 3.835862,
+   "maxAbsLogitDelta": 1.6144089087788416e-05,
+   "meanAbsLogitDelta": 4.274515943479814e-06,
+   "greedy_identical": true,
+   "greedy_text": " a corpus a the comparis"
+  },
+  "deviceThroughput": {
+   "parameters": 359616,
+   "contextTokens": 128,
+   "promptTokens": 26,
+   "requestedTokens": 64,
+   "generatedTokens": 64,
+   "maxNewTokensCeiling": 64,
+   "loadMs": 23.5,
+   "generateMs": 2438,
+   "tokensPerSecond": 26.25,
+   "rssMb": 73.2,
+   "text": " a corpus a the comparison the contactor and thermal thermal the",
+   "note": "Measured in the core's JavaScript runtime on this host, no Python involved. Requested and produced counts are both kept because the artifact's manifest carries generation.maxNewTokens = 64."
+  }
+ },
  "verdict": "released",
  "rationale": "Gate released: 0 hard and 0 soft failures. perplexityVsBigram 0.310505 <= 1.0; validationUnknownRate 0.00001071 <= 0.02; lossImprovement 3.380646 >= 1.0. The verdict was produced by re-running the release gate on the run's own report.",
  "note": "Committed record of a measured run. Absolute paths from the machine that produced it are canonicalised; every measured value is unchanged. The weights and this report's own JSON are not committed: artifacts stay out of Git by policy and are referenced by digest. This run's artifact is the released aetheris-lite-lm@0.1.1 (see docs/model-cards/); the install and serve evidence below was captured before the version was promoted and therefore names the artifact as aetheris-lite-lm@0.1.1-verify -- the same weights and the same file digest, a different version string in the manifest."

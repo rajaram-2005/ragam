@@ -68,11 +68,11 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 12,451 source lines, 9,847 test lines
+### `services/core` — 12,459 source lines, 9,869 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
-| `app.mjs` | 1,719 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
+| `app.mjs` | 1,726 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `klyvaron/format.mjs` | 443 | The Klyvaron artifact format: manifest validation, the shared vocabulary digest, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
@@ -101,7 +101,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
 | `memory/store.mjs` | 702 | User-approved memory, candidates that need approval before use, and session recall with citations |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
-| `klyvaron/tiers.mjs` | 485 | The three-tier model family, backing records, and the validator that refuses a capability with no artifact behind it |
+| `klyvaron/tiers.mjs` | 486 | The three-tier model family, backing records, and the validator that refuses a capability with no artifact behind it |
 | `skills/registry.mjs` | 397 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
 | `skills/manifest.mjs` | 319 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
 | `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |

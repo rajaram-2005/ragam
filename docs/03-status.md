@@ -122,7 +122,11 @@ RELEASED, installed by the store in 1,451,765 bytes, served at 26.2 tokens/s in 
 Its corpus manifest digest `70c5b78c…` was recomputed from that revision's own text
 **before the run finished** and matched, so revision and corpus are known to be the same
 thing rather than assumed to be: that is the property the superseded `@0.1.0` lacks, and
-why the version that has it is the released one. Two artifacts of the same id with
+why the version that has it is the released one. The released export was installed and
+served through the same path after the promotion, and both captures are in the record:
+`tier: lite`, `tierClaim: lite`, `textCompletion: true`, `chat: false`, an unpinned chat
+refused with `model_not_instruction_tuned`, and 22.7 tokens/s over HTTP. Record:
+[`experiments/lm-verification-run-8d9cdf8.json`](./experiments/lm-verification-run-8d9cdf8.json). Two artifacts of the same id with
 different weights (`2840150f…` and `165e150f…`) were then installed in sequence, replaced,
 and rolled back; that exercise is what exposed a real defect — a replace left the previous
 version's 1.4 MB weights in the library with no manifest referring to them, and reported

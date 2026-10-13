@@ -926,6 +926,28 @@ test('the clean-revision run matches its committed record', () => {
 
   assert.ok(update.finding.includes('2,898,235'), 'the defect the exercise found must be stated')
   assert.ok(squash(doc.lite()).includes('2,898,235'), 'docs/08 must state what the defect cost')
+
+  // The same artifact was installed and served again *after* the version was promoted -- with
+  // the export the model card describes, no `-verify` qualifier. Two captures of one weight file
+  // under two version strings are what makes the difference between them checkable, and the
+  // second capture has to agree with the card the family publishes.
+  const released = record.servingReleased
+  assert.equal(released.installedAs, `aetheris-lite-lm@${card.version}`)
+  assert.equal(released.weightsSha256, card.artifacts.fileDigest,
+    'the released export must be the file the card describes')
+  assert.equal(released.sameWeightsAsDrill, true,
+    'the drill and the released export must be the same bytes')
+  assert.equal(released.installedBytes, record.serving.installedBytes - 14,
+    'the only difference between the two captures is the shorter version string')
+  assert.equal(released.models.tier, TIERS.LITE)
+  assert.equal(released.models.aetherisLite, true)
+  assert.equal(released.models.measured.probeDetail.tierClaim, TIERS.LITE)
+  assert.equal(released.ready.loaded[0].tierClaim, TIERS.LITE)
+  assert.equal(released.chatUnpinned.status, 501)
+  assert.equal(released.chatPinned.status, 200)
+  assert.equal(released.chatPinned.sentExternally, false)
+  assert.equal(released.crossImplementation.greedy_identical, true)
+  assert.ok(released.crossImplementation.maxAbsLogitDelta < 1e-3)
 })
 
 test('the documented distillation result matches the committed experiment record', () => {

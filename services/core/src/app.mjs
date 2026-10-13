@@ -1584,7 +1584,14 @@ async function handle(request, response, app) {
   return sendJson(response, 404, { error: 'not_found', message: `no route for ${method} ${path}` }, app)
 }
 
-function publicModel(model) {
+/**
+ * A model as the HTTP surface presents it.
+ *
+ * Exported so the operator CLI can describe a model the same way rather than inventing a
+ * second shape: `tier` is derived here, and a caller that printed the raw registry entry
+ * would report `null` beside a `tier:lite` tag for the same model.
+ */
+export function publicModel(model) {
   return {
     id: model.id,
     kind: model.kind,

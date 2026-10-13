@@ -21,7 +21,7 @@ import { resolve } from 'node:path'
 
 import { loadConfig } from '../src/config.mjs'
 import { KlyvaronStore } from '../src/klyvaron/store.mjs'
-import { AetherisOmniApp } from '../src/app.mjs'
+import { AetherisOmniApp, publicModel } from '../src/app.mjs'
 import { RUNTIME_POLICIES } from '../src/policy/egress.mjs'
 
 const USAGE = `usage: node services/core/scripts/klyvaron.mjs <command> [options]
@@ -153,7 +153,10 @@ function commandStatus(options) {
     loaded: readiness.klyvaron.loaded,
     broken: readiness.klyvaron.broken,
     errors: app.klyvaron.errors,
-    models: app.registry.list().filter((model) => String(model.id).startsWith('klyvaron:')),
+    // Presented the way /api/models presents them, from the same function: the raw registry
+    // entry has no derived `tier`, so printing it would show `tier: null` beside a
+    // `tier:lite` tag for the same model.
+    models: app.registry.list().filter((model) => String(model.id).startsWith('klyvaron:')).map(publicModel),
     storage: app.storageReport(),
   })
   return app.klyvaron.errors.length === 0 ? 0 : 1

@@ -389,6 +389,17 @@ weights and the same file digest, installed through the same command as **1,451,
 — 14 bytes fewer than the drill's copy only because the version string in the manifest is
 shorter.
 
+That export was then installed and served again **after** the promotion, and the
+[record](./experiments/lm-verification-run-8d9cdf8.json) keeps both captures side by side so
+the claim above is measured rather than inferred: `tier: lite` and `tierClaim: lite` on the
+model row, `/api/ready` reporting `textCompletion: true` and `chat: false`, an unpinned
+`/api/chat` refused `501 model_not_instruction_tuned`, a pinned one answered with 48 labelled
+tokens at **22.7 tokens/s** over HTTP (**26.2 tokens/s** in the runtime with no HTTP in the
+path), and NumPy and JavaScript agreeing to **1.6e-05** on the logits and exactly on the
+greedy text. Two captures of one weight file under two version strings, and the arithmetic
+between them — 1,451,765 and 1,451,751, fourteen bytes apart — is what a promotion has to
+survive to be believed.
+
 **That exercise found a real defect**, which is the reason it is described here rather than
 summarised as a passing test. The first version of it ended with the library holding
 **2,898,235 bytes for one artifact id**: `cpSync` merges into an existing directory, so
