@@ -817,6 +817,16 @@ test('the clean-revision run matches its committed record', () => {
   assert.ok(text.includes(record.run.evaluation.perplexityVsBestBaseline.toFixed(6)),
     'docs/08 must state the ratio to the best baseline')
 
+  // Numbers that came from the neighbouring run's paragraph when this table was written:
+  // the corpus total is arithmetic over the record's own byte counts, and the two throughput
+  // figures are measurements. Both are pinned so a copy-paste cannot pass.
+  const corpusTotal = (record.corpus.trainBytes + record.corpus.validationBytes).toLocaleString('en-US')
+  assert.ok(text.includes(corpusTotal), `docs/08 must state the corpus total ${corpusTotal}`)
+  assert.ok(text.includes(record.serving.deviceThroughput.tokensPerSecond.toFixed(1)),
+    'docs/08 must state the measured device throughput')
+  assert.ok(text.includes(record.serving.chatPinned.tokensPerSecond.toFixed(1)),
+    'docs/08 must state the measured pinned-chat throughput')
+
   // Three runs, three corpora, three weight digests: none may be confused with another.
   const card = JSON.parse(doc.lmCard()).card
   const previous = JSON.parse(doc.lmVerification())

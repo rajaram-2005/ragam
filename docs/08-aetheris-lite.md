@@ -278,7 +278,7 @@ its corpus can be rebuilt from a commit:
 |---|---|
 | Revision | `8d9cdf8…`, **no `-dirty` suffix** — the revision is read beside the corpus |
 | Corpus manifest digest | `70c5b78c…` — recomputed from that revision's own text before the run finished, so the match is a prediction that held rather than a check fitted to the answer |
-| Corpus | 154 train / 17 validation files, 2,614,740 bytes, vocabulary 148 characters (147 in the training text) |
+| Corpus | 154 train / 17 validation files, 2,646,300 bytes, vocabulary 148 characters (147 in the training text) |
 | Parameters | **359,616** |
 | Validation perplexity | **4.8932**, against a bigram baseline of **15.7588** on the same 280,192 held-out tokens — ratio **0.310505** |
 | Gate | **released**, 0 hard failures, 0 soft failures |
@@ -299,7 +299,7 @@ store's API:
 | Install | `scripts/klyvaron.mjs install <dir>` — manifest plus weights, **1,451,765 bytes**, verified before the copy and again after it |
 | Device throughput | 22.6 ms to load, **26.2 tokens/s**, 72.9 MB resident |
 | NumPy vs JavaScript | all 148 logits for one prompt, maximum difference **1.6e-05**; 24 greedy tokens identical from both (`" a corpus a the comparis"`) |
-| `/api/chat`, not pinned | **501** `model_not_instruction_tuned`; pinned, **200** with 48 tokens, `sentExternally: false`, 24.2 tokens/s |
+| `/api/chat`, not pinned | **501** `model_not_instruction_tuned`; pinned, **200** with 48 tokens, `sentExternally: false`, 23.0 tokens/s |
 | `/api/storage` | 1.5 MB used, `withinBudget: true`, 4,998,548,235 bytes of headroom |
 
 Both runs remain **verification artifacts**: `aetheris-lite-lm@0.1.0` is the released model,
