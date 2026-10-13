@@ -350,6 +350,7 @@ process anywhere near the device:
 | Weights | the `.npz` itself, parsed in the core (ZIP + `.npy`), with the manifest's SHA-256 re-checked before a byte is used |
 | Vocabulary digest | one specification implemented in both languages, checked by running the JavaScript implementation from the Python test suite. The run report records a *different* function over the same character set (`CharacterTokenizer.digest`); the two are not expected to agree, and both are recorded |
 | Cross-language parity | a committed fixture carries the exact weights, the NumPy logits and the greedy continuation; `klyvaron-runtime.test.mjs` asserts the JavaScript agrees |
+| Container framing | both the inline and the ZIP64 framing of the same members load. CPython's `zipfile` writes version-needed 20 beside the real sizes on one patch release and 45 with both sizes sentinelled on another — `numpy.savez` goes through it, so the same weights are framed differently depending on the interpreter that exported them. The reader resolves a sentinel from the ZIP64 extra field in the central directory, then in the local header, and refuses rather than guessing when neither has it |
 
 ```
 python services/fabric/scripts/export_lm.py --from-run services/fabric/artifacts \

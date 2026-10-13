@@ -68,13 +68,13 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 12,459 source lines, 9,869 test lines
+### `services/core` — 12,546 source lines, 9,990 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
 | `app.mjs` | 1,726 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
-| `klyvaron/format.mjs` | 443 | The Klyvaron artifact format: manifest validation, the shared vocabulary digest, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
+| `klyvaron/format.mjs` | 530 | The Klyvaron artifact format: manifest validation, the shared vocabulary digest, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
 | `media/jobs.mjs` | 360 | Job queue, progress, cancellation, timeouts, artifact storage |
 | `klyvaron/runtime.mjs` | 349 | Klyvaron Lite inference in plain JavaScript: the forward pass, seeded sampling, greedy decode, token budgets and cancellation |
@@ -107,7 +107,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |
 | `skills/store.mjs` | 246 | Skills on disk: document + state split, version files for rollback, deletion tombstones |
 
-### `services/fabric` — 9,046 source lines, 6,905 test lines
+### `services/fabric` — 9,046 source lines, 6,900 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible

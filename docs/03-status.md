@@ -9,11 +9,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1082 passing, 0 failing.**
+**Test totals: 1084 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **452 / 452** (20 files, ~50 s) |
+| `services/core` | `node --test test/*.test.mjs` | **454 / 454** (20 files, ~50 s) |
 | `services/fabric` | `pytest -q` | **563 / 563** (25 files, ~21 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **67 / 67** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 242.71 kB → **71.78 kB gzip**, single chunk, no warnings |
@@ -61,7 +61,7 @@ instead.
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
 | 3 | Unified app, five areas | **Complete** | `apps/web`; 67 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
-| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,616-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 9, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 26 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
+| 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,616-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 11, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 28 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
 | 5 | Online provider integration | **Not met — removed by decision** | No external provider is configured, vendored or bundled. Image and video requests are refused with an explicit limitation, and the UI states that no provider exists rather than implying one can be enabled with a key |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
@@ -180,7 +180,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (452 tests)
+### `services/core` — Implemented and tested (454 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -263,6 +263,30 @@ and `chat: false`, an unpinned `/api/chat` is refused with `model_not_instructio
 `route`/`delta`/`done` events. Python and JavaScript produce the same greedy text from
 the same bytes (max logit difference 8.2e-06). Record:
 [`experiments/lm-verification-run-67cdd58.json`](./experiments/lm-verification-run-67cdd58.json).
+### What the CI check found, and why it took a diagnostic to see it
+
+The **Fabric** job was red on this branch from the first Klyvaron Lite commit while every
+local run of the same suite was green — a clean venv, a pristine clone, depth-1 and full
+history, the same NumPy and pytest. The reason could not be read the usual way: a job log is
+served from a host an agent without the repository's browser session cannot reach, and the
+log page itself is behind a sign-in wall. The test step now emits the failing test and its
+assertion as a check annotation, which the checks API serves openly, and the answer arrived
+in one line: the committed cross-language parity fixture regenerated *byte for byte
+differently* on the runner while all fourteen arrays were identical. CPython 3.11.2 frames
+each local record with version-needed 20 beside the real sizes; 3.11.17 writes 45 with both
+sizes replaced by the `0xffffffff` sentinel that ZIP64 defines for "the value is in the extra
+field". Same members, same weights, a different container — the fixture test was comparing a
+container built by the standard library.
+
+Two things changed, both in the honest direction. The fixture test now compares the *model*
+(tokenizer digest, member names, per-array dtype, shape and values) and reports which array
+changed and by how much when it fails; the container is the standard library's, not this
+project's. And the JavaScript reader resolves ZIP64 sentinels instead of trusting the fixed
+fields, because an artifact is bytes and the interpreter that wrote it is not recorded in
+them — `klyvaron-runtime.test.mjs` reads the committed fixture reframed both ways and asserts
+the weights are identical, and asserts a refusal (not a guess) when a sentinel cannot be
+resolved anywhere. Both tests fail against the previous reader.
+
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 

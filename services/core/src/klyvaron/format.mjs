@@ -63,6 +63,76 @@ export class ArtifactError extends Error {
 const EOCD_SIGNATURE = 0x06054b50
 const CENTRAL_SIGNATURE = 0x02014b50
 const LOCAL_SIGNATURE = 0x04034b50
+const ZIP64_EXTRA_ID = 0x0001
+//: ZIP64's "the real value is in the extra field" marker for a 32-bit size or offset.
+const ZIP64_SENTINEL = 0xffffffff
+
+/**
+ * Find one extra field by id, or null.
+ *
+ * Extra fields are a flat list of `(id, length, data)` records. Returning null rather than
+ * throwing lets the caller say which sources it looked in.
+ */
+function findExtraField(buffer, start, length, id) {
+  const end = Math.min(start + length, buffer.length)
+  let cursor = start
+  while (cursor + 4 <= end) {
+    const fieldId = buffer.readUInt16LE(cursor)
+    const fieldLength = buffer.readUInt16LE(cursor + 2)
+    if (fieldId === id) return buffer.subarray(cursor + 4, cursor + 4 + fieldLength)
+    cursor += 4 + fieldLength
+  }
+  return null
+}
+
+/**
+ * A member's real sizes when the 32-bit fields say "the value is in the extra field".
+ *
+ * ZIP64 replaces a size or an offset with `0xffffffff` and carries the 64-bit values in an
+ * extra field (id `0x0001`), in a fixed order — uncompressed size, compressed size, header
+ * offset, disk number — including only the fields that overflowed. That framing is not
+ * exotic for this project: CPython's `zipfile` writes *every* member that way on some patch
+ * releases of the same interpreter (version-needed 45, both sizes sentinelled) and writes
+ * the sizes inline beside a ZIP64 extra field on others, for the same weights. An artifact
+ * is bytes; the interpreter that wrote it is not recorded in them, so both have to read.
+ *
+ * The central directory is the index and is consulted first. The local header is consulted
+ * as well because a writer that put the values beside the data is not wrong, only
+ * unhelpful — and a reader that refuses it would be refusing an artifact it can read.
+ */
+function resolveZip64Sizes(buffer, {
+  centralExtraStart, centralExtraLength, localExtraStart, localExtraLength,
+  compressedSize, uncompressedSize, name,
+}) {
+  if (compressedSize !== ZIP64_SENTINEL && uncompressedSize !== ZIP64_SENTINEL) {
+    return { compressed: compressedSize, uncompressed: uncompressedSize }
+  }
+  const sources = [
+    ['the central directory', centralExtraStart, centralExtraLength],
+    ['the local header', localExtraStart, localExtraLength],
+  ]
+  for (const [where, start, length] of sources) {
+    const field = findExtraField(buffer, start, length, ZIP64_EXTRA_ID)
+    if (!field) continue
+    let cursor = 0
+    const resolved = { compressed: compressedSize, uncompressed: uncompressedSize }
+    if (uncompressedSize === ZIP64_SENTINEL) {
+      if (cursor + 8 > field.length) continue
+      resolved.uncompressed = Number(field.readBigUInt64LE(cursor))
+      cursor += 8
+    }
+    if (compressedSize === ZIP64_SENTINEL) {
+      if (cursor + 8 > field.length) continue
+      resolved.compressed = Number(field.readBigUInt64LE(cursor))
+      cursor += 8
+    }
+    return resolved
+  }
+  throw new ArtifactError(
+    `'${name}' declares a 64-bit size but carries no ZIP64 extra field (looked in the central directory and the local header)`,
+    { code: 'corrupt_zip' },
+  )
+}
 
 /**
  * Read every member of a ZIP archive held in memory.
@@ -71,7 +141,9 @@ const LOCAL_SIGNATURE = 0x04034b50
  * central directory is the index and a scan would also match signatures appearing
  * inside compressed data. `numpy.savez` writes stored (method 0) entries;
  * `savez_compressed` writes deflated ones, and both are handled so an exporter that
- * changes its mind does not silently produce an unreadable artifact.
+ * changes its mind does not silently produce an unreadable artifact. ZIP64 framing is
+ * handled too — see `resolveZip64Sizes` for why the same interpreter writes it for the
+ * same weights on different patch releases.
  */
 export function readZipEntries(buffer) {
   const eocd = findEndOfCentralDirectory(buffer)
@@ -96,17 +168,32 @@ export function readZipEntries(buffer) {
     if (buffer.readUInt32LE(localOffset) !== LOCAL_SIGNATURE) {
       throw new ArtifactError(`'${name}' has a bad local header`, { code: 'corrupt_zip' })
     }
+    if (localOffset === ZIP64_SENTINEL) {
+      throw new ArtifactError(
+        `'${name}' is stored at a 64-bit offset; this reader works on an in-memory buffer and cannot address past 4 GB`,
+        { code: 'unsupported_zip64' },
+      )
+    }
     const localNameLength = buffer.readUInt16LE(localOffset + 26)
     const localExtraLength = buffer.readUInt16LE(localOffset + 28)
     const dataStart = localOffset + 30 + localNameLength + localExtraLength
-    const raw = buffer.subarray(dataStart, dataStart + compressedSize)
+    const { compressed, uncompressed } = resolveZip64Sizes(buffer, {
+      centralExtraStart: offset + 46 + nameLength,
+      centralExtraLength: extraLength,
+      localExtraStart: localOffset + 30 + localNameLength,
+      localExtraLength,
+      compressedSize,
+      uncompressedSize,
+      name,
+    })
+    const raw = buffer.subarray(dataStart, dataStart + compressed)
 
     let data
     if (method === 0) data = raw
     else if (method === 8) data = inflateRawSync(raw)
     else throw new ArtifactError(`'${name}' uses unsupported compression method ${method}`, { code: 'unsupported_compression' })
-    if (data.length !== uncompressedSize) {
-      throw new ArtifactError(`'${name}' is ${data.length} bytes, the directory says ${uncompressedSize}`, { code: 'corrupt_zip' })
+    if (data.length !== uncompressed) {
+      throw new ArtifactError(`'${name}' is ${data.length} bytes, the directory says ${uncompressed}`, { code: 'corrupt_zip' })
     }
     entries.set(name, data)
     offset += 46 + nameLength + extraLength + commentLength

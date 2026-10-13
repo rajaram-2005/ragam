@@ -94,6 +94,127 @@ test('the .npz reader reads real NumPy archives byte for byte', () => {
   }
 })
 
+// ---------------------------------------------------------------------------
+// ZIP64 framing: the same members, written by a different interpreter
+// ---------------------------------------------------------------------------
+
+const ZIP64_SENTINEL = 0xffffffff
+
+/** Walk the central directory, returning the EOCD offset and each record's offsets. */
+function centralDirectoryEntries(buffer) {
+  const eocd = buffer.lastIndexOf(Buffer.from('PK\x05\x06', 'latin1'))
+  const count = buffer.readUInt16LE(eocd + 10)
+  let offset = buffer.readUInt32LE(eocd + 16)
+  const records = []
+  for (let i = 0; i < count; i += 1) {
+    records.push({
+      offset,
+      nameLength: buffer.readUInt16LE(offset + 28),
+      extraLength: buffer.readUInt16LE(offset + 30),
+      commentLength: buffer.readUInt16LE(offset + 32),
+      localOffset: buffer.readUInt32LE(offset + 42),
+    })
+    offset += 46 + records[i].nameLength + records[i].extraLength + records[i].commentLength
+  }
+  return { eocd, records }
+}
+
+/** The framing recent CPython writes: version-needed 45, both sizes sentinelled. */
+function withSentinelLocalSizes(buffer) {
+  const copy = Buffer.from(buffer)
+  for (const { localOffset } of centralDirectoryEntries(copy).records) {
+    copy.writeUInt16LE(45, localOffset + 4)
+    copy.writeUInt32LE(ZIP64_SENTINEL, localOffset + 18)
+    copy.writeUInt32LE(ZIP64_SENTINEL, localOffset + 22)
+  }
+  return copy
+}
+
+/**
+ * The framing ZIP64 proper describes: sentinels in the directory's fixed size fields and
+ * the 64-bit values in an extra field (id 0x0001, uncompressed then compressed).
+ */
+function withSentinelDirectorySizes(buffer, extraId = 0x0001) {
+  const copy = Buffer.from(buffer)
+  const { eocd, records } = centralDirectoryEntries(copy)
+  const directoryStart = copy.readUInt32LE(eocd + 16)
+  const chunks = []
+  for (const record of records) {
+    const head = Buffer.from(copy.subarray(record.offset, record.offset + 46))
+    const name = copy.subarray(record.offset + 46, record.offset + 46 + record.nameLength)
+    const afterExtra = record.offset + 46 + record.nameLength + record.extraLength
+    const comment = copy.subarray(afterExtra, afterExtra + record.commentLength)
+    const compressed = copy.readUInt32LE(record.offset + 20)
+    const uncompressed = copy.readUInt32LE(record.offset + 24)
+    assert.notEqual(uncompressed, ZIP64_SENTINEL, 'the fixture must not already be sentinelled')
+    const extra = Buffer.alloc(20)
+    extra.writeUInt16LE(extraId, 0)
+    extra.writeUInt16LE(16, 2)
+    extra.writeBigUInt64LE(BigInt(uncompressed), 4)
+    extra.writeBigUInt64LE(BigInt(compressed), 12)
+    head.writeUInt32LE(ZIP64_SENTINEL, 20)
+    head.writeUInt32LE(ZIP64_SENTINEL, 24)
+    head.writeUInt16LE(extra.length, 30)
+    chunks.push(head, name, extra, comment)
+  }
+  const directory = Buffer.concat(chunks)
+  const tail = Buffer.from(copy.subarray(eocd))
+  tail.writeUInt32LE(directory.length, 12)
+  tail.writeUInt32LE(directoryStart, 16)
+  return Buffer.concat([copy.subarray(0, directoryStart), directory, tail])
+}
+
+/** Rename every ZIP64 extra field, so a sentinel cannot be resolved anywhere. */
+function withoutZip64ExtraFields(buffer) {
+  const copy = Buffer.from(buffer)
+  for (const record of centralDirectoryEntries(copy).records) {
+    copy.writeUInt16LE(0x9999, record.offset + 46 + record.nameLength)
+    const localNameLength = copy.readUInt16LE(record.localOffset + 26)
+    copy.writeUInt16LE(0x9999, record.localOffset + 30 + localNameLength)
+  }
+  return copy
+}
+
+test('the same members framed as ZIP64 read to the same weights', () => {
+  // CPython's `zipfile` frames the same members differently across patch releases: 3.11.2
+  // writes version-needed 20 beside the real sizes on each local record, and 3.11.17
+  // writes 45 with both sizes replaced by 0xffffffff, the values moved into the ZIP64
+  // extra field. `numpy.savez` writes through `zipfile`, so an artifact exported on one
+  // interpreter is framed differently from the same artifact exported on another -- and
+  // both are the same model. CI's runner is the second kind, which is how this was found:
+  // the committed fixture regenerated there differed byte for byte while every array was
+  // identical. This is the measurement that both framings load.
+  const original = Buffer.from(fixture.npzBase64, 'base64')
+  const reference = readNpz(original)
+  const variants = {
+    'sentinels in the local headers': withSentinelLocalSizes(original),
+    'sentinels in the central directory': withSentinelDirectorySizes(original),
+  }
+  for (const [label, variant] of Object.entries(variants)) {
+    assert.equal(variant.equals(original), false, `${label}: the payload must actually change`)
+    const parsed = readNpz(variant)
+    assert.deepEqual([...parsed.keys()], [...reference.keys()], `${label}: member names`)
+    for (const [name, entry] of reference) {
+      const other = parsed.get(name)
+      assert.equal(other.dtype, entry.dtype, `${label}: ${name} dtype`)
+      assert.deepEqual(other.shape, entry.shape, `${label}: ${name} shape`)
+      assert.deepEqual(Array.from(other.data), Array.from(entry.data), `${label}: ${name} values`)
+    }
+  }
+})
+
+test('a size declared in the extra field with no extra field is refused, not guessed', () => {
+  // The failure this guards against is a reader that, faced with a 0xffffffff it cannot
+  // resolve, reads from the sentinel: it would hand back a truncated array and the model
+  // would generate worse text instead of failing. Refusing is the only honest option.
+  const unresolvable = withoutZip64ExtraFields(withSentinelDirectorySizes(Buffer.from(fixture.npzBase64, 'base64')))
+  assert.throws(() => readNpz(unresolvable), (error) => {
+    assert.equal(error.code, 'corrupt_zip')
+    assert.match(error.message, /ZIP64 extra field/)
+    return true
+  })
+})
+
 test('the runtime reproduces NumPy logits, and its greedy continuation is identical', () => {
   const runtime = new KlyvaronRuntime(fixtureArtifact())
   assert.equal(runtime.parameterCount, fixture.manifest.provenance.parameterCount)
