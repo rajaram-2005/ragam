@@ -52,13 +52,13 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 765 tests: core 267, web 56, fabric 442
+npm test          # 852 tests: core 268, web 56, fabric 528
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~55 min on 2 CPUs)
 npm run train     # in-process training run
 ```
 
-All 765 run in CI on every push and pull request
+All 852 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -119,7 +119,7 @@ Status of every acceptance criterion, with evidence:
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
 | `services/core` | Node 22 ESM | 7,380 | 5,237 | **zero npm packages** | 260 |
-| `services/fabric` | Python 3.11 | 7,138 | 4,927 | NumPy only | 442 |
+| `services/fabric` | Python 3.11 | 8,090 | 6,220 | NumPy only | 528 |
 | `apps/web` | React 18 + Vite | 3,486 | 1,169 | react, react-dom | 56 |
 
 The core service has **no npm dependencies at all** — that is why the root
@@ -233,6 +233,8 @@ Details, including sixteen open items stated plainly:
 | [`docs/05-security.md`](docs/05-security.md) | Threat model and every control, each tied to a test |
 | [`docs/06-benchmarks.md`](docs/06-benchmarks.md) | Measurements, conditions, fairness controls, what they do not support |
 | [`docs/07-improvement-cycle.md`](docs/07-improvement-cycle.md) | The Sparsiz improvement cycle run on a real failure, end to end |
+| [`docs/08-aetheris-lite.md`](docs/08-aetheris-lite.md) | The from-scratch model family: method, verified gradients, release gate |
+| [`docs/09-distillation.md`](docs/09-distillation.md) | Distillation: the logit path that runs here, the credentialed path that does not |
 | [`docs/model-cards/`](docs/model-cards/) | Versioned model cards (Markdown + machine-readable JSON) |
 | [`third-party/NOTICES.md`](third-party/NOTICES.md) | Provenance, what was adopted vs replaced, licence compatibility |
 | [`services/fabric/README.md`](services/fabric/README.md) | Training pipeline and experiment ledger |

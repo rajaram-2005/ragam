@@ -42,6 +42,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--validation-fraction", type=float, default=0.10)
     parser.add_argument("--dtype", default="float32", choices=("float32", "float64"))
     parser.add_argument("--overwrite", action="store_true", help="replace an existing artifact with the same hash")
+    parser.add_argument(
+        "--expect-manifest-digest",
+        default=None,
+        help=(
+            "refuse to train unless the corpus manifest matches this digest. The model trains on "
+            "this repository's own text, so it changes whenever the repository does; pass the digest "
+            "recorded in a previous run's report to reproduce that run or fail loudly."
+        ),
+    )
     parser.add_argument("--json", dest="json_out", default=None, help="write the report JSON here as well")
     parser.add_argument("--quiet", action="store_true")
     return parser
@@ -70,8 +79,13 @@ def main(argv=None) -> int:
     print(f"  corpus   {corpus_root}")
     print(f"  output   {output_dir}")
     started = time.time()
-    report = train(config, output_dir=output_dir, corpus_root=corpus_root,
-                   run_name=args.run_name, overwrite=args.overwrite, progress=progress)
+    try:
+        report = train(config, output_dir=output_dir, corpus_root=corpus_root,
+                       run_name=args.run_name, overwrite=args.overwrite,
+                       expect_manifest_digest=args.expect_manifest_digest, progress=progress)
+    except RuntimeError as error:
+        print(f"\naetheris-lite: refusing to train\n  {error}", file=sys.stderr)
+        return 2
     payload = report.to_dict()
 
     if args.json_out:
@@ -98,6 +112,8 @@ def main(argv=None) -> int:
     print(f"  artifact     {payload['artifact']['filename']} "
           f"({payload['artifact']['bytes']:,} bytes)")
     print(f"  weights      {payload['artifact']['weightsDigest']}")
+    print(f"  corpus hash  {payload['corpus']['manifestDigest']}")
+    print(f"  snapshot     {payload['artifact']['corpusSnapshot']}")
     print(f"  revision     {payload['provenance']['codeRevision']}")
     return 0
 

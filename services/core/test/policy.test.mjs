@@ -171,6 +171,14 @@ test('secrets are redacted and only their category is reported', () => {
   assert.equal(result.text.includes('sk-abcdefghij1234567890'), false)
   assert.equal(result.text.includes('ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'), false)
   assert.match(result.text, /\[REDACTED:openai_style_key\]/)
+
+  // A specific pattern must be tried before a general one that also matches it.
+  // `sk-ant-...` satisfies both, so with the OpenAI pattern first the Anthropic
+  // pattern was unreachable and every Anthropic key was reported under the wrong
+  // name. The credential was still redacted, so nothing failed -- which is exactly
+  // why the name needs pinning rather than the redaction.
+  assert.deepEqual(redactSecrets('key sk-ant-api03-abcdefghijklmnopqrstuvwx').findings, ['anthropic_style_key'])
+  assert.deepEqual(redactSecrets('key sk-proj-abcdefghijklmnopqrstuvwxyz0123').findings, ['openai_style_key'])
   assert.ok(result.findings.includes('github_token'))
   // The findings list must never contain the secret itself.
   assert.equal(JSON.stringify(result.findings).includes('abcdefghij'), false)

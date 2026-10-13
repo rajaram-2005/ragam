@@ -18,6 +18,9 @@ five product areas, never presented as one of them.
 | `fabric/lm/train.py` | AdamW, warmup+cosine, gradient clipping, and the provenance a run needs to be re-derived |
 | `fabric/lm/evaluate.py` | Held-out perplexity against computed uniform/unigram/bigram baselines |
 | `fabric/lm/card.py` | The Aetheris Lite release policy, driven through the existing `ModelReleaseManager` |
+| `fabric/lm/distill.py` | Logit distillation: temperature-scaled KL against a local teacher, on the verified backward pass |
+| `fabric/lm/privacy.py` | The redaction gate any text leaving for an external teacher must pass |
+| `fabric/lm/teacher.py` | An OpenAI-compatible teacher behind that gate, for models that only expose an API |
 | `fabric/hybrid.py` | Rank fusion of the lexical and dense retrievers |
 | `fabric/dataset.py::split_fit_validation` | Fit/validation split so selection never touches the evaluation set |
 | `fabric/metrics.py` | Recall@k, MRR, nDCG@k, hit rate |
@@ -36,7 +39,7 @@ is deliberate — see *What cannot run here* below.
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -e '.[dev]'
-pytest                     # 256 tests
+pytest                     # 528 tests
 python -m fabric.server    # http://127.0.0.1:8791
 ```
 
@@ -50,7 +53,16 @@ Data Validation → Base Selection → Domain Training → SFT
 Each stage reports its own `StageStatus`. On a host with no GPU and no route to
 model weights, `sft`, `preference_optimization` and `distillation` return
 `blocked_needs_weights` and say what would be needed. They are never reported as
-completed, and a run containing one is marked `partial`.
+completed, and a run containing one is marked `partial`. For *this* pipeline that
+remains true: distilling the retriever needs a teacher for the retrieval task, and
+none is installed.
+
+`fabric/lm/` is a parallel path rather than a stage of that pipeline, which is why it
+is not blocked by the same wall. It trains its own teacher locally, so logit
+distillation needs no download, no GPU and no credential — see
+[`docs/09-distillation.md`](../docs/09-distillation.md). The path that does need a
+credential, distillation from a model that only exposes an HTTP API, is implemented
+and tested against a local fixture and has **never** been run against a provider.
 
 ## Measured result on this host
 

@@ -54,6 +54,8 @@ const doc = {
   lite: () => read('docs/08-aetheris-lite.md'),
   lmCard: () => read('docs/model-cards/aetheris-lite-lm-0.1.0.json'),
   cycle: () => read('docs/07-improvement-cycle.md'),
+  distillation: () => read('docs/09-distillation.md'),
+  distillVerdict: () => read('docs/experiments/distillation-logit-vs-baseline.json'),
   readme: () => read('README.md'),
   env: () => read('.env.example'),
   notices: () => read('third-party/NOTICES.md'),
@@ -493,14 +495,14 @@ test('the status doc reports the real test totals', () => {
   // docs/03-status.md and README.md have to move with it.
   assert.equal(count('services/core/test', /\.test\.mjs$/), 11)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
-  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 19)
+  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 23)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**267 / 267**'), 'core total must be stated')
-  assert.ok(status.includes('**442 / 442**'), 'fabric total must be stated')
+  assert.ok(status.includes('**268 / 268**'), 'core total must be stated')
+  assert.ok(status.includes('**528 / 528**'), 'fabric total must be stated')
   assert.ok(status.includes('**56 / 56**'), 'web total must be stated')
-  assert.ok(status.includes('765 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('765 tests: core 267, web 56, fabric 442'),
+  assert.ok(status.includes('852 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('852 tests: core 268, web 56, fabric 528'),
     'README must state the same totals')
   assert.ok(status.includes('(11 files'), 'the file count must move with the suite')
 
@@ -513,14 +515,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(267), `core heading must say 267, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(442), `fabric heading must say 442, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(268), `core heading must say 268, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(528), `fabric heading must say 528, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(56), `web heading must say 56, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    765,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 765`,
+    852,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 852`,
   )
 })
 
@@ -578,6 +580,62 @@ test('the documented language-model results match its committed model card', () 
     /follows no instructions|no instruction-following|does not follow instructions/.test(text),
     'docs/08 must say the model does not follow instructions',
   )
+})
+
+test('the documented distillation result matches the committed experiment record', () => {
+  // A negative result is the easiest kind to soften in prose and the easiest to get
+  // wrong in transcription, so the numbers are read from the record and required to
+  // appear. Phrasing is free; the measurements are not.
+  const record = JSON.parse(doc.distillVerdict())
+  // U+2212 (typographic minus) is what a document *should* use in prose, and it is not
+  // the ASCII '-' that toFixed produces. Normalising here keeps the check strict about
+  // the number while leaving the document free to be typeset properly.
+  const text = squash(doc.distillation()).replace(/\u2212/g, '-')
+
+  assert.equal(record.experiment, 'logit-distillation-vs-baseline')
+  assert.equal(record.runs.length, 6, 'three seeds, two arms')
+  assert.equal(record.budget.steps, 300)
+
+  // The verdict, spelled as the record computed it. Tolerant on phrasing, strict on
+  // substance: the document may write it as a sentence, but it has to say it, and it
+  // has to say the word the record computed rather than a softer synonym.
+  assert.ok(
+    new RegExp(`Verdict[^.]*${record.verdict}`, 'i').test(text),
+    `docs/09 must state the computed verdict ${record.verdict.toUpperCase()}`,
+  )
+
+  // Every paired measurement, to the precision the document claims.
+  for (const run of record.runs) {
+    const value = run.nllNatsPerToken.toFixed(6)
+    assert.ok(text.includes(value), `docs/09 must state the measured nll ${value} (seed ${run.seed}, ${run.arm})`)
+  }
+
+  // The summary: the mean gain, and the counts that decided the verdict.
+  assert.ok(text.includes(record.summary.meanGain.toFixed(6)),
+    `docs/09 must state the mean gain ${record.summary.meanGain.toFixed(6)}`)
+  assert.ok(text.includes(`${record.summary.seedsReversed} of ${record.summary.seedCount}`),
+    'docs/09 must state how many seeds reversed')
+
+  // The teacher is identified by digest, and the record must agree with it.
+  assert.ok(text.includes(record.teacher.weightsDigest.slice(0, 12)),
+    'docs/09 must identify the teacher by its weights digest')
+
+  // The baseline must be described as not forwarding the teacher at all, because that
+  // is what makes the two arms' costs comparable.
+  const baseline = record.runs.filter((run) => run.arm === 'baseline')
+  assert.equal(baseline.length, 3)
+  assert.ok(baseline.every((run) => run.teacherForwards === 0))
+  const distilled = record.runs.filter((run) => run.arm === 'distilled')
+  assert.ok(distilled.every((run) => run.teacherForwards === record.budget.steps))
+  assert.ok(/0 teacher forwards|never forwards the teacher|does not forward the teacher/.test(text),
+    'docs/09 must record that the baseline never runs the teacher')
+
+  // And the credentialed path must still be declared unrun. This is the claim that
+  // would be easiest to lose: nothing in the repository can test a provider.
+  assert.ok(/never been run against a (real |live )?provider/.test(text),
+    'docs/09 must state that the external path has never run against a provider')
+  assert.ok(/requires external credentials/i.test(text),
+    "docs/09 must label the external path 'requires external credentials'")
 })
 
 test('the documented fabric line counts match the filesystem', () => {

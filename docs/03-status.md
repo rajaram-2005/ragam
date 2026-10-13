@@ -9,12 +9,12 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 765 passing, 0 failing.**
+**Test totals: 852 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **267 / 267** (11 files, ~23 s) |
-| `services/fabric` | `pytest -q` | **442 / 442** (19 files, ~31 s) |
+| `services/core` | `node --test test/*.test.mjs` | **268 / 268** (11 files, ~23 s) |
+| `services/fabric` | `pytest -q` | **528 / 528** (23 files, ~35 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **56 / 56** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 217.28 kB → **65.53 kB gzip**, single chunk, no warnings |
 
@@ -150,7 +150,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (267 tests)
+### `services/core` — Implemented and tested (268 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -170,7 +170,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (442 tests)
+### `services/fabric` — Implemented and tested (528 tests)
 
 | Stage | Status |
 |---|---|
@@ -179,7 +179,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | domain_training | **Implemented and tested** — hand-written Adam; all 5 parameter gradients match central finite differences to ~3e-10 |
 | sft | **Blocked — requires weights** |
 | preference_optimization | **Blocked — requires weights, data and a reward signal** |
-| distillation | **Blocked — requires a teacher model** |
+| distillation | **Implemented and tested** — logit distillation from a locally trained teacher runs here with no credentials; distillation from an *external* teacher is **Requires external credentials** (built and tested against a local fixture, never run against a provider). See [`09-distillation.md`](./09-distillation.md) |
 | evaluation | **Implemented and tested** |
 | release | **Implemented and tested** — validates before releasing; rollback restores a prior version |
 
@@ -196,6 +196,16 @@ using corpora it already has, which is why it is not blocked where the retrieval
 pipeline is. See [`08-aetheris-lite.md`](./08-aetheris-lite.md). It carries the
 same discipline: a corpus split that cannot leak, held-out evaluation against
 computed baselines, a versioned card, and a gate that refuses.
+
+Two limits on that statement are worth stating plainly rather than implying. The
+corpus is this repository's own text, so **every commit changes the corpus and
+therefore the model**; the first attempt at a reproduction produced a different
+model (first loss 4.8057 against the release's 4.8380) and the first attempt at the
+distillation experiment was refused outright when eight characters entered the
+corpus. A run now writes its exact corpus beside its weights, and a reproduction can
+be demanded or refused by digest rather than assumed. And the model emits mush at
+this size — 359,136 parameters is enough to beat every baseline it was measured
+against and not enough to hold a conversation.
 
 ### `apps/web` — Implemented and tested (56 tests)
 

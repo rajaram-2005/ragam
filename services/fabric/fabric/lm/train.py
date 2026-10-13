@@ -20,6 +20,7 @@ Two rules are enforced rather than documented:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import platform
@@ -172,7 +173,6 @@ class TrainingReport:
 
     @property
     def digest(self) -> str:
-        import hashlib
         payload = self.to_dict()
         for field in self.DIGEST_EXCLUDED:
             payload.pop(field, None)
@@ -198,9 +198,41 @@ def peak_memory_mb() -> float:
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
 
 
+def _file_digest(path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def load_corpus_snapshot(path) -> tuple[str, str, dict]:
+    """Read a run's corpus snapshot back as (train_text, validation_text, manifest).
+
+    Snapshots exist because the corpus is this repository's own text: it changes
+    whenever the repository does, which makes a released model irreproducible by
+    re-running its command. This is the other half -- being able to feed the exact
+    text of a past run back in, so a distillation or ablation experiment can be run
+    against a teacher's own data even after the repository has moved on.
+    """
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if payload.get("format") != "aetheris-corpus-snapshot/v1":
+        raise ValueError(f"{path} is not an aetheris corpus snapshot")
+    manifest = dict(payload["manifest"])
+    manifest["digest"] = payload["manifestDigest"]
+    return payload["train"], payload["validation"], manifest
+
+
 def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = "aetheris-lite-lm",
-          overwrite: bool = False, progress=None) -> TrainingReport:
-    """Run the pipeline and write the artifact plus its report."""
+          overwrite: bool = False, expect_manifest_digest: str | None = None,
+          progress=None) -> TrainingReport:
+    """Run the pipeline and write the artifact, its report and a corpus snapshot.
+
+    `expect_manifest_digest` turns silent drift into a refusal. The model is trained on
+    this repository's own text, so any added file changes the corpus and therefore the
+    trained weights. Without this check, "reproduce the release" would re-run happily
+    and produce a *different* model while reporting success.
+    """
     root = Path(corpus_root or config.corpus_root).resolve()
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -215,6 +247,14 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
     )
     if manifest.overlap():
         raise RuntimeError(f"the corpus split leaked files across both sides: {sorted(manifest.overlap())}")
+
+    if expect_manifest_digest and manifest.digest != expect_manifest_digest:
+        raise RuntimeError(
+            f"corpus drift: the manifest is {manifest.digest} but {expect_manifest_digest} was expected. "
+            f"This corpus has {len(manifest.train)} train / {len(manifest.validation)} validation files. "
+            "The model trains on this repository's own text, so it changes whenever the repository does. "
+            "Train from the run's *.corpus.txt snapshot instead, or pass the digest of the corpus you mean."
+        )
 
     train_text = read_corpus(root, manifest.train)
     validation_text = read_corpus(root, manifest.validation)
@@ -278,6 +318,28 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
             )
     saved_digest = model.save(artifact_path)
 
+    # The corpus itself is written next to the weights. This closes a real hole found
+    # by trying to retrain the released model: it is trained on THIS REPOSITORY's own
+    # text, so every commit or added file changes the corpus, and "run the same command
+    # to reproduce it" quietly stopped being true while still appearing to work. The
+    # manifest digest alone does not help -- it proves the corpus changed, not what it
+    # was. Storing the exact text makes a release reproducible indefinitely, and costs
+    # about a megabyte in a directory that is already gitignored.
+    snapshot_path = output_dir / f"{run_name}-{in_memory_digest[:12]}.corpus.json"
+    snapshot_path.write_text(
+        json.dumps({
+            "format": "aetheris-corpus-snapshot/v1",
+            "manifest": manifest.to_dict(),
+            # The digest is computed from the manifest rather than stored in it, so it
+            # has to be written down here or the snapshot could not identify itself.
+            "manifestDigest": manifest.digest,
+            "train": train_text,
+            "validation": validation_text,
+        }),
+        encoding="utf-8",
+    )
+    snapshot_digest = _file_digest(snapshot_path)
+
     report = TrainingReport(
         config=config.to_dict(),
         model_config=model_config.to_dict(),
@@ -327,6 +389,10 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
             "fileDigest": saved_digest,
             "weightsDigest": in_memory_digest,
             "bytes": artifact_path.stat().st_size,
+            # The exact text this run trained on, so the model can be rebuilt even
+            # after the repository has moved on.
+            "corpusSnapshot": snapshot_path.name,
+            "corpusSnapshotDigest": snapshot_digest,
         },
     )
     report_path = output_dir / f"{run_name}-{in_memory_digest[:12]}.report.json"

@@ -9,8 +9,14 @@ import { DATA_CLASSES } from './egress.mjs'
 // Deliberately conservative patterns. Each carries the label used in audit events
 // so an operator can see *what kind* of thing was removed without seeing it.
 const SECRET_PATTERNS = [
-  { name: 'openai_style_key', re: /\bsk-[A-Za-z0-9_-]{16,}\b/g },
+  // Order matters within this list. Patterns are applied in sequence and the first
+  // match consumes the text, so a general pattern placed before a specific one makes
+  // the specific one unreachable. `sk-ant-...` also satisfies `sk-...`, so the
+  // Anthropic pattern has to come first or every Anthropic key is reported as an
+  // OpenAI key. The credential was still redacted either way; what was wrong was the
+  // name an operator reads in the audit trail.
   { name: 'anthropic_style_key', re: /\bsk-ant-[A-Za-z0-9_-]{16,}\b/g },
+  { name: 'openai_style_key', re: /\bsk-[A-Za-z0-9_-]{16,}\b/g },
   { name: 'github_token', re: /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g },
   { name: 'aws_access_key_id', re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
   { name: 'google_api_key', re: /\bAIza[0-9A-Za-z_-]{30,}\b/g },

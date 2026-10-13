@@ -289,10 +289,22 @@ class TransformerLM:
     # -- backward ----------------------------------------------------------
 
     def loss_and_grads(self, inputs: np.ndarray, targets: np.ndarray):
-        """Returns (loss_in_nats, grads). The backward pass is derived by hand."""
-        c = self.config
+        """Returns (loss_in_nats, grads) for next-token prediction."""
         logits, cache = self.forward(inputs, cache=True)
         loss, dlogits = self._cross_entropy(logits, targets)
+        return loss, self.backward_from_dlogits(dlogits, cache)
+
+    def backward_from_dlogits(self, dlogits: np.ndarray, cache: dict):
+        """Backpropagate an arbitrary gradient on the logits.
+
+        Split out so knowledge distillation can supply its own gradient -- the
+        weighted sum of a cross-entropy term and a temperature-scaled KL term --
+        without duplicating any of the backward pass below. Everything after this
+        point depends only on `dlogits` and the forward cache, so both objectives
+        share one verified implementation rather than two that could drift apart.
+        """
+        c = self.config
+        inputs, T, B = cache["inputs"], cache["T"], cache["B"]
 
         grads = self.zero_grads()
         head = self.params["emb"] if c.tie_embeddings else self.params["head"]
@@ -304,7 +316,6 @@ class TransformerLM:
         grads["lnf_gain"] += dlnf_gain
         grads["lnf_bias"] += dlnf_bias
 
-        B, T = cache["B"], cache["T"]
         hd = c.head_dim
         inv_scale = 1.0 / math.sqrt(hd)
 
@@ -368,7 +379,7 @@ class TransformerLM:
         pos_onehot[columns % T, columns] = 1.0
         grads["pos"][:T] += pos_onehot @ d_flat
 
-        return loss, grads
+        return grads
 
     # -- persistence -------------------------------------------------------
 

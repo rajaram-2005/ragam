@@ -27,7 +27,9 @@ dependencies = ["numpy>=1.26"]
 # every pytest below 9.0.3, where the /tmp/pytest-of-{user} temp directory can be
 # pre-created or symlinked by another local user on a shared UNIX host. Test-only
 # and never redistributed, but the declared range should not permit a known-bad
-# version. The fabric suite (256 tests) was verified green under pytest 9.1.1.
+# version. The fabric suite was verified green under pytest 9.1.1. The count is
+# deliberately absent: an unguarded number in a comment is a stale number, and this
+# one had already drifted. docs/03-status.md reports the current totals.
 dev = ["pytest>=9.0.3"]
 
 [project.scripts]

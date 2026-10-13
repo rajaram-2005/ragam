@@ -254,6 +254,60 @@ def test_the_report_serialises_to_json(report, tmp_path):
     assert len(restored["loss_curve"]) == len(report.loss_curve)
 
 
+def test_the_corpus_snapshot_is_written_and_hashed(corpus, tmp_path):
+    """Without this, the model is only reproducible while the repository stands still.
+
+    It is trained on this repository's own text, so any added file changes the corpus
+    and therefore the weights. The manifest digest proves the corpus changed; the
+    snapshot is what lets it be rebuilt.
+    """
+    report = train(small_config(), output_dir=tmp_path, corpus_root=corpus, run_name="r")
+    snapshot = Path(report.artifact["path"]).parent / report.artifact["corpusSnapshot"]
+    assert snapshot.exists()
+    assert len(report.artifact["corpusSnapshotDigest"]) == 64
+
+    payload = json.loads(snapshot.read_text(encoding="utf-8"))
+    assert payload["format"] == "aetheris-corpus-snapshot/v1"
+    # The split must round-trip, not just the text: an experiment has to train on
+    # exactly the files this run did, on the same side.
+    assert payload["manifestDigest"] == report.corpus["manifestDigest"]
+    assert payload["train"] and payload["validation"]
+
+    # And the reader must agree with the file, or the snapshot is decorative.
+    from fabric.lm.train import load_corpus_snapshot
+
+    train_text, validation_text, manifest = load_corpus_snapshot(snapshot)
+    assert (train_text, validation_text) == (payload["train"], payload["validation"])
+    assert manifest["digest"] == report.corpus["manifestDigest"]
+    # The file counts must survive the round trip: they are what an experiment reports,
+    # and counting newlines instead of files would produce a believable wrong number.
+    assert len(manifest["train"]) == report.corpus["trainFiles"]
+    assert len(manifest["validation"]) == report.corpus["validationFiles"]
+
+
+def test_an_expected_manifest_digest_that_does_not_match_is_refused(corpus, tmp_path):
+    """Silent drift is the failure this prevents: a reproduction run that quietly
+    trains a different model and reports success."""
+    with pytest.raises(RuntimeError, match="corpus drift"):
+        train(
+            small_config(), output_dir=tmp_path, corpus_root=corpus, run_name="r",
+            expect_manifest_digest="0" * 64,
+        )
+
+
+def test_the_matching_manifest_digest_is_accepted(corpus, tmp_path):
+    """The guard must not be a blanket refusal; the right digest has to pass."""
+    from fabric.lm.data import build_manifest
+
+    digest = build_manifest(corpus).digest
+    report = train(
+        small_config(), output_dir=tmp_path, corpus_root=corpus, run_name="r",
+        expect_manifest_digest=digest,
+    )
+    assert report.artifact["weightsDigest"]
+    assert report.corpus["manifestDigest"] == digest
+
+
 def test_the_report_digest_ignores_where_the_artifact_was_written(corpus, tmp_path):
     """Same run in two directories is the same run."""
     a = train(small_config(), output_dir=tmp_path / "a", corpus_root=corpus, run_name="r")

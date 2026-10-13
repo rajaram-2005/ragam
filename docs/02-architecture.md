@@ -94,10 +94,10 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
 | `media/validate.mjs` | 143 | Magic-byte sniffing, video genuineness check |
 | `providers/base.mjs` | 143 | Provider contract, timeout and retry helpers |
-| `policy/classify.mjs` | 137 | Secret and sensitivity classification, redaction |
+| `policy/classify.mjs` | 143 | Secret and sensitivity classification, redaction |
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
 
-### `services/fabric` — 7,138 source lines, 4,927 test lines
+### `services/fabric` — 8,090 source lines, 6,220 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible
