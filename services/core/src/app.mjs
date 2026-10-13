@@ -13,6 +13,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { AuditLedger, AUDIT_OUTCOMES } from './audit/ledger.mjs'
 import { createEgressGuard, installGlobalEgressGuard, createDataPolicy, RUNTIME_POLICIES } from './policy/egress.mjs'
 import { classifyText, redactDeep } from './policy/classify.mjs'
+import { familyReport, tierClaimFor } from './klyvaron/tiers.mjs'
 import { ModelRegistry, ModelRouter, MODEL_KINDS, MODALITIES, AVAILABILITY } from './router/registry.mjs'
 import { OllamaProvider, OpenAiCompatLocalProvider, normalizeMessages } from './providers/local.mjs'
 import { FreellmapiProvider } from './providers/freellmapi.mjs'
@@ -32,6 +33,18 @@ export class AetherisOmniApp {
   constructor({ config, ledger = null }) {
     this.config = config
     this.events = []
+
+    // The model family is validated at startup, so a family record that claims a
+    // capability nothing backs stops the process instead of reaching a user. Refusing
+    // to boot on a dishonest record is the only enforcement that cannot be quietly
+    // worked around later: by the time a request arrives, the check has already run.
+    this.modelFamily = familyReport()
+    if (!this.modelFamily.valid) {
+      throw new Error(
+        'the Klyvaron family record is inconsistent and will not be served:\n  - '
+        + this.modelFamily.violations.join('\n  - '),
+      )
+    }
     this.ledger = ledger ?? new AuditLedger(resolve(config.dataDir, 'audit.sqlite'))
 
     // --- hardware profile (real measurements, used by the router) ----------
@@ -853,7 +866,14 @@ async function handle(request, response, app) {
   // --- models -------------------------------------------------------------
   if (method === 'GET' && path === '/api/models') {
     const availableOnly = url.searchParams.get('ready') === 'true'
-    return sendJson(response, 200, { models: app.registry.list({ availableOnly }).map(publicModel), hardware: app.hardware }, app)
+    return sendJson(response, 200, {
+      models: app.registry.list({ availableOnly }).map(publicModel),
+      // The declared family, with its validation result. Served alongside the routable
+      // models because they answer different questions: `models` is what can serve a
+      // request now, `family` is what Aetheris has built and what backs each claim.
+      family: app.modelFamily,
+      hardware: app.hardware,
+    }, app)
   }
   if (method === 'POST' && path === '/api/models/probe') return sendJson(response, 200, await app.probeAll(), app)
 
@@ -1027,6 +1047,9 @@ function publicModel(model) {
     minRamGb: model.minRamGb,
     minVramGb: model.minVramGb,
     aetherisLite: model.aetherisLite,
+    // Derived, not declared: present only when this model id IS the artifact behind a
+    // capability the tier actually provides. See klyvaron/tiers.mjs tierClaimFor().
+    tier: tierClaimFor(model.id),
     version: model.version,
     tags: model.tags,
     measured: model.measured,

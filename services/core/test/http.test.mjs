@@ -113,6 +113,20 @@ test('system routes report real state', async () => {
     assert.equal(models.json.models.length, 1)
     assert.equal(models.json.models[0].id, 'ollama:tiny-local:latest')
 
+    // The model family travels with the model list, because the model control in Chat
+    // is where a user sees it. It arrives validated, so the API cannot serve a
+    // capability claim that nothing backs.
+    assert.equal(models.json.family.valid, true)
+    assert.deepEqual(models.json.family.violations, [])
+    assert.deepEqual(models.json.family.tiers.map((t) => t.id), ['lite', 'pro', 'high'])
+    const lite = models.json.family.tiers.find((t) => t.id === 'lite')
+    assert.deepEqual(lite.availableCapabilities, ['text.completion', 'text.extract'])
+    assert.equal(lite.status, 'partial')
+
+    // A discovered third-party model carries no Klyvaron tier, because a label is a
+    // lookup against the backing records and this id is not one of them.
+    assert.equal(models.json.models[0].tier, null)
+
     // No response may be cached: these are live status endpoints.
     assert.equal(health.headers.get('cache-control'), 'no-store')
   } finally {

@@ -23,6 +23,7 @@ import { DEFAULT_CONFIG, loadConfig } from '../src/config.mjs'
 import { ELEVATED_SCOPES, FORBIDDEN_SCOPES } from '../src/plugins/manifest.mjs'
 import { LIFECYCLE, DEFAULT_BUDGET } from '../src/godcore/lifecycle.mjs'
 import { DEFAULT_ROUTING_WEIGHTS } from '../src/router/registry.mjs'
+import { KLYVARON, familyReport } from '../src/klyvaron/tiers.mjs'
 
 // HERE is services/core/test, so the repo root is three levels up. Getting this
 // wrong made every doc lookup fail at once — which is the argument for comparing
@@ -54,6 +55,9 @@ const doc = {
   lite: () => read('docs/08-aetheris-lite.md'),
   lmCard: () => read('docs/model-cards/aetheris-lite-lm-0.1.0.json'),
   cycle: () => read('docs/07-improvement-cycle.md'),
+  hermes: () => read('docs/10-hermes-audit.md'),
+  klyvaron: () => read('docs/11-klyvaron-family.md'),
+  matrix: () => read('docs/12-feature-matrix.md'),
   distillation: () => read('docs/09-distillation.md'),
   distillVerdict: () => read('docs/experiments/distillation-logit-vs-baseline.json'),
   readme: () => read('README.md'),
@@ -308,6 +312,10 @@ test('every document that restates a suite total agrees with docs/03', () => {
   for (const [read, stale] of [
     [doc.setup, 'all three suites (765 tests)'], [doc.setup, '# 442 —'],
     [doc.setup, '| **Fabric** | 256 tests pass'], [doc.security, '256 Fabric tests'],
+    [doc.setup, 'all three suites (854 tests)'], [doc.setup, 'npm run test:core         # 270'],
+    [doc.status, '**270 / 270**'], [doc.status, '### `services/core` — Implemented and tested (270 tests)'],
+    [doc.setup, 'all three suites (930 tests)'], [doc.status, '**346 / 346**'],
+    [doc.setup, 'all three suites (932 tests)'], [doc.status, '**348 / 348**'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -556,20 +564,20 @@ test('the docs record limitations instead of implying completeness', () => {
 test('the status doc reports the real test totals', () => {
   // Recomputed from the filesystem: one test file per suite.
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
-  // 11 includes this file. If a suite file is added or removed, the counts in
+  // 14 includes this file. If a suite file is added or removed, the counts in
   // docs/03-status.md and README.md have to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 11)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 14)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 23)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**270 / 270**'), 'core total must be stated')
+  assert.ok(status.includes('**350 / 350**'), 'core total must be stated')
   assert.ok(status.includes('**528 / 528**'), 'fabric total must be stated')
   assert.ok(status.includes('**56 / 56**'), 'web total must be stated')
-  assert.ok(status.includes('854 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('854 tests: core 270, web 56, fabric 528'),
+  assert.ok(status.includes('934 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('934 tests: core 350, web 56, fabric 528'),
     'README must state the same totals')
-  assert.ok(status.includes('(11 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(14 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -580,14 +588,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(270), `core heading must say 269, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(350), `core heading must say 350, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(528), `fabric heading must say 528, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(56), `web heading must say 56, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    854,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 854`,
+    934,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 934`,
   )
 })
 
@@ -1044,4 +1052,96 @@ test('the CI workflow is valid YAML with the structure it claims', () => {
     assert.ok(body.includes('actions/checkout@'), `job ${jobs[index]} must check out the repository`)
     assert.ok(body.includes('run:'), `job ${jobs[index]} must actually run something`)
   }
+})
+
+test('the Klyvaron document matches the family it describes', () => {
+  // The document states a tier table and a set of model measurements. Both are read
+  // from the module and the card rather than trusted, because a document describing a
+  // model family is exactly where a capability claim starts drifting from the code.
+  const report = familyReport()
+  assert.equal(report.valid, true, 'docs/11 describes an invalid family')
+  const text = squash(doc.klyvaron())
+
+  // Parsed as a table rather than matched as a phrase. The first version of this check
+  // used `${displayName}[^|]*${status}`, which cannot cross a cell boundary, so it
+  // failed on a document that states the status correctly one cell to the right.
+  const tierRows = new Map()
+  for (const line of doc.klyvaron().split('\n')) {
+    const cells = line.split('|').map((c) => c.trim())
+    if (cells.length < 6) continue
+    const name = cells[1].replace(/[*`]/g, '')
+    if (report.tiers.some((t) => t.displayName === name)) tierRows.set(name, cells)
+  }
+  assert.equal(tierRows.size, report.tiers.length,
+    `docs/11 must table every tier; found ${[...tierRows.keys()]}`)
+
+  for (const tier of report.tiers) {
+    const cells = tierRows.get(tier.displayName)
+    assert.ok(cells[2], `${tier.displayName} must state its hardware class`)
+    // The status word is the whole point of the document: a tier presented without its
+    // status is a tier presented as a product.
+    assert.equal(cells[3].replace(/[*`]/g, '').toLowerCase(), tier.status,
+      `${tier.displayName} row says '${cells[3]}'; the module says '${tier.status}'`)
+    assert.equal(cells[4], `${tier.availableCapabilities.length} of ${tier.capabilityCount}`,
+      `${tier.displayName} availability cell disagrees with the module`)
+  }
+
+  // The storage numbers in the document are the numbers the code enforces.
+  assert.ok(text.includes('5 GB total, strictly below'), 'docs/11 must state the mobile budget')
+  assert.ok(text.includes('500 MB reserve'))
+  assert.ok(text.includes('1.5 GB per-primary-model'))
+
+  // The one claim the document most needs to keep: that Lite does not chat.
+  const chat = KLYVARON.lite.capabilities.chat
+  assert.equal(chat.state, 'unavailable')
+  assert.ok(text.includes('It does not chat, and it is deliberately not wired into `/api/chat`'),
+    'docs/11 must state that Lite is not wired into chat')
+
+  // And its measurements come from the card, so the two cannot disagree. Field paths are
+  // taken from the card's real shape (`card.metrics.*`, `card.weightsDigest`), which the
+  // first version of this check guessed at -- `card.evaluation` does not exist.
+  const card = JSON.parse(doc.lmCard()).card
+  const backing = KLYVARON.lite.capabilities['text.completion'].backing
+  assert.equal(backing.measured.validationPerplexity, card.metrics.validationPerplexity,
+    'the family record and the model card must agree on perplexity')
+  assert.equal(backing.measured.perplexityVsBestBaseline, card.metrics.perplexityVsBigram,
+    'the family record and the model card must agree on the ratio to baseline')
+  assert.equal(backing.parameters, card.parameterCount)
+  assert.equal(backing.weightsDigest, card.weightsDigest,
+    'the family record and the model card must agree on the weights digest')
+  assert.ok(text.includes(card.weightsDigest), 'docs/11 must quote the real weights digest')
+  // The document quotes the rounded figures; check the rounding rather than the full float.
+  assert.ok(text.includes(card.metrics.validationPerplexity.toFixed(4)),
+    `docs/11 must state the perplexity ${card.metrics.validationPerplexity.toFixed(4)}`)
+  assert.ok(text.includes(card.metrics.bestBaselinePerplexity.toFixed(4)),
+    'docs/11 must state the baseline perplexity')
+})
+
+test('the feature matrix uses the four statuses and claims no parity', () => {
+  const text = squash(doc.matrix())
+  // The four statuses, each defined. A matrix with undefined words is decoration.
+  // Every status is pinned by its DEFINITION, not by its name. A control run showed the
+  // difference: deleting the Unsupported definition still passed, because the word
+  // "**Unsupported**" appears in a dozen table cells. A term used without a definition is
+  // exactly the decoration this section exists to prevent.
+  for (const definition of [
+    '**Completed** means implemented in this repository and exercised by a test',
+    '**Partial** means implemented with a named limitation',
+    '**Planned** means designed, no code',
+    '**Unsupported** means no implementation and no accepted design',
+  ]) {
+    assert.ok(text.includes(definition), `the matrix must define every status: missing '${definition}'`)
+  }
+  // The five areas, named.
+  for (const area of ['## 1. Conversation (the Chat area)', '## 2. Image', '## 3. Video',
+    '## 4. Plugins', '## 5. MCP']) {
+    assert.ok(text.includes(squash(area)), `the matrix must cover ${area}`)
+  }
+  // A sixth top-level area would contradict the directive's five-area rule.
+  assert.ok(!/^## \d+\. (Training|Memory|Model Management|Agents|Admin|Benchmarking) /m.test(doc.matrix()),
+    'the matrix must not introduce a sixth top-level area')
+  // And the honesty clauses that keep the matrix from becoming a sales table.
+  assert.ok(/no row claims parity with a named competitor/i.test(text))
+  assert.ok(/Requires external credentials/.test(text),
+    'the gateway-dependent rows must be labelled')
 })

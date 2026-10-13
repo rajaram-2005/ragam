@@ -52,13 +52,13 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 854 tests: core 270, web 56, fabric 528
+npm test          # 934 tests: core 350, web 56, fabric 528
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~55 min on 2 CPUs)
 npm run train     # in-process training run
 ```
 
-All 854 run in CI on every push and pull request
+All 934 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -118,7 +118,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 7,429 | 5,744 | **zero npm packages** | 270 |
+| `services/core` | Node 22 ESM | 9,160 | 6,945 | **zero npm packages** | 350 |
 | `services/fabric` | Python 3.11 | 8,079 | 6,220 | NumPy only | 528 |
 | `apps/web` | React 18 + Vite | 3,480 | 1,185 | react, react-dom | 56 |
 
@@ -235,6 +235,9 @@ Details, including sixteen open items stated plainly:
 | [`docs/07-improvement-cycle.md`](docs/07-improvement-cycle.md) | The Sparsiz improvement cycle run on a real failure, end to end |
 | [`docs/08-aetheris-lite.md`](docs/08-aetheris-lite.md) | The from-scratch model family: method, verified gradients, release gate |
 | [`docs/09-distillation.md`](docs/09-distillation.md) | Distillation: the logit path that runs here, the credentialed path that does not |
+| [`docs/10-hermes-audit.md`](docs/10-hermes-audit.md) | Hermes Agent audit: what was adopted, what was rejected, and why |
+| [`docs/11-klyvaron-family.md`](docs/11-klyvaron-family.md) | The Klyvaron family, the six learning levels, and what is not built |
+| [`docs/12-feature-matrix.md`](docs/12-feature-matrix.md) | Every capability marked completed / partial / planned / unsupported |
 | [`docs/model-cards/`](docs/model-cards/) | Versioned model cards (Markdown + machine-readable JSON) |
 | [`third-party/NOTICES.md`](third-party/NOTICES.md) | Provenance, what was adopted vs replaced, licence compatibility |
 | [`services/fabric/README.md`](services/fabric/README.md) | Training pipeline and experiment ledger |

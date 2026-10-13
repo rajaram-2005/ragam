@@ -70,11 +70,11 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 7,429 source lines, 5,744 test lines
+### `services/core` — 9,160 source lines, 6,945 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
-| `app.mjs` | 1,121 | Composition root, the HTTP route table, error→status mapping, chat/image/video entry points, readiness |
+| `app.mjs` | 1,144 | Composition root, the HTTP route table, error→status mapping, chat/image/video entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
 | `media/jobs.mjs` | 359 | Job queue, progress, cancellation, timeouts, artifact storage |
@@ -96,6 +96,11 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/base.mjs` | 136 | Provider contract, timeout and retry helpers |
 | `policy/classify.mjs` | 143 | Secret and sensitivity classification, redaction |
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
+| `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
+| `klyvaron/tiers.mjs` | 412 | The three-tier model family, backing records, and the validator that refuses a capability with no artifact behind it |
+| `skills/registry.mjs` | 305 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
+| `skills/manifest.mjs` | 286 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
+| `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |
 
 ### `services/fabric` — 8,079 source lines, 6,220 test lines
 
