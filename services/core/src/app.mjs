@@ -229,6 +229,10 @@ export class AetherisOmniApp {
           // a question: it can satisfy [text_in, text_out] and still not be an assistant.
           tags: ['first_party', 'klyvaron', ...(tierClaim ? [`tier:${tierClaim}`] : []),
             ...(runtime.instructionTuned ? [] : ['base_completion'])],
+          // The Lite flag is the same lookup as the tag, not a second opinion: a model named
+          // like a Lite artifact used to publish `aetherisLite: false` next to `tier:lite`,
+          // which is two answers to one question from one row.
+          aetherisLite: tierClaim === 'lite',
           costWeight: 0.5,
         })
         // Availability is *observed*, never declared: the descriptor starts NOT_INSTALLED

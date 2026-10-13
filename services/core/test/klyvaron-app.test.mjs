@@ -217,6 +217,7 @@ test('an artifact that declares a tier it cannot back loads, and gets no tier la
     assert.ok(!model.tags.some((tag) => String(tag).startsWith('tier:')),
       `no tier tag may be emitted for an unbacked artifact; tags were ${model.tags.join(', ')}`)
     assert.ok(model.tags.includes('base_completion'), 'the honest part of the descriptor survives')
+    assert.equal(model.aetherisLite, false, 'the Lite flag must follow the same lookup as the tag')
 
     // The same join, from the other side: a claim that *is* backed has to reach the public
     // row. The parity fixture cannot claim one (it is not a family artifact), so the

@@ -68,11 +68,11 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 12,438 source lines, 9,798 test lines
+### `services/core` — 12,442 source lines, 9,799 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
-| `app.mjs` | 1,715 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
+| `app.mjs` | 1,719 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `klyvaron/format.mjs` | 443 | The Klyvaron artifact format: manifest validation, the shared vocabulary digest, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
