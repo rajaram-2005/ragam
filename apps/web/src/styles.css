@@ -419,15 +419,42 @@ pre.code {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Online-only product: provider setup is a dialog, never a sixth area. */
-.login-card { max-width: 560px; margin: 10vh auto; padding: 32px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+/* Traditional sign-in pages. Three of them (sign in, create account, reset password),
+   one card, the product's own mark and type — the same visual identity as the shell, so
+   signing in does not look like a different product from the workspace it opens. */
+.auth-shell { min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 9vh 16px 56px; }
+.auth-card {
+  width: min(460px, 100%); padding: 28px; display: grid; gap: 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+}
+.auth-brand { display: flex; align-items: center; gap: 10px; }
+.auth-card h1 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
+.auth-subtitle { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--text-muted); }
+.auth-form { display: grid; }
+.auth-rules { margin: 0 0 13px; padding-left: 18px; font-size: 11px; line-height: 1.75; color: var(--text-muted); }
+.auth-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; }
+.auth-link { font-size: 11.5px; color: var(--mint); text-decoration: none; border-bottom: 1px solid rgba(181, 245, 216, 0.28); }
+.auth-link:hover { color: var(--mint-strong); border-bottom-color: var(--mint-strong); }
+.auth-nav { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.auth-nav-current { font-size: 11.5px; font-weight: 700; color: var(--text); }
+.auth-footer, .auth-note { margin: 0; font-size: 10.5px; line-height: 1.7; color: var(--text-muted); }
+.auth-footer code, .auth-note code { font-family: var(--font-mono); color: var(--text-soft); }
+.input.mono { font-family: var(--font-mono); letter-spacing: 0.04em; }
+/* The signed-in identity in the sidebar: whose installation this is, and what that
+   account may do about it. Chrome, not an area — the five areas stay the whole surface. */
+.account-card { margin-top: 10px; padding: 10px; display: grid; gap: 8px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--line); border-radius: 12px; }
+.account-identity { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.account-email { overflow: hidden; font-size: 11px; color: var(--text-soft); text-overflow: ellipsis; white-space: nowrap; }
+.account-actions { display: flex; gap: 6px; }
+.account-actions .btn { flex: 1; justify-content: center; }
 .provider-dialog { width: min(640px, calc(100vw - 32px)); max-height: 88vh; overflow: auto; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 24px; }
 .provider-dialog::backdrop { background: #000b; backdrop-filter: blur(3px); }
 .online-chat { max-width: 1080px; margin: auto; display: grid; gap: 16px; }
 .context-section { border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
 summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
 .message-text { line-height: 1.6; overflow-wrap: anywhere; }
-.provider-dialog p, .login-card p { line-height: 1.6; color: var(--text-muted); }
-@media (max-width: 700px) { .login-card { margin: 24px 12px; padding: 22px; } }
+.provider-dialog p, .auth-card p { line-height: 1.6; color: var(--text-muted); }
+@media (max-width: 700px) { .auth-shell { padding: 24px 0 40px; } .auth-card { padding: 22px; border-radius: 0; border-left: 0; border-right: 0; } }
 
 .online-chat .thread { max-height: min(52vh, 620px); overflow-y: auto; }
 .online-chat .message small { color: var(--text-muted); font-size: 11px; }

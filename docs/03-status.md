@@ -11,14 +11,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1179 passing, 0 failing.**
+**Test totals: 1204 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **528 / 528** (25 files, ~50 s) |
+| `services/core` | `node --test test/*.test.mjs` | **545 / 545** (26 files, ~40 s) |
 | `services/fabric` | `pytest -q` | **575 / 575** (26 files, ~21 s) |
-| `apps/web` | `node --test test/*.test.mjs` | **76 / 76** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 187.30 kB → **58.96 kB gzip**, single chunk, no warnings |
+| `apps/web` | `node --test test/*.test.mjs` | **84 / 84** (4 files, ~1 s) |
+| `apps/web` build | `vite build` | 199.25 kB → **61.46 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as four jobs split so a
@@ -32,6 +32,13 @@ For Phase 2, superseded offline UI expectations were replaced with online-only U
 they had counted absolute registry size, and now assert about the plugin the test
 installed *and* separately verify the built-ins are present, enabled and bound.
 That is a stronger claim than the count it replaced.
+
+For the accounts increment, the operator-token sign-in was **removed rather than
+supplemented**: `services/core/test/accounts.test.mjs` (16 tests) covers scrypt password
+storage, lockout scope, enumeration resistance, throttling, session bounds, owner-only
+gateway control and per-account data isolation, and the web suite grew by 8 tests for the
+three sign-in pages. `online.test.mjs` now signs in with an account. See
+[20 — Accounts and sign-in](./20-accounts-and-sign-in.md).
 
 ---
 
@@ -89,7 +96,7 @@ instead.
 |---|---|---|---|
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
-| 3 | Unified app, five areas | **Complete** | `apps/web`; 76 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
+| 3 | Unified app, five areas | **Complete** | `apps/web`; 84 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
 | 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,616-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 11, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 28 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
 | 5 | Online provider integration | **Planned under updated directive** | LiteLLM is the preferred planned gateway; only its catalog protocol is implemented so far. No online inference adapter is configured, vendored or bundled. Image and video requests are refused with an explicit limitation, and the UI states that no provider exists rather than implying one can be enabled with a key |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
@@ -209,13 +216,14 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (528 tests)
+### `services/core` — Implemented and tested (545 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
 | Egress policy & guard | **Implemented and tested** | Three policies; fails safe to `strict_offline` on a blank/invalid value |
 | Data classification & redaction | **Implemented and tested** | Whole-identifier patterns catch `AWS_SECRET_ACCESS_KEY`-style names |
 | Audit ledger | **Implemented and tested** | Append-only SQLite; refusals audited; NDJSON export; subject purge |
+| Accounts & sign-in (online entry) | **Implemented and tested** | 16 tests; scrypt hashes with no reversible copy, per-account lockout and throttling, owner/member roles, host-delivered reset codes, per-account stores; see doc 20 |
 | Model registry & router | **Implemented and tested** | Capability gating before scoring; unknown latency scores 0.5, not 0 |
 | Ollama / llama.cpp providers | **Implemented and tested against a fixture server** | Real protocol handling; no real LM installed here |
 | Klyvaron CPU execution | **Implemented and tested** | Single worker, bounded incremental streaming, cancellation/deadlines, one-model residency; see doc 15 |
@@ -320,7 +328,7 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (76 tests)
+### `apps/web` — Implemented and tested (84 tests)
 
 | Area | Status |
 |---|---|

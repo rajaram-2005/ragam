@@ -67,6 +67,8 @@ const doc = {
   readme: () => read('README.md'),
   env: () => read('.env.example'),
   notices: () => read('third-party/NOTICES.md'),
+  accounts: () => read('docs/20-accounts-and-sign-in.md'),
+  phase2: () => read('docs/19-online-only-phase-2.md'),
 }
 
 /** Environment variable names read anywhere in core or the web build config. */
@@ -355,6 +357,9 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.setup, 'all three suites (1075 tests)'], [doc.status, '**562 / 562**'],
     [doc.setup, '| **Fabric** | 562 tests pass'], [doc.security, '562 Fabric tests'],
     [doc.setup, '| **Core service** | 445 tests pass'],
+    [doc.setup, 'all three suites (1179 tests)'], [doc.status, '**528 / 528**'],
+    [doc.status, '**76 / 76**'], [doc.setup, 'npm run test:core         # 528'],
+    [doc.setup, '| **Web app** | `npm ci`, 76 tests'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -602,20 +607,21 @@ test('the docs record limitations instead of implying completeness', () => {
 test('the status doc reports the real test totals', () => {
   // Recomputed from the filesystem: one test file per suite.
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
-  // 19 includes this file. If a suite file is added or removed, the counts in
+  // 26 includes the accounts suite added with traditional sign-in. If a suite file
+  // is added or removed, the counts in
   // docs/03-status.md and README.md have to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 25)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 26)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 26)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**528 / 528**'), 'core total must be stated')
+  assert.ok(status.includes('**545 / 545**'), 'core total must be stated')
   assert.ok(status.includes('**575 / 575**'), 'fabric total must be stated')
-  assert.ok(status.includes('**76 / 76**'), 'web total must be stated')
-  assert.ok(status.includes('1179 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1179 tests: core 528, web 76, fabric 575'),
+  assert.ok(status.includes('**84 / 84**'), 'web total must be stated')
+  assert.ok(status.includes('1204 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1204 tests: core 545, web 84, fabric 575'),
     'README must state the same totals')
-  assert.ok(status.includes('(25 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(26 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -626,15 +632,82 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(528), `core heading must say 528, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(545), `core heading must say 545, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(575), `fabric heading must say 575, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(76), `web heading must say 76, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(84), `web heading must say 84, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1179,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1179`,
+    1204,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1204`,
   )
+})
+
+test('the account and sign-in document describes the code that implements it', () => {
+  // Sign-in changed shape entirely: an operator token in a file became accounts with
+  // passwords. Every number in that description is a claim about code, so each one is
+  // read out of the module rather than trusted -- a documented "12 characters" next to an
+  // enforced 8 is the kind of drift this suite exists to catch.
+  const text = squash(doc.accounts())
+  const accounts = read('services/core/src/online/accounts.mjs')
+  const online = read('services/core/src/online/app.mjs')
+  const number = (source, name) => Number(new RegExp(`export const ${name} = ([\\d_]+)`).exec(source)[1])
+
+  assert.equal(number(accounts, 'PASSWORD_MIN_LENGTH'), 12, 'the enforced password minimum moved; docs/20 states 12')
+  assert.ok(text.includes('Minimum length | 12 characters'), 'docs/20 must state the minimum it enforces')
+  assert.equal(number(accounts, 'PASSWORD_MAX_LENGTH'), 256)
+  assert.equal(number(accounts, 'MAX_FAILED_LOGINS'), 8)
+  assert.ok(text.includes('Eight consecutive failures lock'), 'docs/20 must state the lockout rule')
+  // Written as expressions in the module, so the expressions are what is compared: a
+  // regex over digits alone would read `15 * 60_000` as 15 and pass against anything.
+  assert.match(accounts, /export const LOCKOUT_MS = 15 \* 60_000/)
+  assert.match(accounts, /export const RESET_CODE_TTL_MS = 15 \* 60_000/)
+  assert.ok(text.includes('fifteen minutes'), 'docs/20 states the reset lifetime in the words the page uses')
+  assert.equal(number(accounts, 'DEFAULT_MAX_ACCOUNTS'), 64)
+  assert.ok(new RegExp('^AETHERIS_MAX_ACCOUNTS=64$', 'm').test(doc.env()), '.env.example must state the real default')
+  assert.ok(new RegExp('^AETHERIS_PRINT_RESET_CODES=false$', 'm').test(doc.env()), '.env.example must ship the console-printing switch off')
+
+  // scrypt work factors are stated in prose and stored in every hash, so the two agree.
+  assert.match(accounts, /N: 16384, r: 8, p: 1, keyLength: 64, saltBytes: 16/)
+  assert.ok(text.includes('scrypt, N=16384, r=8, p=1, 64-byte derived key'), 'docs/20 must state the work factors')
+
+  // Session bounds, read from the module the routes actually use.
+  assert.match(online, /ttlMs: 8 \* 3600_000, perAccount: 8, installation: 64/)
+  for (const claim of ['Lifetime | 8 hours', 'Per account | 8', 'Per installation | 64']) {
+    assert.ok(text.includes(claim), `docs/20 must state the session bound: ${claim}`)
+  }
+
+  // The removed mechanism must stay removed in the prose too: a guide that still tells
+  // somebody to paste a token is a guide for a product that no longer exists.
+  // The README may name the removed mechanism to say it is removed; what it must not do
+  // is instruct anybody to use it. So the instruction is forbidden and the statement of
+  // removal is required -- the distinction a bare keyword scan cannot make.
+  const readme = squash(doc.readme())
+  assert.doesNotMatch(readme, /Sign in using the Core host|paste it (?:here|into)/i,
+    'the README must not instruct the removed token sign-in')
+  assert.ok(readme.includes('access-token file and its login route have been removed'),
+    'the README must state that the token sign-in is gone')
+  assert.ok(readme.includes('create an account'), 'the README must tell the reader how to get in now')
+  assert.doesNotMatch(squash(doc.phase2()), /paste it into the \*\*installation sign-in form\*\*/)
+  assert.ok(squash(doc.phase2()).includes('Sign-in is an account, not a token'), 'docs/19 must point at the change')
+  assert.ok(text.includes('Sign-up is open'), 'the account model states that registration is open')
+  assert.ok(text.includes('first account created is the owner'), 'the owner rule is documented')
+
+  // Reset delivery is the part most likely to be over-claimed, so the denial is checked
+  // as carefully as the claim: no mail transport means no "check your inbox".
+  assert.ok(text.includes('no mail transport'), 'docs/20 must say why a code cannot be emailed')
+  assert.ok(text.includes('password-resets.json'), 'docs/20 must say where the code actually goes')
+  // `withoutDisclaimers` matters here: the guide says it CANNOT email a reset link, and a
+  // naive scan flags the denial as the claim.
+  assert.doesNotMatch(withoutDisclaimers(doc.accounts()), /emails? (?:a|the) reset link|check your inbox/i)
+  assert.ok(text.includes('can reset any password on this installation'),
+    'the host-access consequence must be stated, not implied away')
+
+  // And the guide must carry a limitations list, like every other document here.
+  assert.ok(text.includes('## Not delivered'), 'docs/20 must state what it does not do')
+  for (const gap of ['second factors', 'self-service account deletion', 'Email delivery']) {
+    assert.ok(text.includes(gap), `docs/20 must list ${gap} as not delivered`)
+  }
 })
 
 test('the documented language-model results match its committed model card', () => {

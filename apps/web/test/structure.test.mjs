@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 import { AREAS, AREA_IDS } from '../src/areas.js'
+import { AUTH_PAGES, AUTH_PAGE_IDS, PASSWORD_MIN_LENGTH, PASSWORD_RULES } from '../src/auth.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const srcDir = join(here, '..', 'src')
@@ -104,9 +105,82 @@ test('App renders the five areas and imports no sixth', () => {
   for (const area of AREAS) {
     assert.ok(app.includes(`area.id === '${area.id}'`), `App.jsx does not render the '${area.id}' area`)
   }
-  // Internal services appear as panels inside areas, never as routes.
-  assert.ok(!/Route|createBrowserRouter|<Router/.test(app), 'the app must not grow a router with extra pages')
+  // Internal services appear as panels inside areas, never as pages of their own, and no
+  // routing library arrives to make adding one easy. The three sign-in pages are the only
+  // pages outside the five areas, and they are selected from the hash by App itself.
+  assert.ok(!/createBrowserRouter|<Router|react-router/.test(app), 'the app must not grow a client router with extra product areas')
   assert.ok(app.includes('ChatArea') && app.includes('McpArea'))
+  // The only hashes App.jsx writes literally are area hashes; the sign-in pages come from
+  // auth.js, so growing this list means growing the product surface, not the sign-in.
+  const literals = [...app.matchAll(/'#\/([a-z-]+)'/g)].map((m) => m[1])
+  assert.ok(literals.length > 0, 'App.jsx addresses areas by hash')
+  assert.deepEqual(literals.filter((id) => !AREA_IDS.includes(id)), [],
+    `App.jsx hard-codes a page outside the five areas: ${literals.join(', ')}`)
+  assert.match(app, /authPageFromHash\(hash\(\)\)/, 'the sign-in page is chosen from the hash')
+  assert.match(app, /isAuthHash\(hash\(\)\)/, 'a signed-in visitor is sent back from a sign-in hash')
+  assert.deepEqual(AUTH_PAGES.map((page) => page.hash), ['#/signin', '#/signup', '#/forgot-password'])
+})
+
+// ---------------------------------------------------------------------------
+// Sign-in is three traditional pages, with one way in
+// ---------------------------------------------------------------------------
+
+test('the sign-in surface is exactly three pages, each with its own file', () => {
+  assert.deepEqual(AUTH_PAGE_IDS, ['signin', 'signup', 'forgot-password'])
+  const files = readdirSync(join(srcDir, 'pages')).filter((name) => name.endsWith('.jsx')).sort()
+  assert.deepEqual(files, ['AuthLayout.jsx', 'ForgotPasswordPage.jsx', 'SignInPage.jsx', 'SignUpPage.jsx'],
+    'a sign-in page is a page: one component per page, plus the frame they share')
+  // None of them is a product area, and none of them is reachable from the navigation.
+  for (const page of AUTH_PAGES) {
+    assert.ok(!AREA_IDS.includes(page.id), `${page.id} must not double as a product area`)
+    assert.ok(!read('components/Shell.jsx').includes(page.hash), 'sign-in pages are not navigation entries')
+  }
+  assert.match(read('components/Shell.jsx'), /<AccountCard account=\{account\} onSignOut=\{onSignOut\} \/>/,
+    'the sidebar renders the signed-in identity')
+})
+
+test('one way in: the token sign-in and every third-party method are gone from the client', () => {
+  // The installation access token was a secret on the Core host that a person had to
+  // copy into a form. It is removed rather than offered as an alternative, because a
+  // second way in is a second thing to phish and a second thing to rotate.
+  //
+  // Comments are stripped first, as in the loopback-host test below: api.js explains in
+  // prose that the token body is gone, and a scan that could not tell that sentence from
+  // an implementation would fail on the note that documents the removal.
+  const code = (file) => readFileSync(file, 'utf8').split('\n')
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join('\n')
+  for (const file of walk(srcDir)) {
+    const source = code(file)
+    const name = file.replace(basePrefix(), '')
+    assert.doesNotMatch(source, /access[- ]token|installation token|api\.login\(token|single_operator/i,
+      `${name} still offers the removed token sign-in`)
+    // Named providers and passwordless mechanisms. "Sign in with" on its own is too
+    // broad a net: it also catches "Sign in with the new one", which is a sentence about
+    // a password this product does have.
+    assert.doesNotMatch(source, /oauth|openid connect|magic link|passkey|webauthn|\bsaml\b|sign in with (?:google|github|apple|microsoft|sso|a passkey)/i,
+      `${name} offers a sign-in method this product does not have`)
+    // Credentials belong in the request, never in storage the page can read back.
+    assert.doesNotMatch(source, /localStorage|sessionStorage|document\.cookie/,
+      `${name} stores something in the browser that the server should hold`)
+  }
+  assert.match(read('pages/SignInPage.jsx'), /api\.login\(\{ email: email\.trim\(\), password \}\)/)
+  assert.match(read('pages/SignUpPage.jsx'), /api\.register\(\{ email: email\.trim\(\), password \}\)/)
+  assert.match(read('pages/ForgotPasswordPage.jsx'), /api\.requestPasswordReset\(/)
+  assert.match(read('pages/ForgotPasswordPage.jsx'), /api\.confirmPasswordReset\(/)
+  assert.match(read('components/AccountCard.jsx'), /api\.changePassword\(/)
+})
+
+test('the password rules the pages state are the rules the server enforces', () => {
+  // A minimum length stated in the UI and a different one enforced by the server is the
+  // classic way a form starts rejecting what it just asked for. Both sides are read here
+  // rather than trusted to agree.
+  const core = readFileSync(join(here, '..', '..', '..', 'services', 'core', 'src', 'online', 'accounts.mjs'), 'utf8')
+  const enforced = Number(/export const PASSWORD_MIN_LENGTH = (\d+)/.exec(core)[1])
+  assert.equal(PASSWORD_MIN_LENGTH, enforced, 'the client states a minimum the server does not enforce')
+  assert.ok(enforced >= 12, `the enforced minimum is ${enforced}; a traditional sign-in page needs a real one`)
+  for (const rule of PASSWORD_RULES) assert.ok(rule.length > 20, `a stated rule is too vague to help: ${rule}`)
+  assert.match(read('pages/SignUpPage.jsx'), /PASSWORD_RULES/)
+  assert.match(read('components/AccountCard.jsx'), /PASSWORD_MIN_LENGTH/)
 })
 
 test('online areas remove offline and research surfaces without removing optional context', () => {
@@ -372,7 +446,7 @@ test('memory can be exported, not only deleted', () => {
 test('the security controls the product added are visible in their areas', () => {
   assert.match(read('areas/PluginsArea.jsx'),/signing alone is not a sandbox/)
   assert.match(read('areas/McpArea.jsx'),/cannot grant permissions/)
-  assert.match(read('App.jsx'),/api\.login\(token/)
+  assert.match(read('pages/SignInPage.jsx'),/api\.login\(/)
   const settings=read('components/ProviderSettings.jsx')
   assert.match(settings,/type="password"/)
   assert.doesNotMatch(settings,/localStorage|sessionStorage/)

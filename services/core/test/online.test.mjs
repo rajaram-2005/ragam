@@ -34,9 +34,19 @@ async function fixture(t, options = {}) {
     const text = await response.text(); let data; try { data = JSON.parse(text) } catch { data = text }
     return { status: response.status, data, headers: response.headers }
   }
-  f.login = async () => { const r = await f.request('POST','/api/auth/login',{ token: readFileSync(f.app.tokenPath,'utf8') }); f.cookie = r.headers.get('set-cookie').split(';')[0]; return r }
+  // Sign-in is an account: an email address and a password. The first account created on
+  // an installation is its owner, which is the one allowed to change the gateway.
+  f.account = { email: 'owner@example.test', password: 'a-long-owner-password' }
+  f.login = async () => {
+    let r = await f.request('POST','/api/auth/register',f.account)
+    if (r.status !== 201) r = await f.request('POST','/api/auth/login',f.account)
+    f.cookie = r.headers.get('set-cookie').split(';')[0]; f.accountId = r.data.account.id; return r
+  }
   f.configure = async () => { await f.login(); const r = await f.request('PUT','/api/providers/litellm',{ baseUrl: f.gatewayUrl+'/v1', apiKey: 'synthetic-gateway-secret' }); assert.equal(r.status,200); const checked = await f.request('POST','/api/models/probe',{}); assert.equal(checked.status,200); return checked.data }
   f.chat = (extra = {}) => ({ prompt: 'ordinary question', model: 'model-a', authorization: { confirmed: true, providerRevision: f.app.store.state.revision }, ...extra })
+  // Calling the app in process, rather than over HTTP, still has to say who is asking:
+  // history, memory and knowledge are resolved from the session's account.
+  f.session = () => f.app.sessionFor({ headers: { cookie: f.cookie } })
   f.restart = () => { f.app.close(); f.app = create() }
   f.dir = dir
   t.after(async () => { await close(server); await close(gateway); f.app.close(); rmSync(dir,{ recursive:true, force:true }) })
@@ -50,8 +60,8 @@ test('provider, context, model and tool routes require owner authentication', as
  const f = await fixture(t)
  for (const path of ['/api/providers','/api/models','/api/sessions','/api/memory','/api/knowledge/documents','/api/plugins','/api/mcp/tools']) assert.equal((await f.request('GET',path)).status,401,path)
 })
-test('owner login uses an HttpOnly secure cookie; wrong tokens and cross-origin mutations fail', async (t) => {
- const f = await fixture(t); assert.equal((await f.request('POST','/api/auth/login',{token:'wrong'})).status,401)
+test('owner login uses an HttpOnly secure cookie; wrong passwords and cross-origin mutations fail', async (t) => {
+ const f = await fixture(t); assert.equal((await f.request('POST','/api/auth/login',{email:f.account.email,password:'a-long-wrong-password'})).status,401)
  const r = await f.login(); assert.match(r.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/); assert.match(r.headers.get('set-cookie'),/Secure/)
  assert.equal((await f.request('POST','/api/auth/logout',{}, {headers:{origin:'https://attacker.example'}})).status,403)
  assert.equal((await f.request('POST','/api/auth/logout',{}, {headers:{'x-aetheris-request':''}})).status,403)
@@ -111,8 +121,9 @@ test('streaming passes deltas and requires a real completion sentinel', async (t
 test('completed conversations are stored; failed streams do not become saved assistant turns', async (t) => {
  const f=await fixture(t);await f.configure(); const {data:s}=await f.request('POST','/api/sessions',{title:'test'})
  assert.equal((await f.request('POST','/api/chat',f.chat({sessionId:s.id}))).status,200)
- const before=f.app.memory.getSession(s.id).turns.length;assert.equal(before,2)
- f.mode='truncated';await f.request('POST','/api/chat/stream',f.chat({sessionId:s.id}));assert.equal(f.app.memory.getSession(s.id).turns.length,before)
+ const memory=f.app.contextFor(f.accountId).memory
+ const before=memory.getSession(s.id).turns.length;assert.equal(before,2)
+ f.mode='truncated';await f.request('POST','/api/chat/stream',f.chat({sessionId:s.id}));assert.equal(memory.getSession(s.id).turns.length,before)
 })
 test('file knowledge and approved memory remain opt-in and backed by real stores', async (t) => {
  const f=await fixture(t);await f.configure()
@@ -145,5 +156,5 @@ test('public HTTPS endpoints are required unless the operator trusts an exact in
 })
 test('an already cancelled request never reaches the gateway', async (t) => {
  const f=await fixture(t);await f.configure();const controller=new AbortController();controller.abort();const n=f.calls.length
- await assert.rejects(f.app.chat(f.chat(),{signal:controller.signal}),{code:'cancelled'});assert.equal(f.calls.length,n)
+ await assert.rejects(f.app.chat(f.chat(),{signal:controller.signal,session:f.session()}),{code:'cancelled'});assert.equal(f.calls.length,n)
 })

@@ -90,6 +90,10 @@ async function loadComponents() {
     "export { default as McpArea } from '../../src/areas/McpArea.jsx'",
     "export { default as ProviderSettings } from '../../src/components/ProviderSettings.jsx'",
     "export { default as App } from '../../src/App.jsx'",
+    "export { default as SignInPage } from '../../src/pages/SignInPage.jsx'",
+    "export { default as SignUpPage } from '../../src/pages/SignUpPage.jsx'",
+    "export { default as ForgotPasswordPage } from '../../src/pages/ForgotPasswordPage.jsx'",
+    "export { default as AccountCard } from '../../src/components/AccountCard.jsx'",
     "export { Shell, StatusCard } from '../../src/components/Shell.jsx'",
     "export { JobTable, JobDetail } from '../../src/components/Jobs.jsx'",
     "export * as ui from '../../src/components/ui.jsx'",
@@ -187,12 +191,77 @@ test('authenticated shell keeps five areas and provides settings outside navigat
 
 })
 
-test('App renders an owner sign-in boundary before loading protected data', () => {
+test('App renders the sign-in page before loading protected data', () => {
+  // Signed out is the first state anybody sees, and it must not be a wall around a
+  // half-loaded workspace: no area chrome, no thread, no navigation.
   const markup = render('App', React.createElement(components.App))
-  assert.match(markup, /Sign in to this installation/)
+  assert.match(markup, /Sign in/)
+  assert.match(markup, /type="email"/)
   assert.match(markup, /type="password"/)
   assert.doesNotMatch(markup, /class="thread"|class="nav-item/)
+  // The removed mechanism must not survive in the signed-out view.
+  assert.doesNotMatch(markup, /access token|installation access|Sign in to this installation/i)
+})
 
+test('the sign-in page is a traditional address-and-password form', () => {
+  const markup = render('SignInPage', React.createElement(components.SignInPage))
+  assert.match(markup, /<h1>Sign in<\/h1>/)
+  // Named fields and the right autoComplete values: this is what lets a password manager
+  // recognise the form, which is most of why a traditional sign-in page is worth having.
+  assert.match(markup, /name="email"/)
+  assert.match(markup, /autoComplete="username"/)
+  assert.match(markup, /name="password"/)
+  assert.match(markup, /autoComplete="current-password"/)
+  assert.match(markup, /type="submit"[^>]*>.*Sign in|Sign in<\/button>/s)
+  // The other two sign-in pages are reachable from it, and no area chrome leaks in.
+  assert.match(markup, /href="#\/signup"/)
+  assert.match(markup, /href="#\/forgot-password"/)
+  assert.doesNotMatch(markup, /class="nav-item|class="thread|Provider Settings/)
+})
+
+test('the create-account page states the rules before the form is submitted', () => {
+  const markup = render('SignUpPage', React.createElement(components.SignUpPage))
+  assert.match(markup, /Create your account/)
+  assert.match(markup, /At least 12 characters/)
+  assert.match(markup, /autoComplete="new-password"/)
+  assert.equal((markup.match(/type="password"/g) ?? []).length, 2, 'a password and its confirmation')
+  assert.match(markup, /Confirm password/)
+  assert.match(markup, /first account created on an installation becomes its/, 'who owns the installation is stated where the account is made')
+  assert.match(markup, /href="#\/signin"/)
+})
+
+test('the reset page promises a host-delivered code and never an email', () => {
+  const markup = render('ForgotPasswordPage', React.createElement(components.ForgotPasswordPage))
+  assert.match(markup, /Reset your password/)
+  assert.match(markup, /Request a reset code/)
+  assert.match(markup, /password-resets\.json/, 'where the code actually is')
+  assert.match(markup, /sends no email/)
+  // The one thing this page must never do is claim a message is on its way.
+  assert.doesNotMatch(markup, /check your (?:email|inbox)|we(?:'ve| have) sent|sent you an (?:email|code)|reset link/i)
+  assert.match(markup, /href="#\/signin"/)
+})
+
+test('the sidebar names the signed-in account without becoming a sixth area', () => {
+  const owner = render('Shell (owner)', React.createElement(components.Shell, { active: 'chat', onSelect: noop, account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onSignOut: noop }))
+  assert.match(owner, /owner@example\.test/)
+  assert.match(owner, /OWNER/)
+  assert.match(owner, /Change password/)
+  assert.match(owner, /Sign out/)
+  assert.equal((owner.match(/class="nav-item/g) ?? []).length, 5, 'the account card must not add a navigation entry')
+  const member = render('Shell (member)', React.createElement(components.Shell, { active: 'chat', onSelect: noop, account: { id: 'a2', email: 'member@example.test', role: 'member' }, onSignOut: noop }))
+  assert.match(member, /MEMBER/)
+  assert.doesNotMatch(member, /OWNER/)
+  // With no account there is no card at all: the shell must not invent an identity.
+  const anonymous = render('Shell (anonymous)', React.createElement(components.Shell, { active: 'chat', onSelect: noop }))
+  assert.doesNotMatch(anonymous, /Change password|Sign out|MEMBER|OWNER/)
+})
+
+test('provider settings are read-only for a member account', () => {
+  const member = render('ProviderSettings (member)', React.createElement(components.ProviderSettings, { account: { id: 'a2', email: 'member@example.test', role: 'member' }, onClose: noop }))
+  assert.match(member, /Only the owner account/)
+  const owner = render('ProviderSettings (owner)', React.createElement(components.ProviderSettings, { account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop }))
+  assert.doesNotMatch(owner, /Only the owner account/)
+  assert.match(owner, /Save connection/)
 })
 
 test('StatusCard distinguishes loading, errors, listings and observed inference', () => {

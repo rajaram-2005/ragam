@@ -67,9 +67,21 @@ async function request(method, path, body, { signal } = {}) {
 }
 
 export const api = {
+  // --- sign-in --------------------------------------------------------------
+  // One way in: an account on this installation. The operator access token, its file on
+  // the Core host and its `{ token }` login body are gone, so nothing here can offer a
+  // second sign-in method. `auth()` is the only call that works signed-out, and it says
+  // no more than whether this browser holds a session and whose it is.
   auth: () => request('GET', '/api/auth'),
-  login: (token) => request('POST', '/api/auth/login', { token }),
+  login: ({ email, password }) => request('POST', '/api/auth/login', { email, password }),
+  register: ({ email, password }) => request('POST', '/api/auth/register', { email, password }),
   logout: () => request('POST', '/api/auth/logout', {}),
+  changePassword: ({ currentPassword, newPassword }) => request('POST', '/api/auth/password', { currentPassword, newPassword }),
+  // A reset code is never returned to the browser: it is delivered on the Core host, and
+  // this request answers identically whether or not the address has an account.
+  requestPasswordReset: (email) => request('POST', '/api/auth/password-reset/request', { email }),
+  confirmPasswordReset: ({ email, code, password }) => request('POST', '/api/auth/password-reset/confirm', { email, code, password }),
+
   provider: () => request('GET', '/api/providers'),
   saveProvider: (body) => request('PUT', '/api/providers/litellm', body),
   testProvider: () => request('POST', '/api/providers/litellm/test', {}),
