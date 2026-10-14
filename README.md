@@ -6,7 +6,7 @@
 
 Exactly **Chat, Image, Video, Plugins, MCP**, with LiteLLM Provider Settings in a dialog and an explicit persistent model picker. Inference is online-only; there are no active local-runtime, hardware-tier, training or task-diagnostic panels. Optional history, approved memory and text-file knowledge remain.
 
-Run `npm run core` and `npm run web`, then **create an account** at `#/signup` and sign in with it at `#/signin`. Sign-in is traditional — an email address and a password, on three pages (sign in, create account, reset password) — and it is the only way in: the operator access-token file and its login route have been removed. The first account created owns the installation and is the only one that can change the gateway connection; later accounts are members with their own history, memory and knowledge. Then open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. On HTTP-only local development, start Core with `AETHERIS_COOKIE_SECURE=false`; keep secure cookies enabled for HTTPS deployments. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md).
+Run `npm run core` and `npm run web`, then **create an account** at `#/signup` and sign in with it at `#/signin`. Sign-in is traditional — an email address and a password, on three pages (sign in, create account, reset password) — and it is the only way in: the operator access-token file and its login route have been removed. The first account created owns the installation and is the only one that can change the gateway connection; later accounts are members with their own history, memory and knowledge. Then open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. On HTTP-only local development, start Core with `AETHERIS_COOKIE_SECURE=false`; keep secure cookies enabled for HTTPS deployments. If the web app is served inside another site's iframe, also start Core with `AETHERIS_COOKIE_SAMESITE=none` — a strict session cookie is never sent cross-site, so sign-in would appear to work and every request after it would be a `401`. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md).
 
 **Current limits:** online Image/Video adapters and remote MCP are not connected, and universal provider support is not delivered — LiteLLM is the only gateway. No real provider credentials or remote inference have been tested in this restricted sandbox. The product needs a reachable, authorized LiteLLM gateway; synthetic fixtures are used only in tests. Accounts have no email delivery, no second factor and no self-service deletion. See the [Phase 2 guide](docs/19-online-only-phase-2.md) for security boundaries and setup, and [accounts and sign-in](docs/20-accounts-and-sign-in.md) for the account model.
 
@@ -69,13 +69,13 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 1209 tests: core 545, web 89, fabric 575
+npm test          # 1213 tests: core 547, web 91, fabric 575
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
 ```
 
-All 1209 run in CI on every push and pull request
+All 1213 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -135,9 +135,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 14,555 | 11,723 | **zero npm packages** | 545 |
+| `services/core` | Node 22 ESM | 14,592 | 11,803 | **zero npm packages** | 547 |
 | `services/fabric` | Python 3.11 | 9,299 | 7,107 | NumPy only | 575 |
-| `apps/web` | React 18 + Vite | 2,644 | 1,757 | react, react-dom | 89 |
+| `apps/web` | React 18 + Vite | 2,665 | 1,803 | react, react-dom | 91 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

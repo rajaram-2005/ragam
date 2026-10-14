@@ -13,7 +13,7 @@ import AuthLayout, { AuthLink } from './AuthLayout.jsx'
 // The password is cleared after a successful submit so it is not sitting in component
 // state while the app renders somebody's workspace.
 
-export default function SignInPage({ checking = false, error = null, onError = () => {}, onSignedIn = () => {} }) {
+export default function SignInPage({ checking = false, error = null, notice = '', onError = () => {}, onSignedIn = () => {} }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -24,6 +24,8 @@ export default function SignInPage({ checking = false, error = null, onError = (
       title="Sign in"
       subtitle="Chat, Image, Video, Plugins and MCP, through this installation's LiteLLM gateway."
       error={error}
+      notice={notice}
+      noticeTone="info"
     >
       <form
         className="auth-form"

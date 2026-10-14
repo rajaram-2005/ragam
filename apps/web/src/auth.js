@@ -56,3 +56,15 @@ export const PASSWORD_RULES = Object.freeze([
   'Not a common password, and not one repeated character.',
   'Not your email address, or the name part of it.',
 ])
+
+/**
+ * What the sign-in page says when a session that was working stops being accepted.
+ *
+ * This is not a cosmetic message. Dropping the account silently is what makes a cookie
+ * problem look like a broken product: the workspace disappears with nothing on screen to
+ * explain it, so the person signs in again, and again, and reports that they "can't see
+ * the models or chat". The common non-obvious cause is stated here rather than left to be
+ * diagnosed from a network tab — an app inside another site's iframe is cross-site, and a
+ * SameSite=Strict cookie is never sent there.
+ */
+export const SESSION_ENDED_NOTICE = 'Your session ended: this browser is no longer sending the session cookie. Sign in again. If this app is embedded in another site, whoever operates the Core must start it with AETHERIS_COOKIE_SAMESITE=none and AETHERIS_COOKIE_SECURE=true, or the browser will keep the cookie to itself here.'

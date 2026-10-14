@@ -31,6 +31,7 @@ import React from 'react'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { SESSION_ENDED_NOTICE } from '../src/auth.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const WEB = resolve(HERE, '..')
@@ -218,6 +219,28 @@ test('the sign-in page is a traditional address-and-password form', () => {
   assert.match(markup, /href="#\/signup"/)
   assert.match(markup, /href="#\/forgot-password"/)
   assert.doesNotMatch(markup, /class="nav-item|class="thread|Provider Settings/)
+})
+
+test('a session the server no longer recognises is reported, not swallowed', () => {
+  // Ending a session silently is what turns a cookie problem into "I signed in and can't
+  // see anything": the workspace disappears, the sign-in page comes back, and nothing on
+  // screen says the session was dropped rather than never established.
+  const plain = render('SignInPage', React.createElement(components.SignInPage))
+  assert.doesNotMatch(plain, /Your session ended/, 'an ordinary visit is not told its session ended')
+
+  const ended = render('SignInPage (session ended)', React.createElement(components.SignInPage, { notice: SESSION_ENDED_NOTICE }))
+  assert.match(ended, /Your session ended/)
+  assert.match(ended, /data-tone="info"/, 'reported as information about this installation, not as a failed sign-in')
+  assert.match(ended, /AETHERIS_COOKIE_SAMESITE=none/, 'the non-obvious cause is named where somebody can act on it')
+
+  // A dropped session and a wrong password can happen to the same person in the same
+  // minute; both must be able to appear at once.
+  const both = render('SignInPage (ended and refused)', React.createElement(components.SignInPage, {
+    notice: SESSION_ENDED_NOTICE, error: new Error('That address and password do not match an account here.'),
+  }))
+  assert.match(both, /Your session ended/)
+  assert.match(both, /data-tone="bad"/)
+  assert.equal((both.match(/class="banner"/g) ?? []).length, 2)
 })
 
 test('the create-account page states the rules before the form is submitted', () => {

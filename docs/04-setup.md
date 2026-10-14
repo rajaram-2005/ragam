@@ -96,7 +96,7 @@ npm install          # 62 packages, ~12 s
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 89 tests
+npm test             # 91 tests
 ```
 
 | Variable | Default | Purpose |
@@ -211,9 +211,9 @@ Full design, evaluation methodology and limitations:
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1209 tests)
-npm run test:core         # 545
-npm run test:web          # 89
+npm test                  # all three suites (1213 tests)
+npm run test:core         # 547
+npm run test:web          # 91
 npm run test:fabric       # 575 — needs numpy + pytest on the interpreter
 ```
 
@@ -257,9 +257,9 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 545 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Core service** | 547 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
 | **Fabric** | 575 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 89 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Web app** | `npm ci`, 91 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 38-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 
 The Fabric job's release-gate step is the one worth reading, because it asserts the

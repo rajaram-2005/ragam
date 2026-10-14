@@ -16,7 +16,7 @@ export function AuthLink({ page, children, className = '' }) {
   return <a className={`auth-link ${className}`.trim()} href={target.hash}>{children}</a>
 }
 
-export default function AuthLayout({ active, title, subtitle, error, notice, children, footer }) {
+export default function AuthLayout({ active, title, subtitle, error, notice, noticeTone = 'ok', children, footer }) {
   return (
     <main className="auth-shell">
       <div className="auth-card">
@@ -29,7 +29,7 @@ export default function AuthLayout({ active, title, subtitle, error, notice, chi
         <h1>{title}</h1>
         {subtitle ? <p className="auth-subtitle">{subtitle}</p> : null}
         {error ? <Banner tone="bad" title={error.message ?? String(error)} /> : null}
-        {notice ? <Banner tone="ok" title={notice} /> : null}
+        {notice ? <Banner tone={noticeTone} title={notice} /> : null}
         {children}
         <nav className="auth-nav" aria-label="Sign-in pages">
           {AUTH_PAGES.map((page) => (

@@ -20,7 +20,8 @@ import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
-import { OnlineApp, SESSIONS, RESET_REQUESTED_MESSAGE } from '../src/online/app.mjs'
+import { COOKIE_SAME_SITE, OnlineApp, SESSIONS, RESET_REQUESTED_MESSAGE } from '../src/online/app.mjs'
+import { main } from '../src/server.mjs'
 import {
   AccountStore, MAX_FAILED_LOGINS, PASSWORD_MIN_LENGTH, ROLES, RESET_CODE_TTL_MS,
   hashPassword, normalizeEmail, passwordProblems, verifyPassword,
@@ -53,7 +54,8 @@ async function fixture(t, options = {}) {
   f.gatewayUrl = await listen(gateway)
   const create = () => new OnlineApp({
     dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: options.timeoutMs ?? 2000,
-    maxAccounts: options.maxAccounts, onResetCode: (info) => f.resetCodes.push(info),
+    maxAccounts: options.maxAccounts, secureCookie: options.secureCookie,
+    cookieSameSite: options.cookieSameSite, onResetCode: (info) => f.resetCodes.push(info),
   })
   f.app = create()
   f.server = f.app.server()
@@ -281,6 +283,65 @@ test('a session cookie is HttpOnly, SameSite=Strict, scoped to /api, secure and 
   assert.equal(out.status, 200); assert.match(out.headers.get('set-cookie'), /Max-Age=0/)
   assert.equal((await f.request('GET', '/api/auth', undefined, { cookie })).data.authenticated, false)
   assert.equal((await f.request('GET', '/api/ready', undefined, { cookie })).status, 401)
+})
+
+test('the cookie SameSite policy is an operator choice, and the unusable combination is refused', async (t) => {
+  // 'strict' is the default because an installation people visit directly should never
+  // hand its session cookie to another site.
+  const strict = await fixture(t)
+  assert.match((await strict.register(OWNER, { adopt: false })).headers.get('set-cookie'), /SameSite=Strict/)
+
+  // An embedded installation opts in. The point of the opt-in is that the *next* request
+  // carries the cookie, so that is what is asserted, not just the header text.
+  const embedded = await fixture(t, { cookieSameSite: 'none' })
+  const r = await embedded.register(OWNER, { adopt: false })
+  assert.match(r.headers.get('set-cookie'), /SameSite=None/)
+  assert.match(r.headers.get('set-cookie'), /Secure/, 'a SameSite=None cookie without Secure is discarded by every browser')
+  assert.equal((await embedded.request('GET', '/api/ready', undefined, { cookie: cookieOf(r) })).status, 200)
+
+  // The value comes from an environment variable, so it arrives as a string in whatever
+  // case somebody typed it.
+  const lax = await fixture(t, { cookieSameSite: 'LAX' })
+  assert.match((await lax.register(OWNER, { adopt: false })).headers.get('set-cookie'), /SameSite=Lax/)
+
+  // Both refusals happen before anything is created on disk: a configuration this service
+  // will not run with should not leave a half-written data directory behind.
+  const refused = join(tmpdir(), `aetheris-cookie-refused-${process.pid}-${Date.now()}`)
+  assert.throws(() => new OnlineApp({ dataDir: refused, cookieSameSite: 'none', secureCookie: false }),
+    /SameSite=None requires a Secure cookie/)
+  assert.throws(() => new OnlineApp({ dataDir: refused, cookieSameSite: 'sometimes' }),
+    /must be one of strict, lax, none/)
+  assert.equal(existsSync(refused), false, 'a refused configuration must not create a data directory')
+  assert.deepEqual([...COOKIE_SAME_SITE], ['strict', 'lax', 'none'], 'the accepted values are documented in docs/20')
+})
+
+test('the entry point reads the cookie policy from the environment and says so at boot', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'aetheris-entry-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const env = {
+    AETHERIS_ONLINE_DATA_DIR: dir, AETHERIS_CORE_HOST: '127.0.0.1', AETHERIS_CORE_PORT: '0',
+    AETHERIS_COOKIE_SECURE: 'true', AETHERIS_COOKIE_SAMESITE: 'NONE',
+  }
+  const lines = []
+  const running = await main({ env, stdout: (line) => lines.push(line) })
+  t.after(() => running.shutdown())
+  assert.equal(running.config.cookieSameSite, 'none', 'the value is normalised rather than trusted as typed')
+  assert.ok(lines.some((line) => line.includes('SameSite=none')),
+    'widening a session cookie to cross-site must be visible on the console at boot')
+
+  // The combination browsers discard is refused instead of served, and the refusal names
+  // both variables so the fix is one edit away.
+  //
+  // Written as a settled outcome rather than `assert.rejects` on purpose. If the refusal
+  // ever stops happening, `main()` resolves into a listening server, and a test that
+  // simply asserts on a rejected promise leaves that server holding the event loop open:
+  // the suite would hang instead of failing. Cleanup is registered before the assertion,
+  // so a failure shuts the stray instance down and the run still reports.
+  const refused = await main({ env: { ...env, AETHERIS_COOKIE_SECURE: 'false' }, stdout: () => {} })
+    .then((running) => ({ running }), (error) => ({ error }))
+  t.after(async () => { await refused.running?.shutdown() })
+  assert.ok(refused.error, 'SameSite=None without a Secure cookie must be refused, not served')
+  assert.match(refused.error.message, /SameSite=None requires a Secure cookie[\s\S]*AETHERIS_COOKIE_SECURE=true/)
 })
 
 test('sessions belong to one account, roll over at the cap, and die with the process', async (t) => {

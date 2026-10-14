@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { api } from './api.js'
 import { Shell } from './components/Shell.jsx'
 import { AREAS } from './areas.js'
-import { AUTH_PAGES, DEFAULT_AUTH_PAGE, authPageFromHash, isAuthHash } from './auth.js'
+import { AUTH_PAGES, DEFAULT_AUTH_PAGE, SESSION_ENDED_NOTICE, authPageFromHash, isAuthHash } from './auth.js'
 import { Banner } from './components/ui.jsx'
 import ProviderSettings from './components/ProviderSettings.jsx'
 import SignInPage from './pages/SignInPage.jsx'
@@ -28,14 +28,28 @@ const goTo = (target) => { if (globalThis.location) globalThis.location.hash = t
 
 export default function App() {
   const [account, setAccount] = useState(null), [checking, setChecking] = useState(true)
-  const [authError, setAuthError] = useState(null)
+  const [authError, setAuthError] = useState(null), [notice, setNotice] = useState('')
   const [active, setActive] = useState(currentArea), [page, setPage] = useState(currentPage), [settings, setSettings] = useState(false)
   const [readiness, setReadiness] = useState(null), [provider, setProvider] = useState(null), [error, setError] = useState(null)
 
+  // Both are `useCallback` with no dependencies because they touch only state setters,
+  // and `refresh` depends on `signedOut`: a new identity for either would tear down and
+  // rebuild the polling interval on every render.
+  // Signing in lands on Chat: the workspace, not the page you were standing on.
+  const signedIn = useCallback((next) => { setAccount(next); setAuthError(null); setNotice(''); setActive('chat'); goTo('#/chat') }, [])
+  const signedOut = useCallback((ended = '') => {
+    setAccount(null); setProvider(null); setReadiness(null); setSettings(false); setError(null); setNotice(ended)
+    setPage(DEFAULT_AUTH_PAGE); goTo(AUTH_PAGES.find((entry) => entry.id === DEFAULT_AUTH_PAGE).hash)
+  }, [])
+
   const refresh = useCallback(async () => {
     try { const [r, p] = await Promise.all([api.ready(), api.provider()]); setReadiness(r); setProvider(p); setError(null) }
-    catch (e) { setError(e); if (e.status === 401) setAccount(null) }
-  }, [])
+    // A 401 in the middle of using the app means the browser has stopped sending the
+    // session cookie. Ending the session without saying so leaves a person staring at a
+    // sign-in page they did not ask for, with no idea that the cause may be the frame
+    // this app is served in rather than their password.
+    catch (e) { setError(e); if (e.status === 401) signedOut(SESSION_ENDED_NOTICE) }
+  }, [signedOut])
 
   useEffect(() => {
     api.auth()
@@ -61,18 +75,11 @@ export default function App() {
 
   useEffect(() => { if (!account) return; refresh(); const id = setInterval(refresh, 20000); return () => clearInterval(id) }, [account, refresh])
 
-  // Signing in lands on Chat: the workspace, not the page you were standing on.
-  const signedIn = (next) => { setAccount(next); setAuthError(null); setActive('chat'); goTo('#/chat') }
-  const signedOut = () => {
-    setAccount(null); setProvider(null); setReadiness(null); setSettings(false); setError(null)
-    setPage(DEFAULT_AUTH_PAGE); goTo(AUTH_PAGES.find((entry) => entry.id === DEFAULT_AUTH_PAGE).hash)
-  }
-
   if (!account) {
     const shared = { checking, error: authError, onError: setAuthError }
     if (page === 'signup') return <SignUpPage {...shared} onSignedIn={signedIn} />
     if (page === 'forgot-password') return <ForgotPasswordPage error={authError} onError={setAuthError} />
-    return <SignInPage {...shared} onSignedIn={signedIn} />
+    return <SignInPage {...shared} notice={notice} onSignedIn={signedIn} />
   }
 
   const area = AREAS.find((a) => a.id === active) ?? AREAS[0]

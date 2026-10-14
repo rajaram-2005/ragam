@@ -103,13 +103,38 @@ enforces another is a support queue.
 
 | Property | Value |
 |---|---|
-| Cookie | `aetheris_session`, `HttpOnly`, `SameSite=Strict`, `Path=/api`, `Secure` unless `AETHERIS_COOKIE_SECURE=false` |
+| Cookie | `aetheris_session`, `HttpOnly`, `SameSite=Strict` by default, `Path=/api`, `Secure` unless `AETHERIS_COOKIE_SECURE=false` |
 | Lifetime | 8 hours |
 | Storage | in process memory; every session ends when Core restarts |
 | Per account | 8, oldest rolled off rather than refusing a new sign-in |
 | Per installation | 64, hard stop (`429 session_limit`) |
 | On password reset | every session for that account is revoked |
 | On password change | every other session for that account is revoked; the one that proved the current password survives |
+
+### When this app is served inside another site
+
+`SameSite=Strict` means the browser never sends the cookie on a cross-site request. An
+installation opened in its own tab is same-site and works. The same installation served
+inside another site's `<iframe>` — a portal, a dashboard, a preview proxy — is cross-site
+for *every* request it makes, so the browser stores the cookie at sign-in and then never
+sends it back. Sign-in itself succeeds, the workspace renders from the response body, and
+the first fetch after it is a `401`. That sequence reads as a broken product rather than
+as a cookie policy, so both halves of it are handled:
+
+- **It is configurable.** `AETHERIS_COOKIE_SAMESITE=none` sends the session cookie on
+  cross-site requests, which is what an embedded deployment needs; `lax` is the middle
+  ground for top-level navigation arriving from another site. Browsers only honour
+  `SameSite=None` over HTTPS and discard such a cookie silently otherwise, so Core
+  **refuses to start** with `none` and `AETHERIS_COOKIE_SECURE=false` rather than issue a
+  cookie that cannot work. Widening the cookie does not widen the mutation surface: every
+  state-changing route still requires the `x-aetheris-request` header, which a cross-site
+  form post or image tag cannot set, and the CORS policy is unchanged. The policy in force
+  is printed on the console at boot whenever it is not the default.
+- **It is visible.** When a session that was working stops being accepted, the web app ends
+  it with a message on the sign-in page that names both variables, instead of clearing the
+  account silently. `SESSION_ENDED_NOTICE` in `apps/web/src/auth.js` is that message, and
+  `apps/web/test/structure.test.mjs` fails if the silent form returns or if the variables
+  it names stop being read by Core.
 
 ## Password reset without an email service
 
@@ -173,6 +198,7 @@ header; nothing about CSRF handling changed.
 | `AETHERIS_MAX_ACCOUNTS` | `64` | Hard cap on accounts an open sign-up page can create |
 | `AETHERIS_PRINT_RESET_CODES` | `false` | Also print a password-reset code on the Core console |
 | `AETHERIS_COOKIE_SECURE` | `true` | Unchanged; `false` only for deliberate HTTP local development |
+| `AETHERIS_COOKIE_SAMESITE` | `strict` | `strict`, `lax` or `none`. Use `none` when the web app is embedded in another site; it requires `AETHERIS_COOKIE_SECURE=true`, and Core refuses to start without it |
 | `AETHERIS_ONLINE_DATA_DIR` | `.aetheris-data/online` | Unchanged; now also holds `accounts.sqlite` and `password-resets.json` |
 
 ## Not delivered
@@ -223,6 +249,17 @@ return `capability_unavailable` rather than substituting output.
   and an unknown address (identical answers), the code on the host and on the console,
   reset confirmation, revocation of the pre-reset session, code replay refused, and
   password change.
+- The cookie policy is asserted through the real HTTP stack: `strict` by default, `none`
+  plus `Secure` when an operator opts in (and the opted-in session then works on the next
+  request, which is the entire point), `lax` accepted in upper case because it arrives from
+  an environment variable, `none` without `Secure` refused, an unknown value refused, and
+  both refusals checked to leave no data directory behind. The entry point is tested too:
+  `AETHERIS_COOKIE_SAMESITE` reaches the config normalised, and a non-default policy is
+  printed at boot.
+- Web: a dropped session is reported rather than swallowed. The sign-in page renders
+  `SESSION_ENDED_NOTICE` as information alongside a sign-in failure, and `App.jsx` is pinned
+  against the silent `setAccount(null)` form that made a cross-site cookie problem look
+  like a broken workspace.
 - Production build succeeds (`npm run web:build`).
 
 Not verified here: real email delivery (none exists), real provider inference (this

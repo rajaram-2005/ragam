@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 import { AREAS, AREA_IDS } from '../src/areas.js'
-import { AUTH_PAGES, AUTH_PAGE_IDS, PASSWORD_MIN_LENGTH, PASSWORD_RULES } from '../src/auth.js'
+import { AUTH_PAGES, AUTH_PAGE_IDS, PASSWORD_MIN_LENGTH, PASSWORD_RULES, SESSION_ENDED_NOTICE } from '../src/auth.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const srcDir = join(here, '..', 'src')
@@ -168,6 +168,29 @@ test('one way in: the token sign-in and every third-party method are gone from t
   assert.match(read('pages/ForgotPasswordPage.jsx'), /api\.requestPasswordReset\(/)
   assert.match(read('pages/ForgotPasswordPage.jsx'), /api\.confirmPasswordReset\(/)
   assert.match(read('components/AccountCard.jsx'), /api\.changePassword\(/)
+})
+
+test('a 401 while using the app ends the session out loud, and names a variable the Core reads', () => {
+  // The silent form of this -- `if (e.status === 401) setAccount(null)` -- is what made a
+  // cross-site cookie problem indistinguishable from a broken workspace. Both halves are
+  // pinned: the reason reaches the page, and the silent drop cannot come back.
+  const app = read('App.jsx')
+  assert.match(app, /if \(e\.status === 401\) signedOut\(SESSION_ENDED_NOTICE\)/)
+  assert.doesNotMatch(app, /if \(e\.status === 401\) setAccount\(null\)/,
+    'a dropped session must say so; silently clearing the account reads as a broken app')
+  assert.match(app, /notice=\{notice\}/, 'the sign-in page is handed the reason')
+
+  // The notice tells an operator which variables to set, so it is a claim about the Core.
+  // A renamed variable would leave the advice pointing at nothing.
+  assert.match(SESSION_ENDED_NOTICE, /AETHERIS_COOKIE_SAMESITE=none/)
+  assert.match(SESSION_ENDED_NOTICE, /AETHERIS_COOKIE_SECURE=true/)
+  const entry = readFileSync(join(here, '..', '..', '..', 'services', 'core', 'src', 'server.mjs'), 'utf8')
+  for (const name of ['AETHERIS_COOKIE_SAMESITE', 'AETHERIS_COOKIE_SECURE']) {
+    assert.ok(entry.includes(`env.${name}`), `the notice names ${name}, which the Core entry point does not read`)
+  }
+  // And 'none' must be a value the service actually accepts.
+  const router = readFileSync(join(here, '..', '..', '..', 'services', 'core', 'src', 'online', 'app.mjs'), 'utf8')
+  assert.match(router, /export const COOKIE_SAME_SITE = Object\.freeze\(\['strict', 'lax', 'none'\]\)/)
 })
 
 test('the two forms that set a password refuse to submit a pair that does not match', () => {

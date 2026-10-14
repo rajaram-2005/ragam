@@ -33,7 +33,7 @@ Core binds `0.0.0.0:8790`; Web uses relative `/api` requests through the Vite pr
 AETHERIS_COOKIE_SECURE=false npm run core
 ```
 
-**Sign-in is an account, not a token.** The operator token file this increment originally created (`.aetheris-data/online/access-token`) has been **removed**, together with its `{ token }` login route: there is one way in. Open the web app, choose **Create account** (`#/signup`), and sign in with an email address and a password. The first account created owns the installation and is the only one that can change the gateway connection; later accounts are members. Accounts, scrypt password hashes, sessions, per-account data isolation and the host-delivered password-reset flow are specified in [docs/20](20-accounts-and-sign-in.md). Sign-in still creates an HttpOnly, SameSite=Strict, eight-hour cookie, sessions are still bounded and revoked on restart, and sign-out still invalidates the current session.
+**Sign-in is an account, not a token.** The operator token file this increment originally created (`.aetheris-data/online/access-token`) has been **removed**, together with its `{ token }` login route: there is one way in. Open the web app, choose **Create account** (`#/signup`), and sign in with an email address and a password. The first account created owns the installation and is the only one that can change the gateway connection; later accounts are members. Accounts, scrypt password hashes, sessions, per-account data isolation and the host-delivered password-reset flow are specified in [docs/20](20-accounts-and-sign-in.md). Sign-in still creates an HttpOnly, eight-hour cookie whose `SameSite` is `Strict` by default (`AETHERIS_COOKIE_SAMESITE=none` opts in for an installation embedded in another site, and requires secure cookies), sessions are still bounded and revoked on restart, and sign-out still invalidates the current session.
 
 Then:
 
@@ -55,6 +55,7 @@ Export environment variables into the process; the new entry does not load legac
 | `AETHERIS_CORE_PORT` | `8790` | API port |
 | `AETHERIS_ONLINE_DATA_DIR` | `.aetheris-data/online` | Separate settings, accounts, history, memory and knowledge directory |
 | `AETHERIS_COOKIE_SECURE` | `true` | Set `false` only for deliberate HTTP local development |
+| `AETHERIS_COOKIE_SAMESITE` | `strict` | `none` when the web app is served inside another site's iframe; requires secure cookies |
 | `AETHERIS_MAX_ACCOUNTS` | `64` | Cap on accounts an open sign-up page can create |
 | `AETHERIS_PRINT_RESET_CODES` | `false` | Also print a password-reset code on the Core console |
 | `AETHERIS_LITELLM_TRUSTED_ORIGINS` | empty | Comma-separated exact origins for explicitly trusted internal gateways |
@@ -75,7 +76,7 @@ History is saved for completed turns. Incomplete/failed generations retain the d
 
 ## Validation and preservation
 
-- Full verification: **545 Core + 89 Web + 575 Fabric = 1,209 tests**, followed by production build. (This increment delivered 528 + 76 + 575 = 1,179; the accounts and sign-in change in [docs/20](20-accounts-and-sign-in.md) added 17 Core and 13 Web tests.)
+- Full verification: **547 Core + 91 Web + 575 Fabric = 1,213 tests**, followed by production build. (This increment delivered 528 + 76 + 575 = 1,179; the accounts and sign-in change in [docs/20](20-accounts-and-sign-in.md) added 19 Core and 15 Web tests.)
 - Core adds **19 online-specific tests** for authentication, CSRF, secret storage, model switching/persistence, no fallback, data consent, classification, body deadlines, provider errors, SSE completion, context/history, reviewed tools, and removed routes.
 - Web's superseded offline-control/research-panel assertions were replaced with current online UI assertions; remaining component/API/render regressions remain. A new provider-settings render test verifies key input and connection controls.
 - Existing legacy Core and Fabric suites are retained. Their passing tests do **not** mean their capabilities are in the online product. Counts include retained research/library coverage.

@@ -9,6 +9,10 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
     dataDir: env.AETHERIS_ONLINE_DATA_DIR || resolve('.aetheris-data/online'),
     trustedOrigins: (env.AETHERIS_LITELLM_TRUSTED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
     secureCookie: env.AETHERIS_COOKIE_SECURE !== 'false',
+    // 'strict' never sends the session cookie on a cross-site request, which is right for
+    // an installation visited directly and breaks one served inside another site's iframe.
+    // 'none' is the opt-in for that; OnlineApp refuses it without a Secure cookie.
+    cookieSameSite: (env.AETHERIS_COOKIE_SAMESITE || 'strict').trim().toLowerCase(),
     maxAccounts: Number(env.AETHERIS_MAX_ACCOUNTS || DEFAULT_MAX_ACCOUNTS),
     // A password reset cannot be emailed: this product has no mail transport. The code is
     // always written to `password-resets.json` inside the data directory (mode 0600, the
@@ -26,6 +30,9 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
   const accounts = app.accounts.count()
   if (accounts === 0) stdout('  sign-in    no accounts yet — open the web app and create the first one; it becomes the owner')
   else stdout(`  sign-in    ${accounts} account(s); owner ${app.accounts.owner()?.email ?? 'none'}`)
+  if (config.cookieSameSite !== 'strict') {
+    stdout(`  cookie     SameSite=${config.cookieSameSite}${config.secureCookie ? ' + Secure' : ''} — the session is sent on cross-site requests, so this app can be embedded in another site; mutations still require the x-aetheris-request header`)
+  }
   stdout('Configure LiteLLM in Provider Settings. No local inference or automatic model downloads.')
   const shutdown = async () => { server.closeAllConnections(); await new Promise((done) => server.close(done)); app.close() }
   return { app, server, config, shutdown, exitCode: 0 }

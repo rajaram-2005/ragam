@@ -371,6 +371,15 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.accounts, '**8 new tests** across `render.test.mjs` and `structure.test.mjs`'],
     [doc.architecture, '14,555 source lines, 11,712 test lines'],
     [doc.readme, '| 14,555 | 11,712 |'],
+    [doc.status, '**545 / 545**'], [doc.status, '**89 / 89**'], [doc.status, '**Test totals: 1209 passing'],
+    [doc.status, 'Implemented and tested (545 tests)'], [doc.status, 'Implemented and tested (89 tests)'],
+    [doc.status, '`apps/web`; 89 tests including'], [doc.status, '`accounts.test.mjs` (16 tests)'],
+    [doc.status, '199.64 kB'], [doc.status, '61.59 kB gzip'], [doc.status, '`test/render.test.mjs` (28 tests)'],
+    [doc.setup, 'all three suites (1209 tests)'], [doc.setup, 'npm run test:core         # 545'],
+    [doc.setup, 'npm run test:web          # 89'], [doc.setup, '| **Core service** | 545 tests pass'],
+    [doc.setup, '| **Web app** | `npm ci`, 89 tests'], [doc.setup, 'npm test             # 89 tests'],
+    [doc.readme, '1209 tests: core 545, web 89, fabric 575'], [doc.readme, 'All 1209 run in CI'],
+    [doc.phase2, '545 Core + 89 Web + 575 Fabric = 1,209 tests'], [doc.phase2, '17 Core and 13 Web tests'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -626,11 +635,11 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 26)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**545 / 545**'), 'core total must be stated')
+  assert.ok(status.includes('**547 / 547**'), 'core total must be stated')
   assert.ok(status.includes('**575 / 575**'), 'fabric total must be stated')
-  assert.ok(status.includes('**89 / 89**'), 'web total must be stated')
-  assert.ok(status.includes('1209 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1209 tests: core 545, web 89, fabric 575'),
+  assert.ok(status.includes('**91 / 91**'), 'web total must be stated')
+  assert.ok(status.includes('1213 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1213 tests: core 547, web 91, fabric 575'),
     'README must state the same totals')
   assert.ok(status.includes('(26 files'), 'the file count must move with the suite')
 
@@ -643,14 +652,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(545), `core heading must say 545, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(547), `core heading must say 547, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(575), `fabric heading must say 575, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(89), `web heading must say 89, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(91), `web heading must say 91, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1209,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1209`,
+    1213,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1213`,
   )
 })
 
@@ -677,6 +686,16 @@ test('the account and sign-in document describes the code that implements it', (
   assert.equal(number(accounts, 'DEFAULT_MAX_ACCOUNTS'), 64)
   assert.ok(new RegExp('^AETHERIS_MAX_ACCOUNTS=64$', 'm').test(doc.env()), '.env.example must state the real default')
   assert.ok(new RegExp('^AETHERIS_PRINT_RESET_CODES=false$', 'm').test(doc.env()), '.env.example must ship the console-printing switch off')
+
+  // The cookie policy an embedded deployment needs, and the refusal that keeps the
+  // unusable combination from being served. Both are claims about code, so both are read
+  // out of it: a documented `none` next to a service that only accepts `strict` would send
+  // an operator chasing a variable that does nothing.
+  assert.match(online, /export const COOKIE_SAME_SITE = Object\.freeze\(\['strict', 'lax', 'none'\]\)/)
+  assert.ok(new RegExp('^AETHERIS_COOKIE_SAMESITE=strict$', 'm').test(doc.env()), '.env.example must ship the strict cookie default')
+  assert.ok(text.includes('`SameSite=Strict` by default'), 'docs/20 must state the default cookie policy')
+  assert.ok(text.includes('AETHERIS_COOKIE_SAMESITE=none'), 'docs/20 must state how an embedded deployment opts in')
+  assert.ok(text.includes('refuses to start'), 'docs/20 must say the unusable combination is refused, not served')
 
   // scrypt work factors are stated in prose and stored in every hash, so the two agree.
   assert.match(accounts, /N: 16384, r: 8, p: 1, keyLength: 64, saltBytes: 16/)

@@ -27,11 +27,38 @@ import { McpRegistry, RISK, SERVER_KINDS } from '../mcp/layer.mjs'
  */
 export const SESSIONS = Object.freeze({ ttlMs: 8 * 3600_000, perAccount: 8, installation: 64 })
 
+/**
+ * Accepted values for the session cookie's SameSite attribute.
+ *
+ * `strict` is the default and the right answer for an installation people visit
+ * directly: the cookie is never sent on a cross-site request. It is the wrong answer
+ * for an installation served inside somebody else's iframe — a portal, a preview
+ * proxy, an internal dashboard — because there *every* request is cross-site, so the
+ * browser stores the cookie at sign-in and then never sends it back. The symptom is
+ * nasty: sign-in succeeds, the workspace appears, and the first fetch after it is a
+ * 401. `none` is the opt-in for that deployment, `lax` is the middle ground for
+ * top-level navigation from another site.
+ */
+export const COOKIE_SAME_SITE = Object.freeze(['strict', 'lax', 'none'])
+
 /** Answered identically for a known and an unknown address, on purpose. */
 export const RESET_REQUESTED_MESSAGE = 'If an account on this installation uses that email address, a single-use reset code is now waiting on the Core host. It expires in 15 minutes.'
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], secureCookie = true, timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null }) {
+  constructor({ dataDir, trustedOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null }) {
+    // Checked before anything is created on disk: a configuration this service refuses
+    // should refuse without leaving a half-written data directory behind.
+    const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
+    if (!COOKIE_SAME_SITE.includes(sameSite)) {
+      throw new Error(`Cookie SameSite policy must be one of ${COOKIE_SAME_SITE.join(', ')}, not '${sameSite}' (AETHERIS_COOKIE_SAMESITE)`)
+    }
+    // Every browser rejects SameSite=None without Secure, and rejects it silently: the
+    // sign-in response looks fine and the cookie simply never comes back. Starting up
+    // with that combination would reproduce, on purpose, the failure it exists to fix.
+    if (sameSite === 'none' && !secureCookie) {
+      throw new Error('SameSite=None requires a Secure cookie: browsers discard it without one, so every session would end at the first request. Set AETHERIS_COOKIE_SECURE=true, or use strict or lax (AETHERIS_COOKIE_SAMESITE)')
+    }
+    this.cookieSameSite = sameSite
     this.dir = resolve(dataDir); mkdirSync(this.dir, { recursive: true, mode: 0o700 })
     this.store = new OnlineStore(this.dir)
     this.gateway = new LiteLLMGateway({ trustedOrigins, timeoutMs })
@@ -239,7 +266,10 @@ export class OnlineApp {
     }
     if (this.authAttempts.size > 1024) for (const [bucket, hits] of this.authAttempts) if (hits.length === 0) this.authAttempts.delete(bucket)
   }
-  cookie(token, maxAge = SESSIONS.ttlMs / 1000) { return `aetheris_session=${token}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=${maxAge}${this.secureCookie ? '; Secure' : ''}` }
+  cookie(token, maxAge = SESSIONS.ttlMs / 1000) {
+    const sameSite = this.cookieSameSite === 'none' ? 'None' : this.cookieSameSite === 'lax' ? 'Lax' : 'Strict'
+    return `aetheris_session=${token}; HttpOnly; SameSite=${sameSite}; Path=/api; Max-Age=${maxAge}${this.secureCookie ? '; Secure' : ''}`
+  }
   server() {
     const server = createServer(async (req, res) => {
       const controller = new AbortController()
