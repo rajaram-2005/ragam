@@ -1,3 +1,5 @@
+import { EXECUTION_MODES } from '../hardware/admission.mjs'
+
 // Capability metadata + capability-aware Model Router.
 //
 // Directive §4.C: routing must be capability-aware, not name-based, and every
@@ -189,11 +191,13 @@ export class ModelRegistry {
  * an unavailable capability produces a clear error, never a silent substitute.
  */
 export class ModelRouter {
-  constructor({ registry, weights = DEFAULT_ROUTING_WEIGHTS, hardware = null }) {
+  constructor({ registry, weights = DEFAULT_ROUTING_WEIGHTS, hardware = null, admission = null, refreshHardware = null }) {
     if (!registry) throw new TypeError('ModelRouter requires a registry')
     this.registry = registry
     this.weights = { ...DEFAULT_ROUTING_WEIGHTS, ...weights }
     this.hardware = hardware
+    this.admission = admission
+    this.refreshHardware = refreshHardware
   }
 
   /**
@@ -210,6 +214,10 @@ export class ModelRouter {
    *                                        outranks a default exclusion)
    */
   route(request, { policy = 'strict_offline', allowExternal = false } = {}) {
+    if (this.refreshHardware) this.hardware = this.refreshHardware()
+    if (request.executionMode !== undefined && !EXECUTION_MODES.includes(request.executionMode)) {
+      throw Object.assign(new TypeError('executionMode must be local, hybrid or online'), { status: 400, code: 'invalid_execution_mode' })
+    }
     const needed = request.capabilities || []
     if (!needed.length) throw new TypeError('route() requires at least one capability')
 
@@ -223,19 +231,20 @@ export class ModelRouter {
         rejected.push({ id: model.id, reason })
         continue
       }
-      accepted.push({ model, score: this.#score(model, request) })
+      const qualification = model.location === 'local' ? this.admission?.check(model, request.workload ?? {}, this.hardware) : null
+      accepted.push({ model, score: this.#score(model, request), tierRank: ({ lite: 1, pro: 2, max: 3 })[qualification?.tier] ?? 0 })
     }
 
     // A pinned model wins only if it survived the same gates.
     if (request.preferId) {
       const pinned = accepted.find((entry) => entry.model.id === request.preferId)
       if (pinned) {
-        const rest = accepted.filter((entry) => entry !== pinned).sort((a, b) => b.score.total - a.score.total)
+        const rest = accepted.filter((entry) => entry !== pinned).sort((a, b) => b.tierRank - a.tierRank || b.score.total - a.score.total)
         return this.#decision([pinned, ...rest], rejected, request, policy)
       }
     }
 
-    accepted.sort((a, b) => b.score.total - a.score.total)
+    accepted.sort((a, b) => b.tierRank - a.tierRank || b.score.total - a.score.total)
     return this.#decision(accepted, rejected, request, policy)
   }
 
@@ -250,6 +259,12 @@ export class ModelRouter {
       request,
       policy,
       satisfied: Boolean(chosen),
+      execution: { mode: request.executionMode ?? (policy === 'strict_offline' ? 'local' : 'hybrid'),
+        location: chosen?.location ?? null, scope: chosen?.location === 'local' ? 'core_host' : chosen ? 'remote_provider' : null },
+      alternatives: !chosen && this.admission ? this.admission.alternatives(null, request.workload ?? {}, this.hardware).filter((a) => this.registry.candidates(request).some((m) => m.id === a.modelId && m.location === 'local' && m.measured.availability === AVAILABILITY.READY)) : [],
+      retryable: !chosen,
+      fallback: chosen && request.preferId && chosen.id !== request.preferId ? { requested: request.preferId, selected: chosen.id, tradeoff: 'A compatible alternative was selected; quality, speed and context may differ.' } : null,
+      tradeoff: !chosen ? 'Keep this task and retry with a smaller model or shorter context. Quality or retained context may decrease; CPU execution may be slower. No upload was authorized by this refusal.' : null,
       // Honest explanation when nothing can serve the request.
       explanation: chosen
         ? `selected '${chosen.id}' (${chosen.kind}, ${chosen.location})`
@@ -274,7 +289,9 @@ export class ModelRouter {
     if (request.minContext && (model.contextWindow ?? 0) < request.minContext) {
       return `context window ${model.contextWindow ?? 0} < required ${request.minContext}`
     }
+    if (request.executionMode === 'online' && model.location !== 'online') return 'local model excluded by online execution mode'
     if (model.location === 'online') {
+      if (request.executionMode === 'local') return 'remote model excluded by local execution mode'
       if (request.localOnly) return 'online model excluded by localOnly request'
       if (policy === 'strict_offline') return 'blocked by strict_offline policy'
       if (!allowExternal) return 'external egress not authorized for this request'
@@ -285,9 +302,15 @@ export class ModelRouter {
     if (availability === AVAILABILITY.NOT_INSTALLED) return 'runtime or weights not installed locally'
     if (availability === AVAILABILITY.NEEDS_HARDWARE) return 'insufficient hardware for this model'
     if (availability === AVAILABILITY.UNREACHABLE) return 'provider unreachable at last probe'
+    if (model.location === 'local') {
+      const tier = model.tags?.find((t) => /^tier:(pro|max)$/.test(t))
+      if (tier && !this.admission) return 'no benchmark-qualified model configuration'
+      const admission = this.admission?.check(model, request.workload ?? {}, this.hardware)
+      if (admission && !admission.eligible) return admission.reasons.join('; ')
+    }
     if (this.hardware && model.location === 'local') {
-      if (model.minVramGb > (this.hardware.vramGb ?? 0) || model.minRamGb > (this.hardware.ramGb ?? 0)) {
-        return `needs ${model.minRamGb}GB RAM / ${model.minVramGb}GB VRAM, host has ${this.hardware.ramGb}GB / ${this.hardware.vramGb}GB`
+      if (model.minVramGb > (this.hardware.vramGb ?? 0) || model.minRamGb > (this.hardware.ramFreeGb ?? this.hardware.ramGb ?? 0)) {
+        return `needs ${model.minRamGb}GB RAM / ${model.minVramGb}GB VRAM, host has ${this.hardware.ramFreeGb ?? this.hardware.ramGb}GB available RAM / ${this.hardware.vramGb}GB`
       }
     }
     return null

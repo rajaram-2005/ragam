@@ -169,7 +169,7 @@ test('hardware profiling excludes models that cannot fit', () => {
   const router = new ModelRouter({ registry, hardware: { ramGb: 3.9, vramGb: 0 } })
   const result = router.route({ capabilities: ['text_in', 'text_out'] }, { policy: 'strict_offline' })
   assert.equal(result.modelId, 'small')
-  assert.match(result.rejected[0].reason, /host has 3.9GB \/ 0GB/)
+  assert.match(result.rejected[0].reason, /host has 3.9GB available RAM \/ 0GB/)
 })
 
 test('tool-calling and context requirements are enforced', () => {

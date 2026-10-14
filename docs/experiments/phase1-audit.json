@@ -1,0 +1,1289 @@
+{
+  "schema": "aetheris.phase1-audit/1",
+  "date": "2026-10-14",
+  "scope": "audit only; targeted source review, existing local verification, isolated observational probes; no upstream runtime/model execution",
+  "report": "docs/18-phase-1-audit.md",
+  "checkout": {
+    "branch": "arena/fe54d09a-ragam",
+    "head": "3235257a2ff67f4d54ad7be34d2b449f3ca1f867",
+    "uncommittedWorkPresent": true,
+    "baselineFileCount": 208,
+    "baselineHashAlgorithm": "sha256",
+    "baselineManifestSha256": "babea094de14caed8f8ae7a1b8734f3c017cf64b079eea3bc41b97478dc81821",
+    "changedOrMissingBaselineFiles": [],
+    "baselineFiles": {
+      ".env.example": "20695c8be4f4e03bd75e00a469ae78f8e068a7451d5be37b9ba8fb6929344674",
+      ".github/workflows/ci.yml": "d4d9c993e41dc0e1ac71c5d551f89bfc6c7a7c895f407cda53c8b6c3b51fd514",
+      ".gitignore": "ca2c87911b3ba3b996e3cd1541e6f136961b09aaf0f48bece51c480495552427",
+      "LICENSE": "17be47093fb30034bcd0d5cfa2bcb21c27121da885c6266322147d1932ba9b95",
+      "README.md": "534c95c93069c83a1c5f858292792811fa1b61184fcca175b28a7574a4b51627",
+      "apps/web/index.html": "fa1b5dbaebf7ba67832797cc75d5589147f6715ffb587c3dd2565a2e7c5b51d7",
+      "apps/web/package-lock.json": "1fd18370079a68b22163b4264c4e385942f4d0aab59aff6b21fd7108b55fe894",
+      "apps/web/package.json": "d565438755fc5cf946f7e457a2d83067f0cec0af68f1d7d50be2f95fdc606981",
+      "apps/web/src/App.jsx": "e2745c23855f2efdcca48bd05e8f4f0e569c7d5c138c67cc964551223704ee08",
+      "apps/web/src/api.js": "28d05604ff8adea04edefa8f4e285e3a1aa5dcdf77504aeb053496d896b51114",
+      "apps/web/src/areas.js": "9992e5963ec104dca342469e2db865f6ff8cacf61fc3ce5fad09df4969468dfc",
+      "apps/web/src/areas/ChatArea.jsx": "8766a8e62e1c8f01c0337c570e44e608b7948821d8c6d61070ba2a7821236e79",
+      "apps/web/src/areas/ImageArea.jsx": "0f7a2e44872ffaa366104761fadf4f67c3a5d5d2ab5bb5e0b8883da3a3c7983f",
+      "apps/web/src/areas/McpArea.jsx": "ce0e1dc2f8f1f40fe1b4801ef78da0ac8e7526987f8a02076d4ee8f31c516e36",
+      "apps/web/src/areas/PluginsArea.jsx": "688ee1b9d0bbaceae231ed3b9991fcfc5fa0d20cace40871282cf360b7014204",
+      "apps/web/src/areas/VideoArea.jsx": "9f6bf0f4cc01290991d760b812e51a361b2535d3f7f6337db62e6ad76bc8786d",
+      "apps/web/src/components/ExecutionMode.jsx": "0dc2981eb2fe64823c0fdc48155e4f064ed46ab5fb9cb84007192f3f5dcd7348",
+      "apps/web/src/components/Jobs.jsx": "a4b3a1c013cace657c857cceafb65406305ae5b6d54c38e7592dd62a81ecf3bd",
+      "apps/web/src/components/ModelCatalog.jsx": "802583ed3572bdb321ddb9eb7719c04e7fafce4b124d57d80113ea90865b72fa",
+      "apps/web/src/components/Shell.jsx": "e74c602935e12bf64847b3ad7003b5d5b4ca313ccd8b5cbf04d1ae684e76d9f2",
+      "apps/web/src/components/ui.jsx": "fd3ad373cf856b89b80d828273bb8fc6344971c4b9ca1e130ab35ec263c1f227",
+      "apps/web/src/format.js": "f872630641a239b705c644dad591b7cb8e93fc4d050a2737ae6dcb878b29c745",
+      "apps/web/src/main.jsx": "bddf131de6530830216cb39f7cf78c861df400e5a22774de5009fdeb67f3b500",
+      "apps/web/src/styles.css": "3195c4092644e0351c5f8ca982d7d7ab1d1d9ae9ec2dbc7359c085465571fba9",
+      "apps/web/test/api.test.mjs": "8b75ce67af3b05c91c555b5feac9cb057aeabe0d3533dd19caa9db76d7f44a5f",
+      "apps/web/test/format.test.mjs": "cb87006821b72d8ad8ed58ffa3b579b5743128c3486cd86f953e4a2c754a1a89",
+      "apps/web/test/render.test.mjs": "750f4683d7c50ea1c8c44ee9886fa90ed24c6edb9e321a0e7b843651b613c761",
+      "apps/web/test/structure.test.mjs": "53a3fcb338b7ebed8f5d1dce7e81f7be3cd64101714b083a6c1014013960f110",
+      "apps/web/vite.config.js": "90eec2f22f8dc67339fd724d9cb58efbc37b83493cdf1f7e3107db2f035fd6f2",
+      "docs/01-audit.md": "76807b9322d6a16b7eebf135cd204598b6b40231d8d5d127f2a143c89f610e02",
+      "docs/02-architecture.md": "742dfe477b8ae773789db145c2c0d16df33add627baadcec9b0fbb558aa0e72c",
+      "docs/03-status.md": "9988390c8ce41be42f56075bb04af730aaacb6f34b65f094523f810cc7180fc8",
+      "docs/04-setup.md": "5e39cd0ed675342116c6ffe9a3445d76ffa65fcd41a0b3e5ec3d70a60589441f",
+      "docs/05-security.md": "586e6041e8e1d94fe0e7c4fff5eb40b013d9e2201725b37af65600671c337b95",
+      "docs/06-benchmarks.md": "0421da5903a7d2201b175ff05203817423d384c2ec7d794585e02722ad3412f3",
+      "docs/07-improvement-cycle.md": "aeab9e2ba758ee69dd9445a0f78f8dbf88c5ebda74238642d5d6b76be3c740e9",
+      "docs/08-aetheris-lite.md": "5273b22a33f1472cb336fb62cd2842c39b020a0fa2efafac2819d3540aeffa9f",
+      "docs/09-distillation.md": "cd7860be670d1b8b47656b7a5eca31ab03535c78c83522b59821f3a62c2a0175",
+      "docs/10-hermes-audit.md": "ec034130870ef99566fad840fbecd7bfc64f73081abccbc70800a4d3db3d67ff",
+      "docs/11-klyvaron-family.md": "2f7752c1566381cb1bc6a539910a9ae353ee6dd939bf154641edde19eea9973f",
+      "docs/12-feature-matrix.md": "3d9d289236d5c465bc6679e1a14d2e84e78ac0ae490ea4a52618c19d39e24d84",
+      "docs/13-hardware-execution-policy.md": "f36a7ae2bcbac123dd0862c1a5838600397898a2dc7f3903116e314b7bc5c2b4",
+      "docs/14-cpu-int8-inference.md": "dcec63b6310848874ef13f3f6484cbe72ee217aa273be4c9e9dd79c9546a2f92",
+      "docs/15-responsive-local-execution.md": "6a3780f60dcf2cfce9acc400f9616474b1685932f90b6523370437425733be53",
+      "docs/16-universal-ecosystem-roadmap.md": "f55c983550127c9cc28121e7f4f2f4e7b2d0a35c494b25ecdec462394acefd33",
+      "docs/17-model-catalog.md": "59d12087e4d7117f3954f067ae36a4a6f2b07a5acda91546e67d5084907b9eca",
+      "docs/experiments/distillation-control-untrained-teacher.json": "106119b60d4342e8464a184d2a4eacfb6ee0b83b643e49e7b6b2b5e5494dafb5",
+      "docs/experiments/distillation-logit-vs-baseline.json": "cd43b8d08dd92a067d38ea521f394fd58e1e97d5e613cb87027eb02e4476e248",
+      "docs/experiments/distillation-sensitivity-alpha-0.9.json": "fee4a8fcdacf4e26f877eddc5c2a7bdbda606b058861b97174e07449642c42ca",
+      "docs/experiments/int8-runtime-verification.json": "7a024332328cf28642a1fb689d37266d15eeebad437fdd80511474df413c66c0",
+      "docs/experiments/l4-transfer.json": "cda717a4ac361d6aeb165b470a6c93afefe35c3225008a0c55a7d4fa83fc61a9",
+      "docs/experiments/lm-verification-run-67cdd58.json": "e8c897ffd369c01222d614b9b9a979a538485f2c7951bf23f0b334823a4612e0",
+      "docs/experiments/lm-verification-run-8d9cdf8.json": "fbc37a9ed265266f0c0adde1e1d41b373580370252330b6b5dc2ebbe959e466f",
+      "docs/experiments/universe-source-audit.json": "5516887e6ff0aea19e19bdb1b80d465e793c36d03efeec88a319c6eba1d12a2b",
+      "docs/model-cards/aetheris-lite-lm-0.1.0.json": "ed0c82ec22d8469501628332793f5754bf2a1c454ece3574716c0864812aaeaa",
+      "docs/model-cards/aetheris-lite-lm-0.1.0.md": "e7b09450ab4bc5f64354650e4b661be694cd8e69465af53cd23bb69719e4de20",
+      "docs/model-cards/aetheris-lite-lm-0.1.1.json": "9b03a0c1671fa57bd11bc0db90b796a98adfed38da4f379411f62c041da87fa6",
+      "docs/model-cards/aetheris-lite-lm-0.1.1.md": "e612d3d4d1aa90e6ba462fb2411011ce65681d14fbf34d1ad2b3764a9789aff6",
+      "docs/model-cards/aetheris-lite-retriever-0.1.0.json": "2df175b9dbdfa70a2f93c9a56bac37c1d5835ab0f5114d7722083ad23d16f379",
+      "docs/model-cards/aetheris-lite-retriever-0.1.0.md": "f1c123ef2550bee0622b0c2f7697651ca867fbdc6e6329e3e53ae235c51ce957",
+      "package.json": "eff10d218cf224030e66f5416e88b1926d8e50b2bf806282f70a1cfae800e014",
+      "services/core/package.json": "6c45a2553d40c92fb654055a911a2b9c9a3ef5690dc81beb37324d03c0f59bfb",
+      "services/core/scripts/benchmark-klyvaron.mjs": "831fe26226a522d9308361e4d7b7f26ec3245019dea3074b34c91413f17db8c1",
+      "services/core/scripts/klyvaron.mjs": "8656faa8773396c2a076ac920bb1a3e8f882505692ea044ff753140ee36e4503",
+      "services/core/src/app.mjs": "cfe640a33573eb0bbf805f9b07211d2e6e0445b996485b560e780f272378203b",
+      "services/core/src/audit/ledger.mjs": "8dfb9fdfdd5345f19c2e5e92995284d97c5055812b8343c5f03121c82827c0ec",
+      "services/core/src/builtins.mjs": "ca68854d46db1730e9a88ce9212a902854a04e38663cc45668fd0ade8872a016",
+      "services/core/src/catalog/registry.mjs": "11475c58591ef49eadfb6b593facaacfb1f0b345e634507d8b8cdbc98260a953",
+      "services/core/src/catalog/sources.mjs": "1fd3cc3c146af8a77eb61f46ae33b1c2f8c9538e46e775790457f1e07bdd4af5",
+      "services/core/src/config.mjs": "44d31d1edd02fcee28a5939770bcabfcb2d8fb833e06b808bd9e1499553b9a5d",
+      "services/core/src/godcore/lifecycle.mjs": "8a7948175f20f3af66a8e94cb1e129f373be29afbbb6d36044d642203775da6b",
+      "services/core/src/hardware/admission.mjs": "fc213822f0899585d340abee341919c083f3dcafa9dfb050c96d0f009e17b681",
+      "services/core/src/hardware/detect.mjs": "59ba2e2e41a469356c19b12a52a73402ffe5d0344b8c02f5f7371590a8678f08",
+      "services/core/src/klyvaron/execution.mjs": "f09d89a0cc5935c3adf8a7d0799c5606c65ec0e22012a5f71b0e5806a2d82573",
+      "services/core/src/klyvaron/footprint.mjs": "9d562922d0022e97d375df449efc674bbeca7e26846fef26fc9a04c306f41128",
+      "services/core/src/klyvaron/format.mjs": "d21d2904901f2f32bad74c18bf729d5d436d8e9eb539744b282d16fa71e60660",
+      "services/core/src/klyvaron/runtime.mjs": "8b771eabf169606742942af634be03600473c21ce969ccab4395b438ffd86989",
+      "services/core/src/klyvaron/store.mjs": "ebfa495b30db5d016a6eb7be4b67251b3be70d573815d0329ea48a0ce805c5ff",
+      "services/core/src/klyvaron/tiers.mjs": "7a0fb4e07f119ff38f4fe4cf3d6739077201db390fac628dc57b4bd4d4b40298",
+      "services/core/src/klyvaron/worker.mjs": "47588c3d6d4f2c9f2ed3ae3c42cc165c53eb9ef27c22ef540512290a20cc9e01",
+      "services/core/src/knowledge/bm25.mjs": "83be141dabecd50f8385aada0ad7c6613b9140302ae4e698b2a9a966e1add6e3",
+      "services/core/src/knowledge/pipeline.mjs": "5ea6c9e20efd13d8e47aaf609aa51df2c350c09dc0592504717ffe509a6d1562",
+      "services/core/src/knowledge/store.mjs": "666c3059c5ed10e4bd28bad2052755689a2eb43ca5308e644f44054259a2d229",
+      "services/core/src/knowledge/text.mjs": "a1423ac7fa0fd639a18fab5a3d84d54df2c97ebaf0eae651660c5937ce4b3b43",
+      "services/core/src/mcp/layer.mjs": "e4723eaf80e0556b7d694cef3f24e6aa847bb878d96b93c84b9570e1f5e4db11",
+      "services/core/src/mcp/schema.mjs": "6c371672a6ae468d5ad0d5a1a16423c2508dc618b0f3c1befdccd7be7177e58f",
+      "services/core/src/media/jobs.mjs": "053c6405f2f1753fca393851999587c338b53f9ae5dc5bf5d8fdeef139009ceb",
+      "services/core/src/media/validate.mjs": "d16896e530fab49d808205bc6aefd1379514369926ceb5cdc19cc96e25a673e8",
+      "services/core/src/memory/store.mjs": "b802ed93bc831e72eff673737fd252e50a074c831d79f9b6ad5297a5687a0b90",
+      "services/core/src/plugins/manifest.mjs": "1a61eb77e49d7e77c33627846d8323e56fddc00abd5f97f1ec5567be1c431aa1",
+      "services/core/src/plugins/registry.mjs": "53b9f0fd65fdd90bcda385de8edd4cb2b1320f05597984bbf9a840e0022ed23f",
+      "services/core/src/plugins/signing.mjs": "c97d41edfad3c8bbd563f27f610d94ba81b93162e39740a1643134fdc99be6b9",
+      "services/core/src/policy/classify.mjs": "15dee58616d2addc6c5e0b26b6eb4b940c7e983c2fe9090fc216e04494f0f7b2",
+      "services/core/src/policy/egress.mjs": "d607369d3b599583ade0ac4e6cde58d4b7fb4f89ab631fde440353ed413be5f3",
+      "services/core/src/providers/base.mjs": "37ce71797517966f4e8c57cb1a55cc4b8d73453b82037a05e9bdb6bd59183878",
+      "services/core/src/providers/klyvaron.mjs": "84cd72b15b145a71aac48182c1393e8a248b3ca743c65dc3667b310df9bff82c",
+      "services/core/src/providers/local.mjs": "3baaa1f8ae8f3ff9102b61aa7b247f44f92036151a65647b07ae53df3cff93f0",
+      "services/core/src/router/registry.mjs": "b3d221739fb0c4da0579de28185cb222e2824785bc7f7e5307036acd4172f494",
+      "services/core/src/server.mjs": "6baa6077486a1c78beecd8df78ab4e249a26915178b49fcdfdc59099651dc87d",
+      "services/core/src/skills/lifecycle.mjs": "b39666e69b28e21e711329ace1c6bf87849257c6c2b5bd66894e2ad36baf33a5",
+      "services/core/src/skills/manifest.mjs": "6cc69a07a8e18b02ceca33935eadb5269273147b3bc7580186245421fa88bf49",
+      "services/core/src/skills/registry.mjs": "f7970884e4a4448f564702c4972652110fa056ca3f75a10f9033d6396886e2ea",
+      "services/core/src/skills/store.mjs": "e1f6dbf117a9ca1bc92cd597c4ce391a57b9f0399b41d16659e182d5893fc6f6",
+      "services/core/src/storage/budget.mjs": "6f6421c3f0788dc37b9979d47e87376c2ef679d7cd615ac69535d50f5f20e129",
+      "services/core/test/builtins.test.mjs": "edd66716563e0fc78fd0811f41b45f78cf164cd275d5138b65db4df138e38aa1",
+      "services/core/test/catalog.test.mjs": "cae94fdc59a659d2c0c44d5dac4316a20292b00dabe2cb81f6f5663145af4ebd",
+      "services/core/test/docs.test.mjs": "51ea4249da038067049e3b0bb9348034c82a3cb2b519620350851c3700e8405b",
+      "services/core/test/fixtures/klyvaron-lite-int8-parity.json": "59e0d79f1eadcef4474a66505b0021f0600ed3ce44150c9f3864b28d3234de41",
+      "services/core/test/fixtures/klyvaron-lite-parity.json": "552c101f2c25173000a4b3af89dc42bdf55ee81732031e0e2c40b9d5f309e83f",
+      "services/core/test/godcore.test.mjs": "ec12984b3630e7791ff99bd22590e387bd050fa7100d2952e3cee0bb268ce1a3",
+      "services/core/test/hardware.test.mjs": "2707155df45d5ded7db4be245f33bfabd8c4af5ceba40d9c475df24bfb5e6cc7",
+      "services/core/test/helpers/blocked-cpu-worker.mjs": "4e5b15d5bd6549b8f67a2f08e4d10151b967e9a18462a0f14b5b689ab8cfd58a",
+      "services/core/test/helpers/local-model-server.mjs": "b5071a200a80f3c89dbc4a7a7b5208df96332baa7845f4b5c4eff8ea38479d52",
+      "services/core/test/http.test.mjs": "accb39333f7a142da397c74e3660580ea12e6c5ccbe5eb44c12bcbc05b9cc599",
+      "services/core/test/klyvaron-app.test.mjs": "b342d939328092892286296e268cf761942a86330a660bd3178130c31e591e35",
+      "services/core/test/klyvaron-execution.test.mjs": "8609a5613c611a061fa387077b427334e68e450c4d6e0044226372e953c025fa",
+      "services/core/test/klyvaron-quantized.test.mjs": "6022cacdb8bf4e270a70c4811eeb0f259c6ec60883ea65843c5f776f25ac7ca1",
+      "services/core/test/klyvaron-runtime.test.mjs": "e129a993bd754a4f2f882f68257d0eeabbb4cc1884e08745d8dada76a1b8540a",
+      "services/core/test/klyvaron-store.test.mjs": "4f129721d42e518d55af5687c71e0e42b8761475943c628a207433dfb1eb53e2",
+      "services/core/test/klyvaron.test.mjs": "7333c47fb0b1b8a83cfc956b8400e10318268e39ec1e8f2aeb0901ab0590a4a2",
+      "services/core/test/knowledge.test.mjs": "a84aa0646b32da8e5010a2b2c14327f4bd31c2f7447b3b7d0eded232ce05b536",
+      "services/core/test/mcp.test.mjs": "440ae29e9a57837f8219b16ac90f10a45ff3c6e77f764330394bd8f370494196",
+      "services/core/test/media.test.mjs": "85f5bc5add23a7332281ecc119ebd8035886def524cf2e2905b234f1758f9717",
+      "services/core/test/memory.test.mjs": "b6de9022ffebd30b96e80f8a2fc161603c22e63aa5707c5d442f9b9bd4f974da",
+      "services/core/test/offline.test.mjs": "ea5a4c0bdbff0b91102bc7f45bbec31eaa0ac0e30a32107409e6c24d3cffacbd",
+      "services/core/test/plugins.test.mjs": "a7f1c49f81384858d86885e48435350b90d72e5a3fdd5f28239511b696b098bd",
+      "services/core/test/policy.test.mjs": "fa0612a3aca53ed1846e75684e56fb71d4330e12e9e2617b164c9ae2247ed9dc",
+      "services/core/test/router.test.mjs": "bae07874e53cc3264ecbbe3abaf4b6d6335a03adb830c6ec417bd7b255ff72c8",
+      "services/core/test/signing.test.mjs": "a715518264d69a8f5b6f6288e808dfb62320ad12ab799edfe73a4495f334868f",
+      "services/core/test/skill-store.test.mjs": "a455928169e15ac78fed6df996f7a7adff1de055838304b6e915230bb9bc7572",
+      "services/core/test/skills.test.mjs": "cf0fe3a85af7915f479aa62c9783bbf86ecb829a3f7ce01f5d5f8b00e4240227",
+      "services/core/test/storage.test.mjs": "29406f15cb76da69354b901ed64e1ae9a0877a4670fbeae43066969a81ae4a14",
+      "services/fabric/README.md": "5b1914a135c18d452f46d7246b15fa12ff27d4ccbe8ddff32b519ffd8c9a3443",
+      "services/fabric/conftest.py": "23d2f748d9c50a696aa4f5e4f18a66b3a8bf81f28526f0d1e74c18f9306443e6",
+      "services/fabric/fabric/__init__.py": "94f0960eed604dd14039414d1eae3287124f86e15c285d36e5b408ae9ccc8c08",
+      "services/fabric/fabric/bm25.py": "57fb48380045e4e82529326c054e88b15f25a460c1aa3769ffdb1914bd41e32e",
+      "services/fabric/fabric/dataforge.py": "936847607814164b07e239e7890fcbe6233d4c7fe9e4635fea22660d13575995",
+      "services/fabric/fabric/dataset.py": "122f7b07b11bad5668ee8773dde320b636f183bdb237f358bab588ce0f39108f",
+      "services/fabric/fabric/dual_encoder.py": "cd15707927d0876bfcdfc84c60733ae82dcc96b7189dabed349bd6e3917a7779",
+      "services/fabric/fabric/experiments.py": "1abd3226592db12f7ffcda04dfe5dcdf6b158a60a7e5752040a810fea9568f4d",
+      "services/fabric/fabric/failure_memory.py": "8ed69453edd3a1409b4d40ed6b0c4e4412fa70f39b0aae307fb3b20efaa2e10c",
+      "services/fabric/fabric/hybrid.py": "db8b2aabef002a316c659580beeb68059753057a63bd52a4fecf912fdf48efbe",
+      "services/fabric/fabric/lm/__init__.py": "68e8ced378616ba84a8662736971cdf5c8bc966a49bb34daa863302ab6bc0ef3",
+      "services/fabric/fabric/lm/card.py": "3d0de8cdc185e4e9b9c68b420db303bb9bef7a6982bf51dad74bacb49c92cdf7",
+      "services/fabric/fabric/lm/data.py": "de148d51f70fa74d19d1382894949dd4be084b71cc7f51d3ff30394bd8f4bcd5",
+      "services/fabric/fabric/lm/distill.py": "e2ab6233b33f7fb4cf844c49f7a42c8bcd7d00aba078f8dca69b779b60dd7c17",
+      "services/fabric/fabric/lm/evaluate.py": "d6b3e1d8dbe71888fddb1de254a718e30783399bc316a02b7b14806269c508d3",
+      "services/fabric/fabric/lm/export.py": "0cd42a7a1ae6bd44072bec07e78cbb7be5faeaa994a68d89f55a1f23e8208f67",
+      "services/fabric/fabric/lm/model.py": "f2d77dfa93c68a731f373d5453f71c61c5de298ca8bae155445dfe2c81378dcf",
+      "services/fabric/fabric/lm/privacy.py": "76e49fa2a3f567bc96274183d0ccbf46b6b8c9e79cb8e265270870376993c45c",
+      "services/fabric/fabric/lm/quantize.py": "3e2073bc0059e084461fe8d72b12332bc888127b3e67c3612496ecd43b647b59",
+      "services/fabric/fabric/lm/teacher.py": "68be856412e29f8b7aa406a2359943e3cd7fc6c76702c7c21b465616940d631e",
+      "services/fabric/fabric/lm/tokenizer.py": "5975d8465b898e5f6b6d6b6a6d5deb8068f9ba26b27cfb52498698411690b952",
+      "services/fabric/fabric/lm/train.py": "8521557771aad98db5d23dd61e4f73e8835910c1fc30ffdf9cefe8fb55a1d9ea",
+      "services/fabric/fabric/metrics.py": "22b254b5cccad7386df281b42a7a1bbb6ef5b2b58ccb773fa6fd14f487ba9196",
+      "services/fabric/fabric/modelcards.py": "904efc1b4bd26aaebd60ba33cf34eba309624550d7dc4f49fe120cc6305a5ae4",
+      "services/fabric/fabric/pipeline.py": "cd106db0338c8b13df680e2a05d9c9461a4541783929b53ac0cf58bf86ae636d",
+      "services/fabric/fabric/records.py": "20a3e0794b6ad8564ff04c73c10b5a59687be6c9885a73b5804b233405846804",
+      "services/fabric/fabric/run.py": "0715442c857cef5e492e1d9e3581da289f99a802e1cb35505a3b28cd1b04e10a",
+      "services/fabric/fabric/server.py": "66cb02bfecc654d8f36e5363880561deadbfc7690164c5c471311c06b2e127a8",
+      "services/fabric/fabric/taxonomy.py": "b9e07873d44965f21c2ca53295029391f121e44370a13508847967188713369a",
+      "services/fabric/fabric/text.py": "db38d910ddeb63a504bc62ca568ae4609fb9f9e19f5b56d4fa42ceba93b1dc61",
+      "services/fabric/fabric/transfer.py": "0981d7df5dbfe7e03ad064eac141807fe60470095b32cfd5d730313a60d700f6",
+      "services/fabric/pyproject.toml": "4f4393b88c903a818faf375d4fff962acc99a2190f4bb476ae731f120549c62f",
+      "services/fabric/scripts/audit_python_deps.py": "0a03107c1cdfd2a878b987255d4a8c0a093e66f4807874c1a39409f5ad151922",
+      "services/fabric/scripts/distill_experiment.py": "ec6be080ba9aa3580632e995657b8664d2d09432f5921202322ea3b7b7455660",
+      "services/fabric/scripts/export_lm.py": "374e92da63174044f7c27564995c0d8042cbaf9e313218698dc9d11648e5593c",
+      "services/fabric/scripts/generate-int8-fixture.py": "2faecf411ad63bea7bab91feca69bcb7a3a15d9e830607cdecfb9c700b5aadb4",
+      "services/fabric/scripts/generate-parity-fixture.mjs": "072029f05b0e44ebd51b5b5199788beabbe4dcd0e447e234c75407c6211cb6ee",
+      "services/fabric/scripts/generate-redaction-parity-fixture.mjs": "016c2869137b9e30dd7fd84280a6e0a986f6a8152f2698dfcaa57e3903b8e34d",
+      "services/fabric/scripts/l4_transfer.py": "6ea863a737eaad4c33531d6989cca01e0102d040736dae9576cfab7afef61d5d",
+      "services/fabric/scripts/lm_release.py": "0de58c21765ed8b1d4df950df2439da47fa8f7e6b762dd138723d8b8990e95b0",
+      "services/fabric/scripts/quantize_lm.py": "47d0d51150a2bc2b7ca9e8453642c6d333f2b8cae788096c77c947297646fc39",
+      "services/fabric/scripts/robustness.py": "52c53e2640152bc4ca6a75e75e14646b6f6ac7c54a33b4016f5c6255d2976633",
+      "services/fabric/scripts/sparsiz_cycle.py": "24d5fe4556d43a56f6f837529968c5d9dcf6db45a07ba72a18574d9508e8d3cf",
+      "services/fabric/scripts/train_lm.py": "1b8751010d3786564691c03a9a4cc3e7254be4d132a944911ae29acebe228cee",
+      "services/fabric/tests/fixtures/redaction-parity.json": "aef9669e1ed1dd718b73ad77bc84959421cf0988afe91277b626cbf2c75c4726",
+      "services/fabric/tests/fixtures/text-parity.json": "1c208804047ae8d5a05344ff833ff02d8bc141da2e87ba5eff4269217ccebd76",
+      "services/fabric/tests/test_dataforge.py": "4f214172e6d396fbc838dab1f6ae467aaf18d7d4dfdd5c83b4bcd8338cf9c675",
+      "services/fabric/tests/test_dataset.py": "eefa226b6d36d884aacea74190b6b9458a6183c790fb314b880d7192c21ab47a",
+      "services/fabric/tests/test_distill_experiment.py": "7817b42173b165d15f544d0b1d2306a67632325ff670c93510b663900c2e3c9c",
+      "services/fabric/tests/test_dual_encoder.py": "eec9c2ac50d16a4960cfc94e95cc6e9360c8da7adb2c95fb0bd749fbd3d88569",
+      "services/fabric/tests/test_experiments.py": "134f4edf0654ccf98fffed8d7cd5621e7f3f0a9ddb4f28d0eeef22a15050b352",
+      "services/fabric/tests/test_failure_memory.py": "e4180da8d273e1394a75ab0d4096ccb423af8693d5ad3c9469c6aaf2e9a88428",
+      "services/fabric/tests/test_hybrid.py": "f732fd101f9e142e6d6ac5a0dd9c4956875b6c802df8cde41924135a77b2d4ae",
+      "services/fabric/tests/test_lm_card.py": "b73c7dbc04e95d188887d82f9c121e0d36e34044380da3fd60de03231cf66f9e",
+      "services/fabric/tests/test_lm_data.py": "d65f89130ade045cf2729cd9a31c74091a5b6443062be3b5e22cbfcc34f504ba",
+      "services/fabric/tests/test_lm_distill.py": "127209975950750477d5e6367fdcfd0e5ad7f353508fea682ce66383ff4e7ff6",
+      "services/fabric/tests/test_lm_evaluate.py": "7facc2b0f9c52b551d3c46a8349fb8dec5607facd13c5387db9cc7b4f9c19c84",
+      "services/fabric/tests/test_lm_export.py": "63a11bb5e864887b0b0ef1775b17c15565d9d1b90e8a1d0130678fd18ab0135d",
+      "services/fabric/tests/test_lm_model.py": "1c730d610f6596738487da5d8955f3a906cd842782b69e3a8060e93a6f5f5cd7",
+      "services/fabric/tests/test_lm_privacy.py": "fafef005d5bef3fe7535bbbd4c21336a8343442d378975f91e76e8cc9aefe3bd",
+      "services/fabric/tests/test_lm_quantize.py": "1557fe6c0b886fbac19e7b4f83a03410a6d46c8723d7f4a7bda976142d7d805c",
+      "services/fabric/tests/test_lm_teacher.py": "8f4ad5c37a66efa051071d3ee12b3cf84ebc0e0164db1516a4d51e89be64dcce",
+      "services/fabric/tests/test_lm_tokenizer.py": "0c815027b5f55095497069c88984a07718e635b98f6dfa09e04baa108fe102a5",
+      "services/fabric/tests/test_lm_train.py": "61edd2a2417954871f9a55376777c6bc8a77a012f235668c877080afb682489c",
+      "services/fabric/tests/test_metrics.py": "50eaebf93269e05417e211cc5a02a59273c0a8a002318dec58ef31328d279f97",
+      "services/fabric/tests/test_modelcards.py": "30baca4c2ff87d611ec2b5dbf18a798ab81a6fe274e76f427bbd9918b270b309",
+      "services/fabric/tests/test_parity.py": "44bcd93c48e48a29ad0aebb57307006a24d1b9ba2bccd711f705d325bda1cd31",
+      "services/fabric/tests/test_pipeline.py": "c95e957df499e227b0b8897e6cc0116f04c9dc0d8ecf16c81c465a441103c90b",
+      "services/fabric/tests/test_robustness.py": "e53200d5922b4528e87d3cf14f961520d6a87d76095aea78d20b187a7ec12f50",
+      "services/fabric/tests/test_server.py": "507799ffcc4f71da621237f17c124485f0a427fc0f9f253cdc4ae7b51b2edb3e",
+      "services/fabric/tests/test_sparsiz_cycle.py": "4338631e2f63db4f8fe37a256f714c7c906019da67d46b952311fbac0071d31d",
+      "services/fabric/tests/test_transfer.py": "d238cd114be395e6b9b1507974fa33b05f5f9932e5c769cd5ec129c00a7e6b1f",
+      "third-party/NOTICES.md": "b1409f0491f24c03b03fbdae1f1db3fb0bc0b3c93c73bd2358f6c00997067c62",
+      "third-party/licenses/aetheris-MIT.txt": "17be47093fb30034bcd0d5cfa2bcb21c27121da885c6266322147d1932ba9b95",
+      "third-party/licenses/numpy-BSD-3-Clause.txt": "c002bd26de7dc7aa464250a0de063d58fe55974452e4389e5c21c350a820bf06",
+      "third-party/licenses/sparsiz-Unlicense.txt": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e"
+    }
+  },
+  "repositories": [
+    {
+      "repository": "rajaram-2005/Aetheris-",
+      "revision": "bed29f4f98eb0be8b7bb7ae2488607765579dbfe",
+      "licenceScope": "MIT",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "17be47093fb30034bcd0d5cfa2bcb21c27121da885c6266322147d1932ba9b95",
+          "bytes": 1066,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/LICENSE",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "package.json",
+          "sha256": "167e63d40f034198853d9c6375ca7823e3152cdab4eb32a2070175998c866a92",
+          "bytes": 787,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/package.json",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "src/main.jsx",
+          "sha256": "4cd1535409ae32895e0890536bcae2381f092bc753b860df485b666e67b3147c",
+          "bytes": 107833,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/src/main.jsx",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "test/runtimeApi.test.js",
+          "sha256": "e0dee97c36312ec4b790493eca9cd1d75d0e37a69490973518960361bf966fc0",
+          "bytes": 5294,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/test/runtimeApi.test.js",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "vite.config.js",
+          "sha256": "044faf2833e02b68cc16551a5d639bfe1e80bc0999d9f943115472482c5c9e99",
+          "bytes": 373,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/vite.config.js",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "README.md",
+          "sha256": "edde13e0decbbab703a456769473ae4b05620ea11ce795a8c80f1ba842151cd1",
+          "bytes": 9364,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/README.md",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "src/runtime/index.js",
+          "sha256": "321adb68f46f1219563dd7d4a366af8b20e46898a1c704780a294c8219b325e7",
+          "bytes": 9108,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/src/runtime/index.js",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "src/runtime/securityPolicy.js",
+          "sha256": "8943d4a83e767e3a013fe001a9640e02861ee1766468c69ab448833ead977449",
+          "bytes": 3603,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/src/runtime/securityPolicy.js",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "src/runtime/taskState.js",
+          "sha256": "f468f5d53951a1203b8f0777192e32874979b20b21d0e41dfb676a118f21efb3",
+          "bytes": 3671,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/src/runtime/taskState.js",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "src/runtime/universalApi.js",
+          "sha256": "1d156e6dd95fea717e9b380831f1382bef459e3e6f39d55f882183dda1277c85",
+          "bytes": 10879,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/src/runtime/universalApi.js",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        }
+      ],
+      "treeTruncated": false,
+      "upstreamSuiteExecuted": false,
+      "headRecheck": {
+        "repository": "rajaram-2005/Aetheris-",
+        "reviewedRevision": "bed29f4f98eb0be8b7bb7ae2488607765579dbfe",
+        "observedHead": "bed29f4f98eb0be8b7bb7ae2488607765579dbfe",
+        "unchanged": true
+      }
+    },
+    {
+      "repository": "rajaram-2005/sparsiz",
+      "revision": "76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69",
+      "licenceScope": "Unlicense",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e",
+          "bytes": 1211,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/LICENSE",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "SECURITY.md",
+          "sha256": "02d2bc551ad1caec15cd3e67fbac680a2bd6b52f28b3a3e06ed5d9252489f39e",
+          "bytes": 4145,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/SECURITY.md",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "setup.py",
+          "sha256": "0f7f60cc16bdddc9aef8df00ec8b8ba89fec278224f5ba6e4672ee2b430897dd",
+          "bytes": 831,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/setup.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "sparsiz/training/evaluation.py",
+          "sha256": "3ca10e83694ac4822e3489c9334884965be9a0dca0ccc4a9b27a9e97568b1919",
+          "bytes": 6335,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/sparsiz/training/evaluation.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "sparsiz/training/failure_memory.py",
+          "sha256": "9f19eff12564899be97e85c0f67e2ffa6dffbca300b3a2f1c3c69c293d2f84c8",
+          "bytes": 7524,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/sparsiz/training/failure_memory.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "tests/test_faisanth.py",
+          "sha256": "65cc4d6452e676673136d909532566196b1a39ef3b24e8ae97ff092f54f510d0",
+          "bytes": 1794,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/tests/test_faisanth.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "README.md",
+          "sha256": "8aa1fdf993e270c0c295cebd04bef4ef3f91a1a8e16e89976cca78952a68fad7",
+          "bytes": 80864,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/README.md",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        }
+      ],
+      "treeTruncated": false,
+      "upstreamSuiteExecuted": false,
+      "headRecheck": {
+        "repository": "rajaram-2005/sparsiz",
+        "reviewedRevision": "76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69",
+        "observedHead": "76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69",
+        "unchanged": true
+      }
+    },
+    {
+      "repository": "NousResearch/hermes-agent",
+      "revision": "1f6c02c07c697026888f1c66e634534fa2aae358",
+      "licenceScope": "MIT",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "821556e6336796450ab852d375117b48a4887e71d255794fd6318d99982a5ab6",
+          "bytes": 1070,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/LICENSE",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "SECURITY.md",
+          "sha256": "08b733d1f2c71f8cdd87200beb10c06185d0912a6eb19bbf69149dbb4e207a55",
+          "bytes": 15752,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/SECURITY.md",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "agent/memory_manager.py",
+          "sha256": "d30c9a637c20ce32300ca1b0fa5bed210f33612306fff3b779f901592bfce2ad",
+          "bytes": 51099,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/agent/memory_manager.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "pyproject.toml",
+          "sha256": "ff41b097147124ff2eb51a437d5f44eddea35104900c1c79c7edfb8b7352d901",
+          "bytes": 43035,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/pyproject.toml",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "tests/agent/test_memory_sync_interrupted.py",
+          "sha256": "f17d3ce8d1b8a8f756232a47ebd6dc8d8240bea0e9673520eda76b6144a9601e",
+          "bytes": 2915,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/tests/agent/test_memory_sync_interrupted.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "tools/skills_tool.py",
+          "sha256": "a5fac64ae3c2f2496cd7da46aacd396d6a50a0dd5d9f4ef4d1ba2d8d7ba9df2f",
+          "bytes": 40030,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/tools/skills_tool.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "cli.py",
+          "sha256": "04e9c76fc5596766d4fad1f28a1583ccbc0f9709371dd8a5f60ab91b34105ebb",
+          "bytes": 79921,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/cli.py",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        }
+      ],
+      "treeTruncated": false,
+      "upstreamSuiteExecuted": false,
+      "headRecheck": {
+        "repository": "NousResearch/hermes-agent",
+        "reviewedRevision": "1f6c02c07c697026888f1c66e634534fa2aae358",
+        "observedHead": "1f6c02c07c697026888f1c66e634534fa2aae358",
+        "unchanged": true
+      }
+    },
+    {
+      "repository": "BerriAI/litellm",
+      "revision": "148ca66ecb6b55bafefa738a8327654d0a347b08",
+      "licenceScope": "MIT outside enterprise; enterprise has separate commercial terms",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "b170d6bf8e8835dd357e011681db028f4d51e2fb0ea892058f56e01fb39b8273",
+          "bytes": 1419,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/LICENSE",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "enterprise/LICENSE.md",
+          "sha256": "a3160d1176cb556447255ca8652855486d681f8025550291828796a439e1b2f9",
+          "bytes": 2223,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/enterprise/LICENSE.md",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "litellm/proxy/common_utils/model_listing_utils.py",
+          "sha256": "096391bea94b81762887e48f6e6cae1924fe998add1eae9a5d880bd73bc0bbff",
+          "bytes": 15322,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/litellm/proxy/common_utils/model_listing_utils.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "litellm/proxy/management_endpoints/model_management_endpoints.py",
+          "sha256": "2dd266ddcbd8a22a5349fdae13d3fa053f4e31a7e37dcbd650f352a268b41961",
+          "bytes": 148866,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/litellm/proxy/management_endpoints/model_management_endpoints.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "litellm/proxy/proxy_server.py",
+          "sha256": "f4afc3b1794659e78b88febfa0f3a66fd1b73678aff94e4ca04ac6ef1def846b",
+          "bytes": 879006,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/litellm/proxy/proxy_server.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "pyproject.toml",
+          "sha256": "0e5cbd769ac7a98174162cafea110750ad6ad0d80d9dc517b8afebc96c3ff105",
+          "bytes": 15915,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/pyproject.toml",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "tests/unit/proxy/test_read_model_list.py",
+          "sha256": "c6d8ab1dbf1285fd1dccec40ea1710e2156f7a3a8e24a2bc67b548395cceed20",
+          "bytes": 1168,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/tests/unit/proxy/test_read_model_list.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        }
+      ],
+      "treeTruncated": false,
+      "upstreamSuiteExecuted": false,
+      "headRecheck": {
+        "repository": "BerriAI/litellm",
+        "reviewedRevision": "148ca66ecb6b55bafefa738a8327654d0a347b08",
+        "observedHead": "148ca66ecb6b55bafefa738a8327654d0a347b08",
+        "unchanged": true
+      }
+    },
+    {
+      "repository": "ollama/ollama",
+      "revision": "8718c2bd2363c3f9f422d82bbad322bc2b791d60",
+      "licenceScope": "MIT",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "5934ed2ce0d15154bcdb9c85203210abac0da4314af34081e36df4599f90b226",
+          "bytes": 1058,
+          "url": "https://github.com/ollama/ollama/blob/8718c2bd2363c3f9f422d82bbad322bc2b791d60/LICENSE",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "api/types.go",
+          "sha256": "e19aafa5065afa3ed058df9135d200527391e012349ed5955dd0cc09c0b33f7a",
+          "bytes": 44473,
+          "url": "https://github.com/ollama/ollama/blob/8718c2bd2363c3f9f422d82bbad322bc2b791d60/api/types.go",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "go.mod",
+          "sha256": "c8330ba5f762c4bded1401cc8ecadbe85ebe8e5d159fd81da122da986b26cda5",
+          "bytes": 3858,
+          "url": "https://github.com/ollama/ollama/blob/8718c2bd2363c3f9f422d82bbad322bc2b791d60/go.mod",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "server/model_list_test.go",
+          "sha256": "094d3186ef274d5b8b960fb6e6909df1d116ed69a9f2f13ae9f0f4d1bb63f318",
+          "bytes": 5166,
+          "url": "https://github.com/ollama/ollama/blob/8718c2bd2363c3f9f422d82bbad322bc2b791d60/server/model_list_test.go",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "server/routes.go",
+          "sha256": "23b3202e270e8f3dba0c716c128529432db02e8b1e40e6d73c94345abf6cfde4",
+          "bytes": 107111,
+          "url": "https://github.com/ollama/ollama/blob/8718c2bd2363c3f9f422d82bbad322bc2b791d60/server/routes.go",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        }
+      ],
+      "treeTruncated": false,
+      "upstreamSuiteExecuted": false,
+      "headRecheck": {
+        "repository": "ollama/ollama",
+        "reviewedRevision": "8718c2bd2363c3f9f422d82bbad322bc2b791d60",
+        "observedHead": "8718c2bd2363c3f9f422d82bbad322bc2b791d60",
+        "unchanged": true
+      }
+    },
+    {
+      "repository": "huggingface/huggingface_hub",
+      "revision": "a704b8488c6ec78f719c576ba77a6035095dae77",
+      "licenceScope": "Apache-2.0",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/LICENSE",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "SECURITY.md",
+          "sha256": "247f3e19ecc0d61dd63b14d156a8aebb0ee170c92bc28504f83fbd5104bdb0ae",
+          "bytes": 7573,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/SECURITY.md",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "pyproject.toml",
+          "sha256": "7feef7f0623d13680a1b5cdb4a337a22fe7c64c83cadb56d591b8822455a7bd3",
+          "bytes": 3652,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/pyproject.toml",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "setup.py",
+          "sha256": "66ff9e1d0557a230f1582fd4555f49c8474e97741780faebfd6b65dda46d1760",
+          "bytes": 5088,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/setup.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "src/huggingface_hub/hf_api.py",
+          "sha256": "5ac896338db48115a13222be9f46cc088bbdbedaf95b1b2f371d94b4b1912311",
+          "bytes": 684242,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/src/huggingface_hub/hf_api.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        },
+        {
+          "path": "tests/test_hf_api.py",
+          "sha256": "5eecdc8ff242d4da8f0c3f73c7602c618623ca3eaacd5d2ec6daf0d5182b4f91",
+          "bytes": 220324,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/tests/test_hf_api.py",
+          "reviewScope": "targeted review reused from earlier audit, with source findings rechecked; not exhaustive"
+        }
+      ],
+      "treeTruncated": false,
+      "upstreamSuiteExecuted": false,
+      "headRecheck": {
+        "repository": "huggingface/huggingface_hub",
+        "reviewedRevision": "a704b8488c6ec78f719c576ba77a6035095dae77",
+        "observedHead": "a704b8488c6ec78f719c576ba77a6035095dae77",
+        "unchanged": true
+      }
+    },
+    {
+      "repository": "mudler/LocalAI",
+      "revision": "91c3bf084bd4952cc51ce6e114ba71dea604ade2",
+      "licenceScope": "MIT root; dependencies/backends/models require separate review",
+      "inspection": "selected source/interface/licence/build/test excerpts; not complete repository audit",
+      "treeTruncated": false,
+      "upstreamSuiteExecuted": false,
+      "files": [
+        {
+          "path": ".github/workflows/backend_build.yml",
+          "sha256": "4f5ba3c8bb8032ffe0bf01f066c66330d541a93938855b3877d7252089176604",
+          "bytes": 11631,
+          "url": "https://github.com/mudler/LocalAI/blob/91c3bf084bd4952cc51ce6e114ba71dea604ade2/.github/workflows/backend_build.yml",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "56bef7ba54ae4e4477b9effe34b6e6cadc1b0bcfaacc5be503096a1ce0a9d391",
+          "bytes": 1099,
+          "url": "https://github.com/mudler/LocalAI/blob/91c3bf084bd4952cc51ce6e114ba71dea604ade2/LICENSE",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "Makefile",
+          "sha256": "118d2b656ce0558c8ddb46876f26c7bdae7ee2aac05654499f39caeb6cd0e7a1",
+          "bytes": 89650,
+          "url": "https://github.com/mudler/LocalAI/blob/91c3bf084bd4952cc51ce6e114ba71dea604ade2/Makefile",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "README.md",
+          "sha256": "424e4b1cb141c2ed8c43e2b2a6b2e518883647ee0127d6d4be2146f7d7792c5e",
+          "bytes": 25767,
+          "url": "https://github.com/mudler/LocalAI/blob/91c3bf084bd4952cc51ce6e114ba71dea604ade2/README.md",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "SECURITY.md",
+          "sha256": "329b4372b2f28d2f56427c8d9b676e626e864f32ed0105a15c4399cf8828b537",
+          "bytes": 3922,
+          "url": "https://github.com/mudler/LocalAI/blob/91c3bf084bd4952cc51ce6e114ba71dea604ade2/SECURITY.md",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "backend/go/cloud-proxy/provider_openai.go",
+          "sha256": "78756653d8834aa108763af868db3c4ead255aee6cd1e9d2c056734d6b6df207",
+          "bytes": 11072,
+          "url": "https://github.com/mudler/LocalAI/blob/91c3bf084bd4952cc51ce6e114ba71dea604ade2/backend/go/cloud-proxy/provider_openai.go",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "core/http/app.go",
+          "sha256": "6e37a3dba31a689392ce18b5e98dd20b1bb3b9f1e40635c2c1d0ad721bf42835",
+          "bytes": 28970,
+          "url": "https://github.com/mudler/LocalAI/blob/91c3bf084bd4952cc51ce6e114ba71dea604ade2/core/http/app.go",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "core/http/app_test.go",
+          "sha256": "8f942c0545fd78ba3d568dfd896d31843af45335e64e29d8bbb5ac3ce9fc7e88",
+          "bytes": 37132,
+          "url": "https://github.com/mudler/LocalAI/blob/91c3bf084bd4952cc51ce6e114ba71dea604ade2/core/http/app_test.go",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "core/http/routes/openai.go",
+          "sha256": "a2cdb7b7b009608a5a3f3afe8008e8b60330ffcc4f0a9496cb54ed4fc970147b",
+          "bytes": 15541,
+          "url": "https://github.com/mudler/LocalAI/blob/91c3bf084bd4952cc51ce6e114ba71dea604ade2/core/http/routes/openai.go",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "go.mod",
+          "sha256": "3bc1ba1e0b3698c49a7ca1929cd6415495dc9a0112e278e0eba30b25b9c790c2",
+          "bytes": 27894,
+          "url": "https://github.com/mudler/LocalAI/blob/91c3bf084bd4952cc51ce6e114ba71dea604ade2/go.mod",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        }
+      ]
+    },
+    {
+      "repository": "ggml-org/llama.cpp",
+      "revision": "091b6a7fc561b78da90a0ed2d524ec995458c657",
+      "licenceScope": "MIT root; models require separate review",
+      "inspection": "selected source/interface/licence/build/test excerpts; not complete repository audit",
+      "treeTruncated": false,
+      "upstreamSuiteExecuted": false,
+      "files": [
+        {
+          "path": ".github/workflows/build-3rd-party.yml",
+          "sha256": "e0066c1607a0d45c539e2ca9d80c0a4b0fda475ea43fedd042a9cc46b1f66ae7",
+          "bytes": 1261,
+          "url": "https://github.com/ggml-org/llama.cpp/blob/091b6a7fc561b78da90a0ed2d524ec995458c657/.github/workflows/build-3rd-party.yml",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "CMakeLists.txt",
+          "sha256": "94d646f48594469909522d2a539aad943705309686646fd8a69cc15c43029e69",
+          "bytes": 10918,
+          "url": "https://github.com/ggml-org/llama.cpp/blob/091b6a7fc561b78da90a0ed2d524ec995458c657/CMakeLists.txt",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d",
+          "bytes": 1078,
+          "url": "https://github.com/ggml-org/llama.cpp/blob/091b6a7fc561b78da90a0ed2d524ec995458c657/LICENSE",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "SECURITY.md",
+          "sha256": "78ec7307fd4a94b39daced4f992abadf4874dfa20124d8b3ef17eba9a8ee528d",
+          "bytes": 7505,
+          "url": "https://github.com/ggml-org/llama.cpp/blob/091b6a7fc561b78da90a0ed2d524ec995458c657/SECURITY.md",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "pyproject.toml",
+          "sha256": "9826116684e90e93d2bb8f8bdb74c60ea5443e435b84f6e75e19e116a694e2d1",
+          "bytes": 1952,
+          "url": "https://github.com/ggml-org/llama.cpp/blob/091b6a7fc561b78da90a0ed2d524ec995458c657/pyproject.toml",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "tools/server/CMakeLists.txt",
+          "sha256": "553ce6725d470274a6bb2b120da87b5328497a1a6c760ae8a5510c7277e05180",
+          "bytes": 1826,
+          "url": "https://github.com/ggml-org/llama.cpp/blob/091b6a7fc561b78da90a0ed2d524ec995458c657/tools/server/CMakeLists.txt",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "tools/server/README.md",
+          "sha256": "8c03f7923fc9b84cb5b9d72dc20209a4041c075767e5ba8c584d92b98ce32396",
+          "bytes": 116993,
+          "url": "https://github.com/ggml-org/llama.cpp/blob/091b6a7fc561b78da90a0ed2d524ec995458c657/tools/server/README.md",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "tools/server/server.cpp",
+          "sha256": "cebd9a758c7966b44e5e391f841a8f560551c753416aa78e3d91a6309d2e8b7b",
+          "bytes": 23352,
+          "url": "https://github.com/ggml-org/llama.cpp/blob/091b6a7fc561b78da90a0ed2d524ec995458c657/tools/server/server.cpp",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "tools/server/tests/unit/test_chat_completion.py",
+          "sha256": "32199bdf961bf3227667b1763456f3b981401cc67024be94ee986a92573f9622",
+          "bytes": 24925,
+          "url": "https://github.com/ggml-org/llama.cpp/blob/091b6a7fc561b78da90a0ed2d524ec995458c657/tools/server/tests/unit/test_chat_completion.py",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        }
+      ]
+    },
+    {
+      "repository": "openvinotoolkit/openvino",
+      "revision": "d34fe57cdcf0c0037b15e558b426659c4cf094e5",
+      "licenceScope": "Apache-2.0 root; notice/dependency/model obligations separate",
+      "inspection": "selected source/interface/licence/build/test excerpts; not complete repository audit",
+      "treeTruncated": false,
+      "upstreamSuiteExecuted": false,
+      "files": [
+        {
+          "path": ".github/workflows/build_doc.yml",
+          "sha256": "6ff4197cf772280b5a15c91906157d30696057772b9b0bf1ea8aa418a117f07f",
+          "bytes": 8653,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/.github/workflows/build_doc.yml",
+          "reviewScope": "collected and hashed only; not substantively reviewed"
+        },
+        {
+          "path": ".github/workflows/job_cpu_functional_tests.yml",
+          "sha256": "edf53e905f963bb748753eef188ac47d79b8544e5dd99f192ce2db17a9d5abec",
+          "bytes": 5146,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/.github/workflows/job_cpu_functional_tests.yml",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": ".github/workflows/ubuntu_24.yml",
+          "sha256": "edc92148c00fdcd7415e59ce95d0553e79e3f8058b2f1107f2f2a8374c520258",
+          "bytes": 12717,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/.github/workflows/ubuntu_24.yml",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "CMakeLists.txt",
+          "sha256": "881579c377b3096ea4da6786f3d352cc1a16fba987986950b187c75e1b86c1c9",
+          "bytes": 8523,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/CMakeLists.txt",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/LICENSE",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "README.md",
+          "sha256": "8bb5835c8674f04a67a326e0136ff4b2913500a1c78cd1e1b154cef5c73f9684",
+          "bytes": 12293,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/README.md",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "SECURITY.md",
+          "sha256": "42dbac1e1dc66709967b7a7152902a3c05908750dfe70632d3debc7f1125934e",
+          "bytes": 690,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/SECURITY.md",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "pyproject.toml",
+          "sha256": "2130e577c403608c625bf7c660613695a30e323d85b88bf2a1e8e76f585b1a14",
+          "bytes": 1791,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/pyproject.toml",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "samples/python/hello_classification/hello_classification.py",
+          "sha256": "7fe509f9667008b60ca4bb496fb306503e045e67492bc70cbe9f94d47e89fd1a",
+          "bytes": 4208,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/samples/python/hello_classification/hello_classification.py",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "samples/python/hello_query_device/hello_query_device.py",
+          "sha256": "b02663fda02b18c932081ff7ec6e14b0c2a9daa2415002f5af27ffe8affc2e41",
+          "bytes": 1581,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/samples/python/hello_query_device/hello_query_device.py",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "setup.py",
+          "sha256": "2aba3867260e1d864b26b2946ec1aadf96e7d724b326b2ba01dfc71a99b4b143",
+          "bytes": 34321,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/setup.py",
+          "reviewScope": "collected and hashed only; not substantively reviewed"
+        },
+        {
+          "path": "src/inference/src/cpp/core.cpp",
+          "sha256": "1c840c585f699f792e8f7ea49f10ce09cf34f41bc1c4754ff4e00845261d8803",
+          "bytes": 14523,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/src/inference/src/cpp/core.cpp",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "tests/samples_tests/smoke_tests/test_hello_query_device.py",
+          "sha256": "1d896624a2cf1a0f05043358fcb4de69ee1c2e05e60723991e25482a05f98a68",
+          "bytes": 1667,
+          "url": "https://github.com/openvinotoolkit/openvino/blob/d34fe57cdcf0c0037b15e558b426659c4cf094e5/tests/samples_tests/smoke_tests/test_hello_query_device.py",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        }
+      ]
+    },
+    {
+      "repository": "vllm-project/vllm",
+      "revision": "77154ca6116ae34cbfe314beef1016bde9b63989",
+      "licenceScope": "Apache-2.0 root; dependency/model obligations separate",
+      "inspection": "selected source/interface/licence/build/test excerpts; not complete repository audit",
+      "treeTruncated": false,
+      "upstreamSuiteExecuted": false,
+      "files": [
+        {
+          "path": ".github/workflows/macos-smoke-test.yml",
+          "sha256": "a34cfbba7ab37ad5f9ce0fc53518fc9d01b55541a4276d91a69451d8363b2c9b",
+          "bytes": 2981,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/.github/workflows/macos-smoke-test.yml",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "CMakeLists.txt",
+          "sha256": "0c7c96d591495e942130f09ae291d37592a02e3e056acfc9fa0a5e0c1a796f9f",
+          "bytes": 68056,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/CMakeLists.txt",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/LICENSE",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "README.md",
+          "sha256": "4dc7399323b9660117f8cc1226afb7a81cdbb912dbb4ae74b66d89052417d11c",
+          "bytes": 5772,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/README.md",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "SECURITY.md",
+          "sha256": "f4d350d5e2d6eb851ee27b7d45ee12de0a6d851284785e0859832f469a995390",
+          "bytes": 5011,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/SECURITY.md",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "pyproject.toml",
+          "sha256": "1b6362896ef7938c80a30fe75eeda330ea95ba12bd395354821d34611abb3dbb",
+          "bytes": 7613,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/pyproject.toml",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "requirements/common.txt",
+          "sha256": "366cb94fae6ea961da1e7d1c855f6316c3897b5ce9a839017db2bbebb668055a",
+          "bytes": 3315,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/requirements/common.txt",
+          "reviewScope": "collected and hashed only; not substantively reviewed"
+        },
+        {
+          "path": "requirements/cpu.txt",
+          "sha256": "6ad9f15188028f6ef9a324d975309c5151de15e2ff90239025c9ab5f30749f76",
+          "bytes": 1547,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/requirements/cpu.txt",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "setup.py",
+          "sha256": "8162ff687f3bf79232fd4078d7b062171650c5bb5582c0962abf018b3b787c74",
+          "bytes": 66926,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/setup.py",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "tests/entrypoints/cohere/test_chat_v2.py",
+          "sha256": "2a4bbc2c6838a763a8182a0291c1e6a4096e82537e79b25fb56c232d42214a56",
+          "bytes": 12175,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/tests/entrypoints/cohere/test_chat_v2.py",
+          "reviewScope": "collected and hashed only; not substantively reviewed"
+        },
+        {
+          "path": "tests/entrypoints/launchers/api_server/test_api_server_process_manager.py",
+          "sha256": "c2526dc45fab4ca430f1cb3eaf29e93580bca86aabb22acb04dc673686e3bc82",
+          "bytes": 20819,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/tests/entrypoints/launchers/api_server/test_api_server_process_manager.py",
+          "reviewScope": "collected and hashed only; not substantively reviewed"
+        },
+        {
+          "path": "tests/entrypoints/openai/chat_completion/test_chat.py",
+          "sha256": "c531c3f48676a189557e3b3e96e5ea619a89677c4dddcbb3a23584647c6db795",
+          "bytes": 37061,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/tests/entrypoints/openai/chat_completion/test_chat.py",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "tests/entrypoints/openai/models/test_models.py",
+          "sha256": "4791ff2e44971667adce847892473f332eb7808f68b05e6163f9593d5af6f1d4",
+          "bytes": 1604,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/tests/entrypoints/openai/models/test_models.py",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "vllm/entrypoints/openai/api_server.py",
+          "sha256": "470ff555bdc19f8e17edf4ee7b6ec3f49ff5af0f773e2a7f91bab536e2239109",
+          "bytes": 1854,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/vllm/entrypoints/openai/api_server.py",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "vllm/entrypoints/openai/chat_completion/api_router.py",
+          "sha256": "dba087f61dd7accc90999bd303123a0c407e5c617cf5a3a7a7974c1314d2392a",
+          "bytes": 4017,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/vllm/entrypoints/openai/chat_completion/api_router.py",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        },
+        {
+          "path": "vllm/entrypoints/openai/models/api_router.py",
+          "sha256": "58d7bf90b7dd2a896441d3085b8a4467c12412120f21fe53d838109b7b85f48b",
+          "bytes": 758,
+          "url": "https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/vllm/entrypoints/openai/models/api_router.py",
+          "reviewScope": "targeted source/configuration/policy/documentation excerpts reviewed; not full-file verification"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "command": "AETHERIS_PYTHON=/home/user/ragam/.venv/bin/python npm run verify",
+    "exitCode": 0,
+    "tests": {
+      "core": 509,
+      "web": 75,
+      "fabric": 575,
+      "total": 1159
+    },
+    "productionBuild": "passed",
+    "fabricCountConfirmedWith": "pytest services/fabric/tests --collect-only -q -o addopts=",
+    "runtimeVersions": {
+      "node": "22.22.3",
+      "python": "3.11.2",
+      "numpy": "2.4.6",
+      "pytest": "9.1.1"
+    },
+    "logSha256": "5ac31eb482bbc109b79c6b3e0590f2abf5758e6de0a97a8bad4ab935dcb3b065",
+    "rawLog": "/home/user/phase1-audit/verify.log",
+    "postReportChecks": {
+      "docsTestsPassed": 37,
+      "diffCheck": "passed",
+      "baselineHashes": "208 unchanged",
+      "upstreamFileHashes": "90 checked against downloaded files",
+      "reportLocalLinks": "all resolve",
+      "auditOnlyAdditions": 3
+    }
+  },
+  "dependencyChecks": {
+    "web": {
+      "command": "npm audit --json --registry=https://registry.npmjs.org",
+      "cwd": "apps/web",
+      "exitCode": 0,
+      "includesDev": true,
+      "metadata": {
+        "vulnerabilities": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 0,
+          "critical": 0,
+          "total": 0
+        },
+        "dependencies": {
+          "prod": 6,
+          "dev": 41,
+          "optional": 27,
+          "peer": 0,
+          "peerOptional": 0,
+          "total": 46
+        }
+      },
+      "rawOutputSha256": "f0b3bf195266902cf3a5f167319de4b3460221c62f310301d1ee2429d83a0a6f"
+    },
+    "python": {
+      "command": ".venv/bin/python services/fabric/scripts/audit_python_deps.py",
+      "exitCode": 0,
+      "packagesChecked": {
+        "iniconfig": "2.3.1",
+        "numpy": "2.4.6",
+        "packaging": "26.3",
+        "pluggy": "1.6.0",
+        "pytest": "9.1.1"
+      },
+      "result": "No checked installed version covered by a known GitHub advisory",
+      "rawLogSha256": "ff1b171cb776d4a515b35938127350ca990790363087edf3b0de96edf6f40c83"
+    },
+    "limits": "Known-advisory checks only; not a complete SBOM, all Python packages, operating-system audit, model supply-chain audit or new-runtime dependency audit"
+  },
+  "observationalProbes": {
+    "script": "docs/experiments/phase1-probes.mjs",
+    "scriptSha256": "40ed5c5d2765fa37edbae4bd826108db4004ebb284291a16e14c23bf88fe7c28",
+    "results": {
+      "schema": "aetheris.phase1-probes/1",
+      "syntheticFixturesOnly": true,
+      "bodyDeadline": {
+        "configuredTimeoutMs": 100,
+        "delayedBodyMs": 250,
+        "elapsedMs": 269,
+        "outcome": "completed_without_timeout"
+      },
+      "metadataReadiness": {
+        "requestsBeforeInference": [
+          "GET /v1/models"
+        ],
+        "models": [
+          {
+            "id": "llamacpp:audit-fixture",
+            "availability": "ready",
+            "toolCalling": true,
+            "minRamGb": 1
+          }
+        ]
+      },
+      "unauthenticatedRead": {
+        "endpoint": "/api/sessions",
+        "authorizationHeaderSent": false,
+        "status": 200
+      },
+      "declaredClassification": {
+        "detectorClass": "restricted",
+        "requestClass": "public",
+        "responseClass": "public",
+        "sentExternally": false
+      },
+      "taskRecreation": {
+        "tasksBefore": 1,
+        "tasksAfterAppRecreationSameDataDirectory": 0,
+        "originalTaskRecovered": false,
+        "scope": "application-object recreation, not process-kill or crash recovery testing"
+      }
+    },
+    "limit": "Synthetic loopback fixtures, no real model output or external data send; results describe current limitations rather than desired acceptance criteria"
+  },
+  "liveStatus": {
+    "coreHealthHttp": 200,
+    "webHttp": 200,
+    "policy": "strict_offline",
+    "readiness": "degraded",
+    "models": {
+      "total": 0,
+      "ready": 0
+    },
+    "capabilities": {
+      "chat": false,
+      "textCompletion": false,
+      "embeddings": false,
+      "imageGeneration": false,
+      "videoGeneration": false,
+      "knowledge": false
+    },
+    "hardware": {
+      "os": "linux",
+      "arch": "x64",
+      "cpuType": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+      "cpuCount": 2,
+      "totalRamBytes": 4131278848,
+      "gpus": [],
+      "runtimes": [],
+      "scope": "core_host",
+      "compatibility": {
+        "recommendedTier": "lite",
+        "qualified": false,
+        "configurations": [],
+        "note": "Lite is the accessibility default, not a claim that an assistant is installed. GPU names and workstation labels do not qualify a tier."
+      }
+    },
+    "fabric": {
+      "http": 200,
+      "status": "degraded",
+      "stages": {
+        "total": 8,
+        "runnable": [
+          "data_validation",
+          "base_selection",
+          "domain_training",
+          "evaluation",
+          "release"
+        ],
+        "blocked": [
+          {
+            "stage": "sft",
+            "status": "blocked_needs_weights",
+            "reason": "supervised fine-tuning needs a base language model and its weights"
+          },
+          {
+            "stage": "preference_optimization",
+            "status": "blocked_needs_weights",
+            "reason": "no preference data, no reward signal and no compute to justify it"
+          },
+          {
+            "stage": "distillation",
+            "status": "blocked_needs_weights",
+            "reason": "distillation needs a teacher model, and no teacher is installed"
+          }
+        ]
+      },
+      "coreIntegrationEstablishedByThisCheck": false,
+      "coreSourceIntegration": "Configuration fields and public configuration only; no Core-to-Fabric invocation path found"
+    },
+    "limits": "Read-only local HTTP observation; no browser interaction, Intel laptop, mobile, GPU or NPU qualification"
+  },
+  "risks": [
+    {
+      "id": "R01",
+      "priority": "P0",
+      "title": "Unauthenticated caller authority",
+      "basis": "local source and unauthenticated synthetic GET",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    },
+    {
+      "id": "R02",
+      "priority": "P0",
+      "title": "Classification downgrade and online-mode data-gate bypass",
+      "basis": "local source and synthetic local-only classification probe; no exfiltration attempted",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    },
+    {
+      "id": "R03",
+      "priority": "P0",
+      "title": "Fetch guard is not process/network containment",
+      "basis": "local guard and upstream remote-forwarding source; no OS isolation test",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    },
+    {
+      "id": "R04",
+      "priority": "P1",
+      "title": "Metadata-only operational readiness/capability/resource claims",
+      "basis": "synthetic model-list-only probe",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    },
+    {
+      "id": "R05",
+      "priority": "P1",
+      "title": "Provider timeout does not cover delayed response body",
+      "basis": "synthetic delayed-body probe",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    },
+    {
+      "id": "R06",
+      "priority": "P1",
+      "title": "Task state lost on application recreation",
+      "basis": "Map source and same-data-directory object recreation; not crash testing",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    },
+    {
+      "id": "R07",
+      "priority": "P0",
+      "title": "In-process extension execution lacks OS containment",
+      "basis": "local Plugin/MCP source; no malicious extension executed",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    },
+    {
+      "id": "R08",
+      "priority": "P1",
+      "title": "No useful licensed model qualified",
+      "basis": "current readiness and licence boundaries",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    },
+    {
+      "id": "R09",
+      "priority": "P1",
+      "title": "User hardware and whole-install mobile footprint unqualified",
+      "basis": "sandbox hardware only",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    },
+    {
+      "id": "R10",
+      "priority": "P1",
+      "title": "Real Image/Video and online inference integration incomplete",
+      "basis": "current adapters/readiness",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    },
+    {
+      "id": "R11",
+      "priority": "P1",
+      "title": "Research loop not integrated and improvement claims unqualified",
+      "basis": "Core Fabric configuration has no invocation path found; Shell configured-URL label is not connectivity; upstream random-score source; local standalone small-model scope",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    },
+    {
+      "id": "R12",
+      "priority": "P2",
+      "title": "Full supply-chain/release qualification pending",
+      "basis": "limited current dependency scans and selected upstream review",
+      "status": "open; no remediation in Phase 1",
+      "closureCriteria": "See report risk register and Phase 2 gates"
+    }
+  ],
+  "changes": {
+    "applicationBehaviorChanged": false,
+    "preexistingFilesChanged": false,
+    "dependenciesInstalled": false,
+    "modelsDownloaded": false,
+    "remoteInferencePerformed": false,
+    "upstreamTestsExecuted": false,
+    "committed": false,
+    "pushed": false,
+    "auditAdditions": [
+      "docs/18-phase-1-audit.md",
+      "docs/experiments/phase1-audit.json",
+      "docs/experiments/phase1-probes.mjs"
+    ]
+  },
+  "reportSha256": "48dba2eaf0dfc00c1e524b7707a56c60d6ae325c47894a89a50018cd99c7997e"
+}

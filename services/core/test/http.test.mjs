@@ -120,7 +120,7 @@ test('system routes report real state', async () => {
     // capability claim that nothing backs.
     assert.equal(models.json.family.valid, true)
     assert.deepEqual(models.json.family.violations, [])
-    assert.deepEqual(models.json.family.tiers.map((t) => t.id), ['lite', 'pro', 'high'])
+    assert.deepEqual(models.json.family.tiers.map((t) => t.id), ['lite', 'pro', 'max'])
     const lite = models.json.family.tiers.find((t) => t.id === 'lite')
     assert.deepEqual(lite.availableCapabilities, ['text.completion', 'text.extract'])
     assert.equal(lite.status, 'partial')

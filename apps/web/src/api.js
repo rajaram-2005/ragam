@@ -33,7 +33,7 @@ async function request(method, path, body, { signal } = {}) {
   try {
     response = await fetch(path, {
       method,
-      headers: body === undefined ? {} : { 'content-type': 'application/json' },
+      headers: body === undefined ? {} : { 'content-type': 'application/json', 'x-aetheris-request': '1' },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
     })
@@ -67,6 +67,16 @@ async function request(method, path, body, { signal } = {}) {
 }
 
 export const api = {
+  auth: () => request('GET', '/api/auth'),
+  login: (token) => request('POST', '/api/auth/login', { token }),
+  logout: () => request('POST', '/api/auth/logout', {}),
+  provider: () => request('GET', '/api/providers'),
+  saveProvider: (body) => request('PUT', '/api/providers/litellm', body),
+  testProvider: () => request('POST', '/api/providers/litellm/test', {}),
+  removeProvider: () => request('DELETE', '/api/providers/litellm', {}),
+  selectModel: (model) => request('PUT', '/api/models/selection', { model }),
+  modelCatalog: (q = '') => request('GET', `/api/models/catalog?q=${encodeURIComponent(q)}`),
+  refreshCatalog: (sourceId, authorizeNetwork = false) => request('POST', '/api/models/catalog/refresh', { sourceId, authorizeNetwork }),
   get: (path, options) => request('GET', path, undefined, options),
   post: (path, body, options) => request('POST', path, body ?? {}, options),
   patch: (path, body, options) => request('PATCH', path, body ?? {}, options),
@@ -107,7 +117,7 @@ export const api = {
   // History is a separate mechanism from memory: it searches the user's own past turns
   // on request and returns where each hit came from.
   sessions: () => request('GET', '/api/sessions'),
-  startSession: (title) => request('POST', '/api/sessions', { title: title ?? null }),
+  startSession: (title, options) => request('POST', '/api/sessions', { title: title ?? null }, options),
   session: (id) => request('GET', `/api/sessions/${encodeURIComponent(id)}`),
   deleteSession: (id) => request('DELETE', `/api/sessions/${encodeURIComponent(id)}`, {}),
   recall: (query) => request('GET', `/api/sessions/recall?q=${encodeURIComponent(query)}`),
@@ -195,7 +205,7 @@ export const api = {
 export async function streamChat(body, { onEvent, signal } = {}) {
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-aetheris-request': '1' },
     body: JSON.stringify(body),
     signal,
   })
@@ -220,27 +230,30 @@ export async function streamChat(body, { onEvent, signal } = {}) {
   const decoder = new TextDecoder()
   let buffer = ''
 
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    let boundary = buffer.indexOf('\n\n')
-    while (boundary !== -1) {
-      const frame = buffer.slice(0, boundary)
-      buffer = buffer.slice(boundary + 2)
-      boundary = buffer.indexOf('\n\n')
-      if (!frame.trim()) continue
-      const name = /^event:\s*(.+)$/m.exec(frame)?.[1]?.trim() ?? 'message'
-      const raw = /^data:\s*(.+)$/m.exec(frame)?.[1]
-      let data = null
-      if (raw) {
-        try {
-          data = JSON.parse(raw)
-        } catch {
-          data = { text: raw }
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) throw new ApiError('stream ended before a completion or error; keep the draft and retry', { code: 'stream_interrupted' })
+      buffer += decoder.decode(value, { stream: true })
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary !== -1) {
+        const frame = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + 2)
+        boundary = buffer.indexOf('\n\n')
+        if (!frame.trim()) continue
+        const name = /^event:\s*(.+)$/m.exec(frame)?.[1]?.trim() ?? 'message'
+        const raw = /^data:\s*(.+)$/m.exec(frame)?.[1]
+        let data = null
+        if (raw) {
+          try { data = JSON.parse(raw) } catch { data = { text: raw } }
         }
+        onEvent?.({ name, data })
+        if (name === 'done' || name === 'error') return
       }
-      onEvent?.({ name, data })
     }
+  } finally {
+    // Breaking/aborting consumption must close the body and release its reader.
+    await reader.cancel().catch(() => {})
+    reader.releaseLock()
   }
 }

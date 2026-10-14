@@ -1,5 +1,7 @@
 # 02 — Architecture
 
+> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
+
 How the three upstream repositories became one system, what each component owns,
 and where the enforcement points are.
 
@@ -41,8 +43,9 @@ Three processes, one product surface.
 ```
 
 The dependency direction is strict: `web → core`, and `core → fabric` only over
-HTTP when enabled. There is no online provider in this build, so every model call
-resolves to a runtime on this machine, or to an audited refusal. Each arrow that
+HTTP when enabled. No cloud provider is bundled. Configured non-loopback
+Ollama/OpenAI-compatible endpoints are remote inference, gated by task mode and
+server policy; only in-process/loopback execution is labelled local. Each arrow that
 crosses a process boundary is a place where a credential, a policy decision or an
 output validation happens — never in the browser.
 
@@ -68,46 +71,58 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 12,546 source lines, 9,990 test lines
+### `services/core` — 13,979 source lines, 11,130 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
-| `app.mjs` | 1,726 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
+| `hardware/detect.mjs` | 61 | OS memory, CPU features, disk and optional bounded GPU probes |
+| `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
+| `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
+| `online/app.mjs` | 194 | Authenticated online application and exact-model inference |
+| `online/context-routes.mjs` | 165 | Authenticated context and reviewed read-only tool routes |
+| `online/gateway.mjs` | 103 | Bounded LiteLLM HTTPS/SSE transport and destination validation |
+| `online/http.mjs` | 24 | Bounded JSON requests and no-store responses |
+| `online/store.mjs` | 40 | Encrypted credential and persistent model-selection store |
+| `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
-| `klyvaron/format.mjs` | 530 | The Klyvaron artifact format: manifest validation, the shared vocabulary digest, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
+| `klyvaron/format.mjs` | 622 | The Klyvaron artifact format: manifest validation, the shared vocabulary digest, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
 | `media/jobs.mjs` | 360 | Job queue, progress, cancellation, timeouts, artifact storage |
-| `klyvaron/runtime.mjs` | 349 | Klyvaron Lite inference in plain JavaScript: the forward pass, seeded sampling, greedy decode, token budgets and cancellation |
+| `klyvaron/runtime.mjs` | 405 | Klyvaron Lite inference in plain JavaScript: the forward pass, seeded sampling, greedy decode, token budgets and cancellation |
 | `providers/local.mjs` | 329 | Ollama and OpenAI-compatible local providers |
-| `router/registry.mjs` | 333 | Model descriptors, capability matching, candidate scoring, tag exclusions |
+| `router/registry.mjs` | 356 | Model descriptors, capability matching, candidate scoring, tag exclusions |
 | `plugins/registry.mjs` | 617 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation, signature checks |
 | `mcp/layer.mjs` | 611 | Servers, tools, risk tiers, approval gates, allowlist, output neutralisation |
 | `knowledge/pipeline.mjs` | 470 | Ingest, dedupe, chunk, index, search, grounded context, purge |
 | `knowledge/store.mjs` | 385 | SQLite metadata, chunks, ACL rows, deletion records |
 | `mcp/schema.mjs` | 246 | JSON Schema subset: validation of schemas *and* of arguments/output |
-| `klyvaron/store.mjs` | 248 | Installing, verifying, listing, loading and removing local models inside the managed storage budget |
+| `catalog/registry.mjs` | 126 | Versioned discovery-only model records, provenance, bounded snapshots, TTL and search |
+| `catalog/sources.mjs` | 100 | Operator-configured metadata adapters, safe credential loading, egress, body/deadline bounds |
+| `klyvaron/execution.mjs` | 125 | One-slot CPU worker admission, bounded token acknowledgements, cancellation/deadlines and residency |
+| `klyvaron/worker.mjs` | 43 | Lazy local artifact loading, pinned identity verification and isolated synchronous CPU execution |
+| `klyvaron/store.mjs` | 256 | Installing, verifying, listing, loading and removing local models inside the managed storage budget |
 | `knowledge/bm25.mjs` | 224 | BM25 index (k1=1.5, b=0.75), rebuilt from stored chunks |
 | `plugins/manifest.mjs` | 216 | Manifest validation, scope vocabulary, semver |
 | `plugins/signing.mjs` | 262 | Ed25519 manifest signatures, canonical form, the local trust store |
-| `config.mjs` | 245 | Environment → config, secret loading, `publicConfig` redaction |
-| `policy/egress.mjs` | 251 | The egress guard, runtime policies, data classes, `*` allow-all, global fetch hook |
-| `providers/klyvaron.mjs` | 178 | The first-party provider adapter: a local model behind the same contract, with its limitations carried into every response |
-| `server.mjs` | 151 | Entry point, startup banner, graceful shutdown |
+| `config.mjs` | 248 | Environment → config, secret loading, `publicConfig` redaction |
+| `policy/egress.mjs` | 253 | The egress guard, runtime policies, data classes, `*` allow-all, global fetch hook |
+| `providers/klyvaron.mjs` | 220 | The first-party provider adapter: a local model behind the same contract, with its limitations carried into every response |
+| `server.mjs` | 25 | Entry point, startup banner, graceful shutdown |
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
 | `media/validate.mjs` | 143 | Magic-byte sniffing, video genuineness check |
-| `klyvaron/footprint.mjs` | 138 | The footprint report a user sees: categorized bytes plus unmanaged files, against the 5 GB budget |
+| `klyvaron/footprint.mjs` | 137 | The footprint report a user sees: categorized bytes plus unmanaged files, against the 5 GB budget |
 | `providers/base.mjs` | 136 | Provider contract, timeout and retry helpers |
 | `policy/classify.mjs` | 143 | Secret and sensitivity classification, redaction |
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
 | `memory/store.mjs` | 702 | User-approved memory, candidates that need approval before use, and session recall with citations |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
-| `klyvaron/tiers.mjs` | 486 | The three-tier model family, backing records, and the validator that refuses a capability with no artifact behind it |
+| `klyvaron/tiers.mjs` | 485 | The three-tier model family, backing records, and the validator that refuses a capability with no artifact behind it |
 | `skills/registry.mjs` | 397 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
 | `skills/manifest.mjs` | 319 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
 | `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |
 | `skills/store.mjs` | 246 | Skills on disk: document + state split, version files for rollback, deletion tombstones |
 
-### `services/fabric` — 9,046 source lines, 6,900 test lines
+### `services/fabric` — 9,299 source lines, 7,107 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible
@@ -116,9 +131,9 @@ release manager, and a hand-written dual encoder whose **five parameter gradient
 all match central finite differences to ~3e-10**. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 4,464 source lines, 1,311 test lines
+### `apps/web` — 2,015 source lines, 1,347 test lines
 
-Five area components, a shell, shared primitives, an API client and three test
+Five area components, a shell, shared primitives, an API client and four test
 files. Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).
 
@@ -169,6 +184,11 @@ Two consequences are deliberate:
 ---
 
 ## 4. Model routing
+
+Hardware detection, model-specific admission and the task execution modes are
+specified in [13-hardware-execution-policy.md](./13-hardware-execution-policy.md).
+The CPU completion runtime checks load/forward-pass allocations; GPU tiers require
+benchmark-qualified profiles. No production GPU profile is bundled yet.
 
 The router is capability-aware and provider-independent. A model descriptor
 declares what it can do; nothing in the router knows which provider serves it.
@@ -366,7 +386,7 @@ the artifact route serves bytes by job id.
 
 ## 7. HTTP surface
 
-38 literal routes plus segment-matched routes under `/api/tasks`, `/api/plugins`,
+40 literal routes plus segment-matched routes under `/api/tasks`, `/api/plugins`,
 `/api/mcp`, `/api/media`, `/api/knowledge`, `/api/memory`, `/api/sessions` and
 `/api/skills`. There is no `/api/routes`.
 
@@ -402,3 +422,11 @@ Recorded so the absence is a decision rather than an oversight.
   preferred; added latency and cost need justification, and none was found.
 - **No weights in the repository.** `.gitignore` excludes `*.gguf`,
   `*.safetensors` and `checkpoints/`.
+
+
+### Catalog boundary
+
+`/api/models/catalog` and `/api/models/catalog/refresh` are metadata-only operations,
+inside Chat. They do not change `/api/models` routing readiness. See
+[17](./17-model-catalog.md) for source versioning, optional operator configuration,
+explicit metadata-network consent and the non-durable cache limitation.

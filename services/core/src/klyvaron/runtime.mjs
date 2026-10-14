@@ -17,9 +17,9 @@
 //  * No KV cache. Each generated token re-runs the full window, exactly as the Python
 //    reference does. At a 128-token context and a sub-million-parameter model this is
 //    microseconds of work; a cache would be a second implementation to keep in parity.
-//  * No quantisation. The manifest says what dtype the weights are; shipping int8
-//    inference without measuring its effect on this model's perplexity would be a
-//    quality claim with nothing behind it.
+//  * No quality claim from quantisation: v2 supports int8 resident matrix weights,
+//    float32 scales/normalisation and float32 activations. Export evaluates the
+//    quality delta; a quantized base completion model is still not an assistant.
 //
 // Numerical policy: activations are stored in the manifest's dtype (float32 for
 // released artifacts), and accumulation happens in JavaScript's float64 with each
@@ -28,6 +28,7 @@
 // than bit-for-bit; the parity test asserts that tolerance and the greedy-decode
 // agreement that follows from it.
 
+import { memorySnapshot } from '../hardware/detect.mjs'
 import { ArtifactError, loadArtifact, parameterCount } from './format.mjs'
 
 const LN_EPS = 1e-5
@@ -88,7 +89,8 @@ function geluInto(x, n, out) {
 }
 
 /** out = x (X×Y) · w (Y×Z), row-major. */
-function matmulInto(x, X, Y, w, Z, out) {
+function matmulInto(x, X, Y, weight, Z, out) {
+  const w = weight.data, scale = weight.scale?.[0] ?? 1
   for (let i = 0; i < X; i += 1) {
     const xBase = i * Y
     for (let k = 0; k < Z; k += 1) out[i * Z + k] = 0
@@ -96,7 +98,7 @@ function matmulInto(x, X, Y, w, Z, out) {
       const xv = x[xBase + j]
       if (xv === 0) continue
       const wBase = j * Z
-      for (let k = 0; k < Z; k += 1) out[i * Z + k] += xv * w[wBase + k]
+      for (let k = 0; k < Z; k += 1) out[i * Z + k] += xv * (scale === 1 ? w[wBase + k] : Math.fround(w[wBase + k] * scale))
     }
   }
 }
@@ -107,7 +109,8 @@ export class KlyvaronRuntime {
    * @param {object} [options]
    * @param {object} [options.tokenizer]  overrides the manifest vocabulary (used by tests)
    */
-  constructor(artifact, { tokenizer = null } = {}) {
+  constructor(artifact, { tokenizer = null, availableMemory = () => memorySnapshot().availableRamBytes } = {}) {
+    this.availableMemory = availableMemory
     this.manifest = artifact.manifest
     this.directory = artifact.directory
     this.sha256 = artifact.sha256
@@ -115,7 +118,7 @@ export class KlyvaronRuntime {
     this.config = Object.freeze({ ...arch })
     this.params = new Map()
     for (const [name, entry] of artifact.weights) {
-      this.params.set(name, { shape: entry.shape, data: entry.data })
+      this.params.set(name, { shape: entry.shape, data: entry.data, scale: entry.scale })
     }
     const dtype = artifact.weights.get('emb')?.data
     this.dtype = dtype instanceof Float64Array ? Float64Array : Float32Array
@@ -134,6 +137,8 @@ export class KlyvaronRuntime {
       })
     }
     this.parameterCount = actual
+    this.quantization = this.manifest.weights.quantization?.scheme ?? (this.dtype === Float64Array ? 'none (float64)' : 'none (float32)')
+    this.residentWeightBytes = [...this.params.values()].reduce((sum, p) => sum + p.data.byteLength + (p.scale?.byteLength ?? 0), 0)
   }
 
   static load(directory, options = {}) {
@@ -172,25 +177,42 @@ export class KlyvaronRuntime {
     }
   }
 
+  /** Bounds typed-array scratch for this implementation, with headroom for GC.
+   * This is an allocation guard, not a measured minimum hardware profile. */
+  scratchBytes(context) {
+    const { d_model: d, d_ff: ff, vocab_size: v } = this.config
+    return 2 * (this.dtype.BYTES_PER_ELEMENT * (context * (10 * d + ff) + d) + 16 * context + 24 * v)
+  }
+
+  assertMemory(context) {
+    const available = this.availableMemory()
+    if (!Number.isFinite(available) || available < this.scratchBytes(context)) {
+      throw new ArtifactError('memory pressure: task stopped locally; retry with a smaller model or shorter context', { code: 'needs_hardware' })
+    }
+  }
+
   /** Logits for the last position of a token window. Returns Float64Array of vocab size. */
   logits(ids) {
     const T = ids.length
     const { d_model: d, d_ff: ff, n_heads: heads, n_layers: layers, vocab_size: V, seq_len } = this.config
     if (!T) throw new ArtifactError('a prompt is required', { code: 'empty_prompt' })
     if (T > seq_len) throw new ArtifactError(`sequence length ${T} exceeds the context of ${seq_len}`, { code: 'context_overflow' })
+    this.assertMemory(T)
     const headDim = d / heads
-    const P = (name) => this.params.get(name).data
+    const W = (name) => this.params.get(name)
+    const P = (name) => W(name).data
+    const at = (weight, index) => weight.scale === undefined ? weight.data[index] : Math.fround(weight.data[index] * weight.scale[0])
 
     // h = emb[ids] + pos[:T]
-    const emb = P('emb')
-    const pos = P('pos')
+    const emb = W('emb')
+    const pos = W('pos')
     let h = new this.dtype(T * d)
     for (let t = 0; t < T; t += 1) {
       const id = ids[t]
       if (id < 0 || id >= V) throw new ArtifactError(`id ${id} is outside the vocabulary`, { code: 'invalid_token' })
       const embBase = id * d
       const hBase = t * d
-      for (let i = 0; i < d; i += 1) h[hBase + i] = emb[embBase + i] + pos[t * d + i]
+      for (let i = 0; i < d; i += 1) h[hBase + i] = at(emb, embBase + i) + at(pos, t * d + i)
     }
 
     const a = new this.dtype(T * d)
@@ -207,9 +229,9 @@ export class KlyvaronRuntime {
 
     for (let layer = 0; layer < layers; layer += 1) {
       layernormInto(h, T, d, P(`L${layer}.ln1_gain`), P(`L${layer}.ln1_bias`), LN_EPS, a)
-      matmulInto(a, T, d, P(`L${layer}.wq`), d, q)
-      matmulInto(a, T, d, P(`L${layer}.wk`), d, k)
-      matmulInto(a, T, d, P(`L${layer}.wv`), d, v)
+      matmulInto(a, T, d, W(`L${layer}.wq`), d, q)
+      matmulInto(a, T, d, W(`L${layer}.wk`), d, k)
+      matmulInto(a, T, d, W(`L${layer}.wv`), d, v)
 
       y.fill(0)
       const scale = 1 / Math.sqrt(headDim)
@@ -237,24 +259,24 @@ export class KlyvaronRuntime {
           }
         }
       }
-      matmulInto(y, T, d, P(`L${layer}.wo`), d, o)
+      matmulInto(y, T, d, W(`L${layer}.wo`), d, o)
       for (let i = 0; i < T * d; i += 1) h[i] = h[i] + o[i]
 
       layernormInto(h, T, d, P(`L${layer}.ln2_gain`), P(`L${layer}.ln2_bias`), LN_EPS, b)
-      matmulInto(b, T, d, P(`L${layer}.w1`), ff, z)
+      matmulInto(b, T, d, W(`L${layer}.w1`), ff, z)
       geluInto(z, T * ff, z)
-      matmulInto(z, T, ff, P(`L${layer}.w2`), d, u)
+      matmulInto(z, T, ff, W(`L${layer}.w2`), d, u)
       for (let i = 0; i < T * d; i += 1) h[i] = h[i] + u[i]
     }
 
     const hf = new this.dtype(d)
     layernormInto(h.subarray((T - 1) * d), 1, d, P('lnf_gain'), P('lnf_bias'), LN_EPS, hf)
-    const head = this.config.tie_embeddings ? emb : P('head')
+    const head = this.config.tie_embeddings ? emb : W('head')
     const logits = new Float64Array(V)
     for (let token = 0; token < V; token += 1) {
       let dot = 0
       const base = token * d
-      for (let i = 0; i < d; i += 1) dot += hf[i] * head[base + i]
+      for (let i = 0; i < d; i += 1) dot += hf[i] * at(head, base + i)
       logits[token] = dot
     }
     return logits
@@ -273,21 +295,44 @@ export class KlyvaronRuntime {
    * @param {(chunk:string)=>void} [options.onToken]
    * @param {AbortSignal} [options.signal]
    */
-  generate({ prompt, maxNewTokens = null, temperature = 0, topK = 40, seed = 0, stop = [], onToken = null, signal = null }) {
+  generate(options) {
+    const steps = this.generateSteps(options)
+    for (;;) {
+      const step = steps.next()
+      if (step.done) return step.value
+      if (step.value.type === 'token') options.onToken?.(step.value.text)
+      if (step.value.type === 'resource') options.onResourceAdjustment?.(step.value.adjustment)
+    }
+  }
+
+  /** Pull-based steps are also consumed by the local worker and in-memory tests. */
+  *generateSteps({ prompt, maxNewTokens = null, temperature = 0, topK = 40, seed = 0, stop = [], signal = null }) {
     if (typeof prompt !== 'string') throw new ArtifactError('a prompt string is required', { code: 'invalid_request' })
-    const ids = this.tokenizer.encode(prompt)
+    let contextLimit = this.contextTokens
+    const available = this.availableMemory()
+    while (contextLimit > 1 && this.scratchBytes(contextLimit) > available) contextLimit = Math.max(1, Math.floor(contextLimit / 2))
+    this.assertMemory(contextLimit)
+    // This tokenizer is character-level; avoid allocating an unbounded prompt array.
+    const ids = this.tokenizer.encode(prompt.slice(-contextLimit))
     if (!ids.length) throw new ArtifactError('the prompt encodes to no tokens', { code: 'empty_prompt' })
-    if (temperature < 0) throw new ArtifactError('temperature must not be negative', { code: 'invalid_request' })
+    if (!Number.isFinite(temperature) || temperature < 0) throw new ArtifactError('temperature must be finite and nonnegative', { code: 'invalid_request' })
+    if (!Array.isArray(stop) || stop.some((s) => typeof s !== 'string' || !s.length)) {
+      throw new ArtifactError('stop sequences must be non-empty strings', { code: 'invalid_request' })
+    }
 
     const limit = Math.min(
       maxNewTokens ?? this.manifest.generation?.maxNewTokens ?? 64,
       this.manifest.generation?.maxNewTokens ?? 64,
     )
     if (limit < 1) throw new ArtifactError('maxNewTokens must be at least 1', { code: 'invalid_request' })
+    const resourceAdjustment = contextLimit < this.contextTokens
+      ? { contextTokens: contextLimit, reason: 'available RAM', tradeoff: 'Shorter context retains less input; the task stayed on this device.' } : null
+    if (resourceAdjustment) yield { type: 'resource', adjustment: resourceAdjustment }
     const random = mulberry32(seed)
-    const window = Array.from(ids.slice(-this.contextTokens))
+    const window = Array.from(ids.slice(-contextLimit))
     const produced = []
     let text = ''
+    let emitted = 0
     let stoppedBy = 'length'
 
     for (let step = 0; step < limit; step += 1) {
@@ -295,7 +340,7 @@ export class KlyvaronRuntime {
         stoppedBy = 'cancelled'
         break
       }
-      const logits = this.logits(Int32Array.from(window.slice(-this.contextTokens)))
+      const logits = this.logits(Int32Array.from(window.slice(-contextLimit)))
       let next
       if (temperature === 0) {
         let best = 0
@@ -329,21 +374,32 @@ export class KlyvaronRuntime {
       produced.push(next)
       const character = this.tokenizer.decode([next])
       text += character
-      if (onToken) onToken(character)
       const hit = stop.find((sequence) => text.endsWith(sequence))
       if (hit) {
         text = text.slice(0, -hit.length)
         stoppedBy = 'stop'
         break
       }
+      // Hold only a suffix that could become a stop sequence on a later token.
+      // Streaming never emits text that the final completion would remove.
+      let hold = 0
+      for (const sequence of stop) {
+        for (let size = Math.min(sequence.length - 1, text.length); size > hold; size -= 1) {
+          if (text.endsWith(sequence.slice(0, size))) { hold = size; break }
+        }
+      }
+      const end = text.length - hold
+      if (end > emitted) { yield { type: 'token', text: text.slice(emitted, end) }; emitted = end }
     }
+    if (text.length > emitted) yield { type: 'token', text: text.slice(emitted) }
     return {
       text,
       tokenIds: produced,
       stoppedBy,
-      promptTokens: ids.length,
+      promptTokens: prompt.length,
       generatedTokens: produced.length,
-      contextTokens: this.contextTokens,
+      contextTokens: contextLimit,
+      resourceAdjustment,
     }
   }
 }

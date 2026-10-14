@@ -64,7 +64,7 @@ test('no internal service is exposed as a navigation entry', () => {
 test('area hints advertise the internal services that live inside each area', () => {
   const byId = Object.fromEntries(AREAS.map((area) => [area.id, area.hint.toLowerCase()]))
   assert.match(byId.chat, /knowledge/, 'Chat is where the private knowledge pipeline is surfaced')
-  assert.match(byId.chat, /task/, 'Chat is where the God Core task lifecycle is surfaced')
+  assert.match(byId.chat, /history/, 'Chat retains conversation history')
   assert.match(byId.image, /validation/, 'Image is where output validation is surfaced')
   assert.match(byId.video, /provenance/, 'Video is where provenance checking is surfaced')
   assert.match(byId.plugins, /permission/, 'Plugins is where the permission model is surfaced')
@@ -109,27 +109,19 @@ test('App renders the five areas and imports no sixth', () => {
   assert.ok(app.includes('ChatArea') && app.includes('McpArea'))
 })
 
-test('internal services are surfaced inside areas, not as sections', () => {
-  const chat = read('areas/ChatArea.jsx')
-  // Knowledge, routing and God Core all live inside Chat.
-  assert.match(chat, /Private company knowledge/)
-  assert.match(chat, /Model routing decision/)
-  assert.match(chat, /God Core task lifecycle/)
-  assert.match(chat, /INTERNAL SERVICE/, 'internal panels must be labelled as internal services')
+test('online areas remove offline and research surfaces without removing optional context', () => {
+  const chat=read('areas/ChatArea.jsx')
+  assert.match(chat, /KnowledgePanel/)
+  assert.match(chat, /MemoryPanel/)
+  assert.match(chat, /HistoryPanel/)
+  assert.doesNotMatch(chat, /TaskPanel|SkillsPanel|ModelCatalog|ExecutionMode/)
+  for (const area of ['Image','Video']) assert.match(read(`areas/${area}Area.jsx`), /no simulated output/i)
 
-  const image = read('areas/ImageArea.jsx')
-  assert.match(image, /Media pipeline state/)
-  const video = read('areas/VideoArea.jsx')
-  assert.match(video, /Provenance and validation/)
-  const plugins = read('areas/PluginsArea.jsx')
-  assert.match(plugins, /Permission model/)
-  const mcp = read('areas/McpArea.jsx')
-  assert.match(mcp, /Capability catalogue/)
 })
 
 test('the runtime policy is displayed, never toggled from the browser', () => {
   const shell = read('components/Shell.jsx')
-  assert.match(shell, /strict offline/, 'the sidebar names the policy in plain language')
+  assert.match(shell, /Online only/, 'the sidebar names the online-only policy')
   // Policy comes from server config; a client-side switch would be a fake control.
   for (const file of ['App.jsx', 'components/Shell.jsx', 'api.js']) {
     const source = read(file)
@@ -229,7 +221,7 @@ test('development fixtures are labelled in the interface itself', () => {
   const ui = read('components/ui.jsx')
   assert.match(ui, /FixtureTag/, 'a FixtureTag component must exist')
   const plugins = read('areas/PluginsArea.jsx')
-  assert.match(plugins, /development fixture/, 'the sample manifest must be marked as a fixture')
+  assert.doesNotMatch(plugins, /SAMPLE_MANIFEST|demo.texttools/, 'sample installers are absent from the active UI')
 })
 
 // ---------------------------------------------------------------------------
@@ -329,45 +321,39 @@ test('Shell.jsx imports the area list, not only re-exports it', () => {
 // --- memory and history in Chat -----------------------------------------------------
 
 test('Chat surfaces memory and history as internal services inside the area', () => {
-  const chat = read('areas/ChatArea.jsx')
-  // Both are controls inside Chat, never a sixth navigation entry.
-  assert.match(chat, /title="Memory you approved"/)
-  assert.match(chat, /title="Procedures Aetheris learned"/)
-  assert.match(chat, /title="Conversation history"/)
-  assert.match(chat, /<MemoryPanel \/>/)
-  assert.match(chat, /<HistoryPanel sessionId=\{sessionId\} \/>/)
-  // And the approval gate is reachable, which is the whole point of building the panel.
-  assert.match(chat, /api\.decideMemory\(candidate\.id, true\)/)
-  assert.match(chat, /api\.decideMemory\(candidate\.id, false\)/)
+  const chat=read('areas/ChatArea.jsx'), panels=read('components/ContextPanels.jsx')
+  assert.match(chat, /<details className="context-section"/)
+  assert.match(chat, /<MemoryPanel/);assert.match(chat, /<HistoryPanel/)
+  assert.match(panels, /title="Memory you approved"/)
+  assert.match(panels, /title="Conversation history"/)
+
 })
 
 test('memory is offered as a switch, off by default, and described in ordinary words', () => {
-  const chat = read('areas/ChatArea.jsx')
-  assert.match(chat, /const \[useMemory, setUseMemory\] = useState\(false\)/, 'memory must default to off')
-  assert.match(chat, /Use what I asked you to remember/)
-  // The API says useMemory; the label does not.
-  assert.ok(!/>\s*useMemory\s*</.test(chat), 'the label must not be an API field name')
-  // And the panel says the plain-language consequence rather than naming the mechanism.
-  assert.match(chat, /not injected into any prompt/)
+  const chat=read('areas/ChatArea.jsx')
+  assert.match(chat,/\[useMemory, setUseMemory\] = useState\(false\)/)
+  assert.match(chat,/Send matching approved memories to this gateway/)
+  assert.match(chat,/includeContext: useKnowledge \|\| useMemory/)
+
 })
 
 test('the history panel reports an empty search rather than filling it in', () => {
-  const chat = read('areas/ChatArea.jsx')
+  const chat = read('components/ContextPanels.jsx')
   assert.match(chat, /Nothing was\s+invented to fill the result/)
   assert.match(chat, /Searched \{hits\.searchedTurns\}/)
 })
 
 test('a session is created lazily, so a visit with no question stores nothing', () => {
-  const chat = read('areas/ChatArea.jsx')
-  assert.match(chat, /if \(!sessionRef\.current\)/, 'the session must be created on first send')
-  assert.match(chat, /api\.startSession\(null\)/)
-  // A failure to store must not block the answer, and must be visible.
-  assert.match(chat, /This conversation is not being stored/)
-  assert.match(chat, /the conversation continues/i)
+  const chat=read('areas/ChatArea.jsx')
+  assert.match(chat,/if \(!id\)/)
+  assert.match(chat,/api\.startSession\(content\.slice/)
+  assert.match(chat,/signal: controller\.signal/)
+  assert.match(chat,/setSessionId\(null\)/)
+
 })
 
 test('the memory panel confirms what the server actually reported', () => {
-  const chat = read('areas/ChatArea.jsx')
+  const chat = read('components/ContextPanels.jsx')
   // The store distinguishes a stored memory from a duplicate and says how many rows a wipe
   // removed. A confirmation that is true either way throws that away.
   assert.match(chat, /result\?\.duplicate \? 'That is already remembered/)
@@ -375,7 +361,7 @@ test('the memory panel confirms what the server actually reported', () => {
 })
 
 test('memory can be exported, not only deleted', () => {
-  const chat = read('areas/ChatArea.jsx')
+  const chat = read('components/ContextPanels.jsx')
   assert.match(chat, /api\.exportMemory\(\)/)
   assert.match(chat, /Download a copy/)
   // The export states its own terms, and the confirmation repeats them rather than
@@ -384,19 +370,33 @@ test('memory can be exported, not only deleted', () => {
 })
 
 test('the security controls the product added are visible in their areas', () => {
-  // A control nobody can see is a control nobody can use. The trust store lives in Plugins
-  // and the allowlist state in MCP, because that is where the thing they govern lives --
-  // neither is a sixth area, and neither is an admin dashboard.
-  const plugins = read('areas/PluginsArea.jsx')
-  assert.match(plugins, /title="Trusted publishers"/)
-  assert.match(plugins, /api\.trustedKeys\(\)/)
-  assert.match(plugins, /api\.trustKey\(/)
-  assert.match(plugins, /api\.untrustKey\(/)
-  // The scope of a signature is stated where the key is added, not assumed.
-  assert.match(plugins, /It does not say the code is safe/)
+  assert.match(read('areas/PluginsArea.jsx'),/signing alone is not a sandbox/)
+  assert.match(read('areas/McpArea.jsx'),/cannot grant permissions/)
+  assert.match(read('App.jsx'),/api\.login\(token/)
+  const settings=read('components/ProviderSettings.jsx')
+  assert.match(settings,/type="password"/)
+  assert.doesNotMatch(settings,/localStorage|sessionStorage/)
 
-  const mcp = read('areas/McpArea.jsx')
-  assert.match(mcp, /No server allowlist is configured/)
-  assert.match(mcp, /Only listed servers may be reached/)
-  assert.match(mcp, /governed by their risk tier and approval gates/)
+})
+
+test('ordinary generation has a Stop control, unmount cleanup, and preserves partial text and drafts', () => {
+  const chat=read('areas/ChatArea.jsx')
+  assert.match(chat,/Stop generation/)
+  assert.match(chat,/useEffect\(\(\) => \(\) => abort\.current\?\.abort\(\), \[\]\)/)
+  assert.match(chat,/signal: controller\.signal/)
+  assert.match(chat,/draft is retained/)
+  assert.match(chat,/if \(!completed\) throw/)
+  assert.match(chat,/setPrompt\(\(draft\) => draft\.trim\(\) === content/)
+  assert.match(chat,/filter\(\(m\) => !m\.failed\)/)
+
+})
+
+test('gateway models are selected explicitly and remote refresh requires an action', () => {
+  const chat=read('areas/ChatArea.jsx'), settings=read('components/ProviderSettings.jsx')
+  assert.match(chat,/api\.selectModel\(next\)/)
+  assert.match(chat,/provider\?\.selectedModel/)
+  assert.match(settings,/Test connection & refresh models/)
+  assert.match(settings,/api\.testProvider/)
+  assert.doesNotMatch(chat,/router decides|ModelCatalog|ExecutionMode/)
+
 })

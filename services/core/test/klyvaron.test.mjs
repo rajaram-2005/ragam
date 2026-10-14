@@ -1,7 +1,7 @@
 // The Klyvaron family: three tiers, and the rule that stops a label implying quality.
 //
 // The tests that matter here are the negative controls. Directive §10 forbids claiming
-// "quality improvements merely because a model has been assigned the Pro or High label"
+// "quality improvements merely because a model has been assigned the Pro or Max label"
 // and §5A forbids presenting a derived model as a first-party foundation model. Those
 // are both cases of a *record that reads as a claim*, so they are tested by constructing
 // the offending record and asserting the validator refuses it.
@@ -24,22 +24,19 @@ test('the shipped family validates', () => {
 })
 
 test('the three tiers exist with the hardware classes the directive names', () => {
-  assert.deepEqual(Object.keys(KLYVARON), ['lite', 'pro', 'high'])
+  assert.deepEqual(Object.keys(KLYVARON), ['lite', 'pro', 'max'])
   assert.equal(getTier(TIERS.LITE).targetHardware, HARDWARE_CLASS.MOBILE)
   assert.equal(getTier(TIERS.PRO).targetHardware, HARDWARE_CLASS.LAPTOP)
-  assert.equal(getTier(TIERS.HIGH).targetHardware, HARDWARE_CLASS.WORKSTATION)
+  assert.equal(getTier(TIERS.MAX).targetHardware, HARDWARE_CLASS.WORKSTATION)
 })
 
-test('the tier names and hardware order come from the directive, not from taste', () => {
-  // §5A mobile, §5B laptops and desktops, §5C powerful computers and remote inference.
-  assert.equal(tierFitsHardware(TIERS.LITE, HARDWARE_CLASS.MOBILE), true)
-  assert.equal(tierFitsHardware(TIERS.LITE, HARDWARE_CLASS.LAPTOP), true, 'a laptop can run Lite')
-  assert.equal(tierFitsHardware(TIERS.PRO, HARDWARE_CLASS.MOBILE), false, 'Pro is not a phone tier')
-  assert.equal(tierFitsHardware(TIERS.HIGH, HARDWARE_CLASS.DESKTOP), false)
-  assert.equal(tierFitsHardware(TIERS.HIGH, HARDWARE_CLASS.WORKSTATION), true)
-  assert.equal(tierFitsHardware(TIERS.HIGH, HARDWARE_CLASS.REMOTE), true)
-  assert.throws(() => getTier('ultra'),
-    (error) => error instanceof ModelFamilyError && error.code === 'model_family_violation')
+test('device classes and GPU names cannot qualify a tier', () => {
+  for (const tier of Object.values(TIERS)) {
+    for (const hardware of Object.values(HARDWARE_CLASS)) assert.equal(tierFitsHardware(tier, hardware), false)
+    assert.equal(tierFitsHardware(tier, { eligible: true, tier }), true)
+    assert.equal(tierFitsHardware(tier, { eligible: false, tier }), false)
+  }
+  assert.throws(() => getTier('high'), ModelFamilyError)
 })
 
 test('Lite reports the artifact that exists, and only the capabilities it backs', () => {
@@ -71,8 +68,8 @@ test('Lite does not claim to chat, and says why', () => {
   assert.match(chat.reason, /refused there unless pinned by id/)
 })
 
-test('Pro and High are recorded as unbuilt rather than omitted', () => {
-  for (const id of [TIERS.PRO, TIERS.HIGH]) {
+test('Pro and Max are recorded as unbuilt rather than omitted', () => {
+  for (const id of [TIERS.PRO, TIERS.MAX]) {
     const tier = getTier(id)
     assert.equal(tier.status, TIER_STATUS.UNBUILT)
     assert.ok(tier.statusNote, 'an unbuilt tier must say so')
@@ -151,16 +148,16 @@ test('an unbuilt tier may not have an available capability', () => {
 
 test('an unbuilt tier without a status note is refused', () => {
   const family = clone(KLYVARON)
-  delete family.high.statusNote
+  delete family.max.statusNote
   const { violations } = validateFamily(family)
   assert.ok(violations.some((v) => /an unbuilt tier must say so/.test(v)), violations.join('; '))
 })
 
 test('a tier cannot be labelled available or partial with nothing available', () => {
   const family = clone(KLYVARON)
-  family.high.status = TIER_STATUS.AVAILABLE
+  family.max.status = TIER_STATUS.AVAILABLE
   assert.ok(validateFamily(family).violations.some((v) => /status is 'available' with no available capability/.test(v)))
-  family.high.status = TIER_STATUS.PARTIAL
+  family.max.status = TIER_STATUS.PARTIAL
   assert.ok(validateFamily(family).violations.some((v) => /that is 'unbuilt'/.test(v)))
 })
 
@@ -196,9 +193,9 @@ test('a tier label needs a backing record for the exact version, not a declarati
   assert.equal(tierClaimForArtifact('klyvaron-parity-tiny', '0.1.0'), null, 'a test fixture is not a family artifact')
   assert.equal(tierClaimForArtifact('Qwen2.5-7B-Instruct', '0.1.0'), null, 'a renamed third-party model')
   assert.equal(tierClaimForArtifact('aetheris-lite-lm-pro', '0.1.0'), null)
-  // Pro and High have nothing behind them, so no version of anything is theirs yet.
+  // Pro and Max have nothing behind them, so no version of anything is theirs yet.
   assert.equal(tierClaimForArtifact('aetheris-pro-lm', '0.1.0'), null)
-  assert.equal(tierClaimForArtifact('aetheris-high-lm', '0.1.0'), null)
+  assert.equal(tierClaimForArtifact('aetheris-max-lm', '0.1.0'), null)
 })
 
 test('the superseded artifact is recorded, not deleted, and is not the release', () => {
@@ -238,7 +235,7 @@ test('a tier label is looked up from the backing record, never declared', () => 
   assert.equal(tierClaimFor('Qwen2.5-7B-Instruct'), null, 'a renamed third-party model')
   assert.equal(tierClaimFor('aetheris-lite-lm-9.9.9'), null, 'a version that does not exist')
   assert.deepEqual(ownedArtifacts(TIERS.PRO), [], 'an unbuilt tier owns no artifact')
-  assert.deepEqual(ownedArtifacts(TIERS.HIGH), [])
+  assert.deepEqual(ownedArtifacts(TIERS.MAX), [])
 })
 
 test('the family report is served on the models route, and it is the validated one', () => {

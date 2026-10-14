@@ -1,5 +1,7 @@
 # 03 — Implementation status
 
+> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
+
 Every claim below is tied to a test, a measurement or a named limitation. Where
 something does not work, it says so and says why.
 
@@ -9,14 +11,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1084 passing, 0 failing.**
+**Test totals: 1179 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **454 / 454** (20 files, ~50 s) |
-| `services/fabric` | `pytest -q` | **563 / 563** (25 files, ~21 s) |
-| `apps/web` | `node --test test/*.test.mjs` | **67 / 67** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 242.71 kB → **71.78 kB gzip**, single chunk, no warnings |
+| `services/core` | `node --test test/*.test.mjs` | **528 / 528** (25 files, ~50 s) |
+| `services/fabric` | `pytest -q` | **575 / 575** (26 files, ~21 s) |
+| `apps/web` | `node --test test/*.test.mjs` | **76 / 76** (4 files, ~1 s) |
+| `apps/web` build | `vite build` | 187.30 kB → **58.96 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as four jobs split so a
@@ -25,13 +27,40 @@ are easy to lose silently: that `services/core` still declares **zero** npm
 dependencies, and that the Fabric release gate refuses an undertrained model rather
 than merely accepting a trained one.
 
-No test was removed or relaxed to obtain this. Two existing assertions in
+For Phase 2, superseded offline UI expectations were replaced with online-only UI requirements; the legacy Core and Fabric regression suites remain. Two earlier assertions in
 `services/core/test/http.test.mjs` were rewritten when built-in plugins arrived —
 they had counted absolute registry size, and now assert about the plugin the test
 installed *and* separately verify the built-ins are present, enabled and bound.
 That is a stronger claim than the count it replaced.
 
 ---
+
+## Hardware policy update
+
+[13 — Hardware execution policy](./13-hardware-execution-policy.md) is the current
+Lite / Pro / Max contract. Measured hardware discovery, fail-closed GPU admission,
+CPU allocation guards, execution-mode controls, stream locality, retained drafts
+and wider managed-directory accounting have regression coverage. Native mobile
+support, useful quantized Lite weights, GPU runtime adapters and real Pro/Max
+benchmarks are **not delivered**. Synthetic admission tests are not GPU benchmarks.
+
+[14 — CPU int8 inference](./14-cpu-int8-inference.md) adds versioned quantized
+artifacts, compressed resident matrix weights, conversion quality gates and a
+repeatable CPU benchmark. Numerical test fixtures are not assistant releases.
+
+[15 — Responsive local execution](./15-responsive-local-execution.md) adds a
+shared CPU worker, bounded incremental streaming, disconnect cancellation,
+deadlines and lazy residency after startup verification. Sixteen execution tests
+cover these boundaries; they do not qualify a useful assistant or a mobile device.
+
+## Universal ecosystem update
+
+The 2026-10-14 master directive supersedes the earlier decision to exclude online
+providers. [16 — Integration map](./16-universal-ecosystem-roadmap.md) tracks all
+requested deliverables and blockers. [17 — Model catalog](./17-model-catalog.md)
+adds a tested, opt-in metadata registry and in-Chat search. It does **not** add
+online inference, useful assistant weights, industry packs or durable task recovery.
+Earlier “complete” labels below refer to the original, narrower integration scope.
 
 ## 1. Status vocabulary
 
@@ -60,9 +89,9 @@ instead.
 |---|---|---|---|
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
-| 3 | Unified app, five areas | **Complete** | `apps/web`; 67 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
+| 3 | Unified app, five areas | **Complete** | `apps/web`; 76 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
 | 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,616-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 11, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 28 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
-| 5 | Online provider integration | **Not met — removed by decision** | No external provider is configured, vendored or bundled. Image and video requests are refused with an explicit limitation, and the UI states that no provider exists rather than implying one can be enabled with a key |
+| 5 | Online provider integration | **Planned under updated directive** | LiteLLM is the preferred planned gateway; only its catalog protocol is implemented so far. No online inference adapter is configured, vendored or bundled. Image and video requests are refused with an explicit limitation, and the UI states that no provider exists rather than implying one can be enabled with a key |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
 | 8 | Multimodal pipelines | **Complete** | Job queue, validation, video genuineness check |
@@ -180,7 +209,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (454 tests)
+### `services/core` — Implemented and tested (528 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -189,6 +218,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Audit ledger | **Implemented and tested** | Append-only SQLite; refusals audited; NDJSON export; subject purge |
 | Model registry & router | **Implemented and tested** | Capability gating before scoring; unknown latency scores 0.5, not 0 |
 | Ollama / llama.cpp providers | **Implemented and tested against a fixture server** | Real protocol handling; no real LM installed here |
+| Klyvaron CPU execution | **Implemented and tested** | Single worker, bounded incremental streaming, cancellation/deadlines, one-model residency; see doc 15 |
 | Knowledge pipeline | **Implemented and tested** | SQLite + filesystem + in-memory rebuildable BM25 |
 | Media queue & validation | **Implemented and tested** | Progress, cancellation, timeouts, retry-after, state history |
 | Plugin registry & manifests | **Implemented and tested** | Preflight vs invoke distinction; uninstall keeps a record |
@@ -199,7 +229,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (563 tests)
+### `services/fabric` — Implemented and tested (575 tests)
 
 | Stage | Status |
 |---|---|
@@ -290,7 +320,7 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (67 tests)
+### `apps/web` — Implemented and tested (76 tests)
 
 | Area | Status |
 |---|---|

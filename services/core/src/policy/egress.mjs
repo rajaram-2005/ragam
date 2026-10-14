@@ -77,7 +77,7 @@ function isLocalHost(hostname) {
 /**
  * @param {object} options
  * @param {string} options.policy            one of RUNTIME_POLICIES
- * @param {string[]} [options.localAllowlist] extra hosts treated as local (e.g. an Ollama box on the LAN)
+ * @param {string[]} [options.localAllowlist] LAN hosts allowed only outside Strict Offline (not on-device inference)
  * @param {string[]} [options.onlineAllowlist] external hosts permitted in hybrid/online modes
  * @param {(event:object)=>void} [options.onDecision] audit hook
  */
@@ -120,7 +120,8 @@ export function createEgressGuard(options = {}) {
     }
     const local = isLocalHost(target.hostname) || localAllowlist.has(target.hostname) || localAllowlist.has(target.host)
     const scope = local ? 'local' : 'external'
-    if (local) return { allowed: true, scope, ...target }
+    const loopback = LOOPBACK_HOSTS.has(target.hostname.replace(/^\[|\]$/g, '')) || LOOPBACK_HOSTS.has(target.hostname)
+    if (loopback || (local && policy !== RUNTIME_POLICIES.STRICT_OFFLINE)) return { allowed: true, scope, ...target }
     // Order matters and is load-bearing: strict_offline is absolute, so it is
     // checked before allow-all. Reversing these two lines would let '*' silently
     // disable offline mode, which is the one guarantee the guard exists to keep.
@@ -140,7 +141,8 @@ export function createEgressGuard(options = {}) {
     const decision = inspect(typeof url === 'string' ? url : url?.url ?? String(url))
     onDecision({ type: 'egress', allowed: decision.allowed, ...decision, at: Date.now() })
     if (!decision.allowed) throw new EgressBlockedError(decision.href || url, decision.reason, policy)
-    return realFetch(url, init)
+    // A permitted local URL must not redirect a prompt to an uninspected host.
+    return realFetch(url, { ...init, redirect: 'error' })
   }
 
   return {

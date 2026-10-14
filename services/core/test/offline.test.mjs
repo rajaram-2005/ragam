@@ -82,7 +82,7 @@ test('strict_offline blocks external hosts before a socket is opened', async () 
   assert.equal(guard.offlineEnforced, true)
 })
 
-test('strict_offline still permits loopback and explicitly allowlisted local hosts', () => {
+test('strict_offline permits on-device loopback but not remote LAN services', () => {
   const guard = createEgressGuard({
     policy: RUNTIME_POLICIES.STRICT_OFFLINE,
     localAllowlist: ['ollama.internal.lan'],
@@ -91,8 +91,6 @@ test('strict_offline still permits loopback and explicitly allowlisted local hos
     'http://127.0.0.1:11434/api/tags',
     'http://localhost:8080/v1/models',
     'http://[::1]:11434/api/tags',
-    'http://192.168.1.20:11434/api/tags',
-    'http://ollama.internal.lan:11434/api/tags',
   ]) {
     const decision = guard.inspect(url)
     assert.equal(decision.allowed, true, `${url} is local and must stay reachable offline`)

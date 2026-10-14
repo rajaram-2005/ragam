@@ -6,8 +6,10 @@
 // enforcement point lives here.
 
 import { createServer } from 'node:http'
+import { setImmediate as nextTurn } from 'node:timers/promises'
 import { resolve, join, sep } from 'node:path'
-import { totalmem, cpus, freemem } from 'node:os'
+import { detectHardware } from './hardware/detect.mjs'
+import { HardwareAdmission } from './hardware/admission.mjs'
 import { readFile, stat } from 'node:fs/promises'
 
 import { AuditLedger, AUDIT_OUTCOMES } from './audit/ledger.mjs'
@@ -33,11 +35,14 @@ import { publicConfig } from './config.mjs'
 import { KlyvaronStore } from './klyvaron/store.mjs'
 import { MobileFootprint } from './klyvaron/footprint.mjs'
 import { KlyvaronProvider } from './providers/klyvaron.mjs'
+import { LocalCpuExecutor } from './klyvaron/execution.mjs'
+import { ModelCatalog } from './catalog/registry.mjs'
+import { configuredCatalogSources } from './catalog/sources.mjs'
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024
 
 export class AetherisOmniApp {
-  constructor({ config, ledger = null }) {
+  constructor({ config, ledger = null, hardwareProbe = null, modelProfiles = [] }) {
     this.config = config
     this.events = []
 
@@ -55,15 +60,9 @@ export class AetherisOmniApp {
     this.ledger = ledger ?? new AuditLedger(resolve(config.dataDir, 'audit.sqlite'))
 
     // --- hardware profile (real measurements, used by the router) ----------
-    this.hardware = {
-      cpuCount: cpus().length,
-      ramGb: round(totalmem() / 1024 ** 3, 2),
-      ramFreeGb: round(freemem() / 1024 ** 3, 2),
-      // No GPU detection is possible without vendor tooling; declare 0 rather than guess.
-      vramGb: 0,
-      gpuDetected: false,
-      detectedAt: Date.now(),
-    }
+    this.hardwareProbe = hardwareProbe ?? (() => detectHardware({ storagePath: config.dataDir }))
+    this.hardware = this.hardwareProbe()
+    this.admission = new HardwareAdmission({ probe: this.hardwareProbe, profiles: modelProfiles })
 
     // --- policy ------------------------------------------------------------
     this.guard = createEgressGuard({
@@ -77,7 +76,8 @@ export class AetherisOmniApp {
 
     // --- registry & router -------------------------------------------------
     this.registry = new ModelRegistry()
-    this.router = new ModelRouter({ registry: this.registry, hardware: this.hardware })
+    this.router = new ModelRouter({ registry: this.registry, hardware: this.hardware, admission: this.admission,
+      refreshHardware: () => (this.hardware = this.hardwareProbe()) })
     this.providers = {}
     this.#registerProviders()
 
@@ -175,7 +175,25 @@ export class AetherisOmniApp {
     // Opened last so the ledger reads startup -> providers -> models. Nothing here
     // reaches the network: a Klyvaron artifact is a file, and `loadArtifact` verifies
     // it against its manifest before a single weight is used.
+    this.localExecution = new LocalCpuExecutor()
     this.klyvaron = this.#openKlyvaron()
+    this.catalog = new ModelCatalog({ onEvent: (event) => {
+      this.#onEvent(event)
+      if (!this.closing) this.ledger.record({ category: 'model', action: 'catalog_refresh',
+        outcome: event.outcome === 'success' ? AUDIT_OUTCOMES.SUCCESS : AUDIT_OUTCOMES.FAILURE, detail: event })
+    } })
+    this.catalog.addSource({ id: 'klyvaron', kind: 'catalog.klyvaron/1', load: async () => ({
+      coverage: 'complete_response', records: this.klyvaron.loaded.map((entry) => {
+        const runtime = this.providers[entry.id].runtime
+        return { id: entry.artifact, revision: entry.version, licence: runtime.manifest.licence,
+          quantization: runtime.quantization, contextTokens: runtime.contextTokens,
+          tasks: [runtime.instructionTuned ? 'chat' : 'text-completion'], runtimes: ['klyvaron-cpu'],
+          modalities: ['text_in', 'text_out'], executionLocation: 'local' }
+      }),
+    }) })
+    for (const source of configuredCatalogSources(config.modelCatalogFile, this.guard)) this.catalog.addSource(source)
+    // Local inventory only at startup. Never refresh remote metadata implicitly.
+    this.catalogReady = this.catalog.refresh('klyvaron').catch(() => null)
   }
 
   // --- wiring -------------------------------------------------------------
@@ -183,15 +201,16 @@ export class AetherisOmniApp {
   /**
    * Open the on-device model library and load whatever is already installed.
    *
-   * Loading at startup is a deliberate trade: it costs a few hundred milliseconds once
-   * and makes readiness a statement about a model in memory rather than a promise about
-   * a file. A model that fails verification is reported as broken and left alone -- it
-   * is never silently deleted, because it is the user's download.
+   * Startup loads each artifact for verification, then retains only its metadata.
+   * One shared worker loads the chosen model on demand, rechecks its identity and
+   * releases it after idling. Full lazy startup verification is not claimed.
+   * A model that fails verification is reported as broken, never silently deleted: it
+   * is the user's download.
    */
   #openKlyvaron() {
     const root = resolve(this.config.dataDir, 'klyvaron')
-    const store = new KlyvaronStore({ root })
-    const library = { root, store, footprint: new MobileFootprint({ budget: store.budget }), loaded: [], broken: [], errors: [] }
+    const store = new KlyvaronStore({ root, dataDir: this.config.dataDir })
+    const library = { root, store, footprint: new MobileFootprint({ budget: store.budget, dataDir: this.config.dataDir }), loaded: [], broken: [], errors: [] }
 
     for (const entry of store.list()) {
       if (entry.broken) {
@@ -208,12 +227,12 @@ export class AetherisOmniApp {
         // `tier: 'pro'` gets `base_completion` and nothing else.
         const tierClaim = tierClaimForArtifact(runtime.manifest.id, runtime.manifest.version)
         this.providers[providerName] = new KlyvaronProvider({
-          runtime, guard: this.guard, loadMs, onEvent: (event) => this.#onEvent(event),
+          runtime, executor: this.localExecution, guard: this.guard, loadMs, onEvent: (event) => this.#onEvent(event),
         })
         const model = this.registry.register({
           id: providerName,
           kind: MODEL_KINDS.LOCAL_LLM,
-          displayName: `${runtime.manifest.id} ${runtime.manifest.version} (Klyvaron ${runtime.manifest.tier})`,
+          displayName: `${runtime.manifest.id} ${runtime.manifest.version} (${tierClaim ? `Klyvaron ${tierClaim}` : 'unqualified CPU model'})`,
           provider: providerName,
           location: 'local',
           capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT],
@@ -222,7 +241,7 @@ export class AetherisOmniApp {
           toolCalling: false,
           structuredOutput: false,
           parametersBillions: runtime.parameterCount / 1e9,
-          quantization: runtime.dtype === Float64Array ? 'none (float64)' : 'none (float32)',
+          quantization: runtime.quantization,
           licence: runtime.manifest.licence,
           version: runtime.manifest.version,
           // `base_completion` is the tag that stops a base model being chosen to answer
@@ -246,7 +265,7 @@ export class AetherisOmniApp {
         })
         library.loaded.push({ id: model.id, artifact: runtime.manifest.id, version: runtime.manifest.version,
           tier: runtime.manifest.tier, tierClaim, parameters: runtime.parameterCount, contextTokens: runtime.contextTokens,
-          instructionTuned: runtime.instructionTuned, loadMs, weightsSha256: runtime.sha256,
+          instructionTuned: runtime.instructionTuned, startupVerified: true, residency: 'see execution snapshot', loadMs, weightsSha256: runtime.sha256,
           limitations: [...runtime.manifest.limitations] })
       } catch (error) {
         library.errors.push({ id: entry.id, code: error.code ?? 'load_failed', message: error.message })
@@ -329,6 +348,10 @@ export class AetherisOmniApp {
     try {
       if (name === 'ollama') {
         const models = await provider.listLocalModels()
+        const present = new Set(models.map((model) => `ollama:${model.id}`))
+        for (const old of this.registry.list()) {
+          if (old.provider === name && old.tags.includes('discovered') && !present.has(old.id)) this.registry.unregister(old.id)
+        }
         for (const model of models) {
           const id = `ollama:${model.id}`
           const descriptor = {
@@ -336,7 +359,8 @@ export class AetherisOmniApp {
             kind: MODEL_KINDS.LOCAL_LLM,
             displayName: `${model.id} (Ollama)`,
             capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT],
-            location: 'local',
+            location: isOnDeviceEndpoint(provider.baseUrl) ? 'local' : 'online',
+            provider: name,
             streaming: true,
             toolCalling: false, // Ollama supports tools on some models; not assumed here.
             quantization: model.quantization ?? null,
@@ -359,7 +383,8 @@ export class AetherisOmniApp {
             kind: MODEL_KINDS.LOCAL_LLM,
             displayName: `${served} (${this.config.llamaCpp.runtime})`,
             capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT],
-            location: 'local',
+            location: isOnDeviceEndpoint(provider.baseUrl) ? 'local' : 'online',
+            provider: name,
             streaming: true,
             toolCalling: true,
             licence: 'unknown',
@@ -512,7 +537,7 @@ export class AetherisOmniApp {
     return { workingMessages, classification, allowExternal, grounding, memory }
   }
 
-  async chat({ messages, prompt = null, model = null, temperature = 0.2, maxTokens = 1024, stream = false, principal = null, dataClass = null, useKnowledge = false, useMemory = false, sessionId = null, signal = null }) {
+  async chat({ messages, prompt = null, model = null, temperature = 0.2, maxTokens = 1024, stop = [], topK = 40, seed = 0, stream = false, principal = null, dataClass = null, useKnowledge = false, useMemory = false, sessionId = null, signal = null, executionMode = 'local' }) {
     const normalized = messages ? normalizeMessages(messages) : [{ role: 'user', content: String(prompt ?? '') }]
     const userText = normalized.filter((message) => message.role === 'user').map((message) => (typeof message.content === 'string' ? message.content : '')).join('\n')
 
@@ -524,7 +549,7 @@ export class AetherisOmniApp {
     if (sessionId) this.#recordTurns(sessionId, [['user', userText]], classification.dataClass)
 
     const route = this.router.route(
-      { capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT], ...(stream ? { streaming: true } : {}), ...(model ? { preferId: model } : {}) },
+      { executionMode, workload: { kind: 'text', contextTokens: Math.max(1, workingMessages.reduce((n, m) => n + Buffer.byteLength(String(m.content), 'utf8'), 0) + maxTokens) }, capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT], ...(stream ? { streaming: true } : {}), ...(model ? { preferId: model } : {}) },
       { policy: this.config.policy, allowExternal },
     )
     if (!route.satisfied) {
@@ -532,7 +557,7 @@ export class AetherisOmniApp {
       const error = new Error(route.explanation)
       error.code = 'no_model_available'
       error.status = 503
-      error.route = { explanation: route.explanation, rejected: route.rejected }
+      error.route = routeSummary(route)
       throw error
     }
 
@@ -556,24 +581,26 @@ export class AetherisOmniApp {
     try {
       if (stream) {
         const provider = this.#providerFor(chosen)
-        const request = { model: this.#providerModelId(chosen), messages: outbound, temperature, maxTokens, signal }
+        let resourceAdjustment = null
+        const request = { model: this.#providerModelId(chosen), messages: outbound, temperature, maxTokens, stop, topK, seed, signal, onResourceAdjustment: (a) => { resourceAdjustment = a } }
         const chunks = []
         for await (const delta of provider.chatStream(request)) chunks.push(delta)
         const text = chunks.join('')
         const durationMs = Date.now() - started
         this.#recordChat({ chosen, classification, isExternal, durationMs, textLength: text.length, stream: true, grounding, redaction })
         if (sessionId) this.#recordTurns(sessionId, [['assistant', text]], classification.dataClass)
-        return { text, stream: true, chunks: chunks.length, modelId: chosen.id, durationMs, routing: routeSummary(route), classification: classification.dataClass, sentExternally: isExternal, grounding: groundingSummary(grounding), memory: memorySummary(memory), redaction }
+        return { text, resourceAdjustment, stream: true, chunks: chunks.length, modelId: chosen.id, durationMs, routing: routeSummary(route), classification: classification.dataClass, sentExternally: isExternal, grounding: groundingSummary(grounding), memory: memorySummary(memory), redaction }
       }
 
       const provider = this.#providerFor(chosen)
-      const result = await provider.chat({ model: this.#providerModelId(chosen), messages: outbound, temperature, maxTokens, signal })
+      const result = await provider.chat({ model: this.#providerModelId(chosen), messages: outbound, temperature, maxTokens, stop, topK, seed, signal })
       const durationMs = Date.now() - started
       this.registry.observe(chosen.id, { availability: AVAILABILITY.READY, medianLatencyMs: durationMs })
       this.#recordChat({ chosen, classification, isExternal, durationMs, textLength: result.text.length, stream: false, grounding, redaction, usage: result.usage })
       if (sessionId) this.#recordTurns(sessionId, [['assistant', result.text]], classification.dataClass)
       return {
         text: result.text,
+        resourceAdjustment: result.resourceAdjustment ?? null,
         toolCalls: result.toolCalls ?? [],
         stream: false,
         modelId: chosen.id,
@@ -583,6 +610,7 @@ export class AetherisOmniApp {
         ...(result.instructionTuned === undefined ? {} : { instructionTuned: result.instructionTuned }),
         ...(result.limitation ? { limitation: result.limitation } : {}),
         durationMs,
+        doneReason: result.doneReason ?? null,
         usage: result.usage ?? null,
         routing: routeSummary(route),
         classification: classification.dataClass,
@@ -682,6 +710,7 @@ export class AetherisOmniApp {
 
   #providerFor(model) {
     if (model.location === 'online') {
+      if (model.provider && this.providers[model.provider]) return this.providers[model.provider]
       // This build ships no online provider. A descriptor that still claims the
       // online location is refused here rather than attempted, so the failure names
       // the missing provider instead of surfacing as a network error later.
@@ -719,17 +748,17 @@ export class AetherisOmniApp {
    * Image generation. Refused honestly on this host: no runtime is configured, so
    * no job is created and no placeholder is returned in its place.
    */
-  async generateImage({ prompt, model = null, n = 1, size = null, principal = null, dataClass = null, externalAuthorization = null }) {
+  async generateImage({ prompt, model = null, n = 1, size = null, principal = null, dataClass = null, externalAuthorization = null, executionMode = 'local' }) {
     if (!prompt || !String(prompt).trim()) throw badRequest('prompt is required')
     const classification = dataClass ? { dataClass } : classifyText(String(prompt))
     const allowExternal = this.#mayGoExternal({ id: 'image', prompt: String(prompt), dataClass: classification.dataClass, context: { externalAuthorization } })
 
-    const route = this.router.route({ capabilities: [MODALITIES.TEXT_IN, MODALITIES.IMAGE_OUT], ...(model ? { preferId: model } : {}) }, { policy: this.config.policy, allowExternal })
+    const route = this.router.route({ executionMode, workload: { kind: 'image' }, capabilities: [MODALITIES.TEXT_IN, MODALITIES.IMAGE_OUT], ...(model ? { preferId: model } : {}) }, { policy: this.config.policy, allowExternal })
     if (!route.satisfied) {
       const error = new Error(`image generation unavailable: ${route.explanation}`)
       error.code = 'capability_unavailable'
       error.status = 503
-      error.route = { explanation: route.explanation, rejected: route.rejected }
+      error.route = routeSummary(route)
       return this.#refuse('model', 'image_refused', error, { policy: this.config.policy, rejected: route.rejected.length })
     }
     // No image runtime ships in this build. A route that resolves therefore reaches
@@ -757,24 +786,24 @@ export class AetherisOmniApp {
    * As with images, this build has no video runtime and no online provider, so the
    * refusal states the limitation instead of substituting a still image (§9).
    */
-  async generateVideo({ prompt, model = null, duration = null, aspectRatio = null, image = null, seed = null, audio = null, principal = null, dataClass = null, externalAuthorization = null }) {
+  async generateVideo({ prompt, model = null, duration = null, aspectRatio = null, image = null, seed = null, audio = null, principal = null, dataClass = null, externalAuthorization = null, executionMode = 'local' }) {
     if (!prompt || !String(prompt).trim()) throw badRequest('prompt is required')
     const classification = dataClass ? { dataClass } : classifyText(String(prompt))
     const allowExternal = this.#mayGoExternal({ id: 'video', prompt: String(prompt), dataClass: classification.dataClass, context: { externalAuthorization } })
 
-    const route = this.router.route({ capabilities: [MODALITIES.TEXT_IN, MODALITIES.VIDEO_OUT], ...(model ? { preferId: model } : {}) }, { policy: this.config.policy, allowExternal })
+    const route = this.router.route({ executionMode, workload: { kind: 'video' }, capabilities: [MODALITIES.TEXT_IN, MODALITIES.VIDEO_OUT], ...(model ? { preferId: model } : {}) }, { policy: this.config.policy, allowExternal })
     if (!route.satisfied) {
       const error = new Error(`video generation unavailable: ${route.explanation}`)
       error.code = 'capability_unavailable'
       error.status = 503
-      error.route = { explanation: route.explanation, rejected: route.rejected }
+      error.route = routeSummary(route)
       // State the limitation instead of silently substituting an image (§9).
       error.limitation = 'no video-capable provider is reachable under the current policy; a still image is NOT offered as a substitute'
       return this.#refuse('model', 'video_refused', error, { policy: this.config.policy, rejected: route.rejected.length })
     }
     const chosen = route.chosen
     if (chosen.location === 'local') {
-      const error = new Error(`local video generation is not available: '${chosen.id}' has no implemented runtime on this hardware profile (${this.hardware.ramGb}GB RAM, no GPU)`)
+      const error = new Error(`local video generation is not available: '${chosen.id}' has no implemented runtime on this hardware profile (${this.hardware.ramGb}GB RAM, GPU compatibility unverified)`)
       error.code = 'needs_hardware'
       error.status = 501
       error.limitation = 'no video-capable provider is configured on this host; a still image is NOT offered as a substitute'
@@ -787,15 +816,27 @@ export class AetherisOmniApp {
     return this.#refuse('model', 'video_refused', error, { modelId: chosen.id })
   }
 
+  /** Runtime readiness is not hardware qualification. Do not mutate probe results:
+   * an unavailable device may regain capacity on the next measurement. */
+  measuredModels() {
+    this.hardware = this.hardwareProbe()
+    return this.registry.list().map((model) => {
+      if (model.location !== 'local') return model
+      const admission = this.admission.check(model, {}, this.hardware)
+      if (admission.eligible || model.measured.availability !== AVAILABILITY.READY) return { ...model, admission }
+      return { ...model, admission, measured: { ...model.measured, availability: AVAILABILITY.NEEDS_HARDWARE } }
+    })
+  }
+
   /** Readiness: what actually works right now, with reasons for what does not. */
   readiness() {
-    const models = this.registry.list()
+    const models = this.measuredModels()
     const ready = models.filter((model) => model.measured.availability === AVAILABILITY.READY)
     return {
       status: ready.length ? 'ready' : 'degraded',
       policy: this.config.policy,
       offlineEnforced: this.guard.offlineEnforced,
-      hardware: this.hardware,
+      hardware: { ...this.hardware, compatibility: this.admission.report(models, this.hardware) },
       models: { total: models.length, ready: ready.length },
       capabilities: {
         // A base completion model can emit text and still cannot answer a question, so
@@ -815,6 +856,7 @@ export class AetherisOmniApp {
       klyvaron: {
         root: this.klyvaron.root,
         loaded: this.klyvaron.loaded,
+        execution: this.localExecution.snapshot(),
         broken: this.klyvaron.broken,
         errors: this.klyvaron.errors,
         storage: this.klyvaron.footprint.summary(),
@@ -843,8 +885,17 @@ export class AetherisOmniApp {
    * private policy/routing helpers; the HTTP layer only hands it a response.
    */
   async streamChat(response, body, writeHead, write, end) {
-    const send = (event, data) => write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+    const send = async (event, data) => {
+      if (body.signal?.aborted || response.destroyed) throw Object.assign(new Error('client disconnected'), { code: 'cancelled', status: 499 })
+      if (await write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`) === false) await waitForDrain(response, body.signal)
+    }
     try {
+      writeHead(200, {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-store, no-transform',
+        connection: 'keep-alive',
+        'x-accel-buffering': 'no',
+      })
       const normalized = body.messages ? normalizeMessages(body.messages) : [{ role: 'user', content: String(body.prompt ?? '') }]
       const userText = normalized
         .filter((message) => message.role === 'user')
@@ -860,8 +911,11 @@ export class AetherisOmniApp {
         purpose: 'chat-stream',
       })
 
+      if (body.sessionId) this.#recordTurns(body.sessionId, [['user', userText]], classification.dataClass)
       const route = this.router.route(
         {
+          executionMode: body.executionMode ?? 'local',
+          workload: { kind: 'text', contextTokens: Math.max(1, workingMessages.reduce((n, m) => n + Buffer.byteLength(String(m.content), 'utf8'), 0) + (body.maxTokens ?? 1024)) },
           capabilities: [MODALITIES.TEXT_IN, MODALITIES.TEXT_OUT],
           streaming: true,
           ...(body.model ? { preferId: body.model } : {}),
@@ -869,7 +923,7 @@ export class AetherisOmniApp {
         { policy: this.config.policy, allowExternal },
       )
       if (!route.satisfied) {
-        send('error', { code: 'no_model_available', message: route.explanation, rejected: route.rejected })
+        await send('error', { code: 'no_model_available', message: route.explanation, rejected: route.rejected, route: routeSummary(route) })
         return end()
       }
 
@@ -881,22 +935,19 @@ export class AetherisOmniApp {
         const redacted = redactDeep(workingMessages)
         outbound = redacted.value
         if (redacted.findings.length) {
-          send('redaction', { findings: redacted.findings })
+          await send('redaction', { findings: redacted.findings })
           this.ledger.record({ category: 'policy', action: 'redact_before_external', outcome: AUDIT_OUTCOMES.ALLOWED, detail: { findings: redacted.findings, modelId: route.chosen.id } })
         }
       }
 
-      writeHead(200, {
-        'content-type': 'text/event-stream; charset=utf-8',
-        'cache-control': 'no-store, no-transform',
-        connection: 'keep-alive',
-        'x-accel-buffering': 'no',
-      })
-      send('route', {
+
+      await send('route', {
         modelId: route.modelId,
         routing: routeSummary(route),
         dataClass: classification.dataClass,
         sentExternally: isExternal,
+        instructionTuned: this.providers[chosen.id]?.instructionTuned ?? null,
+        limitation: this.providers[chosen.id]?.safeDescriptor?.().limitations?.[0] ?? null,
         grounding: groundingSummary(grounding),
         memory: memorySummary(memory),
       })
@@ -905,18 +956,26 @@ export class AetherisOmniApp {
       const started = Date.now()
       let chunks = 0
       let chars = 0
+      let text = ''
+      let completion = null
       for await (const delta of provider.chatStream({
         model: this.#providerModelId(route.chosen),
         messages: outbound,
         temperature: body.temperature ?? 0.2,
         maxTokens: body.maxTokens ?? 1024,
+        stop: body.stop ?? [], topK: body.topK ?? 40, seed: body.seed ?? 0,
+        signal: body.signal,
+        onComplete: (result) => { completion = result },
+        onResourceAdjustment: (adjustment) => send('resource', { adjustment }),
       })) {
         chunks += 1
         chars += delta.length
-        send('delta', { text: delta })
+        text += delta
+        await send('delta', { text: delta })
       }
       const durationMs = Date.now() - started
-      send('done', { modelId: route.modelId, chunks, chars, durationMs })
+      if (body.sessionId) this.#recordTurns(body.sessionId, [['assistant', text]], classification.dataClass)
+      await send('done', { doneReason: completion?.doneReason ?? null, usage: completion?.usage ?? null, limitation: completion?.limitation ?? null, instructionTuned: completion?.instructionTuned ?? null, modelId: route.modelId, chunks, chars, durationMs, routing: routeSummary(route), sentExternally: isExternal, classification: classification.dataClass, grounding: groundingSummary(grounding), memory: memorySummary(memory) })
       this.registry.observe(route.chosen.id, { availability: AVAILABILITY.READY, medianLatencyMs: durationMs })
       this.ledger.record({
         category: 'model',
@@ -925,20 +984,28 @@ export class AetherisOmniApp {
         detail: { modelId: route.modelId, chunks, chars, durationMs, sentExternally: isExternal, dataClass: classification.dataClass, grounded: Boolean(grounding?.hasEvidence) },
       })
     } catch (error) {
-      send('error', { code: error?.code ?? 'stream_failed', message: error?.message ?? String(error) })
+      try {
+        if (!response.destroyed && !body.signal?.aborted) await send('error', { code: error?.code ?? 'stream_failed', status: error?.status, message: error?.message ?? String(error) })
+      } catch { /* disconnected during the error frame; still record the failure */ }
       this.ledger.record({ category: 'model', action: 'chat_stream', outcome: AUDIT_OUTCOMES.FAILURE, detail: { error: error?.message, code: error?.code } })
     }
     return end()
   }
 
   close() {
+    if (this.closing) return this.closing
     try {
       this.restoreGlobalFetch?.()
     } catch {
       /* ignore */
     }
-    this.knowledge?.close()
-    this.ledger?.close()
+    this.catalog?.close()
+    const running = Boolean(this.localExecution?.active)
+    const stopped = this.localExecution?.close()
+    const finish = () => { this.knowledge?.close(); this.ledger?.close() }
+    if (!running) { finish(); this.closing = Promise.resolve(stopped) }
+    else this.closing = Promise.resolve(stopped).then(() => nextTurn()).finally(finish)
+    return this.closing
   }
 }
 
@@ -1082,7 +1149,7 @@ async function handle(request, response, app) {
   if (method === 'GET' && path === '/api/health') return sendJson(response, 200, { status: 'ok', uptimeMs: Date.now() - app.startedAt, policy: app.config.policy }, app)
   if (method === 'GET' && path === '/api/ready') return sendJson(response, 200, app.readiness(), app)
   if (method === 'GET' && path === '/api/config') return sendJson(response, 200, publicConfig(app.config), app)
-  if (method === 'GET' && path === '/api/hardware') return sendJson(response, 200, app.hardware, app)
+  if (method === 'GET' && path === '/api/hardware') return sendJson(response, 200, { ...(app.hardware = app.hardwareProbe()), compatibility: app.admission.report(app.registry.list(), app.hardware) }, app)
   if (method === 'GET' && path === '/api/events') return sendJson(response, 200, { events: app.events.slice(-200) }, app)
 
   // --- models -------------------------------------------------------------
@@ -1091,7 +1158,7 @@ async function handle(request, response, app) {
   if (method === 'GET' && path === '/api/models') {
     const availableOnly = url.searchParams.get('ready') === 'true'
     return sendJson(response, 200, {
-      models: app.registry.list({ availableOnly }).map(publicModel),
+      models: app.measuredModels().filter((m) => !availableOnly || m.measured.availability === AVAILABILITY.READY).map(publicModel),
       // The declared family, with its validation result. Served alongside the routable
       // models because they answer different questions: `models` is what can serve a
       // request now, `family` is what Aetheris has built and what backs each claim.
@@ -1099,23 +1166,37 @@ async function handle(request, response, app) {
       hardware: app.hardware,
     }, app)
   }
+  if (method === 'GET' && path === '/api/models/catalog') {
+    await app.catalogReady
+    return sendJson(response, 200, app.catalog.search({ q: url.searchParams.get('q') ?? '',
+      task: url.searchParams.get('task'), sourceId: url.searchParams.get('source'),
+      limit: Number(url.searchParams.get('limit') ?? 100), offset: Number(url.searchParams.get('offset') ?? 0) }), app)
+  }
+  if (method === 'POST' && path === '/api/models/catalog/refresh') {
+    const linked = disconnectSignal(request, response)
+    try {
+      const body = await readBody(request)
+      const source = await app.catalog.refresh(body.sourceId, { authorizeNetwork: body.authorizeNetwork === true, signal: linked.signal })
+      return sendJson(response, 200, { source }, app)
+    } finally { linked.dispose() }
+  }
   if (method === 'POST' && path === '/api/models/probe') return sendJson(response, 200, await app.probeAll(), app)
 
   // --- chat ---------------------------------------------------------------
-  if (method === 'POST' && path === '/api/chat') {
-    const body = await readBody(request)
-    const result = await app.chat({ ...body, stream: false })
-    return sendJson(response, 200, result, app)
-  }
-  if (method === 'POST' && path === '/api/chat/stream') {
-    const body = await readBody(request)
-    return app.streamChat(
-      response,
-      body,
-      (status, headers) => response.writeHead(status, corsHeaders(app, headers)),
-      (chunk) => response.write(chunk),
-      () => response.end(),
-    )
+  if (method === 'POST' && (path === '/api/chat' || path === '/api/chat/stream')) {
+    const linked = disconnectSignal(request, response)
+    try {
+      const body = await readBody(request)
+      if (path === '/api/chat') {
+        const result = await app.chat({ ...body, signal: linked.signal, stream: false })
+        return sendJson(response, 200, result, app)
+      }
+      return await app.streamChat(
+        response, { ...body, signal: linked.signal },
+        (status, headers) => response.writeHead(status, corsHeaders(app, headers)),
+        (chunk) => response.write(chunk), () => response.end(),
+      )
+    } finally { linked.dispose() }
   }
 
   // --- memory -------------------------------------------------------------
@@ -1625,11 +1706,12 @@ export function publicModel(model) {
     version: model.version,
     tags: model.tags,
     measured: model.measured,
+    admission: model.admission ?? null,
   }
 }
 
 function routeSummary(route) {
-  return { modelId: route.modelId, explanation: route.explanation, candidates: route.candidates, rejected: route.rejected, policy: route.policy }
+  return { modelId: route.modelId, explanation: route.explanation, candidates: route.candidates, rejected: route.rejected, policy: route.policy, execution: route.execution, alternatives: route.alternatives, retryable: route.retryable, tradeoff: route.tradeoff, fallback: route.fallback }
 }
 
 /**
@@ -1724,3 +1806,30 @@ function round(value, digits = 6) {
 }
 
 export { JOB_STATES, TASK_STATES, LIFECYCLE, validateMedia, join, sep, readFile, stat }
+
+function isOnDeviceEndpoint(baseUrl) {
+  try { return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(baseUrl).hostname) } catch { return false }
+}
+
+function disconnectSignal(request, response) {
+  const controller = new AbortController()
+  const abort = () => { if (!response.writableFinished) controller.abort() }
+  request.once('aborted', abort)
+  response.once('close', abort)
+  if (request.aborted || response.destroyed) abort()
+  return { signal: controller.signal, dispose() { request.off('aborted', abort); response.off('close', abort) } }
+}
+
+function waitForDrain(response, signal) {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => { response.off('drain', done); response.off('close', fail); response.off('error', fail); signal?.removeEventListener('abort', fail) }
+    const done = () => { cleanup(); resolve() }
+    const fail = () => { cleanup(); reject(Object.assign(new Error('stream closed while waiting for its reader'), { code: 'cancelled', status: 499 })) }
+    response.once('drain', done)
+    response.once('close', fail)
+    response.once('error', fail)
+    signal?.addEventListener('abort', fail, { once: true })
+    if (signal?.aborted || response.destroyed) fail()
+    else if (!response.writableNeedDrain) done()
+  })
+}

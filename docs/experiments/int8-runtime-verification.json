@@ -1,0 +1,314 @@
+{
+  "format": "klyvaron.int8-runtime-verification/1",
+  "notice": "Synthetic random-initialized parity model. These are real CPU measurements of a test artifact, NOT assistant quality or minimum-device requirements. No speed improvement is claimed.",
+  "fixtureGenerator": ".venv/bin/python services/fabric/scripts/generate-int8-fixture.py",
+  "evaluation": {
+    "failures": [],
+    "format": "klyvaron.quantization-evaluation/1",
+    "limitation": "A relative quantization check is not assistant capability, native-device qualification or a release approval.",
+    "metrics": {
+      "evaluatedPrefixSha256": "c04b7d423fcb11d5dd7502297fdc9354cc858cd4b3d7cee500061476ab5ab73e",
+      "greedyDisagreementRate": 0.006956521739130435,
+      "independence": "caller-supplied text; disjointness from training is not verified by this converter",
+      "maxAbsoluteLogitError": 0.0037904754281044006,
+      "nllIncrease": 0.00026303690394113843,
+      "perplexityRatio": 1.0002630715011809,
+      "protocol": "non-overlapping context windows; teacher-forced next-token cross entropy; natural logs",
+      "quantizedNll": 3.4466368759909614,
+      "sourceNll": 3.44637383908702,
+      "tokensEvaluated": 575,
+      "unknownRate": 0.0,
+      "validationSha256": "c04b7d423fcb11d5dd7502297fdc9354cc858cd4b3d7cee500061476ab5ab73e"
+    },
+    "quantizedResidentWeightBytes": 6728,
+    "quantizedWeightBytes": 12214,
+    "quantizedWeightsSha256": "6db9aefe2e190c8e682ea32a41780b7fd8ebcc814df95a18112e7e2fbaeba1bc",
+    "scheme": "symmetric-int8-per-tensor",
+    "source": {
+      "id": "klyvaron-parity-tiny",
+      "manifestSha256": "258e70e2d77e26dc363014c9e400f1cebf7c33d27368c6f8f093f2487109d5ae",
+      "version": "0.1.0",
+      "weightsSha256": "d96317dd489d61a66fba53601ba2efe6fa77b984c7e1bb752c8f7477a1ab007b"
+    },
+    "sourceResidentWeightBytes": 25056,
+    "sourceWeightBytes": 28518,
+    "status": "passed",
+    "thresholds": {
+      "maxGreedyDisagreement": 0.05,
+      "maxNllIncrease": 0.02,
+      "maxUnknownRate": 0.01
+    }
+  },
+  "runs": {
+    "float32": {
+      "command": "node --expose-gc services/core/scripts/benchmark-klyvaron.mjs services/fabric/artifacts/int8-verification/float32 services/fabric/artifacts/int8-verification/prompt.txt --iterations 7 --tokens 16",
+      "result": {
+        "format": "klyvaron.cpu-benchmark/1",
+        "measuredAt": "2026-10-14T03:56:56.054Z",
+        "backend": "cpu",
+        "model": {
+          "id": "klyvaron-parity-tiny",
+          "version": "0.1.0",
+          "weightsSha256": "d96317dd489d61a66fba53601ba2efe6fa77b984c7e1bb752c8f7477a1ab007b",
+          "quantization": "none (float32)",
+          "instructionTuned": false,
+          "provenance": "test_fixture",
+          "parameters": 6264,
+          "architecture": {
+            "d_ff": 48,
+            "d_model": 24,
+            "n_heads": 4,
+            "n_layers": 1,
+            "seq_len": 32,
+            "tie_embeddings": true,
+            "vocab_size": 31
+          },
+          "artifactBytes": 28518,
+          "residentWeightPayloadBytes": 25056
+        },
+        "runtime": {
+          "node": "v22.22.3",
+          "sourceSha256": "099aa0d4e825f126d2ca1da4fed69036bac56916e51dce32aa2fede9ad99a589",
+          "loaderSha256": "d21d2904901f2f32bad74c18bf729d5d436d8e9eb539744b282d16fa71e60660"
+        },
+        "host": {
+          "os": "linux",
+          "release": "6.1.158+",
+          "arch": "x64",
+          "cpu": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+          "cpuCount": 2,
+          "availableRamBytes": 3825754112,
+          "totalRamBytes": 4131278848
+        },
+        "workload": {
+          "promptSha256": "3cfe988e90719230425b8c934d44109e033aa8f2a55bbe501a35437f64f18fc9",
+          "promptCharacters": 18,
+          "requestedTokens": 16,
+          "iterations": 7
+        },
+        "loadMs": 6.562826999999999,
+        "cold": {
+          "ms": 30.90680499999999,
+          "generatedTokens": 16,
+          "contextTokens": 32,
+          "tokensPerSecond": 517.685344699978,
+          "stoppedBy": "length",
+          "adjustment": null
+        },
+        "warm": [
+          {
+            "ms": 8.775728999999998,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 1823.2103566552707,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 6.97533,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 2293.7982862459558,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 6.329233000000002,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 2527.95243910281,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 6.194314000000006,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 2583.014035129634,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 6.863171999999992,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 2331.283552270003,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 6.090440000000001,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 2627.0679950873823,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 6.3314849999999865,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 2527.053290025963,
+            "stoppedBy": "length",
+            "adjustment": null
+          }
+        ],
+        "medianWarmTokensPerSecond": 2527.053290025963,
+        "memory": {
+          "explicitGc": true,
+          "beforeLoad": {
+            "rss": 50597888,
+            "heapTotal": 7708672,
+            "heapUsed": 4909208,
+            "external": 2148789,
+            "arrayBuffers": 18635
+          },
+          "afterLoad": {
+            "rss": 55554048,
+            "heapTotal": 10067968,
+            "heapUsed": 5046232,
+            "external": 2202367,
+            "arrayBuffers": 43691
+          },
+          "maxProcessRssBytes": 67391488
+        },
+        "limitation": "Process RSS includes Node, imports, allocation scratch and runtime overhead. Weight payload bytes are not process RAM. One CPU smoke benchmark is not a minimum-hardware profile, release approval or a general speed claim."
+      }
+    },
+    "int8": {
+      "command": "node --expose-gc services/core/scripts/benchmark-klyvaron.mjs services/fabric/artifacts/int8-verification/int8 services/fabric/artifacts/int8-verification/prompt.txt --iterations 7 --tokens 16",
+      "result": {
+        "format": "klyvaron.cpu-benchmark/1",
+        "measuredAt": "2026-10-14T03:56:56.248Z",
+        "backend": "cpu",
+        "model": {
+          "id": "klyvaron-parity-tiny-int8",
+          "version": "0.1.0-int8-fixture",
+          "weightsSha256": "6db9aefe2e190c8e682ea32a41780b7fd8ebcc814df95a18112e7e2fbaeba1bc",
+          "quantization": "symmetric-int8-per-tensor",
+          "instructionTuned": false,
+          "provenance": "test_fixture",
+          "parameters": 6264,
+          "architecture": {
+            "d_ff": 48,
+            "d_model": 24,
+            "n_heads": 4,
+            "n_layers": 1,
+            "seq_len": 32,
+            "tie_embeddings": true,
+            "vocab_size": 31
+          },
+          "artifactBytes": 12214,
+          "residentWeightPayloadBytes": 6728
+        },
+        "runtime": {
+          "node": "v22.22.3",
+          "sourceSha256": "099aa0d4e825f126d2ca1da4fed69036bac56916e51dce32aa2fede9ad99a589",
+          "loaderSha256": "d21d2904901f2f32bad74c18bf729d5d436d8e9eb539744b282d16fa71e60660"
+        },
+        "host": {
+          "os": "linux",
+          "release": "6.1.158+",
+          "arch": "x64",
+          "cpu": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+          "cpuCount": 2,
+          "availableRamBytes": 3823968256,
+          "totalRamBytes": 4131278848
+        },
+        "workload": {
+          "promptSha256": "3cfe988e90719230425b8c934d44109e033aa8f2a55bbe501a35437f64f18fc9",
+          "promptCharacters": 18,
+          "requestedTokens": 16,
+          "iterations": 7
+        },
+        "loadMs": 6.385142999999992,
+        "cold": {
+          "ms": 39.210025,
+          "generatedTokens": 16,
+          "contextTokens": 32,
+          "tokensPerSecond": 408.05890840416447,
+          "stoppedBy": "length",
+          "adjustment": null
+        },
+        "warm": [
+          {
+            "ms": 13.916094000000001,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 1149.7479105846799,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 9.134019999999992,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 1751.693120882154,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 8.967016000000001,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 1784.3171016980452,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 8.789103000000011,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 1820.4360558750966,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 9.002913000000007,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 1777.2025565503063,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 8.852348000000006,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 1807.4300739193702,
+            "stoppedBy": "length",
+            "adjustment": null
+          },
+          {
+            "ms": 11.891787000000022,
+            "generatedTokens": 16,
+            "contextTokens": 32,
+            "tokensPerSecond": 1345.466413079882,
+            "stoppedBy": "length",
+            "adjustment": null
+          }
+        ],
+        "medianWarmTokensPerSecond": 1777.2025565503063,
+        "memory": {
+          "explicitGc": true,
+          "beforeLoad": {
+            "rss": 50479104,
+            "heapTotal": 7970816,
+            "heapUsed": 4909584,
+            "external": 2148789,
+            "arrayBuffers": 18635
+          },
+          "afterLoad": {
+            "rss": 54333440,
+            "heapTotal": 10067968,
+            "heapUsed": 5059456,
+            "external": 2167703,
+            "arrayBuffers": 25331
+          },
+          "maxProcessRssBytes": 68046848
+        },
+        "limitation": "Process RSS includes Node, imports, allocation scratch and runtime overhead. Weight payload bytes are not process RAM. One CPU smoke benchmark is not a minimum-hardware profile, release approval or a general speed claim."
+      }
+    }
+  }
+}

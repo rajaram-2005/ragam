@@ -265,7 +265,7 @@ test('a tampered manifest is refused, field by field', () => {
     ['an architecture/weight disagreement', (m) => { m.architecture.n_layers += 1 }, /disagree/],
     ['a changed vocabulary', (m) => { m.tokenizer.characters[0] = 'Z' }, /digest|duplicate/i],
     ['a vocabulary length that contradicts the architecture', (m) => { m.architecture.vocab_size += 1 }, /vocabulary has/],
-    ['an unknown format', (m) => { m.format = 'klyvaron.artifact/2' }, /unsupported artifact format/],
+    ['an unknown format', (m) => { m.format = 'klyvaron.artifact/999' }, /unsupported artifact format/],
     ['an instruction claim', (m) => { m.instructionTuned = 'yes' }, /boolean/],
   ]
   for (const [label, mutate, pattern] of cases) {

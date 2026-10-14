@@ -250,8 +250,8 @@ test('the documented routing weights are the real weights', () => {
 test('the documented route surface is the real route surface', () => {
   const source = readFileSync(resolve(CORE, 'src/app.mjs'), 'utf8')
   const literal = new Set([...source.matchAll(/'(\/api\/[A-Za-z0-9/:._-]+)'/g)].map((m) => m[1]))
-  assert.equal(literal.size, 38, `literal /api routes changed: ${literal.size}`)
-  assert.ok(squash(doc.architecture()).includes('38 literal routes'))
+  assert.equal(literal.size, 40, `literal /api routes changed: ${literal.size}`)
+  assert.ok(squash(doc.architecture()).includes('40 literal routes'))
 
   for (const route of ['/api/health', '/api/ready', '/api/config', '/api/chat', '/api/chat/stream',
     '/api/models', '/api/models/probe', '/api/knowledge/search', '/api/plugins/validate',
@@ -364,7 +364,7 @@ test('the documented module line counts match the filesystem', () => {
   const table = doc.architecture()
   // `[a-z/.]` silently excluded every module with a digit in its name, so
   // `knowledge/bm25.mjs` was never checked -- and its row set drifted unnoticed.
-  const rows = [...table.matchAll(/^\| `([\w/.]+\.mjs)` \| ([\d,]+) \|/gm)]
+  const rows = [...table.matchAll(/^\| `([\w/.-]+\.mjs)` \| ([\d,]+) \|/gm)]
   assert.ok(rows.length >= 20, `expected the full module table, found ${rows.length} rows`)
 
   const countLines = (path) => readFileSync(resolve(CORE, 'src', path), 'utf8').split('\n').length - 1
@@ -604,18 +604,18 @@ test('the status doc reports the real test totals', () => {
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
   // 19 includes this file. If a suite file is added or removed, the counts in
   // docs/03-status.md and README.md have to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 20)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 25)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
-  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 25)
+  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 26)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**454 / 454**'), 'core total must be stated')
-  assert.ok(status.includes('**563 / 563**'), 'fabric total must be stated')
-  assert.ok(status.includes('**67 / 67**'), 'web total must be stated')
-  assert.ok(status.includes('1084 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1084 tests: core 454, web 67, fabric 563'),
+  assert.ok(status.includes('**528 / 528**'), 'core total must be stated')
+  assert.ok(status.includes('**575 / 575**'), 'fabric total must be stated')
+  assert.ok(status.includes('**76 / 76**'), 'web total must be stated')
+  assert.ok(status.includes('1179 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1179 tests: core 528, web 76, fabric 575'),
     'README must state the same totals')
-  assert.ok(status.includes('(20 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(25 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -626,14 +626,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(454), `core heading must say 454, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(563), `fabric heading must say 563, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(67), `web heading must say 67, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(528), `core heading must say 528, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(575), `fabric heading must say 575, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(76), `web heading must say 76, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1084,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1084`,
+    1179,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1179`,
   )
 })
 
@@ -1521,7 +1521,7 @@ test('the memory interface the documents claim is the one that is in the app', (
   // edited, deleted, searched and exported, and that using it is a switch that starts off.
   // Documentation claiming an interface is the same failure mode as documentation claiming
   // a capability, so the claims are checked against the component that has to contain them.
-  const chat = readFileSync(resolve(REPO, 'apps/web/src/areas/ChatArea.jsx'), 'utf8')
+  const chat = readFileSync(resolve(REPO, 'apps/web/src/areas/ChatArea.jsx'), 'utf8') + '\n' + readFileSync(resolve(REPO, 'apps/web/src/components/ContextPanels.jsx'), 'utf8')
   const affordances = {
     'list memories': /\{memories\.length \? \(/,
     'add a memory': /api\.remember\(/,
@@ -1532,7 +1532,7 @@ test('the memory interface the documents claim is the one that is in the app', (
     'export memory': /api\.exportMemory\(/,
     'approve a proposal': /api\.decideMemory\(candidate\.id, true\)/,
     'reject a proposal': /api\.decideMemory\(candidate\.id, false\)/,
-    'a switch that starts off': /const \[useMemory, setUseMemory\] = useState\(false\)/,
+    'a switch that starts off': /\[useMemory, setUseMemory\] = useState\(false\)/,
     'search your own turns': /api\.recall\(/,
     'delete a session': /api\.deleteSession\(/,
   }
@@ -1571,7 +1571,7 @@ test('the memory interface the documents describe is the one in the app', () => 
   // composer's memory switch starts off. Every one of those is a sentence a reader will
   // act on, and until this test existed none of them was connected to any code: the panel
   // could have been deleted and the documents would still have claimed it.
-  const chat = readFileSync(resolve(REPO, 'apps/web/src/areas/ChatArea.jsx'), 'utf8')
+  const chat = readFileSync(resolve(REPO, 'apps/web/src/areas/ChatArea.jsx'), 'utf8') + '\n' + readFileSync(resolve(REPO, 'apps/web/src/components/ContextPanels.jsx'), 'utf8')
   const matrix = squash(doc.matrix())
   const store = readFileSync(resolve(REPO, 'services/core/src/memory/store.mjs'), 'utf8')
 
@@ -1591,9 +1591,9 @@ test('the memory interface the documents describe is the one in the app', () => 
 
   // The rows that make claims about this surface must still say what is true of it.
   assert.match(matrix, /L2 user-approved memory \| \*\*Implemented and tested\*\*/, 'the L2 row must stay honest about what it is')
-  assert.match(matrix, /Learned procedures visible and controllable \| \*\*Completed\*\*/,
+  assert.match(matrix, /Learned procedures visible and controllable \| \*\*Archived\*\*/,
     'the skills surface is in the same panel area and must be stated in the matrix')
-  assert.match(chat, /SkillsPanel/, 'the matrix claims a skills surface; ChatArea must render it')
+  assert.doesNotMatch(chat, /SkillsPanel/, 'research skills are not in the active online product')
 
   // And the history row: the note says the search is lexical rather than semantic, which
   // is a claim about the implementation, so the implementation is what is checked.
@@ -1605,7 +1605,7 @@ test('the memory interface the documents describe is the one in the app', () => 
 
   // The composer default is a safety property, not a style choice, so it is named here
   // rather than left to the web suite alone.
-  assert.match(chat, /const \[useMemory, setUseMemory\] = useState\(false\)/,
+  assert.match(chat, /\[useMemory, setUseMemory\] = useState\(false\)/,
     'memory must not reach a prompt unless the person switches it on')
 })
 

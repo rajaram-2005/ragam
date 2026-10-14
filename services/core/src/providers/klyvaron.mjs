@@ -23,6 +23,8 @@ import { BaseProvider, OPERATIONS, ProviderError } from './base.mjs'
 import { AVAILABILITY } from '../router/registry.mjs'
 import { KlyvaronRuntime } from '../klyvaron/runtime.mjs'
 import { ArtifactError } from '../klyvaron/format.mjs'
+import { createHash } from 'node:crypto'
+import { setImmediate as nextTurn } from 'node:timers/promises'
 
 export class KlyvaronProvider extends BaseProvider {
   static operations = [OPERATIONS.CHAT, OPERATIONS.CHAT_STREAM]
@@ -33,15 +35,25 @@ export class KlyvaronProvider extends BaseProvider {
    * @param {object} options.guard             required by BaseProvider; never used here
    * @param {number} [options.timeoutMs]       wall-clock ceiling for one completion
    */
-  constructor({ runtime, guard, onEvent, timeoutMs = 120_000, loadMs = null }) {
+  constructor({ runtime, guard, onEvent, timeoutMs = 120_000, loadMs = null, executor = null }) {
     super({ name: 'klyvaron', guard, onEvent, timeoutMs })
     if (!(runtime instanceof KlyvaronRuntime)) throw new TypeError('KlyvaronProvider requires a loaded KlyvaronRuntime')
-    this.runtime = runtime
+    this.executor = executor
+    // The app retains verified metadata, not a second copy of every model's arrays.
+    this.runtime = executor ? Object.freeze({
+      manifest: structuredClone(runtime.manifest), directory: runtime.directory,
+      parameterCount: runtime.parameterCount, contextTokens: runtime.contextTokens,
+      instructionTuned: runtime.instructionTuned, sha256: runtime.sha256,
+      quantization: runtime.quantization, residentWeightBytes: runtime.residentWeightBytes,
+    }) : runtime
+    this.expected = { weightsSha256: runtime.sha256,
+      manifestSha256: createHash('sha256').update(JSON.stringify(runtime.manifest)).digest('hex') }
     this.loadMs = loadMs
     this.#measurements = { completions: 0, generatedTokens: 0, totalMs: 0 }
   }
 
   #measurements
+  #busy = false
 
   get instructionTuned() {
     return this.runtime.instructionTuned
@@ -49,12 +61,19 @@ export class KlyvaronProvider extends BaseProvider {
 
   /** Redacted descriptor for health responses. Nothing here is secret, but the shape matches. */
   safeDescriptor() {
+    const resident = !this.executor || (this.executor.resident?.directory === this.runtime.directory
+      && JSON.stringify(this.executor.resident.expected) === JSON.stringify(this.expected))
     return {
       provider: this.name,
       model: this.runtime.manifest.id,
       version: this.runtime.manifest.version,
       tier: this.runtime.manifest.tier,
       parameters: this.runtime.parameterCount,
+      quantization: this.runtime.quantization,
+      residentWeightBytes: resident ? this.runtime.residentWeightBytes : 0,
+      weightPayloadBytes: this.runtime.residentWeightBytes,
+      resident,
+      executionBackend: this.executor ? 'local_cpu_worker' : 'local_cpu_cooperative',
       contextTokens: this.runtime.contextTokens,
       instructionTuned: this.instructionTuned,
       weightsSha256: this.runtime.sha256,
@@ -77,9 +96,9 @@ export class KlyvaronProvider extends BaseProvider {
   }
 
   async probe() {
-    // The runtime is already loaded and verified — `loadArtifact` refuses a mismatch —
-    // so readiness here is a statement about an object in memory, not a hope about a
-    // file. A failed load never reaches this method: the store reports NOT_INSTALLED.
+    // Startup verification established eligibility, not permanent RAM residency.
+    // Worker loading independently rechecks bytes and the pinned manifest identity.
+    // In-memory library users have cooperative execution, not worker isolation.
     return {
       availability: AVAILABILITY.READY,
       detail: {
@@ -88,6 +107,8 @@ export class KlyvaronProvider extends BaseProvider {
         contextTokens: this.runtime.contextTokens,
         instructionTuned: this.instructionTuned,
         loadedInMs: this.loadMs,
+        resident: this.safeDescriptor().resident,
+        verification: this.executor ? 'verified_at_startup; reverified on worker load' : 'in_memory_runtime',
       },
       medianLatencyMs: this.measurement().meanLatencyMs ?? undefined,
       tokensPerSecond: this.measurement().meanTokensPerSecond ?? undefined,
@@ -115,64 +136,85 @@ export class KlyvaronProvider extends BaseProvider {
     return prompt
   }
 
-  #run(request, onToken) {
-    const started = Date.now()
+  async *#cooperative(generation, signal) {
+    // Library/test use can supply an in-memory runtime without an artifact directory.
+    // The application uses the worker executor instead, including mid-pass cancellation.
+    if (this.#busy) throw new ProviderError('local runtime is busy', { code: 'local_busy', status: 503 })
+    this.#busy = true
+    const deadline = performance.now() + this.timeoutMs
+    const steps = this.runtime.generateSteps({ ...generation, signal })
+    try {
+      for (;;) {
+        if (signal?.aborted) throw new ProviderError('local generation cancelled', { code: 'cancelled', status: 499 })
+        const step = steps.next()
+        if (performance.now() > deadline) throw new ProviderError('local generation exceeded its deadline', { code: 'timeout', status: 504 })
+        if (step.done) { yield { type: 'result', result: step.value }; break }
+        yield step.value
+        await nextTurn()
+      }
+    } finally { steps.return(); this.#busy = false }
+  }
+
+  async *#iterate(request) {
+    const started = performance.now()
     const prompt = this.#promptFrom(request)
     const budget = this.#tokenBudget(request.maxTokens ?? request.max_new_tokens)
-    let result
+    const generation = {
+      prompt, maxNewTokens: budget,
+      temperature: Number.isFinite(request.temperature) ? request.temperature : 0,
+      topK: Number.isFinite(request.topK) ? request.topK : 40,
+      seed: Number.isFinite(request.seed) ? request.seed : 0,
+      stop: Array.isArray(request.stop) ? request.stop : [],
+    }
+    let result = null
     try {
-      result = this.runtime.generate({
-        prompt,
-        maxNewTokens: budget,
-        temperature: Number.isFinite(request.temperature) ? request.temperature : 0,
-        topK: Number.isFinite(request.topK) ? request.topK : 40,
-        seed: Number.isFinite(request.seed) ? request.seed : 0,
-        stop: Array.isArray(request.stop) ? request.stop : [],
-        signal: request.signal ?? null,
-        onToken,
-      })
-    } catch (error) {
-      if (error instanceof ArtifactError) {
-        throw new ProviderError(`klyvaron: ${error.message}`, { code: error.code, status: 400 })
+      const events = this.executor
+        ? this.executor.events({ directory: this.runtime.directory, expected: this.expected, generation }, { signal: request.signal, timeoutMs: this.timeoutMs })
+        : this.#cooperative(generation, request.signal)
+      for await (const event of events) {
+        if (event.type === 'token') yield event.text
+        else if (event.type === 'resource') await request.onResourceAdjustment?.(event.adjustment)
+        else if (event.type === 'result') result = event.result
       }
+      if (!result) throw new ProviderError('local inference returned no completion', { code: 'inference_failed', status: 503 })
+      if (result.stoppedBy === 'cancelled') throw new ProviderError('local generation cancelled', { code: 'cancelled', status: 499 })
+    } catch (error) {
+      this.onEvent({ type: 'provider_error', provider: this.name, code: error.code, ms: performance.now() - started })
+      if (error instanceof ArtifactError) throw new ProviderError(`klyvaron: ${error.message}`, { code: error.code, status: error.code === 'needs_hardware' ? 503 : 400 })
       throw error
     }
-    const elapsed = Date.now() - started
+    const elapsed = Math.max(0.001, performance.now() - started)
     this.#measurements.completions += 1
     this.#measurements.generatedTokens += result.generatedTokens
     this.#measurements.totalMs += elapsed
     this.onEvent({ type: 'provider_request', provider: this.name, operation: request.stream ? OPERATIONS.CHAT_STREAM : OPERATIONS.CHAT, status: 200, ms: elapsed })
-    return {
+    const response = {
       text: result.text,
-      // This is the field a caller must read before showing the output to a person.
+      resourceAdjustment: result.resourceAdjustment,
       instructionTuned: this.instructionTuned,
       model: this.runtime.manifest.id,
       version: this.runtime.manifest.version,
       doneReason: result.stoppedBy,
       provider: this.name,
-      limitation: this.instructionTuned
-        ? null
+      limitation: this.instructionTuned ? null
         : 'Klyvaron Lite is a base completion model: it continues the text you give it. It does not follow instructions and its output is not an answer.',
-      usage: {
-        promptTokens: result.promptTokens,
-        completionTokens: result.generatedTokens,
-        totalTokens: result.promptTokens + result.generatedTokens,
-      },
+      usage: { promptTokens: result.promptTokens, completionTokens: result.generatedTokens,
+        totalTokens: result.promptTokens + result.generatedTokens },
       timingMs: elapsed,
-      tokensPerSecond: result.generatedTokens ? Number(((result.generatedTokens / elapsed) * 1000).toFixed(2)) : null,
+      tokensPerSecond: Number(((result.generatedTokens / elapsed) * 1000).toFixed(2)),
     }
+    await request.onComplete?.(response)
+    return response
   }
 
   async chat(request) {
     this.assertSupports(OPERATIONS.CHAT)
-    return this.#run({ ...request, stream: false })
+    const stream = this.#iterate({ ...request, stream: false })
+    for (;;) { const next = await stream.next(); if (next.done) return next.value }
   }
 
   async *chatStream(request) {
     this.assertSupports(OPERATIONS.CHAT_STREAM)
-    const chunks = []
-    const result = this.#run({ ...request, stream: true }, (chunk) => chunks.push(chunk))
-    for (const chunk of chunks) yield chunk
-    return result
+    return yield* this.#iterate({ ...request, stream: true })
   }
 }
