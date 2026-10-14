@@ -170,6 +170,26 @@ test('one way in: the token sign-in and every third-party method are gone from t
   assert.match(read('components/AccountCard.jsx'), /api\.changePassword\(/)
 })
 
+test('the two forms that set a password refuse to submit a pair that does not match', () => {
+  // The confirmation field never reaches the server: POST /api/auth/password reads
+  // {currentPassword,newPassword} and POST /api/auth/password-reset/confirm reads
+  // {email,code,password}. A typo in "confirm" is therefore caught nowhere but here, and
+  // only if the submit is actually gated on the comparison. Server-side rendering cannot
+  // reach that state — it lives in useState behind a keystroke — so this is pinned in the
+  // source of the two forms that own it.
+  for (const file of ['pages/ForgotPasswordPage.jsx', 'components/AccountCard.jsx']) {
+    const source = read(file)
+    assert.match(source, /const mismatch = confirm\.length > 0 && confirm !== (?:password|nextPassword)/,
+      `${file} must compare the two fields, and only once something has been typed`)
+    assert.match(source, /disabled=\{[^}]*\bmismatch\b[^}]*\}/,
+      `${file} lets a mismatched pair be submitted`)
+    assert.match(source, /mismatch \? <span className="error-text">Those two passwords are not the same\.<\/span> : null/,
+      `${file} blocks the submit without saying why`)
+    assert.match(source, /aria-invalid=\{mismatch \|\| undefined\}/,
+      `${file} does not mark the field as invalid`)
+  }
+})
+
 test('the password rules the pages state are the rules the server enforces', () => {
   // A minimum length stated in the UI and a different one enforced by the server is the
   // classic way a form starts rejecting what it just asked for. Both sides are read here

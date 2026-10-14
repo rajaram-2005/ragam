@@ -199,11 +199,24 @@ return `capability_unavailable` rather than substituting output.
 - `services/core/test/online.test.mjs` now signs in with an account; its 19 tests pass
   unchanged in intent, including the assertion that a cancelled request never reaches the
   gateway.
-- Web: **8 new tests** across `render.test.mjs` and `structure.test.mjs` — the three pages
-  render with named fields and the right `autoComplete` values, the reset page never
-  claims an email was sent, the sidebar shows the account without adding a navigation
-  entry, Provider Settings is read-only for a member, and no browser-facing source offers
-  the removed token sign-in or any third-party method.
+- Web: **13 new tests** across `api.test.mjs`, `render.test.mjs` and `structure.test.mjs` —
+  the three pages render with named fields and the right `autoComplete` values; both steps
+  of the reset page render, which needed each step exported on its own because the second
+  is only reachable after a state change; the change-password dialog asks for the current
+  password and warns that the account's other sessions will end; the reset page never
+  claims an email was sent; the sidebar shows the account without adding a navigation
+  entry; Provider Settings is read-only for a member; neither form that sets a password can
+  submit a pair that does not match; and no browser-facing source offers the removed token
+  sign-in or any third-party method.
+- Client and router are checked against each other rather than against a written-down list.
+  `api.test.mjs` derives every endpoint the signed-in UI calls from the UI sources
+  themselves and asserts the router that actually runs — `src/online/app.mjs` and
+  `src/online/context-routes.mjs`, not the legacy table — serves each one; and it records
+  the seven account calls to assert every request body carries exactly the fields the
+  router reads, so a renamed field fails here instead of surfacing as a 400 that reads like
+  a user's typo. One endpoint is a stated exception: `/api/media/artifact/:id`, unreachable
+  because every online media list answers `{ jobs: [] }`. The test asserts that emptiness,
+  so the exception stops being valid the moment the route becomes real.
 - Live HTTP check through the Vite proxy against a running Core: anonymous status, owner
   registration, weak-password rejection, the old `{ token }` body refused, member
   registration, `403 owner_required` on a member gateway change, reset request for a known

@@ -75,7 +75,7 @@ History is saved for completed turns. Incomplete/failed generations retain the d
 
 ## Validation and preservation
 
-- Full verification: **545 Core + 84 Web + 575 Fabric = 1,204 tests**, followed by production build. (This increment delivered 528 + 76 + 575 = 1,179; the accounts and sign-in change in [docs/20](20-accounts-and-sign-in.md) added 17 Core and 8 Web tests.)
+- Full verification: **545 Core + 89 Web + 575 Fabric = 1,209 tests**, followed by production build. (This increment delivered 528 + 76 + 575 = 1,179; the accounts and sign-in change in [docs/20](20-accounts-and-sign-in.md) added 17 Core and 13 Web tests.)
 - Core adds **19 online-specific tests** for authentication, CSRF, secret storage, model switching/persistence, no fallback, data consent, classification, body deadlines, provider errors, SSE completion, context/history, reviewed tools, and removed routes.
 - Web's superseded offline-control/research-panel assertions were replaced with current online UI assertions; remaining component/API/render regressions remain. A new provider-settings render test verifies key input and connection controls.
 - Existing legacy Core and Fabric suites are retained. Their passing tests do **not** mean their capabilities are in the online product. Counts include retained research/library coverage.

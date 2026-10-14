@@ -17,7 +17,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -25,6 +25,13 @@ import { api, ApiError, streamChat } from '../src/api.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const APP_MJS = join(here, '..', '..', '..', 'services', 'core', 'src', 'app.mjs')
+// The ACTIVE product. `npm run core` boots online/app.mjs, not the legacy app.mjs above,
+// so a client path can be pinned to a router that is no longer the one being served --
+// which is a green test and a red UI. Both are checked: the legacy table for the routes
+// the retained components use, and the online table for every route this product serves.
+const ONLINE_APP_MJS = join(here, '..', '..', '..', 'services', 'core', 'src', 'online', 'app.mjs')
+const ONLINE_CONTEXT_MJS = join(here, '..', '..', '..', 'services', 'core', 'src', 'online', 'context-routes.mjs')
+const WEB_SRC = join(here, '..', 'src')
 
 /** A minimal Response stand-in: the client only uses ok/status/text/body. */
 function fakeResponse({ ok = true, status = 200, body = {}, raw = null } = {}) {
@@ -469,4 +476,177 @@ test('catalog search stays on Core and metadata refresh consent is explicit', as
     assert.deepEqual(JSON.parse(calls[2].body), { sourceId: 'gateway', authorizeNetwork: true })
     assert.ok(calls.every((call) => call.url.startsWith('/api/models/catalog')))
   } finally { restore() }
+})
+
+// ---------------------------------------------------------------------------
+// The active online router serves what the UI calls
+// ---------------------------------------------------------------------------
+
+/** Every `.js`/`.jsx` file under src/, so "what the UI calls" is read, not remembered. */
+function walkSource(dir = WEB_SRC) {
+  const out = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...walkSource(full))
+    else if (/\.(jsx?)$/.test(entry.name)) out.push(full)
+  }
+  return out
+}
+
+/**
+ * The static pathname a client definition requests.
+ *
+ * The definitions are template literals, so this is not a substring: `${id}` becomes a
+ * path separator (keeping the static segments on both sides of it), an interpolation that
+ * the capture cut short is dropped, the query string goes, and doubled separators
+ * collapse. `/api/memory/candidates/${id}/decide` therefore checks the `decide` rule
+ * rather than degenerating into `/api/memory`.
+ */
+function staticPath(raw) {
+  return raw
+    .replace(/\$\{[^{}]*\}/g, '/')
+    .replace(/\$\{[^}]*$/, '')
+    .split('?')[0]
+    .replace(/\/+/g, '/')
+    .replace(/\/$/, '')
+}
+
+/** method name -> the /api path it requests, read out of the client's own definitions. */
+function clientPaths() {
+  const lines = readFileSync(join(WEB_SRC, 'api.js'), 'utf8').split('\n')
+  const starts = []
+  lines.forEach((line, index) => {
+    const match = /^  ([A-Za-z][\w]*):/.exec(line)
+    if (match) starts.push({ name: match[1], index })
+  })
+  const paths = new Map()
+  starts.forEach((start, position) => {
+    const end = position + 1 < starts.length ? starts[position + 1].index : lines.length
+    const block = lines.slice(start.index, end).join('\n')
+    // Up to the next quote or backtick: a nested template inside `${}` ends the capture
+    // early, which `staticPath` handles rather than the regex trying to parse JavaScript.
+    const match = /(['`])(\/api\/[^'`]*)/.exec(block)
+    if (match) paths.set(start.name, staticPath(match[2]))
+  })
+  return paths
+}
+
+/**
+ * Is this path served by the online router?
+ *
+ * Literally, or by the segment rules the router actually uses: `/api/memory/search` is
+ * not a string anywhere in the router, it is `segments[1] === 'memory'` plus
+ * `segments[2] === 'search'`. Asserting only literals reported those as missing, which
+ * is a claim about the mechanism rather than about the surface.
+ */
+function servedByOnlineRouter(path, router) {
+  const parts = staticPath(path).split('/').filter(Boolean)
+  if (parts[0] !== 'api' || parts.length < 2) return false
+  const literal = `/${parts.join('/')}`
+  if (!literal.includes('${') && router.includes(`'${literal}'`)) return true
+  if (!router.includes(`segments[1] === '${parts[1]}'`)) return false
+  return parts.slice(2).filter((part) => part && !part.includes('${'))
+    .every((part) => router.includes(`'${part}'`))
+}
+
+test('every endpoint the online UI calls is served by the active online router', () => {
+  const router = `${readFileSync(ONLINE_APP_MJS, 'utf8')}\n${readFileSync(ONLINE_CONTEXT_MJS, 'utf8')}`
+  const paths = clientPaths()
+
+  // Which methods the UI calls is read from the UI. A hand-written list drifts the moment
+  // a component starts calling something new, which is exactly when the check matters.
+  const used = new Map()
+  for (const file of walkSource()) {
+    if (file.endsWith('api.js')) continue
+    for (const match of readFileSync(file, 'utf8').matchAll(/\bapi\.([A-Za-z][\w]*)\s*\(/g)) {
+      if (!used.has(match[1])) used.set(match[1], file.replace(WEB_SRC, 'src'))
+    }
+  }
+  assert.ok(used.size >= 30, `expected the UI to call the client, found ${used.size} methods`)
+
+  // Stated rather than hidden, and self-checking below: Jobs.jsx can build an artifact
+  // URL, and the online router serves no artifacts -- because it reports no media jobs at
+  // all. If media jobs ever become real, the assertion under this list fails first and
+  // the entry has to be removed together with the reason.
+  const EXCEPTIONS = new Map([
+    ['artifactUrl', 'the online product reports no media jobs, so no artifact URL is rendered'],
+  ])
+
+  const missing = []
+  for (const [method, file] of used) {
+    if (EXCEPTIONS.has(method)) continue
+    const path = paths.get(method)
+    if (!path) { missing.push(`${method} (${file}: no /api path could be read from the client)`); continue }
+    if (!servedByOnlineRouter(path, router)) missing.push(`${method} -> ${path} (${file})`)
+  }
+  assert.deepEqual(missing, [], `the online router does not serve: ${missing.join(', ')}`)
+
+  // The exception is a fact about the router, not an opinion: every media list is empty
+  // and there is no artifact route to serve.
+  assert.match(router, /'\/api\/image\/jobs','\/api\/video\/jobs','\/api\/media\/jobs'\]\.includes\(path\)\) return sendJson\(res, 200, \{ jobs: \[\] \}\)/,
+    'the media job lists must still be empty for the artifactUrl exception to hold')
+  // Probing with a real id would pass or fail on the id rather than on the route, so the
+  // check names the mechanism an artifact route would have to use.
+  assert.ok(!router.includes("segments[2] === 'artifact'") && !router.includes("'/api/media/artifact"),
+    'an artifact route now exists: remove the artifactUrl exception and the reason with it')
+
+  // streamChat calls fetch directly rather than going through the client, so it is not in
+  // the map above and is pinned on its own.
+  assert.match(readFileSync(join(WEB_SRC, 'api.js'), 'utf8'), /fetch\('\/api\/chat\/stream'/)
+  assert.ok(router.includes("'/api/chat/stream'"), 'the online router must serve the streaming chat route')
+})
+
+test('the sign-in payloads the client sends are the fields the online router reads', async () => {
+  const { calls, restore } = installFetch(() => fakeResponse({
+    body: { authenticated: true, account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, requested: true, reset: true, changed: true },
+  }))
+  try {
+    await Promise.allSettled([
+      api.auth(),
+      api.login({ email: 'owner@example.test', password: 'a-long-owner-password' }),
+      api.register({ email: 'member@example.test', password: 'a-long-member-password' }),
+      api.logout(),
+      api.changePassword({ currentPassword: 'a-long-owner-password', newPassword: 'a-brand-new-password' }),
+      api.requestPasswordReset('owner@example.test'),
+      api.confirmPasswordReset({ email: 'owner@example.test', code: 'a-single-use-code', password: 'a-brand-new-password' }),
+    ])
+
+    const router = readFileSync(ONLINE_APP_MJS, 'utf8')
+    const byPath = new Map(calls.map((call) => [call.url.split('?')[0], call]))
+
+    // Every path the client produced exists in the router that is actually running.
+    for (const path of byPath.keys()) {
+      assert.ok(router.includes(`'${path}'`), `the online router does not serve ${path}`)
+    }
+
+    // And the body keys are the keys the server reads. A renamed field is a 400 with a
+    // message about a missing email, which reads like a user error and is a code defect.
+    const bodies = {
+      '/api/auth/login': ['email', 'password'],
+      '/api/auth/register': ['email', 'password'],
+      '/api/auth/password': ['currentPassword', 'newPassword'],
+      '/api/auth/password-reset/request': ['email'],
+      '/api/auth/password-reset/confirm': ['email', 'code', 'password'],
+    }
+    for (const [path, fields] of Object.entries(bodies)) {
+      const call = byPath.get(path)
+      assert.ok(call, `the client never called ${path}`)
+      assert.equal(call.method, 'POST', `${path} must be a mutation`)
+      assert.deepEqual(Object.keys(JSON.parse(call.body)).sort(), [...fields].sort(), `the ${path} body drifted`)
+      for (const field of fields) {
+        assert.ok(router.includes(`body.${field}`), `the online router no longer reads body.${field} for ${path}`)
+      }
+      // Mutations carry the CSRF header the router requires, or they are refused.
+      assert.equal(call.headers['x-aetheris-request'], '1', `${path} must send the non-simple header`)
+      assert.equal(call.headers['content-type'], 'application/json')
+    }
+
+    // The status check is a read: no body, and no credential of any kind in it.
+    assert.equal(byPath.get('/api/auth').method, 'GET')
+    assert.equal(byPath.get('/api/auth').body, null)
+    const sent = calls.map((call) => call.body).filter(Boolean).join(' ')
+    assert.doesNotMatch(sent, /"token"|access[-_ ]?token/i, 'the client must not offer the removed token sign-in')
+  } finally {
+    restore()
+  }
 })

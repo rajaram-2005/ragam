@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 14,555 source lines, 11,712 test lines
+### `services/core` — 14,555 source lines, 11,723 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -132,7 +132,7 @@ release manager, and a hand-written dual encoder whose **five parameter gradient
 all match central finite differences to ~3e-10**. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 2,622 source lines, 1,490 test lines
+### `apps/web` — 2,644 source lines, 1,757 test lines
 
 Five area components, three sign-in pages (sign in, create account, reset
 password) and the account card in the sidebar, a shell, shared primitives, an API

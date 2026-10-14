@@ -7,19 +7,70 @@ import AuthLayout, { AuthLink } from './AuthLayout.jsx'
 // The reset-password page, in the two steps a reset actually takes here.
 //
 // The honest constraint first: this product has no mail transport, so it cannot email a
-// reset link, and a page that said "check your inbox" would be lying. What it can do is
-// what it does — ask the Core for a single-use code, which the Core writes into its own
-// protected data directory (and prints to its console if the operator asks it to), and
-// then accept that code with a new password. Somebody who can read the Core host's data
-// directory could already read the provider key, so this delivery channel widens no
-// boundary the installation did not already have; it is stated on the page rather than
-// left to be discovered at 2 a.m.
+// reset link, and a page that claimed otherwise would not be describing this product.
+// What it can do is what it does — ask the Core for a single-use code, which the Core
+// writes into its own protected data directory (and prints to its console if the operator
+// asks it to), and then accept that code with a new password. Somebody who can read the
+// Core host's data directory could already read the provider key, so this delivery channel
+// widens no boundary the installation did not already have; it is stated on the page
+// rather than left to be discovered at 2 a.m.
 //
-// The first step answers identically for an address that exists and one that does not,
-// and this page shows the same thing either way. Turning a reset form into an account
-// lookup service is the classic way to leak who uses a product.
+// The first step answers identically for an address that exists and one that does not, and
+// this page shows the same thing either way. Turning a reset form into an account lookup
+// service is the classic way to leak who uses a product.
+//
+// Each step is its own component. That is not decoration: the second step is only
+// reachable after a state change, so a page rendered as one unit is a page whose confirm
+// form no test ever sees — and the confirm form is the half that sets a password.
 
 const STAGES = Object.freeze({ REQUEST: 'request', CONFIRM: 'confirm', DONE: 'done' })
+
+/** Step one: ask this installation for a code. */
+export function ResetRequestForm({ email, onEmail, busy, onSubmit }) {
+  return (
+    <form className="auth-form" onSubmit={onSubmit}>
+      <Field label="Email address" hint="If an account uses it, a code will be waiting on the Core host.">
+        <input
+          autoFocus className="input" type="email" name="email" inputMode="email" autoComplete="username"
+          required maxLength={254} placeholder="you@example.com" value={email}
+          onChange={(event) => onEmail(event.target.value)} disabled={busy}
+        />
+      </Field>
+      <Button type="submit" variant="primary" busy={busy} disabled={!email}>Request a reset code</Button>
+    </form>
+  )
+}
+
+/** Step two: the code, and the password it unlocks. */
+export function ResetConfirmForm({ code, onCode, password, onPassword, confirm, onConfirm, busy, onSubmit }) {
+  const mismatch = confirm.length > 0 && confirm !== password
+  return (
+    <form className="auth-form" onSubmit={onSubmit}>
+      <Field label="Reset code" hint="Single use, and it expires fifteen minutes after it was requested.">
+        <input
+          autoFocus className="input mono" type="text" name="code" autoComplete="one-time-code" spellCheck="false"
+          required maxLength={256} value={code} onChange={(event) => onCode(event.target.value)} disabled={busy}
+        />
+      </Field>
+      <Field label="New password" hint={`At least ${PASSWORD_MIN_LENGTH} characters, and not one this account has used.`}>
+        <input
+          className="input" type="password" name="password" autoComplete="new-password" required
+          minLength={PASSWORD_MIN_LENGTH} maxLength={256} value={password}
+          onChange={(event) => onPassword(event.target.value)} disabled={busy}
+        />
+      </Field>
+      <Field label="Confirm new password">
+        <input
+          className="input" type="password" name="confirm-password" autoComplete="new-password" required
+          maxLength={256} value={confirm} aria-invalid={mismatch || undefined}
+          onChange={(event) => onConfirm(event.target.value)} disabled={busy}
+        />
+        {mismatch ? <span className="error-text">Those two passwords are not the same.</span> : null}
+      </Field>
+      <Button type="submit" variant="primary" busy={busy} disabled={!code || !password || mismatch}>Set new password</Button>
+    </form>
+  )
+}
 
 export default function ForgotPasswordPage({ error = null, onError = () => {} }) {
   const [stage, setStage] = useState(STAGES.REQUEST)
@@ -71,51 +122,22 @@ export default function ForgotPasswordPage({ error = null, onError = () => {} })
     >
       {message ? <Banner tone="info" title={message} /> : null}
 
-      {stage === STAGES.DONE ? (
-        <div className="auth-row">
-          <AuthLink page="signin">Go to sign in</AuthLink>
-        </div>
-      ) : null}
+      {stage === STAGES.REQUEST
+        ? <ResetRequestForm email={email} onEmail={setEmail} busy={busy} onSubmit={requestCode} />
+        : null}
 
-      {stage === STAGES.REQUEST ? (
-        <form className="auth-form" onSubmit={requestCode}>
-          <Field label="Email address" hint="If an account uses it, a code will be waiting on the Core host.">
-            <input
-              autoFocus className="input" type="email" name="email" inputMode="email" autoComplete="username"
-              required maxLength={254} placeholder="you@example.com" value={email}
-              onChange={(event) => setEmail(event.target.value)} disabled={busy}
-            />
-          </Field>
-          <Button type="submit" variant="primary" busy={busy} disabled={!email}>Request a reset code</Button>
-        </form>
-      ) : null}
+      {stage === STAGES.CONFIRM
+        ? (
+          <ResetConfirmForm
+            code={code} onCode={setCode} password={password} onPassword={setPassword}
+            confirm={confirm} onConfirm={setConfirm} busy={busy} onSubmit={resetPassword}
+          />
+        )
+        : null}
 
-      {stage === STAGES.CONFIRM ? (
-        <form className="auth-form" onSubmit={resetPassword}>
-          <Field label="Reset code" hint="Single use, and it expires fifteen minutes after it was requested.">
-            <input
-              autoFocus className="input mono" type="text" name="code" autoComplete="one-time-code" spellCheck="false"
-              required maxLength={256} value={code} onChange={(event) => setCode(event.target.value)} disabled={busy}
-            />
-          </Field>
-          <Field label="New password">
-            <input
-              className="input" type="password" name="new-password" autoComplete="new-password" required
-              minLength={PASSWORD_MIN_LENGTH} maxLength={256} value={password}
-              onChange={(event) => setPassword(event.target.value)} disabled={busy}
-            />
-          </Field>
-          <Field label="Confirm new password">
-            <input
-              className="input" type="password" name="confirm-password" autoComplete="new-password" required
-              maxLength={256} value={confirm} aria-invalid={mismatch || undefined}
-              onChange={(event) => setConfirm(event.target.value)} disabled={busy}
-            />
-            {mismatch ? <span className="error-text">Those two passwords are not the same.</span> : null}
-          </Field>
-          <Button type="submit" variant="primary" busy={busy} disabled={!code || !password || mismatch}>Set new password</Button>
-        </form>
-      ) : null}
+      {stage === STAGES.DONE
+        ? <div className="auth-row"><AuthLink page="signin">Go to sign in</AuthLink></div>
+        : null}
 
       <p className="small auth-note">
         Where the code is: on the Core host, in <code>password-resets.json</code> inside the online data

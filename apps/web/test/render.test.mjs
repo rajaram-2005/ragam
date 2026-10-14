@@ -93,6 +93,7 @@ async function loadComponents() {
     "export { default as SignInPage } from '../../src/pages/SignInPage.jsx'",
     "export { default as SignUpPage } from '../../src/pages/SignUpPage.jsx'",
     "export { default as ForgotPasswordPage } from '../../src/pages/ForgotPasswordPage.jsx'",
+    "export { ResetRequestForm, ResetConfirmForm } from '../../src/pages/ForgotPasswordPage.jsx'",
     "export { default as AccountCard } from '../../src/components/AccountCard.jsx'",
     "export { Shell, StatusCard } from '../../src/components/Shell.jsx'",
     "export { JobTable, JobDetail } from '../../src/components/Jobs.jsx'",
@@ -241,6 +242,44 @@ test('the reset page promises a host-delivered code and never an email', () => {
   assert.match(markup, /href="#\/signin"/)
 })
 
+test('both steps of the reset page render, not only the first one', () => {
+  // The page starts on step one and only reaches step two after a successful request, so
+  // rendering the page alone leaves the password-setting form unseen by every test. Each
+  // step is exported for exactly this reason.
+  const request = render('ResetRequestForm', React.createElement(components.ResetRequestForm, {
+    email: '', onEmail: noop, busy: false, onSubmit: noop,
+  }))
+  assert.match(request, /Request a reset code/)
+  assert.match(request, /type="email"/)
+  assert.match(request, /autoComplete="username"/)
+  assert.doesNotMatch(request, /name="code"|Set new password/, 'step one must not show step two')
+
+  const confirm = render('ResetConfirmForm', React.createElement(components.ResetConfirmForm, {
+    code: '', onCode: noop, password: '', onPassword: noop, confirm: '', onConfirm: noop, busy: false, onSubmit: noop,
+  }))
+  assert.match(confirm, /Set new password/)
+  assert.match(confirm, /name="code"/)
+  assert.match(confirm, /autoComplete="one-time-code"/)
+  assert.match(confirm, /Single use/, 'the code is single-use and short-lived; say so where it is typed')
+  assert.equal((confirm.match(/type="password"/g) ?? []).length, 2, 'a password and its confirmation')
+  // autoComplete is what lets a password manager store it; name is what the browser posts.
+  assert.equal((confirm.match(/autoComplete="new-password"/g) ?? []).length, 2)
+  assert.match(confirm, /name="password"/)
+  assert.match(confirm, /name="confirm-password"/)
+  assert.match(confirm, /minLength="12"/, 'the server is authoritative, but the form states the same floor')
+  assert.doesNotMatch(confirm, /not the same|aria-invalid/, 'no error before anything is typed')
+
+  // The mismatch state is the one validation this page owns outright — the server never
+  // sees the confirmation field, so nothing downstream catches a typo in it.
+  const mismatched = render('ResetConfirmForm (mismatch)', React.createElement(components.ResetConfirmForm, {
+    code: 'a-single-use-code', onCode: noop, password: 'a-brand-new-password', onPassword: noop,
+    confirm: 'a-different-password', onConfirm: noop, busy: false, onSubmit: noop,
+  }))
+  assert.match(mismatched, /not the same/)
+  assert.match(mismatched, /aria-invalid="true"/)
+  assert.match(mismatched, /disabled/, 'the form must not submit a pair that cannot both be right')
+})
+
 test('the sidebar names the signed-in account without becoming a sixth area', () => {
   const owner = render('Shell (owner)', React.createElement(components.Shell, { active: 'chat', onSelect: noop, account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onSignOut: noop }))
   assert.match(owner, /owner@example\.test/)
@@ -254,6 +293,34 @@ test('the sidebar names the signed-in account without becoming a sixth area', ()
   // With no account there is no card at all: the shell must not invent an identity.
   const anonymous = render('Shell (anonymous)', React.createElement(components.Shell, { active: 'chat', onSelect: noop }))
   assert.doesNotMatch(anonymous, /Change password|Sign out|MEMBER|OWNER/)
+})
+
+test('the change-password dialog asks for the current password and warns about other sessions', () => {
+  // The dialog is in the card's markup from the start (a <dialog> is closed, not absent),
+  // so it can be rendered without clicking anything. It is worth pinning because this is
+  // the only form in the signed-in app that changes a credential, and because what it
+  // promises is a server behaviour: a successful change revokes the account's other
+  // sessions, which feels like a bug unless the form says it is about to happen.
+  const owner = { id: 'a1', email: 'owner@example.test', role: 'owner' }
+  const markup = render('AccountCard', React.createElement(components.AccountCard, { account: owner, onSignOut: noop }))
+  assert.equal((markup.match(/type="password"/g) ?? []).length, 3, 'current, new, and confirm')
+  assert.equal((markup.match(/autoComplete="current-password"/g) ?? []).length, 1, 'exactly one field is the current password')
+  assert.equal((markup.match(/autoComplete="new-password"/g) ?? []).length, 2)
+  assert.match(markup, /name="current-password"[^>]*required/, 'the current password is not optional')
+  assert.match(markup, /minLength="12"/, 'the same floor the server enforces, stated on the form')
+  assert.match(markup, /signs out every other session/, 'say what the server does before it does it')
+  assert.match(markup, /owner@example\.test/)
+  assert.doesNotMatch(markup, /not the same|aria-invalid/, 'no validation error before anything is typed')
+
+  // Three labels read "Change password": the sidebar trigger, the dialog heading, and the
+  // submit button. All three must be present, or the trigger points at nothing.
+  assert.equal((markup.match(/Change password/g) ?? []).length, 3, 'trigger, heading, and submit')
+  assert.match(markup, /aria-labelledby="change-password-title"/)
+  assert.match(markup, /id="change-password-title"/)
+
+  // Without an account there is no card at all: the sidebar must not invent an identity.
+  // `render()` rejects empty markup by design, so this one goes straight to the renderer.
+  assert.equal(renderToStaticMarkup(React.createElement(components.AccountCard, { onSignOut: noop })), '')
 })
 
 test('provider settings are read-only for a member account', () => {

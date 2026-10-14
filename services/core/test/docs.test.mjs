@@ -360,6 +360,17 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.setup, 'all three suites (1179 tests)'], [doc.status, '**528 / 528**'],
     [doc.status, '**76 / 76**'], [doc.setup, 'npm run test:core         # 528'],
     [doc.setup, '| **Web app** | `npm ci`, 76 tests'],
+    [doc.status, '**84 / 84**'], [doc.status, '**Test totals: 1204 passing'],
+    [doc.status, 'Implemented and tested (84 tests)'], [doc.status, '`apps/web`; 84 tests including'],
+    [doc.status, '199.25 kB'], [doc.status, '61.46 kB gzip'],
+    [doc.setup, 'npm test             # 84 tests'], [doc.setup, 'npm run test:web          # 84'],
+    [doc.setup, 'all three suites (1204 tests)'], [doc.setup, '| **Web app** | `npm ci`, 84 tests'],
+    [doc.readme, '1204 tests: core 545, web 84, fabric 575'], [doc.readme, 'All 1204 run in CI'],
+    [doc.readme, '| 2,622 | 1,490 |'], [doc.architecture, '2,622 source lines, 1,490 test lines'],
+    [doc.phase2, '84 Web + 575 Fabric = 1,204 tests'], [doc.phase2, '17 Core and 8 Web tests'],
+    [doc.accounts, '**8 new tests** across `render.test.mjs` and `structure.test.mjs`'],
+    [doc.architecture, '14,555 source lines, 11,712 test lines'],
+    [doc.readme, '| 14,555 | 11,712 |'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -617,9 +628,9 @@ test('the status doc reports the real test totals', () => {
   const status = squash(doc.status())
   assert.ok(status.includes('**545 / 545**'), 'core total must be stated')
   assert.ok(status.includes('**575 / 575**'), 'fabric total must be stated')
-  assert.ok(status.includes('**84 / 84**'), 'web total must be stated')
-  assert.ok(status.includes('1204 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1204 tests: core 545, web 84, fabric 575'),
+  assert.ok(status.includes('**89 / 89**'), 'web total must be stated')
+  assert.ok(status.includes('1209 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1209 tests: core 545, web 89, fabric 575'),
     'README must state the same totals')
   assert.ok(status.includes('(26 files'), 'the file count must move with the suite')
 
@@ -634,12 +645,12 @@ test('the status doc reports the real test totals', () => {
   const fromHeadings = perComponent
   assert.ok(fromHeadings.includes(545), `core heading must say 545, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(575), `fabric heading must say 575, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(84), `web heading must say 84, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(89), `web heading must say 89, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1204,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1204`,
+    1209,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1209`,
   )
 })
 
