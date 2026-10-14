@@ -38,11 +38,14 @@
 // quotes and backslashes — every one of which would make an unescaped join ambiguous.
 
 import { createHash } from 'node:crypto'
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { inflateRawSync } from 'node:zlib'
+import { memorySnapshot } from '../hardware/detect.mjs'
 
 export const ARTIFACT_FORMAT = 'klyvaron.artifact/1'
+export const QUANTIZED_ARTIFACT_FORMAT = 'klyvaron.artifact/2'
+export const INT8_SCHEME = 'symmetric-int8-per-tensor'
 export const MANIFEST_SUFFIX = '.klyvaron.json'
 export const TOKENIZER_FORMAT = 'klyvaron.tokenizer.character/1'
 export const UNK_CHARACTER = '\ufffd'
@@ -145,7 +148,8 @@ function resolveZip64Sizes(buffer, {
  * handled too — see `resolveZip64Sizes` for why the same interpreter writes it for the
  * same weights on different patch releases.
  */
-export function readZipEntries(buffer) {
+export function readZipEntries(buffer, { maxUncompressedBytes = Infinity } = {}) {
+  let expandedBytes = 0
   const eocd = findEndOfCentralDirectory(buffer)
   if (eocd < 0) throw new ArtifactError('not a ZIP container: no end-of-central-directory record', { code: 'not_a_zip' })
   const entryCount = buffer.readUInt16LE(eocd + 10)
@@ -153,7 +157,7 @@ export function readZipEntries(buffer) {
   const entries = new Map()
 
   for (let i = 0; i < entryCount; i += 1) {
-    if (buffer.readUInt32LE(offset) !== CENTRAL_SIGNATURE) {
+    if (offset + 46 > buffer.length || buffer.readUInt32LE(offset) !== CENTRAL_SIGNATURE) {
       throw new ArtifactError(`central directory entry ${i} has a bad signature`, { code: 'corrupt_zip' })
     }
     const method = buffer.readUInt16LE(offset + 10)
@@ -165,7 +169,7 @@ export function readZipEntries(buffer) {
     const localOffset = buffer.readUInt32LE(offset + 42)
     const name = buffer.toString('utf8', offset + 46, offset + 46 + nameLength)
 
-    if (buffer.readUInt32LE(localOffset) !== LOCAL_SIGNATURE) {
+    if (localOffset + 30 > buffer.length || buffer.readUInt32LE(localOffset) !== LOCAL_SIGNATURE) {
       throw new ArtifactError(`'${name}' has a bad local header`, { code: 'corrupt_zip' })
     }
     if (localOffset === ZIP64_SENTINEL) {
@@ -186,11 +190,20 @@ export function readZipEntries(buffer) {
       uncompressedSize,
       name,
     })
+    expandedBytes += uncompressed
+    if (!Number.isSafeInteger(compressed) || !Number.isSafeInteger(uncompressed) || compressed < 0 || uncompressed < 0
+      || dataStart + compressed > buffer.length || expandedBytes > maxUncompressedBytes) {
+      throw new ArtifactError(`'${name}' exceeds the checked archive allocation envelope`, { code: 'archive_limit' })
+    }
+    if (entries.has(name)) throw new ArtifactError(`duplicate ZIP member '${name}'`, { code: 'corrupt_zip' })
     const raw = buffer.subarray(dataStart, dataStart + compressed)
 
     let data
     if (method === 0) data = raw
-    else if (method === 8) data = inflateRawSync(raw)
+    else if (method === 8) {
+      try { data = inflateRawSync(raw, { maxOutputLength: Math.max(1, uncompressed) }) }
+      catch { throw new ArtifactError(`'${name}' has invalid or oversized compressed data`, { code: 'corrupt_zip' }) }
+    }
     else throw new ArtifactError(`'${name}' uses unsupported compression method ${method}`, { code: 'unsupported_compression' })
     if (data.length !== uncompressed) {
       throw new ArtifactError(`'${name}' is ${data.length} bytes, the directory says ${uncompressed}`, { code: 'corrupt_zip' })
@@ -211,6 +224,7 @@ function findEndOfCentralDirectory(buffer) {
 }
 
 const DTYPE_READERS = {
+  '|i1': { bytes: 1, read: (buffer, offset) => buffer.readInt8(offset), array: Int8Array },
   '<f4': { bytes: 4, read: (buffer, offset) => buffer.readFloatLE(offset), array: Float32Array },
   '<f8': { bytes: 8, read: (buffer, offset) => buffer.readDoubleLE(offset), array: Float64Array },
   '|i4': { bytes: 4, read: (buffer, offset) => buffer.readInt32LE(offset), array: Int32Array },
@@ -254,11 +268,14 @@ export function readNpy(buffer, allowFortran = false) {
       code: 'fortran_order',
     })
   }
-  const shape = shapeText.split(',').map((part) => part.trim()).filter(Boolean).map((part) => Number.parseInt(part, 10))
+  const shape = shapeText.split(',').map((part) => part.trim()).filter(Boolean).map((part) => Number(part))
   const reader = DTYPE_READERS[descr]
   if (!reader) throw new ArtifactError(`unsupported dtype '${descr}'`, { code: 'unsupported_dtype' })
 
   const count = shape.reduce((a, b) => a * b, 1)
+  if (!shape.every((n) => Number.isSafeInteger(n) && n > 0) || !Number.isSafeInteger(count)) {
+    throw new ArtifactError('invalid or overflowing array shape', { code: 'corrupt_npy' })
+  }
   const start = headerStart + headerLength
   const expected = count * reader.bytes
   if (buffer.length - start !== expected) {
@@ -273,11 +290,13 @@ export function readNpy(buffer, allowFortran = false) {
 }
 
 /** Read every array in an .npz buffer, keyed by parameter name. */
-export function readNpz(buffer) {
-  const entries = readZipEntries(buffer)
+export function readNpz(buffer, options = {}) {
+  const entries = readZipEntries(buffer, options)
   const arrays = new Map()
   for (const [name, data] of entries) {
-    if (!name.endsWith('.npy')) continue
+    if (!name.endsWith('.npy') || basename(name) !== name || name.includes('\\')) {
+      throw new ArtifactError(`noncanonical NPZ member '${name}'`, { code: 'corrupt_zip' })
+    }
     arrays.set(basename(name, '.npy'), readNpy(data))
   }
   if (!arrays.size) throw new ArtifactError('the archive holds no .npy members', { code: 'empty_archive' })
@@ -343,9 +362,9 @@ function requireField(container, field, where) {
  * omits a limitation is indistinguishable from a model that has none.
  */
 export function validateManifest(manifest) {
-  if (manifest?.format !== ARTIFACT_FORMAT) {
+  if (![ARTIFACT_FORMAT, QUANTIZED_ARTIFACT_FORMAT].includes(manifest?.format)) {
     throw new ArtifactError(
-      `unsupported artifact format ${JSON.stringify(manifest?.format)}; this build reads ${ARTIFACT_FORMAT}`,
+      `unsupported artifact format ${JSON.stringify(manifest?.format)}; this build reads ${ARTIFACT_FORMAT} and ${QUANTIZED_ARTIFACT_FORMAT}`,
       { code: 'unsupported_format' },
     )
   }
@@ -359,6 +378,14 @@ export function validateManifest(manifest) {
   const arch = { ...manifest.architecture }
   for (const field of ['vocab_size', 'd_model', 'n_layers', 'n_heads', 'd_ff', 'seq_len', 'tie_embeddings']) {
     requireField(arch, field, 'architecture')
+  }
+  for (const field of ['vocab_size', 'd_model', 'n_layers', 'n_heads', 'd_ff', 'seq_len']) {
+    if (!Number.isSafeInteger(arch[field]) || arch[field] < 1) {
+      throw new ArtifactError(`architecture.${field} must be a positive safe integer`, { code: 'invalid_manifest' })
+    }
+  }
+  if (typeof arch.tie_embeddings !== 'boolean' || !Number.isSafeInteger(parameterCount(arch))) {
+    throw new ArtifactError('invalid architecture or overflowing parameter count', { code: 'invalid_manifest' })
   }
   if (arch.d_model % arch.n_heads) {
     throw new ArtifactError(`architecture: d_model ${arch.d_model} is not divisible by n_heads ${arch.n_heads}`, {
@@ -402,8 +429,20 @@ export function validateManifest(manifest) {
   requireField(weights, 'file', 'weights')
   requireField(weights, 'sha256', 'weights')
   requireField(weights, 'bytes', 'weights')
+  if (typeof weights.file !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.npz$/.test(weights.file)
+    || !Number.isSafeInteger(weights.bytes) || weights.bytes < 1) {
+    throw new ArtifactError('weights require a safe NPZ basename and positive byte count', { code: 'invalid_manifest' })
+  }
   if (!/^[0-9a-f]{64}$/.test(weights.sha256)) {
     throw new ArtifactError("weights.sha256 must be a lowercase hex sha256", { code: 'invalid_manifest' })
+  }
+  if (!Array.isArray(weights.names) || new Set(weights.names).size !== weights.names.length) {
+    throw new ArtifactError('weights.names must be a unique list', { code: 'name_mismatch' })
+  }
+  // Check the supplied list length before materialising names for every layer.
+  // A tiny malicious manifest must not induce a billion-iteration validation loop.
+  if (weights.names.length !== 10 * arch.n_layers + 4 + (arch.tie_embeddings ? 0 : 1)) {
+    throw new ArtifactError('the weight list and the architecture disagree on parameter count', { code: 'name_mismatch' })
   }
   const expected = expectedParameterNames(arch)
   const declared = new Set(weights.names ?? [])
@@ -414,6 +453,15 @@ export function validateManifest(manifest) {
       `the weight list and the architecture disagree (missing: ${missing.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'})`,
       { code: 'name_mismatch', detail: { missing, unexpected } },
     )
+  }
+
+  const quantization = weights.quantization
+  if (manifest.format === QUANTIZED_ARTIFACT_FORMAT) {
+    if (quantization?.scheme !== INT8_SCHEME || quantization?.scaleDtype !== 'float32') {
+      throw new ArtifactError('v2 requires symmetric int8 weights and float32 scales', { code: 'invalid_quantization' })
+    }
+  } else if (quantization != null) {
+    throw new ArtifactError('quantization metadata requires artifact format v2', { code: 'invalid_quantization' })
   }
 
   if (!Array.isArray(manifest.limitations) || !manifest.limitations.length) {
@@ -454,7 +502,7 @@ export function findManifest(directory) {
  *
  * @returns {{ manifest: object, weights: Map<string, {shape:number[], data:TypedArray, dtype:string}>, directory: string, manifestPath: string, weightsPath: string, sha256: string }}
  */
-export function loadArtifact(directory, { verify = true } = {}) {
+export function loadArtifact(directory, { verify = true, availableMemory = () => memorySnapshot().availableRamBytes } = {}) {
   const manifestPath = findManifest(directory)
   let manifest
   try {
@@ -469,6 +517,15 @@ export function loadArtifact(directory, { verify = true } = {}) {
     throw new ArtifactError(`the manifest names '${manifest.weights.file}', which is not in ${directory}`, {
       code: 'weights_missing',
     })
+  }
+  const allocation = artifactAllocation(manifest)
+  const available = availableMemory()
+  if (!Number.isSafeInteger(allocation.loadBytes) || !Number.isFinite(available) || available < allocation.loadBytes) {
+    throw new ArtifactError('insufficient available RAM to load weights; keep the task and select a smaller model', { code: 'needs_hardware' })
+  }
+  // Even a forged manifest cannot make us read a much larger file before checking.
+  if (statSync(weightsPath).size !== manifest.weights.bytes) {
+    throw new ArtifactError('weights file size differs from the manifest before loading', { code: 'size_mismatch' })
   }
   const bytes = readFileSync(weightsPath)
   const sha256 = createHash('sha256').update(bytes).digest('hex')
@@ -487,13 +544,17 @@ export function loadArtifact(directory, { verify = true } = {}) {
     }
   }
 
-  const weights = readNpz(bytes)
+  const shapes = shapeMap(manifest.architecture)
+  const quantized = manifest.format === QUANTIZED_ARTIFACT_FORMAT
+  const matrixNames = Object.keys(shapes).filter((name) => shapes[name].length === 2)
+  const scaleNames = quantized ? matrixNames.map((name) => `${name}.scale`) : []
+  const weights = readNpz(bytes, { maxUncompressedBytes: allocation.expandedBytes })
   for (const name of expectedParameterNames(manifest.architecture)) {
     if (!weights.has(name)) {
       throw new ArtifactError(`the archive is missing parameter '${name}'`, { code: 'weights_incomplete' })
     }
   }
-  const extra = [...weights.keys()].filter((name) => !expectedParameterNames(manifest.architecture).includes(name))
+  const extra = [...weights.keys()].filter((name) => !expectedParameterNames(manifest.architecture).includes(name) && !scaleNames.includes(name))
   if (extra.length) {
     throw new ArtifactError(`the archive carries parameters the architecture does not describe: ${extra.join(', ')}`, {
       code: 'weights_unexpected',
@@ -508,7 +569,38 @@ export function loadArtifact(directory, { verify = true } = {}) {
       )
     }
   }
+  for (const [name, shape] of Object.entries(shapes)) {
+    const entry = weights.get(name)
+    if (quantized && shape.length === 2) {
+      const scale = weights.get(`${name}.scale`)
+      if (!(entry.data instanceof Int8Array) || !scale || scale.dtype !== '<f4'
+        || scale.shape.join('x') !== '1' || !Number.isFinite(scale.data[0]) || scale.data[0] <= 0
+        || entry.data.some((n) => n === -128 || !Number.isFinite(Math.fround(n * scale.data[0])))) {
+        throw new ArtifactError(`invalid int8 tensor or scale for '${name}'`, { code: 'invalid_quantization' })
+      }
+      entry.scale = scale.data
+      // The scale is part of the digest-bound NPZ, but not a learned parameter.
+      weights.delete(`${name}.scale`)
+    } else if (!(entry.data instanceof Float32Array || (!quantized && entry.data instanceof Float64Array))
+      || entry.data.some((n) => !Number.isFinite(n))) {
+      throw new ArtifactError(`'${name}' must contain finite floating-point weights`, { code: 'unsupported_dtype' })
+    }
+  }
   return { manifest, weights, directory, manifestPath, weightsPath, sha256 }
+}
+
+/** Conservative allocation envelope, not a hardware benchmark. No full float
+ * expansion of int8 matrices is budgeted or performed by the inference loader. */
+export function artifactAllocation(manifest) {
+  const quantized = manifest.format === QUANTIZED_ARTIFACT_FORMAT
+  const shapes = Object.values(shapeMap(manifest.architecture))
+  const scales = quantized ? shapes.filter((shape) => shape.length === 2).length : 0
+  const tensorBytes = shapes.reduce((sum, shape) => sum + shape.reduce((a, b) => a * b, 1)
+    * (quantized ? shape.length === 2 ? 1 : 4 : 8), 0) + scales * 4
+  // Header ceiling is a parser limit, not a model minimum. Expanded ZIP members
+  // and parsed typed arrays coexist while loading, plus the original archive.
+  const expandedBytes = tensorBytes + 4096 * (shapes.length + scales)
+  return { tensorBytes, expandedBytes, loadBytes: manifest.weights.bytes + 2 * expandedBytes }
 }
 
 /** Expected shape of every parameter, derived from the architecture. */

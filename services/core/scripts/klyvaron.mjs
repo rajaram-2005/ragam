@@ -62,7 +62,7 @@ function dataDirFor(options) {
 }
 
 function storeFor(options) {
-  return new KlyvaronStore({ root: resolve(dataDirFor(options), 'klyvaron') })
+  return new KlyvaronStore({ root: resolve(dataDirFor(options), 'klyvaron'), dataDir: dataDirFor(options) })
 }
 
 function print(entry) {

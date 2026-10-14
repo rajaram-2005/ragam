@@ -1,5 +1,7 @@
 # The Klyvaron family, and the six levels of learning
 
+> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
+
 Two things that are easy to claim and hard to make true: that a platform has its own
 models, and that it learns. This document records what exists for each, and — more
 usefully — the mechanism that stops the claim drifting away from the fact.
@@ -9,16 +11,25 @@ it is read from the artifact of record rather than copied from a summary.
 
 ---
 
+The controlling local/hybrid/online and hardware-admission requirements are in
+[13 — Hardware execution policy](./13-hardware-execution-policy.md). Lite is
+CPU-first; Pro is GPU-qualified; Max requires the highest measured compatibility
+profile. A device-class label alone never establishes readiness.
+
+CPU deployment now also supports [evaluated int8 candidates](./14-cpu-int8-inference.md).
+The released float32 artifact and its capability limits are unchanged; a conversion
+is not automatically granted a family release label.
+
 ## 1. The three tiers
 
 | Tier | Hardware | Status | Capabilities available | Backing artifact |
 |---|---|---|---|---|
-| **Klyvaron Lite** | Phones and constrained devices | **Partial** | 2 of 11 | `aetheris-lite-lm-0.1.0` |
-| **Klyvaron Pro** | Laptops and desktops | **Unbuilt** | 0 of 11 | none |
-| **Klyvaron High** | Workstations, authorised remote compute | **Unbuilt** | 0 of 9 | none |
+| **Klyvaron Lite** | CPU-only computers and supported phones | **Partial** | 2 of 11 | `aetheris-lite-lm-0.1.0` |
+| **Klyvaron Pro** | GPU-qualified laptops and desktops | **Unbuilt** | 0 of 11 | none |
+| **Klyvaron Max** | Qualified high-performance GPU computers | **Unbuilt** | 0 of 9 | none |
 
 The status column is a value in `services/core/src/klyvaron/tiers.mjs`, not prose. Pro
-and High are recorded as **unbuilt** rather than omitted, because an omitted capability
+and Max are recorded as **unbuilt** rather than omitted, because an omitted capability
 and a capability that does not exist are indistinguishable in a listing — and a listing
 is exactly where overclaiming starts.
 
@@ -153,7 +164,7 @@ The validator rejects, among others:
 
 All six are tested by constructing the offending record and asserting the validator
 refuses it. When this validator was first written it caught two violations in the
-author's own data — Pro and High carried comparative descriptions — and the fix was to
+author's own data — Pro and Max carried comparative descriptions — and the fix was to
 make tiers declare `status` + `statusNote`, so the report cannot present an unbuilt tier
 as a product.
 
@@ -346,7 +357,7 @@ artifact that gets committed.
 Stated plainly, because §7 of the directive asks for it and because a list of what exists
 without a list of what does not is a sales document:
 
-- **Klyvaron Pro and High do not exist.** No artifact, no measurements, no plan that has
+- **Klyvaron Pro and Max do not exist.** No artifact, no measurements, no plan that has
   produced a file. On this host no route to a model registry exists and there is no GPU,
   so obtaining base weights is not possible; the tiers are unbuilt rather than pending.
 - **Lite does not chat, translate, summarise or reason.** Only `text.completion` and

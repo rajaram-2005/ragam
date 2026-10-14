@@ -1,5 +1,7 @@
 # 04 — Setup
 
+> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
+
 Every command below was run on the host described in
 [`03-status.md`](./03-status.md). Nothing here is aspirational.
 
@@ -77,6 +79,7 @@ npm run core
 |---|---|---|
 | `AETHERIS_CORE_HOST` | `0.0.0.0` | Bind address. Use `127.0.0.1` for a single-user machine |
 | `AETHERIS_CORE_PORT` | `8790` | |
+| `AETHERIS_MODEL_CATALOG_FILE` | unset | Optional operator-owned versioned catalog-source JSON; metadata only, no automatic remote refresh. See [17](./17-model-catalog.md) |
 | `AETHERIS_DATA_DIR` | `./.aetheris-data` | SQLite files, media artifacts, audit ledger |
 | `AETHERIS_RUNTIME_POLICY` | `strict_offline` | `strict_offline` \| `hybrid` \| `online_enabled` |
 | `AETHERIS_ALLOWED_ORIGIN` | *(empty)* | CORS. Empty means same-origin only |
@@ -93,7 +96,7 @@ npm install          # 62 packages, ~12 s
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 67 tests
+npm test             # 76 tests
 ```
 
 | Variable | Default | Purpose |
@@ -208,10 +211,10 @@ Full design, evaluation methodology and limitations:
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1084 tests)
-npm run test:core         # 454
-npm run test:web          # 67
-npm run test:fabric       # 563 — needs numpy + pytest on the interpreter
+npm test                  # all three suites (1179 tests)
+npm run test:core         # 528
+npm run test:web          # 76
+npm run test:fabric       # 575 — needs numpy + pytest on the interpreter
 ```
 
 If NumPy and pytest live in a virtualenv rather than on the system interpreter,
@@ -254,9 +257,9 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 454 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
-| **Fabric** | 563 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 67 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Core service** | 528 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Fabric** | 575 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
+| **Web app** | `npm ci`, 76 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 37-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 
 The Fabric job's release-gate step is the one worth reading, because it asserts the
@@ -352,33 +355,25 @@ are rejected without opening a socket or resolving DNS.
 
 ---
 
-## 8. External providers — removed, and what it would take
+## 8. External providers and metadata catalogs
 
-**This build has no external provider.** There is no gateway to enable, no
-provider key to set, and no provider block in `.env.example`: the integration was
-removed entirely, along with its adapter, its environment variables and its place
-in the readiness view.
+**This build has no online inference adapter.** The updated universal directive
+makes LiteLLM the preferred planned gateway; the former blanket exclusion of
+online providers no longer governs future development. FreeLLMAPI remains excluded.
 
-That is a capability decision, not an oversight, and the interface says so:
+Optional **metadata-only** sources are now configured using
+`AETHERIS_MODEL_CATALOG_FILE`; see [17 — Model catalog](./17-model-catalog.md).
+Credentials stay in protected server-side files. An explicit refresh is separate
+from inference authorization, and Strict Offline blocks external catalog sources,
+even a loopback model gateway that could consult upstream services.
 
-- The Image and Video areas report **no provider** and their requests are refused
-  with a machine-readable limitation. A still image is never substituted for a
-  video, and nothing is sent anywhere without a policy decision recorded in the
-  audit ledger.
-- `AETHERIS_ONLINE_ALLOWLIST` still exists and still governs external hosts for any
-  code path that reaches out, but with no provider configured it has nothing to
-  authorise. Under `strict_offline` it is inert, and the loader warns when an
-  allowlist is present.
-- The router still understands `online` model descriptors. Re-adding a provider is
-  therefore an adapter plus a credential path, not a redesign — but it is a
-  deliberate change, and it must come with the classification ceiling described in
-  [`05-security.md`](./05-security.md) rather than being enabled by a stray
-  environment variable.
+Image and Video still report no generation provider. The online allowlist does
+not make a model available or authorize sending private task content. Before
+online inference ships it needs tested data policy, identity, budget/usage,
+streaming/cancellation and provider-specific capability handling. The existing
+router's online descriptor support is only a foundation, not a gateway release.
 
-If you are re-introducing one, prefer `hybrid` over `online_enabled` so the
-data-classification ceiling stays enforced, keep the credential in a `*_FILE` path
-rather than the process environment, and allowlist the exact host — matching is
-exact-host, with no wildcards and no suffix matching.
+---
 
 ## 9. Data locations
 

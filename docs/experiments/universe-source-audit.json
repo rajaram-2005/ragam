@@ -1,0 +1,265 @@
+{
+  "schema": "aetheris.source-audit/1",
+  "date": "2026-10-14",
+  "method": "Pinned GitHub trees and content API; selected source, tests, manifests and licence inspection; no vendoring or runtime installation",
+  "repositories": [
+    {
+      "repository": "rajaram-2005/Aetheris-",
+      "revision": "bed29f4f98eb0be8b7bb7ae2488607765579dbfe",
+      "licenceScope": "MIT",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "17be47093fb30034bcd0d5cfa2bcb21c27121da885c6266322147d1932ba9b95",
+          "bytes": 1066,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/LICENSE"
+        },
+        {
+          "path": "package.json",
+          "sha256": "167e63d40f034198853d9c6375ca7823e3152cdab4eb32a2070175998c866a92",
+          "bytes": 787,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/package.json"
+        },
+        {
+          "path": "src/main.jsx",
+          "sha256": "4cd1535409ae32895e0890536bcae2381f092bc753b860df485b666e67b3147c",
+          "bytes": 107833,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/src/main.jsx"
+        },
+        {
+          "path": "test/runtimeApi.test.js",
+          "sha256": "e0dee97c36312ec4b790493eca9cd1d75d0e37a69490973518960361bf966fc0",
+          "bytes": 5294,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/test/runtimeApi.test.js"
+        },
+        {
+          "path": "vite.config.js",
+          "sha256": "044faf2833e02b68cc16551a5d639bfe1e80bc0999d9f943115472482c5c9e99",
+          "bytes": 373,
+          "url": "https://github.com/rajaram-2005/Aetheris-/blob/bed29f4f98eb0be8b7bb7ae2488607765579dbfe/vite.config.js"
+        }
+      ]
+    },
+    {
+      "repository": "rajaram-2005/sparsiz",
+      "revision": "76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69",
+      "licenceScope": "Unlicense",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e",
+          "bytes": 1211,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/LICENSE"
+        },
+        {
+          "path": "SECURITY.md",
+          "sha256": "02d2bc551ad1caec15cd3e67fbac680a2bd6b52f28b3a3e06ed5d9252489f39e",
+          "bytes": 4145,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/SECURITY.md"
+        },
+        {
+          "path": "setup.py",
+          "sha256": "0f7f60cc16bdddc9aef8df00ec8b8ba89fec278224f5ba6e4672ee2b430897dd",
+          "bytes": 831,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/setup.py"
+        },
+        {
+          "path": "sparsiz/training/evaluation.py",
+          "sha256": "3ca10e83694ac4822e3489c9334884965be9a0dca0ccc4a9b27a9e97568b1919",
+          "bytes": 6335,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/sparsiz/training/evaluation.py"
+        },
+        {
+          "path": "sparsiz/training/failure_memory.py",
+          "sha256": "9f19eff12564899be97e85c0f67e2ffa6dffbca300b3a2f1c3c69c293d2f84c8",
+          "bytes": 7524,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/sparsiz/training/failure_memory.py"
+        },
+        {
+          "path": "tests/test_faisanth.py",
+          "sha256": "65cc4d6452e676673136d909532566196b1a39ef3b24e8ae97ff092f54f510d0",
+          "bytes": 1794,
+          "url": "https://github.com/rajaram-2005/sparsiz/blob/76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69/tests/test_faisanth.py"
+        }
+      ]
+    },
+    {
+      "repository": "NousResearch/hermes-agent",
+      "revision": "1f6c02c07c697026888f1c66e634534fa2aae358",
+      "licenceScope": "MIT",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "821556e6336796450ab852d375117b48a4887e71d255794fd6318d99982a5ab6",
+          "bytes": 1070,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/LICENSE"
+        },
+        {
+          "path": "SECURITY.md",
+          "sha256": "08b733d1f2c71f8cdd87200beb10c06185d0912a6eb19bbf69149dbb4e207a55",
+          "bytes": 15752,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/SECURITY.md"
+        },
+        {
+          "path": "agent/memory_manager.py",
+          "sha256": "d30c9a637c20ce32300ca1b0fa5bed210f33612306fff3b779f901592bfce2ad",
+          "bytes": 51099,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/agent/memory_manager.py"
+        },
+        {
+          "path": "pyproject.toml",
+          "sha256": "ff41b097147124ff2eb51a437d5f44eddea35104900c1c79c7edfb8b7352d901",
+          "bytes": 43035,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/pyproject.toml"
+        },
+        {
+          "path": "tests/agent/test_memory_sync_interrupted.py",
+          "sha256": "f17d3ce8d1b8a8f756232a47ebd6dc8d8240bea0e9673520eda76b6144a9601e",
+          "bytes": 2915,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/tests/agent/test_memory_sync_interrupted.py"
+        },
+        {
+          "path": "tools/skills_tool.py",
+          "sha256": "a5fac64ae3c2f2496cd7da46aacd396d6a50a0dd5d9f4ef4d1ba2d8d7ba9df2f",
+          "bytes": 40030,
+          "url": "https://github.com/NousResearch/hermes-agent/blob/1f6c02c07c697026888f1c66e634534fa2aae358/tools/skills_tool.py"
+        }
+      ]
+    },
+    {
+      "repository": "BerriAI/litellm",
+      "revision": "148ca66ecb6b55bafefa738a8327654d0a347b08",
+      "licenceScope": "MIT outside enterprise; enterprise has separate commercial terms",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "b170d6bf8e8835dd357e011681db028f4d51e2fb0ea892058f56e01fb39b8273",
+          "bytes": 1419,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/LICENSE"
+        },
+        {
+          "path": "enterprise/LICENSE.md",
+          "sha256": "a3160d1176cb556447255ca8652855486d681f8025550291828796a439e1b2f9",
+          "bytes": 2223,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/enterprise/LICENSE.md"
+        },
+        {
+          "path": "litellm/proxy/common_utils/model_listing_utils.py",
+          "sha256": "096391bea94b81762887e48f6e6cae1924fe998add1eae9a5d880bd73bc0bbff",
+          "bytes": 15322,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/litellm/proxy/common_utils/model_listing_utils.py"
+        },
+        {
+          "path": "litellm/proxy/management_endpoints/model_management_endpoints.py",
+          "sha256": "2dd266ddcbd8a22a5349fdae13d3fa053f4e31a7e37dcbd650f352a268b41961",
+          "bytes": 148866,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/litellm/proxy/management_endpoints/model_management_endpoints.py"
+        },
+        {
+          "path": "litellm/proxy/proxy_server.py",
+          "sha256": "f4afc3b1794659e78b88febfa0f3a66fd1b73678aff94e4ca04ac6ef1def846b",
+          "bytes": 879006,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/litellm/proxy/proxy_server.py"
+        },
+        {
+          "path": "pyproject.toml",
+          "sha256": "0e5cbd769ac7a98174162cafea110750ad6ad0d80d9dc517b8afebc96c3ff105",
+          "bytes": 15915,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/pyproject.toml"
+        },
+        {
+          "path": "tests/unit/proxy/test_read_model_list.py",
+          "sha256": "c6d8ab1dbf1285fd1dccec40ea1710e2156f7a3a8e24a2bc67b548395cceed20",
+          "bytes": 1168,
+          "url": "https://github.com/BerriAI/litellm/blob/148ca66ecb6b55bafefa738a8327654d0a347b08/tests/unit/proxy/test_read_model_list.py"
+        }
+      ]
+    },
+    {
+      "repository": "ollama/ollama",
+      "revision": "8718c2bd2363c3f9f422d82bbad322bc2b791d60",
+      "licenceScope": "MIT",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "5934ed2ce0d15154bcdb9c85203210abac0da4314af34081e36df4599f90b226",
+          "bytes": 1058,
+          "url": "https://github.com/ollama/ollama/blob/8718c2bd2363c3f9f422d82bbad322bc2b791d60/LICENSE"
+        },
+        {
+          "path": "api/types.go",
+          "sha256": "e19aafa5065afa3ed058df9135d200527391e012349ed5955dd0cc09c0b33f7a",
+          "bytes": 44473,
+          "url": "https://github.com/ollama/ollama/blob/8718c2bd2363c3f9f422d82bbad322bc2b791d60/api/types.go"
+        },
+        {
+          "path": "go.mod",
+          "sha256": "c8330ba5f762c4bded1401cc8ecadbe85ebe8e5d159fd81da122da986b26cda5",
+          "bytes": 3858,
+          "url": "https://github.com/ollama/ollama/blob/8718c2bd2363c3f9f422d82bbad322bc2b791d60/go.mod"
+        },
+        {
+          "path": "server/model_list_test.go",
+          "sha256": "094d3186ef274d5b8b960fb6e6909df1d116ed69a9f2f13ae9f0f4d1bb63f318",
+          "bytes": 5166,
+          "url": "https://github.com/ollama/ollama/blob/8718c2bd2363c3f9f422d82bbad322bc2b791d60/server/model_list_test.go"
+        },
+        {
+          "path": "server/routes.go",
+          "sha256": "23b3202e270e8f3dba0c716c128529432db02e8b1e40e6d73c94345abf6cfde4",
+          "bytes": 107111,
+          "url": "https://github.com/ollama/ollama/blob/8718c2bd2363c3f9f422d82bbad322bc2b791d60/server/routes.go"
+        }
+      ]
+    },
+    {
+      "repository": "huggingface/huggingface_hub",
+      "revision": "a704b8488c6ec78f719c576ba77a6035095dae77",
+      "licenceScope": "Apache-2.0",
+      "inspection": "targeted source/interface/licence review; full upstream suites not rerun",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/LICENSE"
+        },
+        {
+          "path": "SECURITY.md",
+          "sha256": "247f3e19ecc0d61dd63b14d156a8aebb0ee170c92bc28504f83fbd5104bdb0ae",
+          "bytes": 7573,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/SECURITY.md"
+        },
+        {
+          "path": "pyproject.toml",
+          "sha256": "7feef7f0623d13680a1b5cdb4a337a22fe7c64c83cadb56d591b8822455a7bd3",
+          "bytes": 3652,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/pyproject.toml"
+        },
+        {
+          "path": "setup.py",
+          "sha256": "66ff9e1d0557a230f1582fd4555f49c8474e97741780faebfd6b65dda46d1760",
+          "bytes": 5088,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/setup.py"
+        },
+        {
+          "path": "src/huggingface_hub/hf_api.py",
+          "sha256": "5ac896338db48115a13222be9f46cc088bbdbedaf95b1b2f371d94b4b1912311",
+          "bytes": 684242,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/src/huggingface_hub/hf_api.py"
+        },
+        {
+          "path": "tests/test_hf_api.py",
+          "sha256": "5eecdc8ff242d4da8f0c3f73c7602c618623ca3eaacd5d2ec6daf0d5182b4f91",
+          "bytes": 220324,
+          "url": "https://github.com/huggingface/huggingface_hub/blob/a704b8488c6ec78f719c576ba77a6035095dae77/tests/test_hf_api.py"
+        }
+      ]
+    }
+  ]
+}

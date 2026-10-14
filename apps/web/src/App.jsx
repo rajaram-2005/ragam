@@ -1,124 +1,36 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { api } from './api.js'
 import { Shell } from './components/Shell.jsx'
 import { AREAS } from './areas.js'
-import { Chip, Button } from './components/ui.jsx'
+import { Banner, Button, Field } from './components/ui.jsx'
+import ProviderSettings from './components/ProviderSettings.jsx'
 import ChatArea from './areas/ChatArea.jsx'
 import ImageArea from './areas/ImageArea.jsx'
 import VideoArea from './areas/VideoArea.jsx'
 import PluginsArea from './areas/PluginsArea.jsx'
 import McpArea from './areas/McpArea.jsx'
-
-const AREA_COPY = {
-  chat: {
-    title: 'Chat',
-    subtitle: 'Local-first conversation with retrieval grounding, credential redaction and the God Core task lifecycle.',
-  },
-  image: {
-    title: 'Image',
-    subtitle: 'Image generation through real adapters, with output validation before anything is shown as a result.',
-  },
-  video: {
-    title: 'Video',
-    subtitle: 'Video generation with provenance checks — a still image is never presented as generated video.',
-  },
-  plugins: {
-    title: 'Plugins',
-    subtitle: 'Permissioned plugins: validated manifests, capability checks, preflight and an audit trail.',
-  },
-  mcp: {
-    title: 'MCP',
-    subtitle: 'Model Context Protocol servers and tools, with schema validation, approval gates and untrusted output handling.',
-  },
-}
-
-const HASH_AREAS = new Set(AREAS.map((area) => area.id))
-
-function areaFromLocation() {
-  // Runs as a lazy useState initializer, i.e. during render. In the browser there is
-  // always a location, but guarding it keeps the component renderable outside a DOM
-  // (server-side render, and the render tests) instead of throwing. Behaviour in the
-  // browser is unchanged: same hash parsing, same 'chat' fallback.
-  if (typeof window === 'undefined' || !window.location) return 'chat'
-  const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0]
-  return HASH_AREAS.has(hash) ? hash : 'chat'
-}
-
+const currentArea = () => AREAS.find((a) => `#/${a.id}` === globalThis.location?.hash)?.id ?? 'chat'
 export default function App() {
-  const [active, setActive] = useState(areaFromLocation)
-  const [readiness, setReadiness] = useState(null)
-  const [config, setConfig] = useState(null)
-  const [readinessError, setReadinessError] = useState(null)
-  const [probing, setProbing] = useState(false)
-
-  const select = useCallback((id) => {
-    setActive(id)
-    if (window.location.hash !== `#/${id}`) window.location.hash = `#/${id}`
+  const [authenticated, setAuthenticated] = useState(false), [checking, setChecking] = useState(true)
+  const [token, setToken] = useState(''), [authError, setAuthError] = useState(null), [busy, setBusy] = useState(false)
+  const [active, setActive] = useState(currentArea), [settings, setSettings] = useState(false)
+  const [readiness, setReadiness] = useState(null), [provider, setProvider] = useState(null), [error, setError] = useState(null)
+  const refresh = useCallback(async () => {
+    try { const [r, p] = await Promise.all([api.ready(), api.provider()]); setReadiness(r); setProvider(p); setError(null) }
+    catch (e) { setError(e); if (e.status === 401) setAuthenticated(false) }
   }, [])
-
-  const refresh = useCallback(async ({ probe = false } = {}) => {
-    setProbing(true)
-    try {
-      if (probe) await api.probeModels().catch(() => null)
-      const [ready, publicConfig] = await Promise.all([api.ready(), api.config()])
-      setReadiness(ready)
-      setConfig(publicConfig)
-      setReadinessError(null)
-    } catch (error) {
-      setReadinessError(error)
-    } finally {
-      setProbing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    refresh()
-    const onHashChange = () => setActive(areaFromLocation())
-    window.addEventListener('hashchange', onHashChange)
-    // Readiness changes when a model appears or a provider goes away; poll slowly
-    // rather than pretending the status is live.
-    const timer = setInterval(() => refresh(), 20000)
-    return () => {
-      window.removeEventListener('hashchange', onHashChange)
-      clearInterval(timer)
-    }
-  }, [refresh])
-
-  const shared = useMemo(
-    () => ({ readiness, config, refreshReadiness: () => refresh({ probe: true }) }),
-    [readiness, config, refresh],
-  )
-
-  const area = AREAS.find((candidate) => candidate.id === active) ?? AREAS[0]
-  const copy = AREA_COPY[area.id]
-
-  return (
-    <Shell
-      active={area.id}
-      onSelect={select}
-      readiness={readiness}
-      config={config}
-      readinessError={readinessError}
-      onRefresh={() => refresh({ probe: true })}
-      title={copy.title}
-      subtitle={copy.subtitle}
-      topActions={
-        <>
-          <Chip tone={readiness ? (readiness.status === 'ready' ? 'ok' : readiness.status === 'degraded' ? 'warn' : 'bad') : undefined}>
-            {readiness?.status ?? 'unknown'}
-          </Chip>
-          {config?.policy ? <Chip tone={config.offlineEnforced ? 'bad' : 'info'}>{config.policy.replace(/_/g, ' ')}</Chip> : null}
-          <Button busy={probing} onClick={() => refresh({ probe: true })}>
-            Re-probe models
-          </Button>
-        </>
-      }
-    >
-      {area.id === 'chat' ? <ChatArea {...shared} /> : null}
-      {area.id === 'image' ? <ImageArea {...shared} /> : null}
-      {area.id === 'video' ? <VideoArea {...shared} /> : null}
-      {area.id === 'plugins' ? <PluginsArea {...shared} /> : null}
-      {area.id === 'mcp' ? <McpArea {...shared} /> : null}
-    </Shell>
-  )
+  useEffect(() => { api.auth().then((s) => setAuthenticated(s.authenticated)).catch(setAuthError).finally(() => setChecking(false)); const change = () => setActive(currentArea()); window.addEventListener('hashchange', change); return () => window.removeEventListener('hashchange', change) }, [])
+  useEffect(() => { if (!authenticated) return; refresh(); const id = setInterval(refresh, 20000); return () => clearInterval(id) }, [authenticated, refresh])
+  if (!authenticated) return <main className="login-card"><div className="brand-type">AETHERIS_</div><h1>Your online AI workspace</h1><p>Chat, Image, Video, Plugins and MCP. Connect through your LiteLLM gateway.</p><h2>Sign in to this installation</h2><p className="small">The operator access token is in the Core host’s online data directory, in <code>access-token</code>. It is not your provider key. Paste it here, never in chat.</p>{authError ? <Banner tone="bad" title={authError.message} /> : null}<form onSubmit={async (e) => { e.preventDefault(); setBusy(true); setAuthError(null); try { await api.login(token.trim()); setToken(''); setAuthenticated(true) } catch (err) { setAuthError(err) } finally { setBusy(false) } }}><Field label="Installation access token"><input className="input" type="password" autoComplete="current-password" value={token} onChange={(e) => setToken(e.target.value)} required /></Field><Button type="submit" variant="primary" busy={busy || checking} disabled={!token}>Sign in</Button></form></main>
+  const area = AREAS.find((a) => a.id === active) ?? AREAS[0]
+  const shared = { provider, readiness, refreshReadiness: refresh, onSettings: () => setSettings(true) }
+  return <Shell active={area.id} onSelect={(id) => { setActive(id); window.location.hash = `#/${id}` }} readiness={readiness} readinessError={error} title={area.label} subtitle="Your gateway. Your models. Online inference only." onSettings={() => setSettings(true)} onLogout={async () => { try { await api.logout(); setAuthenticated(false); setProvider(null); setSettings(false) } catch (e) { setError(e) } }}>
+    {error ? <Banner tone="bad" title={error.message} /> : null}
+    {area.id === 'chat' ? <ChatArea {...shared} /> : null}
+    {area.id === 'image' ? <ImageArea {...shared} /> : null}
+    {area.id === 'video' ? <VideoArea {...shared} /> : null}
+    {area.id === 'plugins' ? <PluginsArea {...shared} /> : null}
+    {area.id === 'mcp' ? <McpArea {...shared} /> : null}
+    {settings ? <ProviderSettings onClose={() => setSettings(false)} onChanged={refresh} /> : null}
+  </Shell>
 }

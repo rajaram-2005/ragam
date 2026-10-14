@@ -88,6 +88,7 @@ async function loadComponents() {
     "export { default as VideoArea } from '../../src/areas/VideoArea.jsx'",
     "export { default as PluginsArea } from '../../src/areas/PluginsArea.jsx'",
     "export { default as McpArea } from '../../src/areas/McpArea.jsx'",
+    "export { default as ProviderSettings } from '../../src/components/ProviderSettings.jsx'",
     "export { default as App } from '../../src/App.jsx'",
     "export { Shell, StatusCard } from '../../src/components/Shell.jsx'",
     "export { JobTable, JobDetail } from '../../src/components/Jobs.jsx'",
@@ -146,6 +147,9 @@ test('all five product areas render in the degraded state', async () => {
   for (const [name, element] of cases) {
     const markup = render(name, element)
     assert.ok(markup.includes('<'), `${name} produced no elements`)
+    if (['ChatArea', 'ImageArea', 'VideoArea'].includes(name)) {
+      assert.doesNotMatch(markup, /value="local"|value="hybrid"|Execution mode/)
+    }
   }
 })
 
@@ -174,86 +178,46 @@ test('the areas render with no readiness at all, as on first paint', () => {
   }
 })
 
-test('App renders the shell with exactly the five product areas', () => {
+test('authenticated shell keeps five areas and provides settings outside navigation', () => {
+  const markup = render('Shell', React.createElement(components.Shell, { active: 'chat', onSelect: noop }))
+  assert.equal((markup.match(/class="nav-item/g) ?? []).length, 5)
+  for (const label of ['Chat','Image','Video','Plugins','MCP']) assert.ok(markup.includes(`>${label}<`))
+  assert.match(markup, /Provider Settings/)
+  assert.doesNotMatch(markup, /INTERNAL SERVICES|God Core|training fabric/)
+
+})
+
+test('App renders an owner sign-in boundary before loading protected data', () => {
   const markup = render('App', React.createElement(components.App))
+  assert.match(markup, /Sign in to this installation/)
+  assert.match(markup, /type="password"/)
+  assert.doesNotMatch(markup, /class="thread"|class="nav-item/)
 
-  assert.ok(markup.includes('PRODUCT AREAS'), 'the shell must label the product areas')
-  assert.ok(markup.includes('INTERNAL SERVICES'), 'the shell must label the internal services')
-  assert.ok(markup.includes('aria-label="Product areas"'), 'the nav must be accessible by name')
-
-  // Exactly five, and no sixth. Rendered output, not a source scan.
-  for (const label of ['Chat', 'Image', 'Video', 'Plugins', 'MCP']) {
-    assert.ok(markup.includes(`>${label}<`), `the nav must render a '${label}' entry`)
-  }
-  const navBlock = markup.slice(markup.indexOf('Product areas'), markup.indexOf('INTERNAL SERVICES'))
-  const entries = navBlock.match(/nav-item|primary-nav__item|<a /g) || []
-  assert.ok(entries.length >= 5, `expected at least five nav entries, found ${entries.length}`)
-
-  // No internal service may appear as a navigation entry.
-  for (const forbidden of ['Training', 'Benchmarks', 'Observability', 'Devices', 'Agents', 'Models']) {
-    assert.ok(!navBlock.includes(`>${forbidden}<`), `'${forbidden}' must not be a navigation entry`)
-  }
 })
 
-test('App renders its pre-fetch state honestly', () => {
-  const markup = render('App (first paint)', React.createElement(components.App))
-  // Before the first fetch resolves, readiness is null: the chip must say "unknown"
-  // and the card must say it is still probing — never a confident "ready".
-  assert.ok(markup.includes('unknown'), 'an unfetched readiness must render as unknown')
-  assert.ok(markup.includes('Probing'), 'the status card must say it is still probing')
-  assert.ok(!markup.includes('>ready<'), 'App must not claim ready before it has probed')
+test('StatusCard distinguishes loading, errors, listings and observed inference', () => {
+  const card = (props) => render('StatusCard', React.createElement(components.StatusCard, props))
+  assert.match(card({}), /Checking connection/)
+  assert.match(card({error: Error('failed')}), /Connection unavailable/)
+  assert.match(card({readiness: {models:{total:5,ready:1}}}), /5 models listed · 1 inference observed/)
+  assert.doesNotMatch(card({readiness: READINESS_READY}), /gpu|ram|strict offline/)
+
 })
 
-test('StatusCard renders all three of its states distinctly', () => {
-  const error = render('StatusCard (error)', React.createElement(components.StatusCard, {
-    readiness: null, config: null, error: new Error('fetch failed'),
-  }))
-  assert.ok(error.includes('Core service unreachable'))
-  assert.ok(error.includes('offline'))
-  assert.ok(error.includes('the interface cannot reach /api'))
-  assert.ok(error.includes('fetch failed'), 'the underlying message must be shown, not swallowed')
-  assert.ok(error.includes('data-tone="blocked"'))
+test('online status removes device tiers and shows zero models honestly', () => {
+  const markup=render('StatusCard',React.createElement(components.StatusCard,{readiness:READINESS_DEGRADED}))
+  assert.match(markup,/0 models listed/)
+  assert.match(markup,/Online only/)
+  assert.doesNotMatch(markup,/hardware|Klyvaron|training fabric/)
 
-  const probing = render('StatusCard (null)', React.createElement(components.StatusCard, {
-    readiness: null, config: null, error: null,
-  }))
-  assert.ok(probing.includes('Probing'))
-  assert.ok(probing.includes('reading readiness from the core service'))
-  assert.ok(probing.includes('data-tone="warn"'))
-
-  const degraded = render('StatusCard (degraded)', React.createElement(components.StatusCard, {
-    readiness: READINESS_DEGRADED, config: CONFIG, error: null,
-  }))
-  assert.ok(degraded.includes('data-tone="warn"'), 'degraded must be a warning, not ok')
-  assert.ok(degraded.includes('degraded'))
-  assert.ok(!degraded.includes('data-tone="ok"'), 'a degraded host must never render as healthy')
-
-  const ready = render('StatusCard (ready)', React.createElement(components.StatusCard, {
-    readiness: READINESS_READY, config: CONFIG, error: null,
-  }))
-  assert.ok(ready.includes('data-tone="ok"'))
 })
 
-test('the degraded status card reports the real hardware and model counts', () => {
-  const markup = render('StatusCard (degraded detail)', React.createElement(components.StatusCard, {
-    readiness: READINESS_DEGRADED, config: CONFIG, error: null,
-  }))
-  // The point of the card is that it does not soften a degraded host.
-  assert.ok(markup.includes('0'), 'a host with no ready models must show the zero')
-  assert.ok(markup.includes('strict offline') || markup.includes('strict_offline'),
-    'the active policy must be visible')
-})
+test('Plugins does not offer executable unreviewed sample installations', () => {
+  const markup=render('PluginsArea',React.createElement(components.PluginsArea))
+  assert.match(markup,/Arbitrary extension installation and execution are disabled/)
+  assert.match(markup,/No reviewed plugins loaded yet/)
+  assert.doesNotMatch(markup,/Demo Text Tools|Install plugin/)
 
-test('Plugins labels its sample manifest as a development fixture', () => {
-  const markup = render('PluginsArea (fixture labelling)', React.createElement(components.PluginsArea, {
-    refreshReadiness: noop,
-  }))
-  // A mock presented as real is the specific failure this guards against.
-  assert.ok(markup.includes('development fixture'), 'the sample manifest must be labelled a fixture')
-  assert.ok(
-    markup.includes('no server-side handler implements it') || markup.includes('declares no scopes'),
-    'the fixture must explain why it is not real',
-  )
 })
 
 test('the policy is displayed but never rendered as a control', () => {
@@ -271,19 +235,11 @@ test('the policy is displayed but never rendered as a control', () => {
 })
 
 test('MCP renders honestly before any server is loaded', () => {
-  const markup = render('McpArea (pre-fetch)', React.createElement(components.McpArea, { refreshReadiness: noop }))
-  const text = markup.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+  const markup=render('McpArea',React.createElement(components.McpArea))
+  assert.match(markup,/No tools loaded yet/)
+  assert.match(markup,/Remote MCP connections are not configured/)
+  assert.match(markup,/enforced server-side/)
 
-  // The gates themselves only render once a server and tool are selected, which needs
-  // effects; that path is covered at source level in structure.test.mjs. What must
-  // render here is the empty state, and it must not pretend tools exist.
-  assert.ok(text.includes('No MCP servers registered.'), 'an empty server list must say so')
-  assert.ok(text.includes('No tools are advertised by any enabled server.'))
-  assert.ok(/Tools cannot be invented from the browser/.test(text),
-    'the UI must state that tools cannot be fabricated client-side')
-  assert.ok(/enforced server-side/.test(text),
-    'timeouts, cancellation and schema validation must be attributed to the server')
-  assert.ok(!text.includes('aetheris.local'), 'no server may be rendered before the fetch resolves')
 })
 
 test('the media areas render their validation surface', () => {
@@ -369,18 +325,12 @@ test('the memory panel renders its empty state honestly, before anything is load
   assert.ok(/Nothing is remembered automatically/.test(markup))
 })
 
-test('the skills panel renders its empty state and states what it guarantees', () => {
-  // Same pre-fetch state as the memory panel: no data, so the honest empty state has to
-  // be what a user sees first. The guarantees are asserted in the markup because a
-  // promise that is not on screen is a promise nobody can check.
-  const markup = render('ChatArea', React.createElement(components.ChatArea, { readiness: READINESS_READY, refreshReadiness: noop }))
-  assert.ok(/Procedures Aetheris learned/.test(markup), 'the skills panel must render in Chat')
-  assert.ok(/No verified procedures yet/.test(markup), 'the empty state must be shown, not a blank panel')
-  assert.ok(/never used until confirmed/.test(markup), 'a proposal must be labelled as unusable until confirmed')
-  assert.ok(/Only a verified procedure is ever used/.test(markup), 'the guarantee must be stated on the panel')
-  // Nothing is proposed in this state, so there must be nothing to verify: a button that
-  // offered to confirm a procedure that does not exist would be worse than no button.
-  assert.ok(!/I ran these steps/.test(markup), 'no proposal means no verify button')
+test('Chat removes research panels but retains optional user context', () => {
+  const markup=render('ChatArea',React.createElement(components.ChatArea))
+  assert.doesNotMatch(markup,/Procedures Aetheris learned|God Core task lifecycle|Model routing decision|Registered models/)
+  assert.match(markup,/Optional files/)
+  assert.match(markup,/Optional approved memory/)
+
 })
 
 test('the button variant reaches the stylesheet as a class', () => {
@@ -409,4 +359,25 @@ test('every button variant used in the app has a rule in the stylesheet', () => 
   for (const variant of used) {
     assert.ok(new RegExp(`\\.btn\\.${variant}\\b`).test(css), `.btn.${variant} is used but has no rule in styles.css`)
   }
+})
+
+test('Chat renders the saved exact model and identifies the online recipient', () => {
+  const provider={keyConfigured:true,baseUrl:'https://gateway.example/v1',models:['model-a','model-b'],selectedModel:'model-b',revision:1}
+  const markup=render('ChatArea',React.createElement(components.ChatArea,{provider}))
+  assert.match(markup,/value="model-b" selected=""/)
+  assert.match(markup,/No silent substitution/)
+  assert.match(markup,/not inference-verified/)
+  assert.match(markup,/gateway.example/)
+
+})
+
+
+test('Provider Settings uses a password input and separates save from connection testing', () => {
+  const markup=render('ProviderSettings',React.createElement(components.ProviderSettings,{onClose:noop}))
+  assert.match(markup,/Provider Settings/)
+  assert.match(markup,/type="password"/)
+  assert.match(markup,/Save connection/)
+  assert.match(markup,/Test connection/)
+  assert.match(markup,/Remove connection/)
+  assert.doesNotMatch(markup,/value="sk-/)
 })

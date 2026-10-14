@@ -22,7 +22,7 @@
 // testing rather than eyeballing.
 
 export const AREAS = Object.freeze([
-  { id: 'chat', label: 'Chat', hint: 'reasoning · knowledge · tasks', glyph: '◈' },
+  { id: 'chat', label: 'Chat', hint: 'online models · knowledge · history', glyph: '◈' },
   { id: 'image', label: 'Image', hint: 'generation · validation', glyph: '▣' },
   { id: 'video', label: 'Video', hint: 'generation · provenance', glyph: '▶' },
   { id: 'plugins', label: 'Plugins', hint: 'manifests · permissions', glyph: '⬡' },

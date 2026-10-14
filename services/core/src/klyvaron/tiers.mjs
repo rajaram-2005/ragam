@@ -1,7 +1,7 @@
 // The Klyvaron model family: three tiers, and the rule that keeps them honest.
 //
 // Directive §5: Klyvaron Lite for phones and constrained devices, Pro for laptops and
-// desktops, High for powerful computers and authorised remote inference.
+// desktops, Max for qualified high-performance local GPU computers.
 //
 // THREE RULES FROM THE DIRECTIVE, ENFORCED RATHER THAN DOCUMENTED
 //
@@ -9,7 +9,7 @@
 //       Klyvaron foundation model. Identify fine-tuned or derived models accurately."
 //
 //   §10 "Do not claim quality improvements merely because a model has been assigned the
-//       Pro or High label."
+//       Pro or Max label."
 //
 //   §18 "Each release must have a real model artifact or an accurately documented
 //       composition of models, a version, provenance, deployment requirements,
@@ -36,9 +36,9 @@
 //           recorded. It does not chat.
 //   Pro   — no artifact. Every capability is `unavailable`. Not a placeholder: an
 //           absent model is recorded as absent.
-//   High  — no artifact, same.
+//   Max  — no artifact, same.
 
-export const TIERS = Object.freeze({ LITE: 'lite', PRO: 'pro', HIGH: 'high' })
+export const TIERS = Object.freeze({ LITE: 'lite', PRO: 'pro', MAX: 'max' })
 
 /**
  * Where a capability claim stands.
@@ -68,7 +68,7 @@ export const PROVENANCE = Object.freeze({
  * Whether a tier exists yet.
  *
  * The distinction the validator enforces, and the reason a comparative description is
- * allowed on an unbuilt tier: the directive's own language for Pro and High IS
+ * allowed on an unbuilt tier: the directive's own language for Pro and Max IS
  * comparative ("stronger local intelligence", "the highest practical quality"), and
  * that is a statement of purpose rather than a claim of delivery. The lie would be
  * presenting an unbuilt tier as though it were a product, so an unbuilt tier must
@@ -283,16 +283,16 @@ const absentTier = (id, displayName, targetHardware, description, required) => O
 })
 
 const PRO = absentTier(TIERS.PRO, 'Klyvaron Pro', HARDWARE_CLASS.LAPTOP,
-  'Stronger local intelligence and creative workflows for laptops and desktops.',
+  'Stronger local intelligence on GPU-qualified laptops and desktops.',
   ['chat', 'reasoning.complex', 'coding.repository', 'research.synthesis', 'documents.analyze',
     'data.analyze', 'vision.understand', 'image.generate', 'image.edit', 'video.generate', 'video.understand'])
 
-const HIGH = absentTier(TIERS.HIGH, 'Klyvaron High', HARDWARE_CLASS.WORKSTATION,
-  'The highest practical quality on powerful computers and authorised remote inference.',
+const MAX = absentTier(TIERS.MAX, 'Klyvaron Max', HARDWARE_CLASS.WORKSTATION,
+  'The highest practical quality on qualified high-performance local GPU computers.',
   ['chat', 'reasoning.complex', 'coding.repository', 'agent.coordination', 'multimodal.understanding',
     'image.generate', 'image.edit', 'video.generate', 'video.understand'])
 
-export const KLYVARON = Object.freeze({ [TIERS.LITE]: LITE, [TIERS.PRO]: PRO, [TIERS.HIGH]: HIGH })
+export const KLYVARON = Object.freeze({ [TIERS.LITE]: LITE, [TIERS.PRO]: PRO, [TIERS.MAX]: MAX })
 
 /** Capabilities the directive names for each tier, so the matrix can be reported whole. */
 export const REQUIRED_CAPABILITIES = Object.freeze(Object.fromEntries(
@@ -477,10 +477,9 @@ export function familyReport() {
   }
 }
 
-/** Can this tier run on a device of the given class, per its declared target? */
-export function tierFitsHardware(id, hardwareClass) {
-  const tier = getTier(id)
-  const order = [HARDWARE_CLASS.MOBILE, HARDWARE_CLASS.LAPTOP, HARDWARE_CLASS.DESKTOP,
-    HARDWARE_CLASS.WORKSTATION, HARDWARE_CLASS.REMOTE]
-  return order.indexOf(hardwareClass) >= order.indexOf(tier.targetHardware)
+/** Device categories are targeting metadata, never evidence of model eligibility.
+ * Pass a measured admission result; legacy class strings fail closed. */
+export function tierFitsHardware(id, admission) {
+  getTier(id)
+  return admission?.eligible === true && admission?.tier === id
 }

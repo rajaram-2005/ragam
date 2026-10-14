@@ -1,5 +1,7 @@
 # 05 — Security
 
+> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
+
 The design rule is one sentence: **the browser is a display, and every enforcement
 point lives in `services/core`.** Nothing in `apps/web` decides policy, holds a
 credential, or validates an output that matters.
@@ -59,7 +61,9 @@ Properties, each with a test:
   construction. It never fails open.
 - **Exact-host matching.** No wildcards, no suffix matching. A named internal host
   that is not allowlisted is never *assumed* local; private-range literals count as
-  local, arbitrary hostnames do not.
+  LAN-local outside Strict Offline, arbitrary hostnames do not. Strict Offline
+  permits only on-device loopback, not allowlisted LAN servers. Redirects are
+  refused before they can forward a payload to an unchecked host.
 - **Protocol restriction.** Non-HTTP(S) protocols are refused in every policy.
   Unparseable URLs are refused rather than passed through.
 - **Covers code that forgets.** `installGlobalEgressGuard` replaces
@@ -507,7 +511,7 @@ Stated plainly, because an unstated gap is worse than a stated one.
    exploiting it needs a second local account. `services/fabric/pyproject.toml`
    nonetheless raised its floor from `pytest>=8.0` to `pytest>=9.0.3`, because a
    declared range that permits a known-bad version is a defect in the declaration
-   even when the installed copy happens to be safe. All 563 Fabric tests were
+   even when the installed copy happens to be safe. All 575 Fabric tests were
    verified green under pytest 9.1.1 before the floor moved.
 
    **Scanning is now enforced in CI, not just run once by hand.** The `web` job

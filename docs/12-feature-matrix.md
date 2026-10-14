@@ -1,5 +1,7 @@
 # Feature matrix: what Aetheris Omni does, and what it does not
 
+> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
+
 A capability audit against the consumer-AI market, with four statuses and no fifth. The
 purpose is to make the gap visible in one place, because the failure mode this document
 exists to prevent is a product whose documentation is a list of intentions.
@@ -88,7 +90,7 @@ them rather than restating them.
 | First-party model family with honest status | **Completed** | Three tiers; one partial, two recorded unbuilt |
 | A tier label that cannot be faked | **Completed** | `tierClaimForArtifact()` looks the id *and version* up in the backing records, and the core emits no `tier:` tag or row value for a declaration nothing backs — asserted by installing an artifact that declares `tier: 'pro'` |
 | Embeddings and reranking | **Partial** | Declared in the router; no reranker model is installed |
-| Multi-tier local models (Pro, High) | **Unsupported** | No artifact and no way to obtain base weights on this host |
+| Multi-tier local models (Pro, Max) | **Unsupported** | No artifact and no way to obtain base weights on this host |
 | Model download and integrity verification | **Completed** | Digest checked before load; a truncated artifact is caught |
 | Managed storage accounting | **Completed** | Measured, not estimated; 5 GB mobile budget with a 500 MB reserve, and `/api/storage` reports the bytes plus the unmanaged files the category walk cannot see |
 | A first-party model that loads and runs locally | **Partial** | Klyvaron Lite loads from a verified artifact and generates in the core service; the model is a base completion model, so chat refuses it unless pinned. A full-size artifact has been installed into the on-device library and served over HTTP (`docs/experiments/lm-verification-run-67cdd58.json`). Real, and far below assistant quality |
@@ -129,7 +131,7 @@ them rather than restating them.
 | Responsive layout | **Completed** | |
 | Streaming, uploads, error-and-retry | **Completed** | A failure explains itself and offers a retry |
 | Export and deletion of user data | **Completed** | |
-| Learned procedures visible and controllable | **Completed** | Review, confirm, pin, set aside, restore and delete, in Chat's advanced view |
+| Learned procedures visible and controllable | **Archived** | Review, confirm, pin, set aside, restore and delete, in Chat's advanced view |
 | Accessibility audit against WCAG | **Partial** | Keyboard and semantics are covered; no formal conformance audit has been run |
 | Onboarding for a first-time user | **Partial** | Suggested prompts and plain language; no guided tour |
 | Mobile build | **Partial** | Storage accounting and a mobile tier exist; there is no mobile application |

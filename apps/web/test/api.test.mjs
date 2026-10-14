@@ -45,16 +45,12 @@ function fakeStream(frames, { chunkEvery = 1 } = {}) {
   return {
     ok: true,
     status: 200,
-    body: {
-      getReader() {
-        return {
-          async read() {
-            if (index >= chunks.length) return { done: true, value: undefined }
-            return { done: false, value: chunks[index++] }
-          },
-        }
+    body: new ReadableStream({
+      pull(controller) {
+        if (index >= chunks.length) controller.close()
+        else controller.enqueue(chunks[index++])
       },
-    },
+    }),
     text: async () => '',
     _encoded: encoded,
   }
@@ -65,7 +61,7 @@ function installFetch(responder) {
   const calls = []
   const original = globalThis.fetch
   globalThis.fetch = async (url, init) => {
-    calls.push({ url: String(url), method: init?.method ?? 'GET', body: init?.body ?? null, headers: init?.headers ?? {} })
+    calls.push({ url: String(url), method: init?.method ?? 'GET', body: init?.body ?? null, headers: init?.headers ?? {}, signal: init?.signal })
     return responder(calls[calls.length - 1])
   }
   return { calls, restore: () => { globalThis.fetch = original } }
@@ -306,12 +302,12 @@ test('a stream that fails before it starts becomes an ApiError with the server c
 })
 
 test('a malformed data payload degrades to raw text instead of throwing', async () => {
-  const frames = ['event: delta\ndata: {not json}\n\n']
+  const frames = ['event: delta\ndata: {not json}\n\n', 'event: done\ndata: {}\n\n']
   const { restore } = installFetch(() => fakeStream(frames, { chunkEvery: 2 }))
   const seen = []
   try {
     await streamChat({ prompt: 'hi' }, { onEvent: (event) => seen.push(event) })
-    assert.equal(seen.length, 1)
+    assert.equal(seen.length, 2)
     assert.deepEqual(seen[0].data, { text: '{not json}' })
   } finally {
     restore()
@@ -404,4 +400,73 @@ test('no client path escapes the documented route table', async () => {
   } finally {
     restore()
   }
+})
+
+test('a truncated SSE body is not success and releases its reader', async () => {
+  const response = fakeStream(['event: delta\ndata: {"text":"partial"}\n\n'])
+  const { restore } = installFetch(() => response)
+  const seen = []
+  try {
+    await assert.rejects(streamChat({ prompt: 'keep this draft' }, { onEvent: (event) => seen.push(event) }), { code: 'stream_interrupted' })
+    assert.equal(seen[0].data.text, 'partial')
+    assert.equal(response.body.locked, false)
+  } finally { restore() }
+})
+
+test('an abandoned SSE consumer cancels the body and releases its reader', async () => {
+  let cancelled = 0
+  const body = new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode('event: delta\ndata: {"text":"partial"}\n\n')) },
+    cancel() { cancelled += 1 },
+  })
+  const { restore } = installFetch(() => ({ ok: true, body }))
+  try {
+    await assert.rejects(streamChat({ prompt: 'hi' }, { onEvent() { throw new Error('view unmounted') } }), /view unmounted/)
+    assert.equal(cancelled, 1)
+    assert.equal(body.locked, false)
+  } finally { restore() }
+})
+
+test('AbortSignal reaches streaming reads; cancellation releases the reader without a done event', async () => {
+  const controller = new AbortController()
+  let responseBody
+  const { calls, restore } = installFetch(({ signal }) => {
+    responseBody = new ReadableStream({
+      start(stream) {
+        signal.addEventListener('abort', () => stream.error(new DOMException('stopped', 'AbortError')), { once: true })
+        stream.enqueue(new TextEncoder().encode('event: delta\ndata: {"text":"partial"}\n\n'))
+      },
+    })
+    return { ok: true, body: responseBody }
+  })
+  const seen = []
+  try {
+    await assert.rejects(streamChat({ prompt: 'hi' }, { signal: controller.signal, onEvent: (event) => { seen.push(event.name); controller.abort() } }), { name: 'AbortError' })
+    assert.equal(calls[0].signal, controller.signal)
+    assert.deepEqual(seen, ['delta'])
+    assert.equal(responseBody.locked, false)
+  } finally { restore() }
+})
+
+test('ordinary chat and lazy session creation accept the same cancellation signal', async () => {
+  const controller = new AbortController()
+  const { calls, restore } = installFetch(() => fakeResponse({ body: {} }))
+  try {
+    await api.startSession(null, { signal: controller.signal })
+    await api.chat({ prompt: 'hi' }, { signal: controller.signal })
+    assert.ok(calls.every((call) => call.signal === controller.signal))
+  } finally { restore() }
+})
+
+test('catalog search stays on Core and metadata refresh consent is explicit', async () => {
+  const { calls, restore } = installFetch(() => fakeResponse({ body: {} }))
+  try {
+    await api.modelCatalog('private search & model')
+    await api.refreshCatalog('gateway')
+    await api.refreshCatalog('gateway', true)
+    assert.equal(calls[0].url, '/api/models/catalog?q=private%20search%20%26%20model')
+    assert.deepEqual(JSON.parse(calls[1].body), { sourceId: 'gateway', authorizeNetwork: false })
+    assert.deepEqual(JSON.parse(calls[2].body), { sourceId: 'gateway', authorizeNetwork: true })
+    assert.ok(calls.every((call) => call.url.startsWith('/api/models/catalog')))
+  } finally { restore() }
 })

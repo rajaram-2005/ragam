@@ -15,7 +15,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: process.env.AETHERIS_CORE_URL || 'http://127.0.0.1:8790',
-        changeOrigin: true,
+        changeOrigin: false,
       },
     },
   },
@@ -26,7 +26,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: process.env.AETHERIS_CORE_URL || 'http://127.0.0.1:8790',
-        changeOrigin: true,
+        changeOrigin: false,
       },
     },
   },

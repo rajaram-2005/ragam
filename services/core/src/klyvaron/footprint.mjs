@@ -18,7 +18,7 @@
 // and the budget verdict is computed over the total, not over the tidy subset.
 
 import { existsSync, readdirSync, statSync } from 'node:fs'
-import { join, resolve, relative } from 'node:path'
+import { join, resolve, relative, sep } from 'node:path'
 
 import { CATEGORIES, formatBytes } from '../storage/budget.mjs'
 
@@ -27,10 +27,10 @@ function categoryDirectories(budget) {
   return new Set(Object.values(CATEGORIES).map((category) => budget.pathFor(category)))
 }
 
-function walkFiles(directory, { limit = Infinity } = {}) {
+function walkFiles(directory, { limit = Infinity, skip = new Set() } = {}) {
   const files = []
   const visit = (current) => {
-    if (!existsSync(current)) return
+    if (skip.has(current) || !existsSync(current)) return
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const full = join(current, entry.name)
       if (entry.isDirectory()) visit(full)
@@ -54,6 +54,9 @@ export class MobileFootprint {
     if (!budget?.measure) throw new TypeError('MobileFootprint requires a storage budget')
     this.budget = budget
     this.dataDir = dataDir ? resolve(dataDir) : null
+    if (this.dataDir && budget.root !== this.dataDir && !budget.root.startsWith(this.dataDir + sep)) {
+      throw new TypeError('dataDir must contain the managed model root')
+    }
   }
 
   /** Unmanaged files under the managed root: present, counted, and attributable by name. */
@@ -61,12 +64,8 @@ export class MobileFootprint {
     const managed = this.budget.root
     const skip = categoryDirectories(this.budget)
     const files = []
-    for (const entry of readdirSync(managed, { withFileTypes: true })) {
-      const full = join(managed, entry.name)
-      if (skip.has(full)) continue
-      if (entry.isDirectory()) files.push(...walkFiles(full))
-      else if (entry.isFile()) files.push({ path: full, bytes: statSync(full).size })
-    }
+    // Include databases, media, skills and caches outside the model library, too.
+    files.push(...walkFiles(this.dataDir ?? managed, { skip }))
     return {
       bytes: files.reduce((sum, file) => sum + file.bytes, 0),
       files: files.length,

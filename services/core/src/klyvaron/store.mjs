@@ -25,6 +25,7 @@ import { join, resolve, sep } from 'node:path'
 
 import { CATEGORIES, MobileStorageBudget, StorageBudgetError } from '../storage/budget.mjs'
 import { ArtifactError, loadArtifact, findManifest } from './format.mjs'
+import { MobileFootprint } from './footprint.mjs'
 import { KlyvaronRuntime } from './runtime.mjs'
 
 export class ModelStoreError extends Error {
@@ -53,10 +54,11 @@ export class KlyvaronStore {
    * @param {MobileStorageBudget} [options.budget]
    * @param {number} [options.deviceFreeBytes]
    */
-  constructor({ root, budget = null, deviceFreeBytes = null }) {
+  constructor({ root, budget = null, deviceFreeBytes = null, dataDir = null }) {
     if (!root) throw new ModelStoreError('a managed root is required', { code: 'root_required' })
     this.root = resolve(root)
     this.budget = budget ?? new MobileStorageBudget({ root: this.root, deviceFreeBytes })
+    this.footprint = new MobileFootprint({ budget: this.budget, dataDir })
     this.libraryPath = this.budget.pathFor(CATEGORIES.MODEL_WEIGHTS)
     mkdirSync(this.libraryPath, { recursive: true })
   }
@@ -130,6 +132,12 @@ export class KlyvaronStore {
     const sourceBytes = directoryBytes(from)
     const existingBytes = existing ? directoryBytes(target) : 0
     const growthBytes = Math.max(0, sourceBytes - existingBytes)
+    // Total includes SQLite, media and other managed data, not just model categories.
+    const footprint = this.footprint.report()
+    const projected = footprint.totalBytes + growthBytes
+    if (projected >= this.budget.limits.managedTotalBytes || this.budget.limits.managedTotalBytes - projected < this.budget.limits.reserveBytes) {
+      throw new ModelStoreError('cannot install: model installation exceeds the total managed-storage budget/reserve', { code: 'storage_budget' })
+    }
     // Gate 2: the budget decides, and it decides with real numbers.
     const decision = this.budget.canInstall(growthBytes, {
       category: CATEGORIES.MODEL_WEIGHTS,

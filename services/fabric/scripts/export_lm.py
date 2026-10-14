@@ -55,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", default=None, help="directory the artifact is written to")
     parser.add_argument("--id", default="aetheris-lite-lm", help="artifact id, e.g. aetheris-lite-lm")
     parser.add_argument("--version", default="0.1.0")
-    parser.add_argument("--tier", default="lite", choices=("lite", "pro", "high"))
+    parser.add_argument("--tier", default="lite", choices=("lite", "pro", "max"))
     parser.add_argument("--max-new-tokens", type=int, default=64, help="generation ceiling recorded in the manifest")
     parser.add_argument("--limitations", default=None, help="JSON file holding a list of limitation strings")
     parser.add_argument("--parity-fixture", default=None, help="write the cross-language parity fixture here")
@@ -112,7 +112,13 @@ def verify(directory: Path) -> int:
         return 2
     manifest = json.loads(manifests[0].read_text(encoding="utf-8"))
     problems = []
-    if manifest.get("format") != ARTIFACT_FORMAT:
+    from fabric.lm.quantize import QUANTIZED_ARTIFACT_FORMAT, load_quantized_reference
+    if manifest.get("format") == QUANTIZED_ARTIFACT_FORMAT:
+        try:
+            load_quantized_reference(directory)
+        except (ValueError, KeyError, OSError) as error:
+            problems.append(str(error))
+    elif manifest.get("format") != ARTIFACT_FORMAT:
         problems.append(f"format is {manifest.get('format')!r}, expected {ARTIFACT_FORMAT!r}")
     weights = directory / str(manifest.get("weights", {}).get("file"))
     if not weights.exists():

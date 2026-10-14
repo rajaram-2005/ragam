@@ -27,7 +27,7 @@ export class OllamaProvider extends BaseProvider {
       const response = await this.fetchWithTimeout(`${this.baseUrl}/api/tags`, { method: 'GET' }, { timeoutMs: 5_000, operation: 'probe' })
       if (!response.ok) return { availability: AVAILABILITY.UNREACHABLE, detail: `HTTP ${response.status}` }
       const data = await response.json()
-      const models = Array.isArray(data?.models) ? data.models : []
+      const models = (Array.isArray(data?.models) ? data.models : []).filter((m) => !m.remote_model && !m.remote_host)
       return {
         availability: models.length ? AVAILABILITY.READY : AVAILABILITY.NOT_INSTALLED,
         detail: { runtime: 'ollama', modelsInstalled: models.length, models: models.map((m) => m.name ?? m.model).filter(Boolean) },
@@ -43,7 +43,7 @@ export class OllamaProvider extends BaseProvider {
     const response = await this.fetchWithTimeout(`${this.baseUrl}/api/tags`, { method: 'GET' }, { timeoutMs: 8_000, operation: 'list' })
     if (!response.ok) throw await readProviderError(response, this.name, 'list')
     const data = await response.json()
-    return (Array.isArray(data?.models) ? data.models : []).map((model) => ({
+    return (Array.isArray(data?.models) ? data.models : []).filter((m) => !m.remote_model && !m.remote_host).map((model) => ({
       id: model.name ?? model.model,
       sizeBytes: model.size ?? null,
       family: model.details?.family ?? null,
@@ -69,8 +69,8 @@ export class OllamaProvider extends BaseProvider {
     }
     const response = await this.fetchWithTimeout(
       `${this.baseUrl}/api/chat`,
-      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
-      { operation: OPERATIONS.CHAT, signal: undefined, timeoutMs: this.timeoutMs },
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: request.signal },
+      { operation: OPERATIONS.CHAT, timeoutMs: this.timeoutMs },
     )
     if (!response.ok) throw await readProviderError(response, this.name, OPERATIONS.CHAT)
     const data = await response.json()

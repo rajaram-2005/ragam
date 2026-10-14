@@ -1,10 +1,27 @@
-# Aetheris Omni
+# Aetheris — online AI workspace
+
+> **Active product: online-only (Phase 2).** [Current setup, features and limitations](docs/19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
+
+## Current product
+
+Exactly **Chat, Image, Video, Plugins, MCP**, with LiteLLM Provider Settings in a dialog and an explicit persistent model picker. Inference is online-only; there are no active local-runtime, hardware-tier, training or task-diagnostic panels. Optional history, approved memory and text-file knowledge remain.
+
+Run `npm run core` and `npm run web`. Sign in using the Core host's `.aetheris-data/online/access-token` file, then open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste installation or provider credentials into a chat message. On HTTP-only local development, start Core with `AETHERIS_COOKIE_SECURE=false`; keep secure cookies enabled for HTTPS deployments.
+
+**Current limits:** online Image/Video adapters and remote MCP are not connected. No real provider credentials or remote inference have been tested in this restricted sandbox. The product needs a reachable, authorized LiteLLM gateway; synthetic fixtures are used only in tests. See the [Phase 2 guide](docs/19-online-only-phase-2.md) for security boundaries and setup.
+
+## Retained legacy architecture and verification history
+
+The following documents the earlier research foundation. Its local/offline capabilities are not part of the active product.
+
 
 A local-first AI platform built by integrating two repositories into one system:
 [`Aetheris-`](https://github.com/rajaram-2005/Aetheris-) (application and
 orchestration) and [`sparsiz`](https://github.com/rajaram-2005/sparsiz) (research and
-compute optimisation). Everything runs on this machine: there is no online provider,
-by design, so no prompt can leave the host without a policy decision recorded for it.
+compute optimisation). Inference remains local-first. The updated directive authorizes
+development of a replaceable LiteLLM gateway; online inference is not implemented
+yet. Optional catalog metadata refresh is separate from inference consent and is
+blocked for external sources in Strict Offline.
 
 This is **not** a concatenation of the two. Each was audited first
 ([`docs/01-audit.md`](docs/01-audit.md)), responsibilities were assigned by
@@ -34,7 +51,7 @@ internal service promoted to a navigation entry, fails the build.
 | Safety / data classification | Chat composer + per-message classification chips |
 | Resource management | Sidebar hardware card; Image and Video echoes |
 | Media validation | Image/Video → job detail, rejection reasons, artifact sha256 |
-| Execution control | Image/Video job cancellation; Chat task pause/resume/cancel |
+| Execution control | Image/Video job cancellation; Chat generation Stop; task pause/resume/cancel |
 | Training & benchmarking | Not in the web app. Separate service; results published as model cards |
 
 ---
@@ -52,13 +69,13 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 1084 tests: core 454, web 67, fabric 563
+npm test          # 1179 tests: core 528, web 76, fabric 575
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
 ```
 
-All 1084 run in CI on every push and pull request
+All 1179 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -118,9 +135,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 12,546 | 9,990 | **zero npm packages** | 454 |
-| `services/fabric` | Python 3.11 | 9,046 | 6,900 | NumPy only | 563 |
-| `apps/web` | React 18 + Vite | 4,464 | 1,311 | react, react-dom | 67 |
+| `services/core` | Node 22 ESM | 13,979 | 11,130 | **zero npm packages** | 528 |
+| `services/fabric` | Python 3.11 | 9,299 | 7,107 | NumPy only | 575 |
+| `apps/web` | React 18 + Vite | 2,015 | 1,347 | react, react-dom | 76 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web
@@ -166,6 +183,19 @@ request returns a continuation labelled as one, carrying the model's own limitat
 The model never answers as if it were an assistant. See
 [`docs/08-aetheris-lite.md`](docs/08-aetheris-lite.md) and
 [`docs/11-klyvaron-family.md`](docs/11-klyvaron-family.md).
+
+### Hardware-based execution
+
+Klyvaron **Lite / Pro / Max** use the user's own device by default. Lite is
+CPU-first; GPU tiers require model-specific measured compatibility, not a GPU name.
+Chat, Image and Video offer Local, Hybrid and Online task modes; Strict Offline
+blocks remote services (including LAN inference). The hardware API reports the
+Core host, not the hardware of a remote browser.
+
+The admission framework, CPU memory safeguards, and [evaluated weight-only int8
+inference](docs/14-cpu-int8-inference.md) are implemented. A useful
+quantized Lite assistant, native mobile packaging, and benchmark-qualified Pro/Max
+models remain release gates. See [the policy and acceptance matrix](docs/13-hardware-execution-policy.md).
 
 ### The retriever
 
@@ -287,3 +317,20 @@ permissive and MIT-compatible; no GPL/AGPL/LGPL code is present.
 `services/fabric` derives its taxonomy and recurrence from `sparsiz` (Unlicense /
 public domain) and its scoring from `Aetheris-/src/runtime/faisanth.mjs` (MIT).
 Both are credited in-file.
+
+### Responsive local execution
+
+Installed Klyvaron text models now use one shared CPU worker, incremental token
+streaming, disconnect cancellation and enforced deadlines. Startup still verifies
+all installed artifacts; only one selected model is cached afterward. Busy tasks
+are refused, not queued indefinitely or sent online. See
+[15 — Responsive local execution](./docs/15-responsive-local-execution.md) for
+residency reporting, verification and the remaining release limitations.
+
+### Universal ecosystem foundation
+
+The [updated integration map and roadmap](./docs/16-universal-ecosystem-roadmap.md)
+tracks the broader provider, agent, industry and durable-execution directive without
+claiming those goals are already delivered. The [versioned model catalog](./docs/17-model-catalog.md)
+adds opt-in metadata discovery inside Chat, separate from model installation,
+licence approval, credentials and inference readiness.

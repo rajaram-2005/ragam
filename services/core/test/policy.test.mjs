@@ -47,10 +47,10 @@ test('strict_offline still permits loopback providers', async () => {
   assert.deepEqual(fetch.calls, ['http://127.0.0.1:11434/api/tags'])
 })
 
-test('private-range literals count as local, but arbitrary hostnames do not', () => {
+test('strict offline rejects LAN services even when allowlisted', () => {
   const guard = createEgressGuard({ policy: RUNTIME_POLICIES.STRICT_OFFLINE, fetch: fakeFetch() })
-  assert.equal(guard.inspect('http://192.168.1.50:11434/api/tags').allowed, true)
-  assert.equal(guard.inspect('http://10.0.0.9/v1/models').allowed, true)
+  assert.equal(guard.inspect('http://192.168.1.50:11434/api/tags').allowed, false)
+  assert.equal(guard.inspect('http://10.0.0.9/v1/models').allowed, false)
   // A LAN *hostname* is not implicitly trusted; it needs an explicit allowlist entry.
   assert.equal(guard.inspect('http://ollama-box.lan/api/tags').allowed, false)
   const allowlisted = createEgressGuard({
@@ -58,7 +58,7 @@ test('private-range literals count as local, but arbitrary hostnames do not', ()
     localAllowlist: ['ollama-box.lan'],
     fetch: fakeFetch(),
   })
-  assert.equal(allowlisted.inspect('http://ollama-box.lan/api/tags').allowed, true)
+  assert.equal(allowlisted.inspect('http://ollama-box.lan/api/tags').allowed, false)
 })
 
 test('a named internal host is not a strict_offline escape hatch', () => {

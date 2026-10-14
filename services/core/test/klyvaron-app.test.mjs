@@ -54,7 +54,7 @@ async function startCore({ install = true, env = {}, manifest = null } = {}) {
     const text = await response.text()
     return { status: response.status, json: text ? JSON.parse(text) : null, text }
   }
-  return { dataDir, app, call, baseUrl, close: async () => { await new Promise((resolve) => server.close(resolve)); rmSync(dataDir, { recursive: true, force: true }) } }
+  return { dataDir, app, call, baseUrl, close: async () => { await new Promise((resolve) => server.close(resolve)); await app.close(); rmSync(dataDir, { recursive: true, force: true }) } }
 }
 
 test('an installed artifact is loaded at startup, and readiness reports it honestly', async () => {
@@ -111,6 +111,11 @@ test('an ordinary chat request is refused, and the refusal carries the model’s
     assert.match(pinned.json.limitation, /does not follow instructions/)
     assert.equal(pinned.json.modelId, `klyvaron:${ARTIFACT_ID}`)
     assert.equal(pinned.json.sentExternally, false)
+    assert.deepEqual(pinned.json.routing.execution, { mode: 'local', location: 'local', scope: 'core_host' })
+    const online = await core.call('POST', '/api/chat', { prompt: 'hello', executionMode: 'online' })
+    assert.equal(online.status, 503)
+    assert.equal(online.json.route.execution.location, null)
+    assert.equal(online.json.route.retryable, true)
     assert.equal(pinned.json.usage.completionTokens, 8)
   } finally {
     await core.close()
@@ -133,6 +138,15 @@ test('the streaming path refuses the same request the same way', async () => {
     assert.match(text, /event: error/)
     assert.match(text, /model_not_instruction_tuned/)
     assert.match(text, /base completion model/)
+    const local = await fetch(`${core.baseUrl}/api/chat/stream`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: 'hello', model: `klyvaron:${ARTIFACT_ID}`, maxTokens: 2, executionMode: 'local' }),
+    })
+    const events = await local.text()
+    assert.match(events, /event: route/)
+    assert.match(events, /"scope":"core_host"/)
+    assert.match(events, /"sentExternally":false/)
+    assert.match(events, /event: done/)
   } finally {
     await core.close()
   }

@@ -458,3 +458,20 @@ would constrain redistribution. None of them could be downloaded on the host use
 for this work (`huggingface.co` is unreachable), so no such licence was evaluated
 — and consequently **no claim is made that any Aetheris model matches or beats
 them**. See [`../docs/06-benchmarks.md`](../docs/06-benchmarks.md).
+
+## Universal catalog protocol references (2026-10-14)
+
+The new catalog adapters are original implementations of inspected metadata HTTP
+contracts, not vendored upstream libraries. Pinned revisions and file hashes are
+recorded in `docs/experiments/universe-source-audit.json` and the integration map
+in `docs/16-universal-ecosystem-roadmap.md`.
+
+- LiteLLM (`BerriAI/litellm`): MIT outside `enterprise/`; enterprise content has
+  separate commercial terms. No enterprise code or LiteLLM dependency is bundled.
+- Hugging Face Hub client (`huggingface/huggingface_hub`): Apache-2.0. Its software
+  licence does not license every hosted model or dataset. No Hub client code is
+  bundled, and model metadata is not redistribution approval.
+- Ollama (`ollama/ollama`): MIT. Only the catalog wire contract is referenced here;
+  no runtime binary or weights are distributed by this increment.
+- Hermes remains a reference, not a vendored runtime. Existing Aetheris/Sparsiz
+  attribution and licence copies above are unchanged.

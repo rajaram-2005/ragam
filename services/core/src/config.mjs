@@ -1,6 +1,7 @@
 // Configuration loading.
 //
-// Secrets are read only here, in the server process, from the environment or from a
+// Core credentials are read here; optional catalog credentials are loaded by
+// catalog/sources.mjs. Both stay in the server process, read from environment or a
 // file path. They are never returned to a client, never written to the audit ledger,
 // and never included in a frontend bundle (directive §4.E, §12).
 
@@ -13,6 +14,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   host: '0.0.0.0',
   allowedOrigin: null, // null → same-origin only; '*' must be an explicit choice
   dataDir: resolve(process.cwd(), '.aetheris-data'),
+  modelCatalogFile: null,
   policy: RUNTIME_POLICIES.STRICT_OFFLINE,
   externalCeiling: DATA_CLASSES.INTERNAL,
   // Local runtimes: loopback only, so they stay reachable in strict_offline.
@@ -119,6 +121,7 @@ export function loadConfig(env = process.env, overrides = {}) {
     host: env.AETHERIS_CORE_HOST || DEFAULT_CONFIG.host,
     allowedOrigin: env.AETHERIS_ALLOWED_ORIGIN || null,
     dataDir,
+    modelCatalogFile: env.AETHERIS_MODEL_CATALOG_FILE ? resolve(env.AETHERIS_MODEL_CATALOG_FILE) : null,
     policy: resolvedPolicy,
     externalCeiling: Object.values(DATA_CLASSES).includes(externalCeiling) ? externalCeiling : DATA_CLASSES.INTERNAL,
     ollama: {
