@@ -222,7 +222,7 @@ return `capability_unavailable` rather than substituting output.
   and session bounds, owner-only gateway control with attributable audit rows, per-account
   isolation of history/memory/knowledge, legacy-store adoption, the whole reset lifecycle
   including replay and session revocation, and password change.
-- `services/core/test/online.test.mjs` now signs in with an account; its 19 tests pass
+- `services/core/test/online.test.mjs` now signs in with an account; its 20 tests pass
   unchanged in intent, including the assertion that a cancelled request never reaches the
   gateway.
 - Web: **13 new tests** across `api.test.mjs`, `render.test.mjs` and `structure.test.mjs` —

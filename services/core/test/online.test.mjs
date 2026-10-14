@@ -27,7 +27,7 @@ async function fixture(t, options = {}) {
     return res.end(JSON.stringify({ model: body.model, choices: [{ message: { content: `Synthetic fixture ${body.model}` } }] }))
   })
   f.gatewayUrl = await listen(gateway)
-  const create = () => new OnlineApp({ dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: options.timeoutMs ?? 2000 })
+  const create = () => new OnlineApp({ dataDir: dir, trustedOrigins: options.trustedOrigins ?? [f.gatewayUrl], timeoutMs: options.timeoutMs ?? 2000 })
   f.app = create(); const server = f.app.server(); f.url = await listen(server)
   f.request = async (method, path, body, opts = {}) => {
     const response = await fetch(f.url + path, { method, headers: { cookie: opts.cookie ?? f.cookie ?? '', ...(body ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}), ...opts.headers }, ...(body ? { body: JSON.stringify(body) } : {}) })
@@ -67,6 +67,37 @@ test('owner login uses an HttpOnly secure cookie; wrong passwords and cross-orig
  assert.equal((await f.request('POST','/api/auth/logout',{}, {headers:{'x-aetheris-request':''}})).status,403)
  assert.equal((await f.request('POST','/api/auth/logout',{})).status,200); assert.equal((await f.request('GET','/api/providers')).status,401)
 })
+test('a private gateway needs an exactly matching trusted origin, and nothing is stored without one', async (t) => {
+ // "Bring your own gateway" includes a gateway on your own machine fronting a local
+ // runtime, and this refusal is what keeps that from meaning "anybody who can reach the
+ // API can point it at an internal address". Verified against a running server rather
+ // than only against gatewayUrl(), because the operator-visible half is the route's
+ // status, code and message — and because a refused save must not leave a
+ // half-configured provider behind.
+ for (const trustedOrigins of [[], ['http://127.0.0.1:4000/'], ['http://localhost:4000']]) {
+   const f = await fixture(t, { trustedOrigins })
+   await f.login()
+   const refused = await f.request('PUT', '/api/providers/litellm', { baseUrl: 'http://127.0.0.1:4000/v1', apiKey: 'sk-local-dev' })
+   assert.equal(refused.status, 400, JSON.stringify(trustedOrigins))
+   assert.equal(refused.data.error, 'endpoint_blocked', JSON.stringify(trustedOrigins))
+   assert.match(refused.data.message, /trusted origin/)
+   const state = (await f.request('GET', '/api/providers')).data
+   assert.equal(state.baseUrl, '', 'a refused endpoint must not be stored')
+   assert.equal(state.keyConfigured, false)
+   assert.deepEqual(state.models, [])
+ }
+
+ // The same URL is accepted once its exact origin is trusted. That is the whole of the
+ // local-gateway setup, and the reason the variable exists.
+ const f = await fixture(t, { trustedOrigins: ['http://127.0.0.1:4000'] })
+ await f.login()
+ const saved = await f.request('PUT', '/api/providers/litellm', { baseUrl: 'http://127.0.0.1:4000/v1', apiKey: 'sk-local-dev' })
+ assert.equal(saved.status, 200)
+ assert.equal(saved.data.baseUrl, 'http://127.0.0.1:4000/v1')
+ assert.equal(saved.data.keyConfigured, true)
+ assert.ok(!JSON.stringify(saved.data).includes('sk-local-dev'), 'the key is never returned to the browser')
+})
+
 test('gateway credential is encrypted at rest and never returned publicly', async (t) => {
  const f = await fixture(t); const settings = await f.configure()
  assert.equal(settings.keyConfigured,true); assert.ok(!JSON.stringify(settings).includes('synthetic-gateway-secret'))
@@ -151,6 +182,12 @@ test('public HTTPS endpoints are required unless the operator trusts an exact in
  for (const url of ['file:///etc/passwd','https://user:pass@host.example/v1','http://public.example/v1','https://169.254.169.254','https://127.0.0.1','https://[::1]']) assert.throws(()=>gatewayUrl(url))
  assert.equal(gatewayUrl('https://gateway.example/v1/'),'https://gateway.example/v1')
  assert.equal(gatewayUrl('http://127.0.0.1:9999/v1',['http://127.0.0.1:9999']),'http://127.0.0.1:9999/v1')
+ // The comparison is on the exact origin, and that is worth pinning because it surprises
+ // people: a trailing slash, or `localhost` where the base URL says `127.0.0.1`, produces
+ // the same refusal as never setting the variable at all.
+ for (const trusted of [['http://127.0.0.1:9999/'], ['http://localhost:9999'], ['127.0.0.1:9999']]) {
+   assert.throws(() => gatewayUrl('http://127.0.0.1:9999/v1', trusted), /trusted origin/, JSON.stringify(trusted))
+ }
  for (const ip of ['127.0.0.1','10.0.0.2','169.254.169.254','::1','::ffff:127.0.0.1','fc00::1']) assert.equal(privateAddress(ip),true,ip)
  assert.equal(privateAddress('8.8.8.8'),false)
 })

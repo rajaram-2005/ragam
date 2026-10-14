@@ -380,6 +380,12 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.setup, '| **Web app** | `npm ci`, 89 tests'], [doc.setup, 'npm test             # 89 tests'],
     [doc.readme, '1209 tests: core 545, web 89, fabric 575'], [doc.readme, 'All 1209 run in CI'],
     [doc.phase2, '545 Core + 89 Web + 575 Fabric = 1,209 tests'], [doc.phase2, '17 Core and 13 Web tests'],
+    [doc.status, '**547 / 547**'], [doc.status, '**Test totals: 1213 passing'],
+    [doc.status, 'Implemented and tested (547 tests)'], [doc.setup, 'all three suites (1213 tests)'],
+    [doc.setup, 'npm run test:core         # 547'], [doc.setup, '| **Core service** | 547 tests pass'],
+    [doc.readme, '1213 tests: core 547, web 91, fabric 575'], [doc.readme, 'All 1213 run in CI'],
+    [doc.phase2, '547 Core + 91 Web + 575 Fabric = 1,213 tests'], [doc.phase2, '19 Core and 15 Web tests'],
+    [doc.accounts, 'its 19 tests pass'], [doc.setup, '38-test documentation-accuracy suite'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -635,11 +641,11 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 26)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**547 / 547**'), 'core total must be stated')
+  assert.ok(status.includes('**549 / 549**'), 'core total must be stated')
   assert.ok(status.includes('**575 / 575**'), 'fabric total must be stated')
   assert.ok(status.includes('**91 / 91**'), 'web total must be stated')
-  assert.ok(status.includes('1213 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1213 tests: core 547, web 91, fabric 575'),
+  assert.ok(status.includes('1215 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1215 tests: core 549, web 91, fabric 575'),
     'README must state the same totals')
   assert.ok(status.includes('(26 files'), 'the file count must move with the suite')
 
@@ -652,15 +658,50 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(547), `core heading must say 547, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(549), `core heading must say 549, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(575), `fabric heading must say 575, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(91), `web heading must say 91, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1213,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1213`,
+    1215,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1215`,
   )
+})
+
+test('the setup guide describes the product that actually runs', () => {
+  // §2 and §7 showed the legacy service's startup banner and told readers to install
+  // Ollama and start the core with LLAMACPP_ENABLED=true. `npm run core` is the online
+  // entry: it never reads that variable, has no local runtime, and answers an unconfigured
+  // installation with setup_required. A setup guide for a different product is worse than
+  // none -- it sends somebody to install a runtime that cannot be reached, and the report
+  // that follows is "I signed in and cannot see the models or chat".
+  const setup = squash(doc.setup())
+  const raw = doc.setup()
+  for (const claim of [
+    'performs **no inference and downloads no models**',
+    'AETHERIS_LITELLM_TRUSTED_ORIGINS=http://127.0.0.1:4000 npm run core',
+    '**exact origin**',
+    'endpoint_blocked',
+    'Aetheris online-only API listening',
+    'AETHERIS_COOKIE_SAMESITE=none',
+  ]) {
+    assert.ok(setup.includes(squash(claim)), `docs/04 must state ${claim}`)
+  }
+  // The legacy instructions must not come back in either form: as a way to start the
+  // active entry, or as an error the active entry can produce.
+  assert.ok(!/LLAMACPP_ENABLED=true\s*\\\s*LLAMACPP_BASE_URL/.test(raw),
+    'docs/04 must not present legacy runtime variables as a way to start the active entry')
+  assert.ok(!setup.includes('no_model_available'),
+    'that error belongs to the legacy router; the active entry reports setup_required')
+  assert.ok(!setup.includes('aetheris-core listening'),
+    'the legacy startup banner is not what npm run core prints')
+  // And the local-gateway path must be reachable in the real code, not only on the page:
+  // the trusted origin is compared exactly, and a private URL is refused without one.
+  const gateway = readFileSync(resolve(CORE, 'src', 'online', 'gateway.mjs'), 'utf8')
+  assert.match(gateway, /trustedOrigins\.includes\(url\.origin\)/,
+    'the guide documents an exact-origin comparison; the code must still do that')
+  assert.match(gateway, /endpoint_blocked/)
 })
 
 test('the account and sign-in document describes the code that implements it', () => {
