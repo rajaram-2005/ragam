@@ -38,7 +38,7 @@ md(r'''
 
 What it does, once you run it on Kaggle:
 
-1. Clones this repository (branch recorded in `status.json`).
+1. Clones this repository from the published branch (`main`; the exact commit it got is recorded in `status.json`).
 2. Installs the pinned Transformers, PEFT and Hub packages.
 3. Runs `fabric/training/smoke.py`, which checks each stage on its own:
    `environment`, `model_verification`, `dataset`, `training`, `reload`, `inference`, `quality`, `persistence`.
@@ -68,7 +68,9 @@ else:
     raise SystemExit("Run this notebook on Kaggle or Colab with a GPU accelerator.")
 
 REPO_URL = "https://github.com/rajaram-2005/ragam.git"
-REPO_REF = "arena/11d936e0-ragam"   # the commit actually used is recorded in status.json
+REPO_REF = "main"                   # the published branch. The exact commit used is recorded in status.json.
+                                    # A session branch (arena/...) is deleted when its session ends, which
+                                    # would break `git clone` for every later run of this notebook.
 REPO_DIR = "/tmp/ragam"             # scratch clone; not in the saved output
 JOB_FILE = "services/fabric/remote/jobs/klyvaron-chat-lora-experiment.json"
 PERSISTENCE_ADAPTER = None          # e.g. "/kaggle/input/<earlier-output>/.../run/artifact" to read back

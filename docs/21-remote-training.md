@@ -154,17 +154,26 @@ verifies persistence.
 ## 7. Sparsiz: inspected, not integrated
 
 Commit `76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69` of
-`github.com/rajaram-2005/sparsiz`, cloned read-only. Findings:
+`github.com/rajaram-2005/sparsiz`, cloned read-only and re-measured line by line on
+2026-10-15. Findings:
 
-* **torch** appears only in `sparsiz/saram.py` (and one encoder under `intelligence/`). It
-  defines a small MSE autoencoder whose physics term is a comment-labelled "dummy loss".
-  **Nothing in the repository calls `backward()`, an optimizer, or `.step()`.** No model is
-  trained there.
-* **No Transformers, PEFT, LoRA or checkpoint training** exists in any file.
-* **`sparsiz/training/`** (12 modules) scores with `random.uniform` and `random.random`: data
-  quality, evaluation baselines, RL rewards, evolution, distillation verification, synthetic
-  data and curriculum. About 35 lines name themselves dummy, placeholder or simulated.
-* **No test** covers any training module.
+* **torch** is imported in exactly one file, `sparsiz/saram.py`, which defines a small MSE
+  autoencoder whose physics term is a comment-labelled "dummy loss". The word also appears in
+  `setup.py`'s dependency list and in one comment under `intelligence/saram/encoder/`; neither
+  imports it. **Nothing in the repository calls `backward()`, an optimizer, or `.step()`.**
+  No model is trained there.
+* **No Transformers, no PEFT** — zero lines name either. **No LoRA is implemented:** the seven
+  lines that name it are prose and printed labels about a conceptual temporary adapter in the
+  L0–L4 story, with no module and no dependency behind them. **No checkpointing code exists**
+  — zero lines name a checkpoint.
+* **`sparsiz/training/`** (12 modules) scores with `random.uniform` and `random.random` — 132
+  such lines across `sparsiz/`, 27 of them inside `sparsiz/training/`: data quality, evaluation
+  baselines, RL rewards, evolution, distillation verification, synthetic data and curriculum.
+  96 lines across `sparsiz/` name themselves dummy, placeholder or simulated (10 of them inside
+  `sparsiz/training/`). An earlier version of this page said "about 35 lines"; that number did
+  not reproduce at the pinned commit under any pattern tried, and the measured counts replace it.
+* **No test** covers any training module: the four test files import `sparsiz.faisanth`,
+  `sparsiz.premsoth`, `sparsiz.rajaram` and `sparsiz.saram`, and nothing from `sparsiz.training`.
 * `training/README.md` describes a pipeline that is not implemented.
 
 **Decision.** No Sparsiz code is reused, and Sparsiz is not integrated. Its scoring is
@@ -253,6 +262,20 @@ imports the trainer or the runner.
   orchestration, it needs no Drive mount, and it says it has not been executed.
 * The docs guard (`services/core/test/docs.test.mjs`) holds the counts in the README, docs 02–05,
   the fabric README and this page. It is re-run after any count changes.
+* **Re-verified on 2026-10-15, on this checkout** (a second pass, after the build pass): the
+  fabric suite is 745/745 and the core suite 567/567; the synthetic data regenerates to the §4
+  hashes byte-for-byte in two independent builds; every package pin in §12 exists on PyPI at
+  that exact version; and `hf_peft.py`'s calls were re-read against those exact wheels —
+  `dtype` plumbing with `torch_dtype` kept for back-compatibility in `from_pretrained`,
+  `generate(input_ids=…)`, `LoraConfig` as a dataclass over `PeftConfig` (so `task_type` is a
+  valid argument), `get_peft_model_state_dict`, `set_peft_model_state_dict`,
+  `PeftModel.from_pretrained`, and `model_info(files_metadata=True)` →
+  `sibling.lfs.sha256`. Peft 0.21.2's own imports from Transformers 5 (`Conv1D`,
+  `ALL_LAYERNORM_LAYERS`, `cached_file`, `http_user_agent`) still exist in 5.19.0. §7 was
+  re-measured from a fresh clone of the pinned commit, which is where the corrections to it
+  come from.
+* The notebook clones the published branch, and a test fails if it is pointed at a session
+  branch — see the defect list in §12.
 
 **Not verified:**
 
@@ -293,13 +316,20 @@ expectation. **Nothing has been run, so every value below that depends on a run 
 | Inference result | NOT RUN |
 | Metrics | NOT RUN |
 | Persistence | NOT RUN |
-| Failures | None recorded: nothing has run. Defects found and fixed in this pass are listed below |
+| Failures | None recorded: nothing has run. Defects found and fixed before any run are listed below (two passes) |
 | Next step | Import the notebook on Kaggle (GPU, Internet on), then Save & Run All. Then run the persistence check |
 
-Defects found and fixed in this pass, before any run: the policy refused `/kaggle/working`,
+Defects found and fixed in the build pass, before any run: the policy refused `/kaggle/working`,
 which Kaggle keeps as output; `normpath` collapsed `s3://` URIs, so every object-store path
 would have been refused; training continued after a failed licence check; the verdict had no
 way to say a gate refused a candidate; and one test was too weak to catch a real defect.
+
+Defects found and fixed in the audit pass of 2026-10-15, before any run: the notebook cloned the
+session branch `arena/11d936e0-ragam`, which stops resolving when that session ends, so a run
+started later would have failed at `git clone`; it now clones `main`, the commit it actually
+gets is still recorded in `status.json`, and a test refuses a session branch. Three claims in §7
+about Sparsiz were wider than the code at the pinned commit and are corrected there to the
+measured numbers.
 
 ## 13. Base models, and image and video
 
