@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -83,6 +84,35 @@ def test_the_notebook_pins_the_base_and_package_versions():
     code = _code(_notebook())
     assert "transformers==5.19.0" in code
     assert "peft==0.21.2" in code
+
+
+def test_the_clone_cell_says_why_it_failed_instead_of_raising_an_exit_code():
+    """A run that dies in this cell used to raise CalledProcessError with the reason only in
+    git's output, which is easy to lose. Both failures that actually happen -- no route to
+    github.com (Kaggle's Internet switch is off by default) and a branch that no longer
+    resolves (a saved copy of this notebook) -- must name themselves and the remedy."""
+    code = _code(_notebook())
+    assert "Could not resolve host" in code, "the internet-off diagnosis is missing"
+    assert "Internet" in code and "On" in code, "the remedy must name the switch to turn on"
+    assert "Remote branch" in code, "the deleted-branch diagnosis is missing"
+    assert "re-import" in code.lower(), "the deleted-branch remedy must say what to do"
+    assert "SystemExit" in code, "the cell must stop with a readable message"
+    assert "check=True" not in code, "the raw exit code is what made this unreadable"
+
+
+def test_the_clone_cell_installs_the_pinned_packages_through_the_same_helper():
+    code = _code(_notebook())
+    assert "pip" in code and "install" in code
+    assert 'run([sys.executable, "-m", "pip", "install"' in code
+
+
+def test_the_notebook_clones_a_published_branch_not_a_session_branch():
+    """A session branch (arena/...) is deleted when that session ends, and this notebook is
+    meant to be run months later by someone else. It must clone a branch that outlives a
+    session; the exact commit it got is recorded in status.json either way."""
+    code = _code(_notebook())
+    assert 'REPO_REF = "main"' in code
+    assert not re.search(r'REPO_REF\s*=\s*"arena/', code)
 
 
 def test_the_superseded_colab_only_notebook_is_gone():

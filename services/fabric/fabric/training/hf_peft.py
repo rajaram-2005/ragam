@@ -9,7 +9,7 @@ Status: written against the documented APIs of the versions pinned in the notebo
 (see ``remote/build_notebook.py``). It has NOT been executed on a GPU. The first real
 run on Kaggle is the first test of it. Everything that can be checked without torch
 (the Hub pin, the licence text, the weight hash, the data order, the prompt format) is
-checked by ``tests/test_training_hf_backend.py`` with an injected fake Hub.
+checked by ``tests/test_training_resume_and_backend.py`` with an injected fake Hub.
 
 Design choices, and why:
 

@@ -31,13 +31,22 @@ prepared dataset, a new account, or a paid service. The notebook never bypasses 
   ([Kaggle: getting started](https://www.kaggle.com/docs/notebooks)). That page also says up to
   **20 GB** may be saved in `/kaggle/working`, and that a longer computation should be run
   with **Save Version > Save & Run All**. The earlier 9-hour figure applied to TPU, not GPU.
-  The Kaggle GPU guide's weekly allowance (about 30 GPU hours) was cited earlier and was not
-  re-checked in this pass.
+  Both pages were re-checked on 2026-10-15. The GPU guide
+  ([Efficient GPU Usage Tips](https://www.kaggle.com/docs/efficient-gpu-usage)) states a weekly
+  GPU quota that "resets weekly and is 30 hours or sometimes higher depending on demand and
+  resources", and a **60-minute** idle timeout for an interactive session. The older "GPU tips
+  and tricks" page still claims 9-hour sessions and is out of date; it was not used. The job's
+  `maxSessionHours: 12` is inside the documented session limit.
 * **Google Colab (fallback).** Colab's FAQ says resources "are not guaranteed and not
   unlimited", idle VMs are deleted, a maximum lifetime applies, and the free tier does not
   allow SSH shells or distributed workers
-  ([Colab FAQ](https://research.google.com/colaboratory/faq.html)). The FAQ gives no fixed
-  GPU quota and no idle-timeout figure. Any specific idle figure is community-reported.
+  ([Colab FAQ](https://research.google.com/colaboratory/faq.html), re-checked 2026-10-15). The
+  same page does give one figure the earlier version of this section missed: "In general,
+  notebooks can run for at most 12 hours, depending on availability and your usage patterns",
+  and Colab Pro+ up to 24 with compute units. It gives no GPU quota and no idle-timeout number
+  at all — "Colab does not publish these limits", naming idle timeout periods, maximum VM
+  lifetime and GPU types as things that vary over time. A 12-hour general cap is therefore
+  documented; any specific idle figure is community-reported.
 * **Hugging Face (model download).** The base is about 0.5 billion parameters, stored as
   `model.safetensors` in BF16 (about 1 GB). The notebook needs internet access to fetch it.
 
@@ -51,9 +60,15 @@ prepared dataset, a new account, or a paid service. The notebook never bypasses 
 | Licence text at the pinned commit | Apache License, Version 2.0 | `LICENSE` fetched at `/raw/7ae5576…/LICENSE`, this session |
 | Parameters | 494,032,768, BF16 | Hub API `safetensors` field |
 
-The licence is **per model**, not per family. Qwen's announcement, cited in an earlier pass and not re-fetched
-here, says all open-source models except the 3B and 72B variants are Apache 2.0
+The licence is **per model**, not per family. Qwen's announcement, re-fetched on 2026-10-15, says
+"All our open-source models, except for the 3B and 72B variants, are licensed under Apache 2.0"
 ([Qwen2.5 blog](https://qwenlm.github.io/blog/qwen2.5/)). Only the 0.5B model is used here.
+
+Re-checked live on 2026-10-15, through the same Hub the run uses: the model API still resolves
+`sha` `7ae557604adf67be50417f59c2c2f167def9a775`, still declares `license: apache-2.0`, and still
+reports BF16 `494,032,768` parameters; the `LICENSE` fetched at that revision still opens
+"Apache License / Version 2.0, January 2004", which is what `verify_model` looks for. The pin has
+not moved.
 
 The notebook checks the licence again at run time. `verify_model` in
 `fabric/training/hf_peft.py` requires the hub's commit to equal the pin, the model card to
@@ -154,17 +169,26 @@ verifies persistence.
 ## 7. Sparsiz: inspected, not integrated
 
 Commit `76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69` of
-`github.com/rajaram-2005/sparsiz`, cloned read-only. Findings:
+`github.com/rajaram-2005/sparsiz`, cloned read-only and re-measured line by line on
+2026-10-15. Findings:
 
-* **torch** appears only in `sparsiz/saram.py` (and one encoder under `intelligence/`). It
-  defines a small MSE autoencoder whose physics term is a comment-labelled "dummy loss".
-  **Nothing in the repository calls `backward()`, an optimizer, or `.step()`.** No model is
-  trained there.
-* **No Transformers, PEFT, LoRA or checkpoint training** exists in any file.
-* **`sparsiz/training/`** (12 modules) scores with `random.uniform` and `random.random`: data
-  quality, evaluation baselines, RL rewards, evolution, distillation verification, synthetic
-  data and curriculum. About 35 lines name themselves dummy, placeholder or simulated.
-* **No test** covers any training module.
+* **torch** is imported in exactly one file, `sparsiz/saram.py`, which defines a small MSE
+  autoencoder whose physics term is a comment-labelled "dummy loss". The word also appears in
+  `setup.py`'s dependency list and in one comment under `intelligence/saram/encoder/`; neither
+  imports it. **Nothing in the repository calls `backward()`, an optimizer, or `.step()`.**
+  No model is trained there.
+* **No Transformers, no PEFT** — zero lines name either. **No LoRA is implemented:** the seven
+  lines that name it are prose and printed labels about a conceptual temporary adapter in the
+  L0–L4 story, with no module and no dependency behind them. **No checkpointing code exists**
+  — zero lines name a checkpoint.
+* **`sparsiz/training/`** (12 modules) scores with `random.uniform` and `random.random` — 132
+  such lines across `sparsiz/`, 27 of them inside `sparsiz/training/`: data quality, evaluation
+  baselines, RL rewards, evolution, distillation verification, synthetic data and curriculum.
+  96 lines across `sparsiz/` name themselves dummy, placeholder or simulated (10 of them inside
+  `sparsiz/training/`). An earlier version of this page said "about 35 lines"; that number did
+  not reproduce at the pinned commit under any pattern tried, and the measured counts replace it.
+* **No test** covers any training module: the four test files import `sparsiz.faisanth`,
+  `sparsiz.premsoth`, `sparsiz.rajaram` and `sparsiz.saram`, and nothing from `sparsiz.training`.
 * `training/README.md` describes a pipeline that is not implemented.
 
 **Decision.** No Sparsiz code is reused, and Sparsiz is not integrated. Its scoring is
@@ -249,10 +273,57 @@ imports the trainer or the runner.
   import overwrite guard, and the verdict's quality rule. Each removal made a test fail.
   The import guard was not caught at first, because the test did not check the store's
   contents; that test was fixed and the mutation then caught.
+* **The mutation checks were reproduced on 2026-10-15, and each is caught by a named test.**
+  The whole suite was run after every removal, in a copy of the checkout, and the run stopped
+  the moment one removal left the suite green — it did not. Rule to catching test:
+
+  | Rule removed | Caught by |
+  | --- | --- |
+  | model-verification gate (`hf_peft.py`) | `test_the_hub_gate_refuses_a_revision_it_did_not_resolve` |
+  | dataset-pin gate (`smoke.py`) | `test_data_that_does_not_match_its_pins_stops_training` |
+  | `kaggle_output` path rule (`policy.py`) | `test_kaggle_output_refuses_paths_outside_the_working_directory` (5 cases) |
+  | synthetic label check (`jobspec.py`) | `test_a_synthetic_dataset_must_be_generated_locally_and_say_so` |
+  | Colab acknowledgement (`policy.py`) | `test_colab_session_paths_need_an_explicit_ephemeral_acknowledgement` |
+  | persistence rule (`smoke.py`) | `test_a_clean_run_with_a_gpu_passes_every_core_stage`, `test_persistence_is_not_claimed_without_a_read_back` |
+  | resume-source rule (`policy.py`) | `test_resume_sources_are_read_only_attached_outputs` |
+  | import overwrite guard (`checkpoint.py`) | `test_nothing_is_imported_when_the_local_store_is_already_as_new` |
+  | the verdict's quality rule (`smoke.py`) | `test_a_candidate_the_gate_refuses_is_not_accepted_but_is_still_tested` |
+
+  This is a script now, not a memory: `python services/fabric/scripts/mutation_check.py` copies
+  the repository once per rule, removes one rule, runs the suite and fails loudly if a removal
+  escapes — or if a rule's anchor text has moved, which would mean the check itself went stale.
+  It is deliberately not in CI: it is about four minutes of suite runs, and it only needs
+  re-running when one of these rules or this section changes.
+* **Every CI step was run on this checkout, not just read.** The zero-dependency check on
+  `services/core`; the core suite (567); `numpy` present and `torch` **not** importable; the
+  advisory audit against the live GitHub Advisory Database (5 packages, none covered, exit 0);
+  the fabric suite (747); the release gate end to end — `partial` status, a released
+  `aetheris-lite-retriever@0.1.0` at mrr 0.8497, and the undertrained run refused; the web
+  suite (92); `npm audit` clean on the production tree and the full tree; the production build;
+  the bundle check (no loopback URL, no credential-shaped string); the docs guard (39); and the
+  licence copies (all present, none truncated). This is the same work the four CI jobs do, and
+  it passed here and on the pull request.
 * The notebook is exactly what its builder produces, its code parses, it calls the tested
   orchestration, it needs no Drive mount, and it says it has not been executed.
 * The docs guard (`services/core/test/docs.test.mjs`) holds the counts in the README, docs 02–05,
   the fabric README and this page. It is re-run after any count changes.
+* **Re-verified on 2026-10-15, on this checkout** (a second pass, after the build pass): the
+  fabric suite is 747/747 and the core suite 567/567; the synthetic data regenerates to the §4
+  hashes byte-for-byte in two independent builds; every package pin in §12 exists on PyPI at
+  that exact version; and `hf_peft.py`'s calls were re-read against those exact wheels —
+  `dtype` plumbing with `torch_dtype` kept for back-compatibility in `from_pretrained`,
+  `generate(input_ids=…)`, `LoraConfig` as a dataclass over `PeftConfig` (so `task_type` is a
+  valid argument), `get_peft_model_state_dict`, `set_peft_model_state_dict`,
+  `PeftModel.from_pretrained`, and `model_info(files_metadata=True)` →
+  `sibling.lfs.sha256`. Peft 0.21.2's own imports from Transformers 5 (`Conv1D`,
+  `ALL_LAYERNORM_LAYERS`, `cached_file`, `http_user_agent`) still exist in 5.19.0. §7 was
+  re-measured from a fresh clone of the pinned commit, which is where the corrections to it
+  come from. §2's Kaggle and Colab figures were re-read from Kaggle's documentation and
+  Colab's FAQ, and §3's pin, declared licence and parameter count were re-resolved through the
+  Hub, with the `LICENSE` at the pinned revision fetched again; those re-checks are recorded in
+  §2 and §3.
+* The notebook clones the published branch, and a test fails if it is pointed at a session
+  branch — see the defect list in §12.
 
 **Not verified:**
 
@@ -293,13 +364,23 @@ expectation. **Nothing has been run, so every value below that depends on a run 
 | Inference result | NOT RUN |
 | Metrics | NOT RUN |
 | Persistence | NOT RUN |
-| Failures | None recorded: nothing has run. Defects found and fixed in this pass are listed below |
+| Failures | None recorded: nothing has run. Defects found and fixed before any run are listed below (two passes) |
 | Next step | Import the notebook on Kaggle (GPU, Internet on), then Save & Run All. Then run the persistence check |
 
-Defects found and fixed in this pass, before any run: the policy refused `/kaggle/working`,
+Defects found and fixed in the build pass, before any run: the policy refused `/kaggle/working`,
 which Kaggle keeps as output; `normpath` collapsed `s3://` URIs, so every object-store path
 would have been refused; training continued after a failed licence check; the verdict had no
 way to say a gate refused a candidate; and one test was too weak to catch a real defect.
+
+Defects found and fixed in the audit pass of 2026-10-15, before any run: the notebook cloned the
+session branch `arena/11d936e0-ragam`, which stops resolving when that session ends, so a run
+started later would have failed at `git clone`; it now clones `main`, the commit it actually
+gets is still recorded in `status.json`, and a test refuses a session branch. Three claims in §7
+about Sparsiz were wider than the code at the pinned commit and are corrected there to the
+measured numbers. `hf_peft.py`'s docstring named `tests/test_training_hf_backend.py`, a file that
+does not exist: the Hub gate tests live in `tests/test_training_resume_and_backend.py`. The
+docstring now names the file that exists. §2's Colab bullet also said the FAQ gives no lifetime
+figure; it does, a general 12-hour cap, and §2 now says so.
 
 ## 13. Base models, and image and video
 
@@ -315,6 +396,15 @@ training".
 1. **Run the smoke notebook once on Kaggle.** Import `services/fabric/remote/notebooks/klyvaron-chat-lora-smoke.ipynb`
    from the repository, set Accelerator to GPU and Internet to On, then Save & Run All.
    Expect errors on the first run.
+   The first cell stops before anything is trained if it cannot clone, and it now says which
+   failure it hit instead of raising a bare exit code:
+
+   * `Could not resolve host: github.com` — **the Internet switch is off**, which is the default
+     on Kaggle. Set it to On in the Settings panel and run again. This is the failure the first
+     attempt at this notebook actually hit.
+   * `Remote branch … not found` — a copy of the notebook that pins a branch which has since been
+     deleted, which is what a saved copy does when its working session ends. Re-import the
+     notebook, or set `REPO_REF = "main"`.
 2. **Read `status.json`.** Each stage shows PASSED, FAILED or NOT RUN. Fill in §12 from it.
 3. **Persistence check.** Copy the notebook, add the committed version's output as an Input,
    set `PERSISTENCE_ADAPTER`, and run again.
