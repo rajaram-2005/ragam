@@ -88,15 +88,19 @@ def test_the_notebook_pins_the_base_and_package_versions():
 
 def test_the_clone_cell_says_why_it_failed_instead_of_raising_an_exit_code():
     """A run that dies in this cell used to raise CalledProcessError with the reason only in
-    git's output, which is easy to lose. Both failures that actually happen -- no route to
-    github.com (Kaggle's Internet switch is off by default) and a branch that no longer
-    resolves (a saved copy of this notebook) -- must name themselves and the remedy."""
+    git's output, which is easy to lose. The three failures that actually happen -- no route to
+    github.com (Kaggle's Internet switch is off by default), a branch that no longer resolves
+    (a saved copy of this notebook), and a connection that is reached but never finishes
+    (transient, so retry first) -- must each name themselves and the remedy."""
     code = _code(_notebook())
     assert "Could not resolve host" in code, "the internet-off diagnosis is missing"
     assert "Internet" in code and "On" in code, "the remedy must name the switch to turn on"
     assert "Remote branch" in code, "the deleted-branch diagnosis is missing"
     assert "re-import" in code.lower(), "the deleted-branch remedy must say what to do"
-    assert "SystemExit" in code, "the cell must stop with a readable message"
+    assert "reached github.com" in code, "the reached-but-incomplete diagnosis is missing"
+    assert "Retry first" in code, "the transient failure must say to retry before blaming settings"
+    assert "RuntimeError" in code, "the cell must stop with a readable message"
+    assert "SystemExit" not in code, "an interpreter exit shows on Kaggle as a bare warning"
     assert "check=True" not in code, "the raw exit code is what made this unreadable"
 
 

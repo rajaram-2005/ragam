@@ -65,7 +65,7 @@ elif os.path.exists("/content"):
     PLATFORM = "colab"
     WORK = "/content/aetheris-smoke"
 else:
-    raise SystemExit("Run this notebook on Kaggle or Colab with a GPU accelerator.")
+    raise RuntimeError("Run this notebook on Kaggle or Colab with a GPU accelerator.")
 
 REPO_URL = "https://github.com/rajaram-2005/ragam.git"
 REPO_REF = "main"                   # the published branch. The exact commit used is recorded in status.json.
@@ -88,7 +88,7 @@ def run(cmd, what):
     if result.returncode:
         message = ((result.stderr or "") + (result.stdout or "")).strip()
         print(message[-2000:], file=sys.stderr)
-        raise SystemExit(f"{what} failed (exit {result.returncode}). The output above says why.")
+        raise RuntimeError(f"{what} failed (exit {result.returncode}). The output above says why.")
     return result
 
 
@@ -98,24 +98,38 @@ if os.path.isdir(REPO_DIR):
 clone = subprocess.run(["git", "clone", "--depth", "1", "--branch", REPO_REF, REPO_URL, REPO_DIR],
                        capture_output=True, text=True)
 if clone.returncode:
-    # Two failures account for almost every run of this cell that stops here. Say which one it
+    # Three failures account for almost every run of this cell that stops here. Say which one it
     # is and what to do, instead of an exit code that names neither.
     message = (clone.stderr or "") + (clone.stdout or "")
     print(message.strip()[-2000:], file=sys.stderr)
+    # Match the transient case first: its git/curl lines also say "unable to access", so
+    # checking it after the unreachable test would give it the wrong message.
+    if ("Failed to connect to github.com" in message or "Connection timed out" in message
+            or "Connection reset by peer" in message or "The remote end hung up unexpectedly" in message
+            or "early EOF" in message or "not closed cleanly before end of file" in message
+            or "The requested URL returned error" in message or "RPC failed" in message
+            or "SSL_ERROR" in message):
+        raise RuntimeError(
+            "git reached github.com but the connection did not finish. The network path is open, so "
+            "this is usually a transient hiccup: a timeout, a reset, or a 5xx answer from GitHub. "
+            "That is worth a retry before anyone's settings are blamed. Retry first: Save Version > "
+            "Save & Run All again, or just re-run this cell. If the same failure repeats, read the "
+            "lines above: a 5xx or 429 is GitHub's side and will pass, while a 403/404 means the "
+            "repository is no longer at that address. Nothing has been trained and nothing was written.")
     if "Could not resolve host" in message or "unable to access" in message or "Could not connect" in message:
-        raise SystemExit(
+        raise RuntimeError(
             "git could not reach github.com. This is almost always the notebook's Internet switch, "
             "which is off by default: on Kaggle open the Settings panel, set Internet to On, then "
             "Save Version > Save & Run All again. On Colab, reconnect the runtime. "
             "Nothing has been trained and nothing was written.")
     if "Remote branch" in message and "not found" in message:
-        raise SystemExit(
+        raise RuntimeError(
             f"The branch {REPO_REF!r} does not exist any more. This copy of the notebook was saved "
             "before that branch was deleted, which happens when a working session ends. Re-import "
             "the notebook from the repository, or set REPO_REF = \"main\" in the cell above and run "
             "this cell again. "
             "Nothing has been trained and nothing was written.")
-    raise SystemExit(f"git clone failed (exit {clone.returncode}); git said:\n{message.strip()[-1200:]}")
+    raise RuntimeError(f"git clone failed (exit {clone.returncode}); git said:\n{message.strip()[-1200:]}")
 
 REPO_COMMIT = run(["git", "-C", REPO_DIR, "rev-parse", "HEAD"], "reading the cloned commit").stdout.strip()
 print("repository commit:", REPO_COMMIT)
