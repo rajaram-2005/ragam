@@ -185,6 +185,43 @@ redistribution is in [`03-status.md`](03-status.md) §7 and [`05-security.md`](0
 
 ---
 
+### 1.5 The development plan
+
+Pro and Max are unbuilt, and Lite is partial. "Develop all three" is only checkable if each tier
+has written, testable requirements, so `services/core/src/klyvaron/plan.mjs` derives one for
+each tier from its record in `tiers.mjs`. It asks the same seven questions of every tier:
+
+| Gate | Met when |
+|---|---|
+| Artifact | a model artifact backs at least one capability |
+| Provenance | every backing names its provenance and licence |
+| Measurements | every available capability has measurements and limitations |
+| Chat | an instruction-tuned artifact backs `chat` |
+| Capability coverage | every capability the directive names is available |
+| Storage target | the primary artifact fits the 1.5 GB mobile budget (mobile tiers only) |
+| Hardware qualification | the record shows qualification on the target hardware class |
+
+A gate is derived, never declared. A capability counts only when it is `available` **and** backed,
+so a bare `available` label leaves the gates open, exactly as the validator refuses it.
+Hardware qualification is open for every tier, because the record has no qualification field at
+all. Tier targeting is not evidence of eligibility, and the plan says so rather than leaving the gate
+silently open.
+
+```
+node services/core/scripts/klyvaron.mjs plan
+```
+
+At this commit Lite meets four of seven gates: it has an artifact, provenance and measurements, and
+it fits the storage target. It stays open on chat, on coverage (2 of 11 capabilities) and on
+hardware. Pro and Max meet none. Nothing here trains a model. Building Pro or Max needs base weights
+and a GPU-qualified host that this sandbox does not have. Lite chat needs an instruction-tuned
+model, which is a training task with its own measured release gate. The plan is the list of what
+must be true first.
+
+The path to a Pro or Max training run is written down in [21 — Remote training](21-remote-training.md):
+remote compute only, a pinned third-party base, checkpoints on persistent storage and an acceptance gate.
+A first LoRA smoke run on Kaggle, on synthetic data, is written and waiting to be run. That pipeline has not yet been run on a GPU, and no Pro or Max artifact exists.
+
 ## 2. The six levels of learning
 
 The directive requires these to be formal levels rather than a synonym for conversation

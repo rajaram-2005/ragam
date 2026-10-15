@@ -29,6 +29,15 @@ five product areas, never presented as one of them.
 | `fabric/modelcards.py` | Versioned cards, validation gate, promotion, rollback |
 | `fabric/run.py` | Run records: config, seeds, dataset digest, revision, resources, hashes |
 | `fabric/pipeline.py` | The eight stages, each reporting its own status |
+| `fabric/training/jobspec.py` | Remote training job contract: refuses unpinned bases, unauthorised data, placeholders and storage that does not match its kind |
+| `fabric/training/policy.py` | Licence allowlist, provenance, and the storage rules for Kaggle output, Colab session disk and Drive |
+| `fabric/training/synthetic.py` | Deterministic, labelled synthetic starter data with pinned hashes |
+| `fabric/training/smoke.py` | The stage ledger: each stage PASSED, FAILED or NOT RUN, and the verdict |
+| `fabric/training/hf_peft.py` | Transformers + PEFT backend, isolated; torch imported lazily; never run here |
+| `fabric/training/checkpoint.py` | Atomic, checksummed checkpoints bound to one configuration; exact resume |
+| `fabric/training/runner.py` | Runs a job: baseline first, checkpoints, acceptance decision, artifact hashing, run record |
+| `fabric/training/release.py` | Candidate manifests, and the rule for replacing the stable release |
+| `fabric/training/experience.py` | Admission of conversation-derived examples to a queue. Never trains |
 | `fabric/server.py` | Thin HTTP surface |
 
 ## Requirements
@@ -39,7 +48,7 @@ is deliberate — see *What cannot run here* below.
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -e '.[dev]'
-pytest                     # 555 tests
+pytest                     # the full suite; the current count is in docs/03-status.md
 python -m fabric.server    # http://127.0.0.1:8791
 ```
 
@@ -98,6 +107,9 @@ Recorded as `blocked_needs_weights` / `blocked_needs_hardware`, not stubbed:
 
 * Real LoRA/QLoRA fine-tuning — needs a base checkpoint and a GPU.
   `huggingface.co` and `download.pytorch.org` are both unreachable from this host.
+  The remote pipeline (`fabric/training/`, [docs/21](../../docs/21-remote-training.md)) is built. Its
+  logic is tested on a NumPy fixture and a fake backend. The Kaggle notebook and its Transformers + PEFT
+  backend have never been run.
 * Distillation — needs a teacher model.
 * Preference optimization — needs paired preference data, a reward signal, and the
   compute to justify it. Upstream `sparsiz` simulated this step with `random`

@@ -521,7 +521,7 @@ test('every button variant used in the app has a rule in the stylesheet', () => 
 })
 
 test('Chat renders the saved exact model and identifies the online recipient', () => {
-  const provider={keyConfigured:true,baseUrl:'https://gateway.example/v1',models:['model-a','model-b'],selectedModel:'model-b',revision:1}
+  const provider={kind:'litellm',name:'LiteLLM',keyConfigured:true,configured:true,baseUrl:'https://gateway.example/v1',models:['model-a','model-b'],selectedModel:'model-b',revision:1}
   const markup=render('ChatArea',React.createElement(components.ChatArea,{provider}))
   assert.match(markup,/value="model-b" selected=""/)
   assert.match(markup,/No silent substitution/)
@@ -539,4 +539,19 @@ test('Provider Settings uses a password input and separates save from connection
   assert.match(markup,/Test connection/)
   assert.match(markup,/Remove connection/)
   assert.doesNotMatch(markup,/value="sk-/)
+})
+
+test('Provider Settings offers LiteLLM, Ollama and llama.cpp, and calls the local two online', () => {
+  const markup = render('ProviderSettings (runtimes)', React.createElement(components.ProviderSettings, { account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop }))
+  assert.match(markup, /LiteLLM gateway/)
+  assert.match(markup, /Ollama/)
+  assert.match(markup, /llama\.cpp server/)
+  // A local runtime is a destination the request leaves this process for, so the copy must not call it local.
+  assert.match(markup, /AETHERIS_TRUSTED_ORIGINS/)
+  assert.doesNotMatch(markup, /local inference|runs locally/i)
+  assert.doesNotMatch(markup, /value="sk-/)
+  // A signed-in workspace with no connection says so, and does not present an empty model list as ready.
+  const chat = render('ChatArea (unconnected)', React.createElement(components.ChatArea, { provider: { kind: 'ollama', name: 'Ollama', configured: false, models: [] } }))
+  assert.match(chat, /Connect your online provider/)
+  assert.match(chat, /Ollama/)
 })

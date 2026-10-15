@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 14,592 source lines, 11,881 test lines
+### `services/core` — 14,786 source lines, 12,222 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -79,11 +79,11 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
 | `online/accounts.mjs` | 387 | Accounts, scrypt password hashes, lockouts, throttling and host-delivered reset codes |
-| `online/app.mjs` | 383 | Authenticated online application, per-account context and exact-model inference |
+| `online/app.mjs` | 408 | Authenticated online application, per-account context, exact-model inference, and one provider route per runtime (LiteLLM, Ollama, llama.cpp) |
 | `online/context-routes.mjs` | 175 | Authenticated context and reviewed read-only tool routes |
-| `online/gateway.mjs` | 103 | Bounded LiteLLM HTTPS/SSE transport and destination validation |
+| `online/gateway.mjs` | 133 | Bounded OpenAI-compatible transport for LiteLLM, Ollama and llama.cpp: destination validation, SSE, no redirects, runtime table |
 | `online/http.mjs` | 32 | Bounded JSON requests and no-store responses |
-| `online/store.mjs` | 40 | Encrypted credential and persistent model-selection store |
+| `online/store.mjs` | 55 | Encrypted credential, runtime kind and persistent model-selection store |
 | `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `klyvaron/format.mjs` | 622 | The Klyvaron artifact format: manifest validation, the shared vocabulary digest, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
@@ -108,7 +108,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `config.mjs` | 248 | Environment → config, secret loading, `publicConfig` redaction |
 | `policy/egress.mjs` | 253 | The egress guard, runtime policies, data classes, `*` allow-all, global fetch hook |
 | `providers/klyvaron.mjs` | 220 | The first-party provider adapter: a local model behind the same contract, with its limitations carried into every response |
-| `server.mjs` | 44 | Entry point, startup banner, graceful shutdown |
+| `server.mjs` | 48 | Entry point, startup banner, graceful shutdown |
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
 | `media/validate.mjs` | 143 | Magic-byte sniffing, video genuineness check |
 | `klyvaron/footprint.mjs` | 137 | The footprint report a user sees: categorized bytes plus unmanaged files, against the 5 GB budget |
@@ -118,12 +118,13 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `memory/store.mjs` | 702 | User-approved memory, candidates that need approval before use, and session recall with citations |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
 | `klyvaron/tiers.mjs` | 485 | The three-tier model family, backing records, and the validator that refuses a capability with no artifact behind it |
+| `klyvaron/plan.mjs` | 120 | The development plan: per-tier gates derived from the tier records, each open gate with its reason |
 | `skills/registry.mjs` | 397 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
 | `skills/manifest.mjs` | 319 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
 | `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |
 | `skills/store.mjs` | 246 | Skills on disk: document + state split, version files for rollback, deletion tombstones |
 
-### `services/fabric` — 9,299 source lines, 7,107 test lines
+### `services/fabric` — 11,700 source lines, 8,798 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible
@@ -132,7 +133,7 @@ release manager, and a hand-written dual encoder whose **five parameter gradient
 all match central finite differences to ~3e-10**. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 2,665 source lines, 1,803 test lines
+### `apps/web` — 2,691 source lines, 1,818 test lines
 
 Five area components, three sign-in pages (sign in, create account, reset
 password) and the account card in the sidebar, a shell, shared primitives, an API

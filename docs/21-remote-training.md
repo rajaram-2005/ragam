@@ -1,0 +1,339 @@
+# 21 — Remote training: the free-first LoRA smoke run, and the path to Pro and Max
+
+**Status, stated first.** The pipeline is built and its logic is tested. **No model has been
+trained.** The first real run, one LoRA adapter on Kaggle (Colab as fallback), has **not
+happened**: this sandbox has no GPU and no route to Kaggle, Colab or the Hugging Face hub
+at run time. Every stage in §5 is therefore **NOT RUN** in the record. No Klyvaron Pro or
+Max model exists. Lite is the only trained Klyvaron model, trained from scratch on this
+machine ([11 — Klyvaron family](11-klyvaron-family.md)).
+
+## 1. The first milestone
+
+One real LoRA run, in this order, before anything is scaled toward Pro or Max:
+
+1. Train a LoRA adapter on **Qwen2.5-0.5B-Instruct**, pinned to one commit, for 200 optimizer
+   steps on **synthetic** starter data.
+2. Save the adapter, reload it into a fresh model, and generate on a fixed prompt. Compare
+   with the untrained base's output on the same prompt.
+3. Read the adapter back from an attached output of an earlier committed run, to check that
+   it persisted.
+
+Each of those is reported on its own status line (§5). A stage that did not run is shown as
+**NOT RUN**, never as a pass.
+
+## 2. Free-first resources, and what they promise
+
+Nothing here needs a purchased GPU, a personal GPU, a Google Drive upload, a manually
+prepared dataset, a new account, or a paid service. The notebook never bypasses a quota.
+
+* **Kaggle Notebooks (primary).** Kaggle's notebook documentation gives **12 hours** of
+  execution for CPU and GPU sessions, and 9 hours for TPU
+  ([Kaggle: getting started](https://www.kaggle.com/docs/notebooks)). That page also says up to
+  **20 GB** may be saved in `/kaggle/working`, and that a longer computation should be run
+  with **Save Version > Save & Run All**. The earlier 9-hour figure applied to TPU, not GPU.
+  The Kaggle GPU guide's weekly allowance (about 30 GPU hours) was cited earlier and was not
+  re-checked in this pass.
+* **Google Colab (fallback).** Colab's FAQ says resources "are not guaranteed and not
+  unlimited", idle VMs are deleted, a maximum lifetime applies, and the free tier does not
+  allow SSH shells or distributed workers
+  ([Colab FAQ](https://research.google.com/colaboratory/faq.html)). The FAQ gives no fixed
+  GPU quota and no idle-timeout figure. Any specific idle figure is community-reported.
+* **Hugging Face (model download).** The base is about 0.5 billion parameters, stored as
+  `model.safetensors` in BF16 (about 1 GB). The notebook needs internet access to fetch it.
+
+## 3. The base model: pin, licence, and what was checked
+
+| Item | Value | Checked how |
+| --- | --- | --- |
+| Model | `Qwen/Qwen2.5-0.5B-Instruct` | Hugging Face model API, 2026-10-15 |
+| Pinned commit | `7ae557604adf67be50417f59c2c2f167def9a775` | Hub API `sha` at that date. It is the `main` commit at that moment; the pin does not move if `main` does |
+| Declared licence | `apache-2.0` | Model card metadata, Hub API |
+| Licence text at the pinned commit | Apache License, Version 2.0 | `LICENSE` fetched at `/raw/7ae5576…/LICENSE`, this session |
+| Parameters | 494,032,768, BF16 | Hub API `safetensors` field |
+
+The licence is **per model**, not per family. Qwen's announcement, cited in an earlier pass and not re-fetched
+here, says all open-source models except the 3B and 72B variants are Apache 2.0
+([Qwen2.5 blog](https://qwenlm.github.io/blog/qwen2.5/)). Only the 0.5B model is used here.
+
+The notebook checks the licence again at run time. `verify_model` in
+`fabric/training/hf_peft.py` requires the hub's commit to equal the pin, the model card to
+declare Apache-2.0, the `LICENSE` text to contain "Apache License" and "Version 2.0", and the
+downloaded `model.safetensors` SHA-256 to match the hub's LFS hash. Any failure stops the run
+before training. The check is recorded in the ledger as `model_verification`.
+
+The job file records a **human** `licenceCheckedBy` field only as an automated check, with
+"human review still pending". A person still has to read the file and record their name.
+
+## 4. The synthetic starter dataset
+
+Nobody has to supply data. `fabric/training/synthetic.py` generates it from fixed rules and a
+fixed seed (`20261015`). Each row is a JSON object with a `text` field, in the form
+`### Instruction:` / `### Response:`. Each row also carries `synthetic: true` and a label.
+
+* **Families.** Addition, word reversal, letter count, uppercase, vowel count and number
+  sorting, all for training. The answers are computed by Python. A separate held-out family
+  of colour questions is used as the regression set, so it measures damage to behaviour the
+  training never taught.
+* **Disjoint.** No validation or regression text appears in training. A test checks it.
+* **Labelled.** Every file, the manifest and the job's `contentsDescription` say SYNTHETIC.
+  The job refuses a synthetic dataset whose description omits that word, or whose provenance
+  is anything but `generated_locally`.
+
+| File | Examples | SHA-256 |
+| --- | ---: | --- |
+| `train.jsonl` | 2000 | `70b11896f0f4c764886458727c290e9f967f2465ec5901ca0d67216b2bb28d57` |
+| `validation.jsonl` | 300 | `571e78d2e87a0b4031efc7d2711eb125a1d171f1f984dd9e770ef227cbe88d5b` |
+| `synthetic-regression.jsonl` | 40 | `41cb2f1c25695764d7aa085650fb99cbba9e6250606352b4a7ce1ef90fb3394b` |
+
+The manifest digest is `b603cbb5dfa51a2af51ede77c8d2a018cdd5d4bf33739e8b57ad3ce55e3045d2`.
+Two independent builds gave identical bytes. The job file pins these hashes, and a test fails
+if the generator drifts from them.
+
+The generated output depends on Python's `random` module. If a future Python changed it,
+the notebook's pin check would refuse the data, and nothing would train on different bytes
+silently. That refusal is intended.
+
+**What this data is not.** It is not domain knowledge and not user data. A passing smoke run
+shows the pipeline works. It says nothing about whether any model is useful.
+
+## 5. The smoke run, stage by stage
+
+`fabric/training/smoke.py` runs these stages in order and writes `status.json`. Each has its
+own status: **PASSED** (ran and its check succeeded), **FAILED** (ran and failed, or raised;
+the error is kept), or **NOT RUN** (not executed, because a prerequisite was missing or an
+earlier stage failed).
+
+| Stage | Needs a GPU | What it checks |
+| --- | --- | --- |
+| `environment` | no | Package versions, disk space, and the GPU if present |
+| `model_verification` | no | The Hub commit, licence, LICENSE text and weight hash (§3) |
+| `dataset` | no | The generated files match the job's pinned hashes and counts (§4) |
+| `training` | yes | Baseline on the same split, then 200 LoRA steps, checkpoints, an artifact hashed from disk, and the acceptance decision |
+| `reload` | yes | A **fresh** base model with the saved adapter attached; the adapter's recorded base revision must equal the pin; logits must be finite |
+| `inference` | yes | The reloaded output on a fixed prompt differs from the untrained base's. This shows the adapter is applied. It is **not** a quality measure |
+| `quality` | yes | The job's acceptance gate (§9). PASSED only if the gate is met on synthetic validation |
+| `persistence` | yes | The adapter was read back from an attached output of an earlier committed run. Otherwise **NOT RUN** |
+
+**Verdict.** `REFUSED` if the job breaks a rule (nothing runs). `FAILED` if a technical stage
+failed. `NOT ACCEPTED` if every stage ran but the gate refused the adapter. `PASSED` if every
+core stage passed. `INCOMPLETE` otherwise, for example with no GPU. `PASSED` never says the
+output persisted; that needs the `persistence` stage.
+
+**Training choices.** Weights are float32, a deliberate choice for a 0.5B model on a 16 GB
+GPU, to avoid precision failures that look like pipeline bugs. LoRA rank 8, alpha 16, dropout
+0.05, on the attention projections. The loss is taken on the answer tokens only, with the
+prompt masked. Batches come from the step number alone, so a resumed run reads the same data
+in the same order.
+
+**Not promised.** GPU kernels are not guaranteed to be deterministic. A resumed run is
+expected to match an uninterrupted one on the fixture, which is pure NumPy. On the GPU that
+match is **not verified**.
+
+## 6. Storage, and what Kaggle keeps
+
+This section corrects an earlier version of this page, which said `/kaggle/working` is
+"discarded when the session ends". That was too strong.
+
+* `kaggle_output`: paths inside `/kaggle/working/` only. Kept as the output of a **committed**
+  version (Save & Run All). An interactive session that is not committed can lose its files.
+  Persistence is claimed only after a read-back through `/kaggle/input` (the `persistence`
+  stage).
+* `colab_session`: the Colab runtime disk. Lost when the runtime ends. A job must acknowledge
+  this (`ephemeralAcknowledged: true`). The notebook sets that itself on Colab, and the ledger
+  notes it.
+* `google_drive`, `object_store`, `local_disk`: kept as before.
+* `/kaggle/input` is read-only. It is accepted only as a `checkpoint.resumeFrom` source.
+  Anything else under it is refused.
+* `resumeFrom`: the newest verified checkpoint of the **same** configuration is copied into the
+  working store. A checkpoint from another configuration is refused. A newer local checkpoint
+  is never replaced by an older attached one.
+
+The Kaggle documentation supports these facts. Only a read-back through `/kaggle/input`
+verifies persistence.
+
+## 7. Sparsiz: inspected, not integrated
+
+Commit `76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69` of
+`github.com/rajaram-2005/sparsiz`, cloned read-only. Findings:
+
+* **torch** appears only in `sparsiz/saram.py` (and one encoder under `intelligence/`). It
+  defines a small MSE autoencoder whose physics term is a comment-labelled "dummy loss".
+  **Nothing in the repository calls `backward()`, an optimizer, or `.step()`.** No model is
+  trained there.
+* **No Transformers, PEFT, LoRA or checkpoint training** exists in any file.
+* **`sparsiz/training/`** (12 modules) scores with `random.uniform` and `random.random`: data
+  quality, evaluation baselines, RL rewards, evolution, distillation verification, synthetic
+  data and curriculum. About 35 lines name themselves dummy, placeholder or simulated.
+* **No test** covers any training module.
+* `training/README.md` describes a pipeline that is not implemented.
+
+**Decision.** No Sparsiz code is reused, and Sparsiz is not integrated. Its scoring is
+simulated, so reusing it would present simulated results as training. The SHA-256 dedupe idea
+is the same as the manifest in §4, implemented here. A `ContaminationDetector` in Sparsiz's
+DataForge uses Python's `hash()`, which varies between processes, so it is not reproducible.
+Because no functioning backend existed, the Transformers + PEFT backend is written **inside
+fabric**, isolated in `hf_peft.py`, with torch imported lazily.
+
+## 8. Checkpoints and resume
+
+Each checkpoint is a directory with `manifest.json` (the step, the config digest, and a
+SHA-256 and size per file) plus the trainer's files.
+
+* **Atomic.** Written to a staging directory, then renamed.
+* **Verified on load.** Every file is re-hashed. A corrupt checkpoint is skipped, the reason
+  is recorded, and the next older one is used.
+* **Bound to one configuration.** The config digest covers the base revision, the dataset
+  hashes, the training settings and the regression hashes. Storage locations and thresholds
+  are excluded. A directory holding another configuration's checkpoint is **refused**.
+* **Never overwritten.** A verified checkpoint is never replaced.
+* **Retention.** The newest `keepLast` are kept.
+
+On the NumPy fixture, an interrupted and resumed run ends at the same adapter digest as an
+uninterrupted one, including after a corrupt newest checkpoint. The GPU case is not verified.
+
+## 9. The acceptance gate
+
+A run is judged against a baseline measured on the same validation split before any step. It
+is a candidate only if:
+
+1. Validation loss falls by at least `minImprovement` nats.
+2. Validation accuracy rises by at least `minAccuracyGain`. A loss-only rule accepted a run
+   whose loss fell only through calibration, with accuracy down. The accuracy rule was added
+   after that happened on the fixture.
+3. Validation has at least 200 examples.
+4. Every regression set worsens by no more than `regressionTolerance`. An unmeasured set
+   counts as failing.
+
+The job's thresholds are unchanged from the earlier scaffold, so they were not tuned for this
+run.
+
+Only an eligible run can become a **candidate**. A candidate manifest records the base (with
+`independentlyPretrained: false`), the licence check, the dataset hashes and the run record's
+digest. It does not change any stable pointer. Replacing the stable release needs a named
+approver and an explicit acceptance statement (`fabric/training/release.py`). The code cannot
+run that acceptance suite, so it does not pretend to.
+
+## 10. Experience-driven examples
+
+A conversation can become a candidate example only after `fabric/training/experience.py`
+checks: consent with the basis recorded; no secret-like text, which is **rejected**, not
+repaired; a named reviewer; and a quality score of at least 0.8. Admission changes no weights.
+A queued example waits for a person to start a job that names it, and then passes the same
+licence, privacy and provenance checks as any dataset. A test checks that this module never
+imports the trainer or the runner.
+
+## 11. What was verified, and what was not
+
+**Verified here** (fabric suite, pytest, this session):
+
+* The full fabric suite passes. Its totals are in the table in `docs/03`, and the docs guard
+  checks them.
+* The job contract refuses each rule in §6 and the synthetic-labelling rule, and the template
+  validates with no placeholder left.
+* The storage rules refuse notebook paths used for the wrong kind, `..` escapes, and resume
+  sources outside `/kaggle/input`.
+* The ledger keeps each stage separate. A failed licence check stops training. Data that does
+  not match its pins stops training. A non-finite loss is never checkpointed. Persistence
+  passes only on a read-back. A refused job runs nothing. The verdict vocabulary is fixed.
+* The synthetic data is deterministic, disjoint and correctly labelled. Every training answer
+  is recomputed and checked.
+* The checkpoint import copies only the newest verified checkpoint of the same configuration,
+  and does not overwrite a newer local one.
+* The Hub gate refuses a wrong revision, a non-Apache licence text, a declared-licence
+  mismatch, a weight-hash mismatch and a missing hub hash. These run with an injected fake Hub.
+* Batch order depends only on the step, and one epoch visits each row once. The loss is taken on
+  the answer only.
+* **Mutation checks.** Nine rules were removed one at a time in a scratch copy: the
+  model-verification gate, the dataset-pin gate, the `kaggle_output` path rule, the synthetic
+  label check, the Colab acknowledgement, the persistence rule, the resume-source rule, the
+  import overwrite guard, and the verdict's quality rule. Each removal made a test fail.
+  The import guard was not caught at first, because the test did not check the store's
+  contents; that test was fixed and the mutation then caught.
+* The notebook is exactly what its builder produces, its code parses, it calls the tested
+  orchestration, it needs no Drive mount, and it says it has not been executed.
+* The docs guard (`services/core/test/docs.test.mjs`) holds the counts in the README, docs 02–05,
+  the fabric README and this page. It is re-run after any count changes.
+
+**Not verified:**
+
+* **The real backend has never run.** `hf_peft.py` (torch, Transformers, PEFT) has no torch
+  here. Its calls are written against the installed API signatures: `AutoModelForCausalLM`
+  with `dtype=`, `LoraConfig`, `get_peft_model`, `get_peft_model_state_dict`,
+  `set_peft_model_state_dict`, `PeftModel.from_pretrained`, and `hf_hub_download`,
+  `snapshot_download`, `model_info(files_metadata=True)`. These were checked against the
+  wheels for the versions in §12. Their behaviour at run time was not.
+* **The notebook has never run.** It has no GPU and no route to Kaggle, Colab or Hugging Face.
+  The first run is the first test of it, and it will likely find errors.
+* **Package compatibility with Kaggle's preinstalled torch** is not checked. The notebook pins
+  `transformers` 5.19.0 and `peft` 0.21.2, and may have to adjust them.
+* **The GPU, memory and time.** The job's `minGpuMemoryGb: 8`, `expectedHours: 0.5` and the
+  200 steps are estimates, not measurements.
+* **Persistence.** No Kaggle output has been read back.
+* **Quality.** No quality claim is made or implied, for this model, the data, or any tier.
+* No adapter has run under llama.cpp, Ollama or OpenVINO.
+
+## 12. Run record: the fields the first run must report
+
+These are the fields the final report must contain. Each is filled from a real run, not from
+expectation. **Nothing has been run, so every value below that depends on a run is NOT RUN.**
+
+| Field | Value |
+| --- | --- |
+| Sparsiz commit | `76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69` (inspected; not used) |
+| Repository commit | recorded by the notebook in `status.json` (`context.repoCommit`). NOT RUN |
+| Base-model commit | `7ae557604adf67be50417f59c2c2f167def9a775` (pinned; resolved at run time: NOT RUN) |
+| Licence | Apache-2.0; LICENSE text checked at the pinned commit in this session; run-time check NOT RUN |
+| Dataset hash | train `70b11896…`, validation `571e78d2…`, regression `41cb2f1c…`; manifest digest `b603cbb5…` (generated and checked in this session) |
+| Environment versions | NOT RUN. Pins: transformers 5.19.0, peft 0.21.2, accelerate 1.15.0, huggingface_hub 2.2.0, safetensors 0.8.0; torch is whatever Kaggle provides |
+| Detected GPU | NOT RUN |
+| Optimizer steps | NOT RUN (target 200) |
+| Loss | NOT RUN |
+| Checkpoint location | NOT RUN (planned `/kaggle/working/aetheris-smoke/checkpoints`) |
+| Reload result | NOT RUN |
+| Inference result | NOT RUN |
+| Metrics | NOT RUN |
+| Persistence | NOT RUN |
+| Failures | None recorded: nothing has run. Defects found and fixed in this pass are listed below |
+| Next step | Import the notebook on Kaggle (GPU, Internet on), then Save & Run All. Then run the persistence check |
+
+Defects found and fixed in this pass, before any run: the policy refused `/kaggle/working`,
+which Kaggle keeps as output; `normpath` collapsed `s3://` URIs, so every object-store path
+would have been refused; training continued after a failed licence check; the verdict had no
+way to say a gate refused a candidate; and one test was too weak to catch a real defect.
+
+## 13. Base models, and image and video
+
+Only Qwen2.5-0.5B-Instruct is in use. Pro and Max bases are not chosen here. Each needs its own
+licence check at its pinned commit, its own baseline, and its own hardware measurement.
+
+Image and Video are not started. The plan is unchanged: start Image with an existing image
+model adapter, and treat Video as processing and inference pipelines, not "foundation-model
+training".
+
+## 14. Next steps, in order
+
+1. **Run the smoke notebook once on Kaggle.** Import `services/fabric/remote/notebooks/klyvaron-chat-lora-smoke.ipynb`
+   from the repository, set Accelerator to GPU and Internet to On, then Save & Run All.
+   Expect errors on the first run.
+2. **Read `status.json`.** Each stage shows PASSED, FAILED or NOT RUN. Fill in §12 from it.
+3. **Persistence check.** Copy the notebook, add the committed version's output as an Input,
+   set `PERSISTENCE_ADAPTER`, and run again.
+4. **Replace the estimates** in the job with the measured memory and time.
+5. **Record a human licence review** in `licenceCheckedBy`, in place of the automated entry.
+6. Only after the smoke run passes end to end: consider scaling. Pro and Max each need their own
+   base, data, baseline and hardware measurement, and a defined acceptance suite, which does not
+   yet exist.
+
+## Where the code is
+
+* `services/fabric/fabric/training/` — `policy.py` (licences, provenance, storage), `jobspec.py`
+  (the contract), `synthetic.py` (the starter data), `smoke.py` (the stage ledger),
+  `hf_peft.py` (the Transformers + PEFT backend, isolated), `checkpoint.py` (the store and the
+  import), `runner.py` (the loop, the decision, the run record), `lora_fixture.py` (the NumPy
+  fixture), `release.py` (candidates and the stable rule), `experience.py` (admission).
+* `services/fabric/remote/` — the job template `jobs/klyvaron-chat-lora-experiment.json`, and the
+  notebook `notebooks/klyvaron-chat-lora-smoke.ipynb`, generated by `build_notebook.py`. Edit the
+  builder and rerun it; never edit the notebook.
+* `services/fabric/tests/test_training_*.py` — the tests described in §11.
+* The superseded Colab-and-Drive design, in commit `3dc8fb1` on this branch, was replaced by the
+  free-first design above.

@@ -83,9 +83,11 @@ export const api = {
   confirmPasswordReset: ({ email, code, password }) => request('POST', '/api/auth/password-reset/confirm', { email, code, password }),
 
   provider: () => request('GET', '/api/providers'),
-  saveProvider: (body) => request('PUT', '/api/providers/litellm', body),
-  testProvider: () => request('POST', '/api/providers/litellm/test', {}),
-  removeProvider: () => request('DELETE', '/api/providers/litellm', {}),
+  // One route per runtime, mirrored from PROVIDER_ROUTES in services/core/src/online/app.mjs.
+  // The literals are spelled out in each method so the route is visible where it is called.
+  saveProvider: (kind, body) => request('PUT', { litellm: '/api/providers/litellm', ollama: '/api/providers/ollama', llamacpp: '/api/providers/llamacpp' }[kind], body),
+  testProvider: (kind) => request('POST', `${{ litellm: '/api/providers/litellm', ollama: '/api/providers/ollama', llamacpp: '/api/providers/llamacpp' }[kind]}/test`, {}),
+  removeProvider: (kind) => request('DELETE', { litellm: '/api/providers/litellm', ollama: '/api/providers/ollama', llamacpp: '/api/providers/llamacpp' }[kind], {}),
   selectModel: (model) => request('PUT', '/api/models/selection', { model }),
   modelCatalog: (q = '') => request('GET', `/api/models/catalog?q=${encodeURIComponent(q)}`),
   refreshCatalog: (sourceId, authorizeNetwork = false) => request('POST', '/api/models/catalog/refresh', { sourceId, authorizeNetwork }),

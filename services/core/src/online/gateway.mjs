@@ -1,10 +1,39 @@
-// LiteLLM transport. No local runtime, redirect, retry or alternate-model fallback.
+// Online gateway transport. No redirect, retry or alternate-model fallback.
+//
+// Every runtime here speaks the same OpenAI-compatible wire protocol, `GET {base}/models`
+// and `POST {base}/chat/completions` (with SSE when streaming). LiteLLM was the first
+// gateway the online entry supported. Ollama and llama.cpp's `llama-server` both expose the same
+// `/v1` routes, so they reach the online entry through this one transport. That keeps
+// their traffic under the same deadline, size limits, cancellation, redirect refusal and
+// destination checks, instead of a second network path with weaker guarantees.
 import http from 'node:http'
 import https from 'node:https'
 import { lookup } from 'node:dns'
 import { isIP, BlockList } from 'node:net'
 
 export function failure(code, message, status = 400) { return Object.assign(new Error(message), { code, status }) }
+
+/**
+ * The runtimes Provider Settings can point at.
+ *
+ * `keyRequired` is the only behavioural difference. A LiteLLM gateway is an authenticated
+ * service, so it always needs a key. A local Ollama or llama.cpp server usually has none,
+ * and a key is sent only if one is stored (`llama-server --api-key` is the case that needs
+ * one). Local runtimes are still ONLINE inference: the request leaves this process for the
+ * configured endpoint, and the UI and ledger say so.
+ */
+export const RUNTIMES = Object.freeze({
+  litellm: Object.freeze({ id: 'litellm', label: 'LiteLLM', keyRequired: true }),
+  ollama: Object.freeze({ id: 'ollama', label: 'Ollama', keyRequired: false }),
+  llamacpp: Object.freeze({ id: 'llamacpp', label: 'llama.cpp server', keyRequired: false }),
+})
+
+/** The runtime record for a kind. Unknown kinds are refused, never mapped to a default. */
+export function runtimeFor(kind = 'litellm') {
+  const runtime = Object.hasOwn(RUNTIMES, kind) ? RUNTIMES[kind] : null
+  if (!runtime) throw failure('invalid_runtime', 'Choose LiteLLM, Ollama or llama.cpp server.', 400)
+  return runtime
+}
 const blocked = new BlockList(), blocked6 = new BlockList()
 for (const [address, prefix] of [['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],['172.16.0.0',12],['192.0.0.0',24],['192.168.0.0',16],['198.18.0.0',15],['224.0.0.0',4],['240.0.0.0',4]]) blocked.addSubnet(address, prefix, 'ipv4')
 for (const [address, prefix] of [['::',96],['::ffff:0:0',96],['fc00::',7],['fe80::',10],['ff00::',8],['2001:db8::',32],['2002::',16]]) blocked6.addSubnet(address, prefix, 'ipv6')
@@ -15,22 +44,23 @@ export function privateAddress(address) {
 export function gatewayUrl(value, trustedOrigins = []) {
   if (typeof value !== 'string' || value.length > 2048) throw failure('invalid_endpoint', 'Gateway URL is too long or invalid.')
   let url
-  try { url = new URL(value) } catch { throw failure('invalid_endpoint', 'Enter a valid LiteLLM API base URL.') }
+  try { url = new URL(value) } catch { throw failure('invalid_endpoint', 'Enter a valid API base URL.') }
   if (url.username || url.password || url.search || url.hash || !['http:', 'https:'].includes(url.protocol)) throw failure('invalid_endpoint', 'Use an HTTP(S) base URL without credentials, query or fragment.')
   const trusted = trustedOrigins.includes(url.origin)
   if ((!trusted && url.protocol !== 'https:') || (!trusted && isIP(url.hostname.replace(/^\[|\]$/g, '')) && privateAddress(url.hostname))) throw failure('endpoint_blocked', 'Use public HTTPS. A private gateway requires an operator-configured trusted origin.')
   return url.href.replace(/\/+$/, '')
 }
 
-export class LiteLLMGateway {
+export class OnlineGateway {
   constructor({ trustedOrigins = [], timeoutMs = 120_000, maxBytes = 2 * 1024 * 1024 } = {}) { Object.assign(this, { trustedOrigins, timeoutMs, maxBytes }) }
   async request(config, path, { body, signal, onFrame } = {}) {
+    const runtime = runtimeFor(config.kind ?? 'litellm'), label = runtime.label
     const base = gatewayUrl(config.baseUrl, this.trustedOrigins)
     const url = new URL(`${base}${path}`)
     const trusted = this.trustedOrigins.includes(url.origin)
     const payload = body === undefined ? null : JSON.stringify(body)
     if (payload && Buffer.byteLength(payload) > this.maxBytes) throw failure('payload_too_large', 'Assembled request is too large.', 413)
-    if (!config.apiKey) throw failure('provider_not_configured', 'Configure a LiteLLM gateway key in Provider Settings.', 503)
+    if (runtime.keyRequired && !config.apiKey) throw failure('provider_not_configured', `Configure a ${label} key in Provider Settings.`, 503)
     if (signal?.aborted) throw failure('cancelled', 'Request cancelled.', 499)
     return await new Promise((resolve, reject) => {
       let req, timer, response, finished = false
@@ -49,12 +79,12 @@ export class LiteLLMGateway {
       })
       req = (url.protocol === 'https:' ? https : http).request(url, {
         method: payload ? 'POST' : 'GET', lookup: safeLookup,
-        headers: { authorization: `Bearer ${config.apiKey}`, accept: onFrame ? 'text/event-stream' : 'application/json', ...(payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {}) },
+        headers: { ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}), accept: onFrame ? 'text/event-stream' : 'application/json', ...(payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {}) },
       }, (res) => {
         response = res
         if (res.statusCode < 200 || res.statusCode >= 300) {
           const code = res.statusCode === 401 || res.statusCode === 403 ? 'provider_auth_failed' : res.statusCode === 429 ? 'provider_rate_limited' : 'provider_error'
-          return done(failure(code, `LiteLLM returned HTTP ${res.statusCode}. Check gateway access, model permissions and quota.`, 502))
+          return done(failure(code, `${label} returned HTTP ${res.statusCode}. Check gateway access, model permissions and quota.`, 502))
         }
         if (onFrame && !String(res.headers['content-type']).includes('text/event-stream')) return done(failure('invalid_stream', 'Gateway did not return a streaming response.', 502))
         let text = '', size = 0, streamDone = false
@@ -88,9 +118,9 @@ export class LiteLLMGateway {
           try { done(null, JSON.parse(text)) } catch { done(failure('invalid_response', 'Gateway returned invalid JSON.', 502)) }
         })
       })
-      req.on('error', (error) => done(error.code === 'endpoint_blocked' ? error : failure('provider_unreachable', 'Cannot reach LiteLLM. Check the endpoint, TLS, DNS and server network access.', 502)))
+      req.on('error', (error) => done(error.code === 'endpoint_blocked' ? error : failure('provider_unreachable', `Cannot reach ${label}. Check the endpoint, TLS, DNS and server network access.`, 502)))
       // This timer remains active through DNS, headers AND the entire body/stream.
-      timer = setTimeout(() => done(failure('provider_timeout', 'LiteLLM request exceeded its total deadline.', 504)), this.timeoutMs)
+      timer = setTimeout(() => done(failure('provider_timeout', `${label} request exceeded its total deadline.`, 504)), this.timeoutMs)
       signal?.addEventListener('abort', abort, { once: true })
       req.end(payload)
     })

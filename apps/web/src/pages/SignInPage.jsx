@@ -22,7 +22,7 @@ export default function SignInPage({ checking = false, error = null, notice = ''
     <AuthLayout
       active="signin"
       title="Sign in"
-      subtitle="Chat, Image, Video, Plugins and MCP, through this installation's LiteLLM gateway."
+      subtitle="Chat, Image, Video, Plugins and MCP, through this installation's online gateway."
       error={error}
       notice={notice}
       noticeTone="info"

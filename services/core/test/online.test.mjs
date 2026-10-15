@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { OnlineApp } from '../src/online/app.mjs'
-import { gatewayUrl, privateAddress, LiteLLMGateway } from '../src/online/gateway.mjs'
+import { gatewayUrl, privateAddress, OnlineGateway } from '../src/online/gateway.mjs'
 const listen = (s) => new Promise((done) => s.listen(0, '127.0.0.1', () => done(`http://127.0.0.1:${s.address().port}`)))
 const close = (s) => new Promise((done) => { s.closeAllConnections(); s.close(done) })
 async function fixture(t, options = {}) {

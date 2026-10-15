@@ -7,7 +7,11 @@ import { DEFAULT_MAX_ACCOUNTS } from './online/accounts.mjs'
 export async function main({ env = process.env, stdout = console.log } = {}) {
   const config = {
     dataDir: env.AETHERIS_ONLINE_DATA_DIR || resolve('.aetheris-data/online'),
-    trustedOrigins: (env.AETHERIS_LITELLM_TRUSTED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
+    // Exact origins the operator trusts for an endpoint that would otherwise be refused: a
+    // private or loopback LiteLLM gateway, or a local Ollama / llama.cpp server. The first
+    // name is the general one; AETHERIS_LITELLM_TRUSTED_ORIGINS is still read, so an existing
+    // installation keeps working unchanged.
+    trustedOrigins: [env.AETHERIS_TRUSTED_ORIGINS || '', env.AETHERIS_LITELLM_TRUSTED_ORIGINS || ''].join(',').split(',').map((s) => s.trim()).filter(Boolean),
     secureCookie: env.AETHERIS_COOKIE_SECURE !== 'false',
     // 'strict' never sends the session cookie on a cross-site request, which is right for
     // an installation visited directly and breaks one served inside another site's iframe.
@@ -33,7 +37,7 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
   if (config.cookieSameSite !== 'strict') {
     stdout(`  cookie     SameSite=${config.cookieSameSite}${config.secureCookie ? ' + Secure' : ''} — the session is sent on cross-site requests, so this app can be embedded in another site; mutations still require the x-aetheris-request header`)
   }
-  stdout('Configure LiteLLM in Provider Settings. No local inference or automatic model downloads.')
+  stdout('Configure an online gateway (LiteLLM, Ollama or llama.cpp server) in Provider Settings. No local inference or automatic model downloads.')
   const shutdown = async () => { server.closeAllConnections(); await new Promise((done) => server.close(done)); app.close() }
   return { app, server, config, shutdown, exitCode: 0 }
 }
