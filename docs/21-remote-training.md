@@ -297,7 +297,7 @@ imports the trainer or the runner.
 * **Every CI step was run on this checkout, not just read.** The zero-dependency check on
   `services/core`; the core suite (567); `numpy` present and `torch` **not** importable; the
   advisory audit against the live GitHub Advisory Database (5 packages, none covered, exit 0);
-  the fabric suite (745); the release gate end to end — `partial` status, a released
+  the fabric suite (747); the release gate end to end — `partial` status, a released
   `aetheris-lite-retriever@0.1.0` at mrr 0.8497, and the undertrained run refused; the web
   suite (92); `npm audit` clean on the production tree and the full tree; the production build;
   the bundle check (no loopback URL, no credential-shaped string); the docs guard (39); and the
@@ -308,7 +308,7 @@ imports the trainer or the runner.
 * The docs guard (`services/core/test/docs.test.mjs`) holds the counts in the README, docs 02–05,
   the fabric README and this page. It is re-run after any count changes.
 * **Re-verified on 2026-10-15, on this checkout** (a second pass, after the build pass): the
-  fabric suite is 745/745 and the core suite 567/567; the synthetic data regenerates to the §4
+  fabric suite is 747/747 and the core suite 567/567; the synthetic data regenerates to the §4
   hashes byte-for-byte in two independent builds; every package pin in §12 exists on PyPI at
   that exact version; and `hf_peft.py`'s calls were re-read against those exact wheels —
   `dtype` plumbing with `torch_dtype` kept for back-compatibility in `from_pretrained`,
@@ -396,6 +396,15 @@ training".
 1. **Run the smoke notebook once on Kaggle.** Import `services/fabric/remote/notebooks/klyvaron-chat-lora-smoke.ipynb`
    from the repository, set Accelerator to GPU and Internet to On, then Save & Run All.
    Expect errors on the first run.
+   The first cell stops before anything is trained if it cannot clone, and it now says which
+   failure it hit instead of raising a bare exit code:
+
+   * `Could not resolve host: github.com` — **the Internet switch is off**, which is the default
+     on Kaggle. Set it to On in the Settings panel and run again. This is the failure the first
+     attempt at this notebook actually hit.
+   * `Remote branch … not found` — a copy of the notebook that pins a branch which has since been
+     deleted, which is what a saved copy does when its working session ends. Re-import the
+     notebook, or set `REPO_REF = "main"`.
 2. **Read `status.json`.** Each stage shows PASSED, FAILED or NOT RUN. Fill in §12 from it.
 3. **Persistence check.** Copy the notebook, add the committed version's output as an Input,
    set `PERSISTENCE_ADAPTER`, and run again.
