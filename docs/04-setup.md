@@ -219,6 +219,16 @@ npm run test:web          # 92
 npm run test:fabric       # 745 — needs numpy + pytest on the interpreter
 ```
 
+Beyond the suites, one check is run by hand rather than by CI, because it costs nine suite
+runs and only needs re-running when a rule it covers changes:
+
+```bash
+cd services/fabric
+python scripts/mutation_check.py   # ~4 min: removes each rule in docs/21 §11 one at a time
+                                   # and requires the suite to fail; exits 1 on an escape
+                                   # or on a rule whose anchor text has moved
+```
+
 If NumPy and pytest live in a virtualenv rather than on the system interpreter,
 point the Python scripts at it:
 
