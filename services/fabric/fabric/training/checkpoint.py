@@ -200,3 +200,20 @@ class CheckpointStore:
         for step in doomed:
             shutil.rmtree(self._directory(step), ignore_errors=True)
         return doomed
+
+
+def import_latest(source: CheckpointStore, dest: CheckpointStore, config_digest: str) -> Checkpoint | None:
+    """Copy the newest verified checkpoint of this configuration from ``source`` into ``dest``.
+
+    Used to resume from an attached output of an earlier committed run. The source is
+    only read. Nothing is copied if ``dest`` already holds an equal or newer checkpoint,
+    and a checkpoint that fails verification in the source is never imported.
+    """
+    found = source.load_latest(config_digest)
+    if found is None:
+        return None
+    local = dest.load_latest(config_digest)
+    if local is not None and local.step >= found.step:
+        return local
+    dest.save(found.step, found.files, config_digest=config_digest, meta=found.meta)
+    return dest.load_latest(config_digest)

@@ -518,7 +518,7 @@ Stated plainly, because an unstated gap is worse than a stated one.
    declared range that permits a known-bad version is a defect in the declaration
    even when the installed copy happens to be safe. All 575 Fabric tests were
    verified green under pytest 9.1.1 before the floor moved. The current Fabric suite,
-   678 Fabric tests, was also run green under pytest 9.1.1 after the remote-training change.
+   744 Fabric tests, was also run green under pytest 9.1.1 after the remote-training change.
 
    **Scanning is now enforced in CI, not just run once by hand.** The `web` job
    executes two audits with deliberately different bars:

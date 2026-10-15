@@ -11,12 +11,12 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1337 passing, 0 failing.**
+**Test totals: 1403 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
 | `services/core` | `node --test test/*.test.mjs` | **567 / 567** (28 files, ~40 s) |
-| `services/fabric` | `pytest -q` | **678 / 678** (31 files, ~25 s) |
+| `services/fabric` | `pytest -q` | **744 / 744** (35 files, ~25 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **92 / 92** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 200.08 kB → **61.78 kB gzip**, single chunk, no warnings |
 
@@ -113,7 +113,7 @@ instead.
 | — | Robustness measurement | **Complete** | `scripts/robustness.py`: seed, training-size and paired axes. The released `mrr` is one seed of six (spread 0.103) and ranks 4th of 6 |
 | 12 | Release readiness docs | **Complete** | This document plus 04, 05, 06 and the model card |
 | — | From-scratch language model | **Complete** | [`08-aetheris-lite.md`](./08-aetheris-lite.md): character-level transformer, 98 new tests including every gradient against a finite difference. Found and fixed a real positional-gradient bug the numeric check reported as `pos: exceeds tolerance by 1.6e-01` |
-| — | Remote training pipeline (Pro and Max) | **Built; not executed** | [`21-remote-training.md`](./21-remote-training.md): job contract with licence, provenance and storage refusals; checkpoints that resume exactly and refuse mixed configurations; an acceptance gate against a measured baseline. Tested on a NumPy fixture only. The Colab notebook has not been run. No Pro or Max model is trained |
+| — | Remote training: free-first LoRA smoke run (Kaggle, Colab fallback) | **Built; smoke run not executed** | [`21-remote-training.md`](./21-remote-training.md): pinned base (Qwen2.5-0.5B-Instruct at a commit, licence checked at that commit), synthetic starter data with pinned hashes, a stage ledger that reports PASSED, FAILED or NOT RUN per stage, and persistence only after a read-back. Tested with a fake backend and a torch-free Hub gate; the Transformers + PEFT backend and the notebook have never run. No Pro or Max model is trained |
 | — | Aetheris Lite release gate | **Complete** | `fabric/lm/card.py` drives the existing `ModelReleaseManager`. Hard requirements: beat the bigram baseline, unknown-rate ≤ 2%, loss must fall. The rejection path is tested more than the acceptance path |
 
 ### Phase 4 in detail — the most important limitation
@@ -240,7 +240,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (678 tests)
+### `services/fabric` — Implemented and tested (744 tests)
 
 | Stage | Status |
 |---|---|

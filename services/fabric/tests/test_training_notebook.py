@@ -1,8 +1,8 @@
-"""The Colab notebook and its job template: generated, parseable, and honest about its state.
+"""The smoke notebook: generated, parseable, thin, and honest about not having been run.
 
-The notebook cannot be executed in CI, which has no GPU and installs no torch. What CAN
-be checked is that it is exactly what its builder produces, that its Python parses,
-and that it refuses to run on Kaggle and while placeholders remain.
+CI has no GPU and no torch, so the notebook itself cannot run here. What can be checked:
+it is exactly what its builder produces, its code parses, it calls the tested orchestration
+instead of duplicating it, it needs no Google Drive mount, and it says it has not been executed.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-NOTEBOOK = REPO / "remote" / "notebooks" / "klyvaron-chat-lora-colab.ipynb"
+NOTEBOOK = REPO / "remote" / "notebooks" / "klyvaron-chat-lora-smoke.ipynb"
 BUILDER = REPO / "remote" / "build_notebook.py"
 
 
@@ -24,8 +24,16 @@ def _builder():
     return module
 
 
-def _code_cells(notebook: dict) -> list:
-    return [''.join(cell["source"]) for cell in notebook["cells"] if cell["cell_type"] == "code"]
+def _notebook() -> dict:
+    return json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+
+
+def _code(notebook: dict) -> str:
+    return "\n".join("".join(cell["source"]) for cell in notebook["cells"] if cell["cell_type"] == "code")
+
+
+def _markdown(notebook: dict) -> str:
+    return "\n".join("".join(cell["source"]) for cell in notebook["cells"] if cell["cell_type"] == "markdown")
 
 
 def test_the_committed_notebook_is_exactly_what_the_builder_produces():
@@ -34,24 +42,51 @@ def test_the_committed_notebook_is_exactly_what_the_builder_produces():
 
 
 def test_every_code_cell_parses_once_ipython_magics_are_removed():
-    notebook = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
-    for index, source in enumerate(_code_cells(notebook)):
+    for index, cell in enumerate(_notebook()["cells"]):
+        if cell["cell_type"] != "code":
+            continue
+        source = "".join(cell["source"])
         python = "\n".join(line for line in source.split("\n") if not line.lstrip().startswith(("%", "!")))
         ast.parse(python, filename=f"cell {index}")
 
 
-def test_the_notebook_refuses_to_run_on_kaggle_and_while_placeholders_remain():
-    text = "\n".join(_code_cells(json.loads(NOTEBOOK.read_text(encoding="utf-8"))))
-    assert 'os.path.exists("/kaggle")' in text
-    assert "refuses to run on Kaggle" in text
-    assert 'if "REPLACE_" in REPO_COMMIT' in text
-    assert "load_job(JOB_FILE)" in text   # the job contract, including placeholders, is enforced
+def test_the_notebook_calls_the_tested_orchestration_and_does_not_reimplement_it():
+    code = _code(_notebook())
+    assert "from fabric.training.smoke import" in code
+    assert "run_smoke(" in code
+    assert "from fabric.training.hf_peft import HFPeftBackend" in code
+    assert "load_job(" in code          # the job contract, including placeholder refusal, is enforced
+    assert "klyvaron-chat-lora-smoke.ipynb" not in code
 
 
-def test_the_notebook_states_that_it_has_not_been_executed():
-    first = ''.join(json.loads(NOTEBOOK.read_text(encoding="utf-8"))["cells"][0]["source"])
-    assert "not executed" in first.lower()
-    assert "Klyvaron model in the family sense" in first
+def test_the_notebook_needs_no_google_drive_and_names_the_kaggle_path():
+    text = json.dumps(_notebook())
+    assert "drive.mount" not in text
+    assert "/kaggle/working" in text
+    assert "Save & Run All" in _markdown(_notebook())
+
+
+def test_the_notebook_states_that_it_has_not_been_executed_and_what_is_synthetic():
+    markdown = _markdown(_notebook())
+    assert "NOT EXECUTED" in markdown
+    assert "synthetic" in markdown.lower()
+    assert "not a quality claim" in markdown.lower() or "not a klyvaron model" in markdown.lower()
+
+
+def test_the_notebook_reports_each_stage_as_passed_failed_or_not_run():
+    markdown = _markdown(_notebook())
+    for word in ("PASSED", "FAILED", "NOT RUN"):
+        assert word in markdown
+
+
+def test_the_notebook_pins_the_base_and_package_versions():
+    code = _code(_notebook())
+    assert "transformers==5.19.0" in code
+    assert "peft==0.21.2" in code
+
+
+def test_the_superseded_colab_only_notebook_is_gone():
+    assert not (REPO / "remote" / "notebooks" / "klyvaron-chat-lora-colab.ipynb").exists()
 
 
 def test_the_notebook_is_not_wired_into_any_ci_job():
@@ -59,14 +94,6 @@ def test_the_notebook_is_not_wired_into_any_ci_job():
     if not workflows.exists():
         return
     for path in workflows.glob("*.yml"):
-        assert "build_notebook" not in path.read_text(encoding="utf-8")
-        assert "klyvaron-chat-lora-colab" not in path.read_text(encoding="utf-8")
-
-
-def test_the_template_job_lives_in_the_repo_and_validates_as_a_refusal():
-    from fabric.training.jobspec import validate_job
-
-    template = json.loads((REPO / "remote" / "jobs" / "klyvaron-chat-lora-experiment.json").read_text())
-    problems = validate_job(template)
-    assert problems and all("REPLACE" in p or "placeholder" in p or "must be" in p or "below" in p
-                            or "allowlist" in p or "SHA-256" in p for p in problems)
+        text = path.read_text(encoding="utf-8")
+        assert "build_notebook" not in text
+        assert "klyvaron-chat-lora-smoke" not in text

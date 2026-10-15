@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from fabric.training.jobspec import JobSpecError, config_digest, load_job, validate_job
+from fabric.training.jobspec import config_digest, load_job, validate_job
 
 REPO = Path(__file__).resolve().parent.parent
 TEMPLATE = REPO / "remote" / "jobs" / "klyvaron-chat-lora-experiment.json"
@@ -77,31 +77,31 @@ def test_the_valid_job_passes():
     assert validate_job(valid_job()) == []
 
 
-def test_the_committed_template_is_refused_only_for_placeholders():
+def _strings(node):
+    if isinstance(node, dict):
+        for value in node.values():
+            yield from _strings(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _strings(value)
+    elif isinstance(node, str):
+        yield node
+
+
+def test_the_committed_template_is_complete_and_validates():
+    """The template carries real pins (base commit, dataset hashes) and no placeholder."""
     template = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+    assert not any("REPLACE_" in s for s in _strings(template))
+    assert validate_job(template) == []
+    assert load_job(TEMPLATE)["base"]["revision"] == "7ae557604adf67be50417f59c2c2f167def9a775"
+
+
+def test_a_placeholder_left_in_the_template_is_refused():
+    """If this fails, the placeholder rule has stopped refusing unfilled values."""
+    template = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+    template["base"]["revision"] = "REPLACE_WITH_COMMIT_SHA"
     problems = validate_job(template)
-    assert len(problems) >= 10
-    assert all(("placeholder" in p) or ("REPLACE" in p) or ("must be" in p) or ("below the minimum" in p)
-               or ("not on the allowlist" in p) for p in problems), problems
-    with pytest.raises(JobSpecError):
-        load_job(TEMPLATE)
-
-
-def test_a_filled_in_template_is_accepted():
-    """If this fails, the template is refused for a reason other than its placeholders."""
-    filled = json.loads(TEMPLATE.read_text(encoding="utf-8"))
-    filled["base"]["revision"] = DIGEST_A
-    filled["base"]["licenceCheckedUrl"] = f"https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/{DIGEST_A}/LICENSE"
-    filled["base"]["licenceCheckedBy"] = "a reviewer"
-    filled["base"]["attributionNotice"] = "Qwen2.5-0.5B-Instruct, Apache-2.0"
-    filled["dataset"].update({
-        "version": "1.0.0", "provenance": "owner_authored", "licence": "MIT",
-        "contentsDescription": "Test rows.",
-    })
-    filled["dataset"]["train"].update({"sha256": SHA_A, "examples": 1000})
-    filled["dataset"]["validation"].update({"sha256": SHA_A, "examples": 300})
-    filled["dataset"]["regression"][0].update({"sha256": SHA_A, "examples": 300})
-    assert validate_job(filled) == []
+    assert any("placeholder" in p for p in problems), problems
 
 
 @pytest.mark.parametrize("revision", ["main", "v1.0", "a" * 39, "A" * 40, "REPLACE_WITH_COMMIT_SHA"])
@@ -165,17 +165,19 @@ def test_personal_data_is_never_accepted_for_a_remote_job():
 @pytest.mark.parametrize("path", [
     "/kaggle/working/ckpt",
     "/kaggle/temp/ckpt",
+    "/kaggle/input/some-output/ckpt",
     "/content/checkpoints",
     "/content/drive-copy/ckpt",
+    "/kaggle/working/../input/x",
 ])
-def test_notebook_session_paths_are_refused_for_checkpoints(path):
+def test_notebook_paths_are_refused_for_a_kind_that_does_not_match_them(path):
     problems = problems_for(lambda j: j["checkpoint"].update(path=path, storageKind="local_disk"))
-    assert any("notebook session filesystem" in p for p in problems), (path, problems)
+    assert any("notebook path" in p or "session disk" in p for p in problems), (path, problems)
 
 
 def test_a_notebook_temporary_storage_kind_is_refused():
     problems = problems_for(lambda j: j["checkpoint"].update(storageKind="notebook_temp"))
-    assert any("not an authorized persistent store" in p for p in problems)
+    assert any("is not allowed" in p for p in problems)
 
 
 def test_google_drive_paths_must_be_on_drive():

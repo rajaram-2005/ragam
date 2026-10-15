@@ -10,10 +10,12 @@ Three questions are answered here and nowhere else:
 
 * May this licence be used for training and for a shipped product?
 * May this data leave the machine, and under whose authority?
-* Is this storage location one that survives the session?
+* Where may checkpoints go, and does that location survive the session?
 """
 
 from __future__ import annotations
+
+import posixpath
 
 #: Licences accepted for a base model or a dataset. Anything else is refused,
 #: including non-commercial and share-alike terms, which would restrict a shipped
@@ -40,13 +42,26 @@ PROVENANCE_NEEDS_AUTHORIZATION = frozenset({"licensed", "consented_experience"})
 
 PROVENANCE_ALLOWED = PROVENANCE_OWNED | PROVENANCE_NEEDS_AUTHORIZATION
 
-#: Where checkpoints and logs may be written. Each one survives the notebook session.
-STORAGE_KINDS = frozenset({"google_drive", "object_store", "local_disk"})
+#: Where checkpoints and logs may be written.
+#:
+#: * ``google_drive``, ``object_store``, ``local_disk``: persist beyond the session.
+#: * ``kaggle_output``: ``/kaggle/working`` is kept as the output of a *committed*
+#:   notebook version (Save Version, Save & Run All). An interactive session that
+#:   is not committed can lose it. Persistence is only claimed once a later run
+#:   reads the files back through ``/kaggle/input``.
+#: * ``colab_session``: the Colab runtime disk. Lost when the runtime ends. Allowed
+#:   only with an explicit acknowledgement in the job, recorded in the run.
+STORAGE_KINDS = frozenset({"google_drive", "object_store", "local_disk", "kaggle_output", "colab_session"})
 
-#: Paths that belong to a notebook session and are discarded when it ends. A
-#: checkpoint written here is a checkpoint that is lost.
-NOTEBOOK_TEMPORARY_PREFIXES = ("/kaggle/working", "/kaggle/temp", "/kaggle/input", "/content/")
+#: Storage kinds whose files survive the notebook session at all.
+PERSISTENT_KINDS = frozenset({"google_drive", "object_store", "local_disk", "kaggle_output"})
 
+EPHEMERAL_KINDS = frozenset({"colab_session"})
+
+KAGGLE_OUTPUT_PREFIX = "/kaggle/working/"
+KAGGLE_INPUT_PREFIX = "/kaggle/input/"
+KAGGLE_TEMP_PREFIX = "/kaggle/temp/"
+COLAB_SESSION_PREFIX = "/content/"
 DRIVE_PREFIX = "/content/drive/"
 
 _OBJECT_STORE_PREFIXES = ("s3://", "gs://", "az://")
@@ -60,31 +75,80 @@ def licence_problems(licence: object, where: str) -> list[str]:
     return []
 
 
+def _normal(path: str) -> str:
+    """Normalise a filesystem path so ``..`` cannot hide a notebook path. URIs are left alone:
+    normalising ``s3://bucket`` would collapse its double slash and break the check."""
+    raw = path.replace("\\", "/").strip()
+    if "://" in raw:
+        return raw
+    return posixpath.normpath(raw)
+
+
 def storage_problems(kind: object, path: object, where: str) -> list[str]:
-    """Refuse any location that is not both authorized and persistent."""
+    """Refuse a storage location unless its kind matches where the path really is."""
     if kind not in STORAGE_KINDS:
-        return [f"{where}: storage kind {kind!r} is not an authorized persistent store "
-                f"(allowed: {sorted(STORAGE_KINDS)})"]
+        return [f"{where}: storage kind {kind!r} is not allowed (allowed: {sorted(STORAGE_KINDS)})"]
     if not isinstance(path, str) or not path.strip():
         return [f"{where}: path is missing"]
-    normal = path.replace("\\", "/").strip()
+    normal = _normal(path)
+    problems: list[str] = []
 
+    # A path on Drive is only ever stored as Drive, and Drive is only used for Drive paths.
     if normal.startswith(DRIVE_PREFIX):
         if kind != "google_drive":
-            return [f"{where}: path is on Google Drive but storage kind is {kind!r}"]
-        return []
+            problems.append(f"{where}: path is on Google Drive but storage kind is {kind!r}")
+        return problems
     if kind == "google_drive":
         return [f"{where}: a google_drive path must begin with {DRIVE_PREFIX!r}"]
 
-    for prefix in NOTEBOOK_TEMPORARY_PREFIXES:
-        if normal == prefix.rstrip("/") or normal.startswith(prefix):
-            return [f"{where}: {normal!r} is a notebook session filesystem and is discarded when the "
-                    "session ends; use persistent storage"]
+    if kind == "kaggle_output":
+        if not normal.startswith(KAGGLE_OUTPUT_PREFIX) or normal == KAGGLE_OUTPUT_PREFIX.rstrip("/"):
+            problems.append(f"{where}: a kaggle_output path must be inside {KAGGLE_OUTPUT_PREFIX!r}")
+        return problems
+    if normal.startswith(("/kaggle/working", KAGGLE_INPUT_PREFIX.rstrip("/"), KAGGLE_TEMP_PREFIX.rstrip("/"))):
+        problems.append(f"{where}: {normal!r} is a Kaggle notebook path; use storage kind kaggle_output "
+                        "(/kaggle/input is read-only, /kaggle/temp is not kept)")
+        return problems
+
+    if kind == "colab_session":
+        if not normal.startswith(COLAB_SESSION_PREFIX):
+            problems.append(f"{where}: a colab_session path must be inside {COLAB_SESSION_PREFIX!r}")
+        return problems
+    if normal.startswith(COLAB_SESSION_PREFIX):
+        problems.append(f"{where}: {normal!r} is the Colab session disk; use storage kind colab_session "
+                        "(acknowledged as ephemeral) or google_drive")
+        return problems
 
     if kind == "object_store":
         if not normal.startswith(_OBJECT_STORE_PREFIXES) or len(normal.split("/", 3)) < 4:
-            return [f"{where}: an object_store path must be a bucket URI such as s3://bucket/prefix"]
+            problems.append(f"{where}: an object_store path must be a bucket URI such as s3://bucket/prefix")
+    elif normal.startswith(_OBJECT_STORE_PREFIXES):
+        problems.append(f"{where}: an object-store URI needs storage kind object_store")
+    return problems
+
+
+def ephemeral_problems(section: dict, where: str) -> list[str]:
+    """A session-only location must be acknowledged, so nobody mistakes it for persistent."""
+    if section.get("storageKind") in EPHEMERAL_KINDS and section.get("ephemeralAcknowledged") is not True:
+        return [f"{where}.ephemeralAcknowledged: {section.get('storageKind')} is lost when the runtime ends; "
+                "set it to true to accept that"]
     return []
+
+
+def resume_source_problems(paths: object, where: str) -> list[str]:
+    """Resume sources are read-only attached outputs, never a place to write."""
+    if not isinstance(paths, list):
+        return [f"{where}: must be a list of paths"]
+    problems = []
+    for index, raw in enumerate(paths):
+        if not isinstance(raw, str) or not raw.strip():
+            problems.append(f"{where}[{index}]: must be a non-empty path")
+            continue
+        normal = _normal(raw)
+        if not normal.startswith(KAGGLE_INPUT_PREFIX):
+            problems.append(f"{where}[{index}]: {normal!r} must be inside {KAGGLE_INPUT_PREFIX!r} "
+                            "(an attached output of an earlier committed run)")
+    return problems
 
 
 def authorization_problems(section: dict, where: str) -> list[str]:

@@ -220,7 +220,7 @@ must be true first.
 
 The path to a Pro or Max training run is written down in [21 — Remote training](21-remote-training.md):
 remote compute only, a pinned third-party base, checkpoints on persistent storage and an acceptance gate.
-That pipeline has not yet been run on a GPU. No Pro or Max artifact exists.
+A first LoRA smoke run on Kaggle, on synthetic data, is written and waiting to be run. That pipeline has not yet been run on a GPU, and no Pro or Max artifact exists.
 
 ## 2. The six levels of learning
 

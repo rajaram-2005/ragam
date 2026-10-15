@@ -136,6 +136,16 @@ def validate_job(job: object) -> list[str]:
         problems.append(f"dataset.provenance: must be one of {sorted(policy.PROVENANCE_ALLOWED)}")
     problems += policy.licence_problems(dataset.get("licence"), "dataset.licence")
     _text(dataset.get("contentsDescription"), "dataset.contentsDescription", problems)
+    # Synthetic rows are generated here, from rules. They must say so, so no report can
+    # present them as collected or domain data.
+    synthetic = dataset.get("synthetic", False)
+    if not isinstance(synthetic, bool):
+        problems.append("dataset.synthetic: must be true or false")
+    elif synthetic:
+        if provenance != "generated_locally":
+            problems.append("dataset.synthetic: synthetic data must have provenance 'generated_locally'")
+        if "SYNTHETIC" not in str(dataset.get("contentsDescription", "")):
+            problems.append("dataset.contentsDescription: a synthetic dataset must say SYNTHETIC")
     if dataset.get("containsPersonalData") is not False:
         problems.append("dataset.containsPersonalData: must be false; personal data is not sent to remote services")
     if provenance in policy.PROVENANCE_NEEDS_AUTHORIZATION:
@@ -214,6 +224,9 @@ def validate_job(job: object) -> list[str]:
         if checkpoint["everySteps"] > training["steps"]:
             problems.append("checkpoint.everySteps: larger than training.steps, so no checkpoint is ever written")
     problems += policy.storage_problems(checkpoint.get("storageKind"), checkpoint.get("path"), "checkpoint")
+    problems += policy.ephemeral_problems(checkpoint, "checkpoint")
+    if "resumeFrom" in checkpoint:
+        problems += policy.resume_source_problems(checkpoint["resumeFrom"], "checkpoint.resumeFrom")
 
     # A session can end at any time and the free allowance is not promised, so a job
     # that needs more than one session must be able to resume.
@@ -248,6 +261,7 @@ def validate_job(job: object) -> list[str]:
 
     logs = _section(job, "logs", problems)
     problems += policy.storage_problems(logs.get("storageKind"), logs.get("path"), "logs")
+    problems += policy.ephemeral_problems(logs, "logs")
 
     resume = _section(job, "resume", problems)
     _text(resume.get("instructions"), "resume.instructions", problems)
