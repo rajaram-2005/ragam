@@ -218,6 +218,10 @@ and a GPU-qualified host that this sandbox does not have. Lite chat needs an ins
 model, which is a training task with its own measured release gate. The plan is the list of what
 must be true first.
 
+The path to a Pro or Max training run is written down in [21 — Remote training](21-remote-training.md):
+remote compute only, a pinned third-party base, checkpoints on persistent storage and an acceptance gate.
+That pipeline has not yet been run on a GPU. No Pro or Max artifact exists.
+
 ## 2. The six levels of learning
 
 The directive requires these to be formal levels rather than a synonym for conversation

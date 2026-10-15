@@ -1,0 +1,72 @@
+{
+  "schema": "aetheris-training-job/1",
+  "jobId": "klyvaron-chat-lora-exp-001",
+  "tier": "experiment",
+  "purpose": "First small Klyvaron Chat LoRA experiment, to test the remote pipeline. Not a Klyvaron tier and not a release.",
+  "base": {
+    "id": "Qwen/Qwen2.5-0.5B-Instruct",
+    "kind": "third_party_finetune",
+    "revision": "REPLACE_WITH_COMMIT_SHA",
+    "licence": "Apache-2.0",
+    "licenceCheckedUrl": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/REPLACE_WITH_COMMIT_SHA/LICENSE",
+    "licenceCheckedBy": "REPLACE_WITH_REVIEWER_NAME",
+    "attributionNotice": "REPLACE_WITH_NOTICE_TEXT_FROM_THE_PINNED_REVISION"
+  },
+  "dataset": {
+    "id": "klyvaron-chat-seed",
+    "version": "REPLACE_WITH_DATASET_VERSION",
+    "provenance": "REPLACE_WITH_PROVENANCE",
+    "licence": "REPLACE_WITH_DATASET_LICENCE",
+    "contentsDescription": "REPLACE_WITH_DESCRIPTION_OF_THE_DATA",
+    "containsPersonalData": false,
+    "train": {"file": "train.jsonl", "sha256": "REPLACE_WITH_SHA256", "examples": 0},
+    "validation": {"file": "validation.jsonl", "sha256": "REPLACE_WITH_SHA256", "examples": 0},
+    "regression": [
+      {"name": "general-chat-regression", "file": "regression-general.jsonl", "sha256": "REPLACE_WITH_SHA256", "examples": 0}
+    ]
+  },
+  "training": {
+    "method": "lora",
+    "rank": 8,
+    "alpha": 16,
+    "dropout": 0.05,
+    "targetModules": ["q_proj", "k_proj", "v_proj", "o_proj"],
+    "learningRate": 0.0002,
+    "steps": 1000,
+    "batchSize": 8,
+    "seqLen": 512,
+    "seed": 1
+  },
+  "resources": {
+    "accelerator": "gpu",
+    "minGpuMemoryGb": 12,
+    "expectedHours": 2.0,
+    "maxSessionHours": 9.0,
+    "storageGb": 3,
+    "note": "Estimates, not measurements. Replace with the peak memory and time of the first session."
+  },
+  "checkpoint": {
+    "everySteps": 100,
+    "keepLast": 3,
+    "storageKind": "google_drive",
+    "path": "/content/drive/MyDrive/klyvaron/checkpoints/klyvaron-chat-lora-exp-001"
+  },
+  "validation": {
+    "baselineName": "untrained-base",
+    "minImprovement": 0.02,
+    "minAccuracyGain": 0.0,
+    "regressionSets": ["general-chat-regression"],
+    "regressionTolerance": 0.05
+  },
+  "output": {
+    "name": "klyvaron-chat-lora-experiment",
+    "version": "0.1.0-exp.1"
+  },
+  "logs": {
+    "storageKind": "google_drive",
+    "path": "/content/drive/MyDrive/klyvaron/logs/klyvaron-chat-lora-exp-001"
+  },
+  "resume": {
+    "instructions": "Open the notebook, set the same JOB_FILE and CHECKPOINT_ROOT, and run all cells. The newest verified checkpoint is loaded and training continues from its step."
+  }
+}
