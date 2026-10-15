@@ -84,6 +84,41 @@ def test_a_pip_failure_is_not_reported_as_an_installed_environment():
     assert len(calls) == 1
 
 
+def test_an_externally_managed_interpreter_retries_with_pips_requested_escape_hatch():
+    runner = load_runner()
+    calls = []
+
+    def pep668(command, **kwargs):
+        calls.append((command, kwargs))
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                stderr="error: externally-managed-environment\nhint: pass --break-system-packages\n",
+            )
+        return subprocess.CompletedProcess(command, 0, stderr="")
+
+    runner.install_requirements(["torch"], runner=pep668)
+    assert len(calls) == 2
+    assert "--break-system-packages" not in calls[0][0]
+    assert calls[1][0][calls[1][0].index("install") + 1] == "--break-system-packages"
+    assert calls[1][0][-1] == "torch"
+
+
+def test_a_network_failure_is_not_retried_as_permission_to_change_python():
+    runner = load_runner()
+    calls = []
+
+    def offline(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 1, stderr="No matching distribution found\n")
+
+    with pytest.raises(RuntimeError, match="No matching distribution found"):
+        runner.install_requirements(["torch"], runner=offline)
+    assert len(calls) == 1
+    assert "--break-system-packages" not in calls[0]
+
+
 def test_the_cpu_job_uses_only_paths_below_the_requested_workdir(tmp_path):
     runner = load_runner()
     work = (tmp_path / "smoke").resolve()

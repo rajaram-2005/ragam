@@ -72,14 +72,45 @@ def pip_command(requirements: Sequence[str]) -> list[str]:
     return command
 
 
+def _externally_managed(message: str) -> bool:
+    lowered = message.lower()
+    return ("externally-managed-environment" in lowered
+            or "externally managed" in lowered
+            or ("pep 668" in lowered and "break-system-packages" in lowered))
+
+
+def _pip_result(command: Sequence[str], runner: Callable[..., subprocess.CompletedProcess]):
+    # Keep normal download progress visible on stdout, but retain stderr long enough to
+    # recognise PEP 668. pip writes the externally-managed diagnosis to stderr.
+    result = runner(list(command), text=True, stderr=subprocess.PIPE)
+    message = result.stderr or ""
+    if message:
+        print(message, file=sys.stderr, end="" if message.endswith("\n") else "\n")
+    return result, message
+
+
 def install_requirements(requirements: Sequence[str], *,
                          runner: Callable[..., subprocess.CompletedProcess] = subprocess.run) -> None:
-    """Install requirements and surface pip's own error when it fails."""
+    """Install requirements, retrying only pip's explicit PEP 668 refusal.
+
+    Debian/Ubuntu system Python installations (including a stock Codespace) can be marked
+    externally managed even for a ``--user`` install. First honour that protection. If pip
+    itself refuses and names PEP 668, retry the identical user-site install with the escape
+    hatch it requested. Network, resolver and disk failures are never disguised by a retry.
+    """
     command = pip_command(requirements)
     print("Installing smoke-run dependencies:", " ".join(requirements), flush=True)
-    result = runner(command, text=True)
+    result, message = _pip_result(command, runner)
+    if result.returncode and _externally_managed(message):
+        retry = list(command)
+        retry.insert(retry.index("install") + 1, "--break-system-packages")
+        print("pip reports an externally managed Python; retrying the same user-site install "
+              "with --break-system-packages.", flush=True)
+        result, message = _pip_result(retry, runner)
     if result.returncode:
-        raise RuntimeError(f"pip install failed with exit {result.returncode}")
+        tail = message.strip()[-1200:]
+        detail = f": {tail}" if tail else ""
+        raise RuntimeError(f"pip install failed with exit {result.returncode}{detail}")
 
 
 def ensure_dependencies() -> None:

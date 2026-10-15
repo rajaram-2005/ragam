@@ -219,19 +219,22 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # inspect aetheris-smoke/status.json
 ```
 
-The work directory contains model and optimizer bytes and is gitignored. This path
-has not completed a real model run yet; see [the remote-training record](./21-remote-training.md)
-for the stage meanings and limitations.
+The work directory contains model and optimizer bytes and is gitignored. On an
+externally managed system Python, the bootstrap retries with
+`--break-system-packages` only after pip explicitly returns its PEP 668 refusal; it
+still installs to the user site. This path has not completed a real model run yet;
+see [the remote-training record](./21-remote-training.md) for the stage meanings and
+limitations.
 
 ---
 
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1420 tests)
+npm test                  # all three suites (1422 tests)
 npm run test:core         # 567
 npm run test:web          # 92
-npm run test:fabric       # 761 — needs numpy + pytest on the interpreter
+npm run test:fabric       # 763 — needs numpy + pytest on the interpreter
 ```
 
 Beyond the suites, one check is run by hand rather than by CI, because it costs nine suite
@@ -285,7 +288,7 @@ when something else changes would not notice.
 | Job | What it proves |
 |---|---|
 | **Core service** | 567 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
-| **Fabric** | 761 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
+| **Fabric** | 763 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 92 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 39-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 

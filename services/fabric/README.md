@@ -60,9 +60,10 @@ about 8 GB RAM and enough disk for the public 0.5B base model:
 python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 ```
 
-It installs only missing/mismatched reviewed dependencies, uses CUDA when available
-and otherwise runs on CPU, resumes valid checkpoints in the same work directory, and
-always puts the stage ledger at `aetheris-smoke/status.json`. This does not add torch
+It installs only missing/mismatched reviewed dependencies (retrying with pip's
+`--break-system-packages` escape hatch only after an explicit PEP 668 refusal), uses
+CUDA when available and otherwise runs on CPU, resumes valid checkpoints in the same
+work directory, and always puts the stage ledger at `aetheris-smoke/status.json`. This does not add torch
 to Fabric's runtime dependency set; the normal service and tests remain NumPy-only.
 See [docs/21](../../docs/21-remote-training.md) for exactly what the smoke run proves.
 
