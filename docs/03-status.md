@@ -11,13 +11,13 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1215 passing, 0 failing.**
+**Test totals: 1234 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **549 / 549** (26 files, ~40 s) |
+| `services/core` | `node --test test/*.test.mjs` | **567 / 567** (28 files, ~40 s) |
 | `services/fabric` | `pytest -q` | **575 / 575** (26 files, ~21 s) |
-| `apps/web` | `node --test test/*.test.mjs` | **91 / 91** (4 files, ~1 s) |
+| `apps/web` | `node --test test/*.test.mjs` | **92 / 92** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 200.08 kB → **61.78 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
@@ -98,7 +98,7 @@ instead.
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
 | 3 | Unified app, five areas | **Complete** | `apps/web`; 91 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
 | 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,616-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 11, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 28 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
-| 5 | Online provider integration | **Planned under updated directive** | LiteLLM is the preferred planned gateway; only its catalog protocol is implemented so far. No online inference adapter is configured, vendored or bundled. Image and video requests are refused with an explicit limitation, and the UI states that no provider exists rather than implying one can be enabled with a key |
+| 5 | Online provider integration | **Partially met** | The online entry reaches a LiteLLM gateway, an Ollama server or a llama.cpp server through one OpenAI-compatible transport, with the same destination checks, consent, deadline and size limits for each. Verified only against synthetic loopback fixtures; no real gateway or runtime has been qualified in this sandbox. Provider-native protocols are not used online, and Image and Video have no adapter |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
 | 8 | Multimodal pipelines | **Complete** | Job queue, validation, video genuineness check |
@@ -216,7 +216,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (549 tests)
+### `services/core` — Implemented and tested (567 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -225,7 +225,9 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Audit ledger | **Implemented and tested** | Append-only SQLite; refusals audited; NDJSON export; subject purge |
 | Accounts & sign-in (online entry) | **Implemented and tested** | 18 tests; scrypt hashes with no reversible copy, per-account lockout and throttling, owner/member roles, host-delivered reset codes, per-account stores; see doc 20 |
 | Model registry & router | **Implemented and tested** | Capability gating before scoring; unknown latency scores 0.5, not 0 |
-| Ollama / llama.cpp providers | **Implemented and tested against a fixture server** | Real protocol handling; no real LM installed here |
+| Ollama / llama.cpp, legacy entry | **Implemented and tested against a fixture server** | `providers/local.mjs`, used by the retained legacy service only. The online entry uses the `/v1` routes of the same runtimes; see [docs/19](19-online-only-phase-2.md) |
+| Ollama / llama.cpp, online entry | **Implemented and tested against a loopback fixture** | Same transport as LiteLLM; keyless by default; exact trusted origin required. No real runtime qualified here |
+| Klyvaron development plan | **Implemented and tested** | Per-tier gates derived from the tier records, `klyvaron.mjs plan`; see [docs/11](11-klyvaron-family.md) §1.5 |
 | Klyvaron CPU execution | **Implemented and tested** | Single worker, bounded incremental streaming, cancellation/deadlines, one-model residency; see doc 15 |
 | Knowledge pipeline | **Implemented and tested** | SQLite + filesystem + in-memory rebuildable BM25 |
 | Media queue & validation | **Implemented and tested** | Progress, cancellation, timeouts, retry-after, state history |
@@ -328,7 +330,7 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (91 tests)
+### `apps/web` — Implemented and tested (92 tests)
 
 | Area | Status |
 |---|---|

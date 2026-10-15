@@ -3,7 +3,7 @@ import { mkdirSync, existsSync, renameSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { OnlineStore } from './store.mjs'
-import { LiteLLMGateway, gatewayUrl, failure } from './gateway.mjs'
+import { OnlineGateway, gatewayUrl, failure, runtimeFor } from './gateway.mjs'
 import { readBody, sendJson } from './http.mjs'
 import { contextRoutes } from './context-routes.mjs'
 import { AccountStore, ROLES, DEFAULT_MAX_ACCOUNTS } from './accounts.mjs'
@@ -41,6 +41,16 @@ export const SESSIONS = Object.freeze({ ttlMs: 8 * 3600_000, perAccount: 8, inst
  */
 export const COOKIE_SAME_SITE = Object.freeze(['strict', 'lax', 'none'])
 
+/**
+ * The provider routes, one per runtime. Written out as literals, so the route a request
+ * means is visible in the source and can be checked against the client that calls it.
+ */
+export const PROVIDER_ROUTES = Object.freeze({
+  litellm: '/api/providers/litellm',
+  ollama: '/api/providers/ollama',
+  llamacpp: '/api/providers/llamacpp',
+})
+
 /** Answered identically for a known and an unknown address, on purpose. */
 export const RESET_REQUESTED_MESSAGE = 'If an account on this installation uses that email address, a single-use reset code is now waiting on the Core host. It expires in 15 minutes.'
 
@@ -61,7 +71,7 @@ export class OnlineApp {
     this.cookieSameSite = sameSite
     this.dir = resolve(dataDir); mkdirSync(this.dir, { recursive: true, mode: 0o700 })
     this.store = new OnlineStore(this.dir)
-    this.gateway = new LiteLLMGateway({ trustedOrigins, timeoutMs })
+    this.gateway = new OnlineGateway({ trustedOrigins, timeoutMs })
     this.secureCookie = secureCookie; this.sessions = new Map(); this.authAttempts = new Map()
     this.activeRequests = 0
     this.ledger = new AuditLedger(join(this.dir, 'audit.sqlite'))
@@ -125,24 +135,34 @@ export class OnlineApp {
   }
   readiness() {
     const s = this.store.public()
-    return { status: !s.keyConfigured ? 'setup_required' : s.checkedAt ? 'configured' : 'connection_unchecked', policy: 'online_only', offlineEnforced: false,
+    return { status: !s.configured ? 'setup_required' : s.checkedAt ? 'configured' : 'connection_unchecked', policy: 'online_only', offlineEnforced: false,
       models: { total: s.models.length, ready: Object.keys(s.verified).length },
-      capabilities: { chat: s.keyConfigured && s.models.length > 0, imageGeneration: false, videoGeneration: false },
-      provider: { name: 'LiteLLM', baseUrl: s.baseUrl, selectedModel: s.selectedModel, checkedAt: s.checkedAt },
+      capabilities: { chat: s.configured && s.models.length > 0, imageGeneration: false, videoGeneration: false },
+      provider: { kind: s.kind, name: s.name, baseUrl: s.baseUrl, selectedModel: s.selectedModel, checkedAt: s.checkedAt },
       accounts: { total: this.accounts.count() },
       note: 'Listing a model does not verify inference or modality support. No local inference or fallback.' }
   }
-  models() { return this.store.state.models.map((id) => ({ id, displayName: id, provider: 'litellm', location: 'online', availability: this.store.state.verified[id] ? 'inference_observed' : 'listed_unverified', selectable: true })) }
-  async configure(body, { session } = {}) {
+  models() { const kind = this.store.kind(); return this.store.state.models.map((id) => ({ id, displayName: id, provider: kind, location: 'online', availability: this.store.state.verified[id] ? 'inference_observed' : 'listed_unverified', selectable: true })) }
+  async configure(body, { session, kind = 'litellm' } = {}) {
+    const runtime = runtimeFor(kind)
     if (typeof body.baseUrl !== 'string') throw failure('invalid_endpoint', 'A gateway URL is required.')
     const baseUrl = gatewayUrl(body.baseUrl, this.gateway.trustedOrigins)
-    const old = this.store.state
+    const old = this.store.state, oldKind = this.store.kind()
     const key = body.apiKey
     if (key !== undefined && (typeof key !== 'string' || key.length > 8192 || /[\r\n]/.test(key))) throw failure('invalid_key', 'Invalid gateway key.')
-    if (!key && (baseUrl !== old.baseUrl || !old.key)) throw failure('key_required', 'Enter a key for this gateway. Existing keys are never carried to a different endpoint.')
-    this.store.save({ baseUrl, key: key ? this.store.seal(key) : old.key, models: [], selectedModel: '', verified: {}, checkedAt: null, revision: old.revision + 1 })
-    this.ledger.record({ category: 'provider', action: 'configure', outcome: 'success', subject: session?.accountId ?? 'owner', detail: { kind: 'litellm', role: session?.role ?? null } })
+    // A destination is the runtime AND the endpoint. Changing either one is a new recipient,
+    // so the stored key is not forwarded to it: the caller must supply one or, for a local
+    // runtime that needs none, go without.
+    const sameDestination = oldKind === kind && baseUrl === old.baseUrl
+    if (!key && runtime.keyRequired && (!sameDestination || !old.key)) throw failure('key_required', 'Enter a key for this gateway. Existing keys are never carried to a different endpoint.')
+    const stored = key ? this.store.seal(key) : (sameDestination ? old.key : null)
+    this.store.save({ kind, baseUrl, key: stored, models: [], selectedModel: '', verified: {}, checkedAt: null, revision: old.revision + 1 })
+    this.ledger.record({ category: 'provider', action: 'configure', outcome: 'success', subject: session?.accountId ?? 'owner', detail: { kind, role: session?.role ?? null, keyStored: Boolean(stored) } })
     return this.store.public()
+  }
+  /** A route for a runtime that is not the saved one must not act on the saved one. */
+  requireActiveRuntime(kind) {
+    if (kind !== this.store.kind()) throw failure('provider_mismatch', `The saved connection is ${runtimeFor(this.store.kind()).label}. Save ${runtimeFor(kind).label} first, or remove the saved connection.`, 409)
   }
   async refreshModels() {
     const revision = this.store.state.revision
@@ -210,8 +230,8 @@ export class OnlineApp {
       context.memory.appendTurn(body.sessionId, { role: 'user', content: prompt, dataClass: classification })
       context.memory.appendTurn(body.sessionId, { role: 'assistant', content: text, dataClass: classification })
     }
-    this.ledger.record({ category: 'model', action: 'online_chat', outcome: 'success', subject: session.accountId, detail: { model, provider: 'litellm', classification, redacted: redacted.findings.length, role: session.role } })
-    return { text, modelId: model, providerModel: reportedModel, provider: 'LiteLLM', sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null }
+    this.ledger.record({ category: 'model', action: 'online_chat', outcome: 'success', subject: session.accountId, detail: { model, provider: this.store.kind(), classification, redacted: redacted.findings.length, role: session.role } })
+    return { text, modelId: model, providerModel: reportedModel, provider: runtimeFor(this.store.kind()).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null }
   }
   authenticated(req) {
     const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]
@@ -339,14 +359,19 @@ export class OnlineApp {
         // to the account that owns it. An open sign-up page cannot be an open door to
         // re-pointing somebody else's provider credentials or spending their key.
         const requireOwner = () => { if (session.role !== ROLES.OWNER) throw failure('owner_required', 'Only the owner account of this installation can change its gateway connection.', 403) }
-        if (req.method === 'PUT' && path === '/api/providers/litellm') { requireOwner(); return sendJson(res, 200, await this.configure(await readBody(req, { principal: session.accountId }), { session })) }
-        if (req.method === 'DELETE' && path === '/api/providers/litellm') {
-          requireOwner()
+        // One route per runtime, so the runtime a request means is in the URL and never
+        // guessed from the body. The path is the only place a kind comes from.
+        const providerKind = Object.keys(PROVIDER_ROUTES).find((kind) => path === PROVIDER_ROUTES[kind] || path === `${PROVIDER_ROUTES[kind]}/test`)
+        const providerTest = providerKind !== undefined && path.endsWith('/test')
+        if (req.method === 'PUT' && providerKind && !providerTest) { requireOwner(); return sendJson(res, 200, await this.configure(await readBody(req, { principal: session.accountId }), { session, kind: providerKind })) }
+        if (req.method === 'DELETE' && providerKind && !providerTest) {
+          requireOwner(); this.requireActiveRuntime(providerKind)
+          const kind = this.store.kind()
           this.store.save({ baseUrl: '', key: null, models: [], selectedModel: '', verified: {}, checkedAt: null, revision: this.store.state.revision + 1 })
-          this.ledger.record({ category: 'provider', action: 'remove', outcome: 'success', subject: session.accountId, detail: { kind: 'litellm', role: session.role } })
+          this.ledger.record({ category: 'provider', action: 'remove', outcome: 'success', subject: session.accountId, detail: { kind, role: session.role } })
           return sendJson(res, 200, this.store.public())
         }
-        if (req.method === 'POST' && (path === '/api/providers/litellm/test' || path === '/api/models/probe')) { requireOwner(); return sendJson(res, 200, await this.refreshModels()) }
+        if (req.method === 'POST' && ((providerKind && providerTest) || path === '/api/models/probe')) { requireOwner(); if (providerKind) this.requireActiveRuntime(providerKind); return sendJson(res, 200, await this.refreshModels()) }
         if (req.method === 'GET' && path === '/api/models') return sendJson(res, 200, { models: this.models(), selectedModel: this.store.state.selectedModel })
         if (req.method === 'PUT' && path === '/api/models/selection') {
           const { model } = await readBody(req, { principal: session.accountId })

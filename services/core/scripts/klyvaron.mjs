@@ -11,6 +11,7 @@
 //   node services/core/scripts/klyvaron.mjs install <artifact-dir> [--replace]
 //   node services/core/scripts/klyvaron.mjs verify [<artifact-id>]
 //   node services/core/scripts/klyvaron.mjs status
+//   node services/core/scripts/klyvaron.mjs plan
 //   node services/core/scripts/klyvaron.mjs remove <artifact-id> --yes
 //
 // `--data-dir <dir>` overrides AETHERIS_DATA_DIR for one command; without either, the
@@ -23,6 +24,7 @@ import { loadConfig } from '../src/config.mjs'
 import { KlyvaronStore } from '../src/klyvaron/store.mjs'
 import { AetherisOmniApp, publicModel } from '../src/app.mjs'
 import { RUNTIME_POLICIES } from '../src/policy/egress.mjs'
+import { developmentPlan, formatPlan } from '../src/klyvaron/plan.mjs'
 
 const USAGE = `usage: node services/core/scripts/klyvaron.mjs <command> [options]
 
@@ -31,6 +33,7 @@ const USAGE = `usage: node services/core/scripts/klyvaron.mjs <command> [options
   verify [<id>]                 re-verify one artifact, or all of them
   remove <id> --yes             delete an artifact the user asked to delete
   status                        what the app reports for the library it opened
+  plan                          the development gates for Lite, Pro and Max, and why each open gate is open
 
 options: --data-dir <dir>   the managed root (default: the configured data dir)`
 
@@ -163,6 +166,8 @@ function commandStatus(options) {
 }
 
 const COMMANDS = {
+  // The plan is read from the family record, not from the store, so it runs without a data dir.
+  plan: () => { console.log(formatPlan(developmentPlan())); return 0 },
   list: commandList,
   install: commandInstall,
   verify: commandVerify,

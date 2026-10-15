@@ -633,19 +633,20 @@ test('the docs record limitations instead of implying completeness', () => {
 test('the status doc reports the real test totals', () => {
   // Recomputed from the filesystem: one test file per suite.
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
-  // 26 includes the accounts suite added with traditional sign-in. If a suite file
-  // is added or removed, the counts in
-  // docs/03-status.md and README.md have to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 26)
+  // 28 includes the accounts suite (traditional sign-in), the online runtimes suite
+  // (Ollama and llama.cpp on the online entry) and the Klyvaron plan suite. If a suite
+  // file is added or removed, the counts in docs/03-status.md and README.md have to move
+  // with it.
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 28)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 26)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**549 / 549**'), 'core total must be stated')
+  assert.ok(status.includes('**567 / 567**'), 'core total must be stated')
   assert.ok(status.includes('**575 / 575**'), 'fabric total must be stated')
-  assert.ok(status.includes('**91 / 91**'), 'web total must be stated')
-  assert.ok(status.includes('1215 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1215 tests: core 549, web 91, fabric 575'),
+  assert.ok(status.includes('**92 / 92**'), 'web total must be stated')
+  assert.ok(status.includes('1234 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1234 tests: core 567, web 92, fabric 575'),
     'README must state the same totals')
   assert.ok(status.includes('(26 files'), 'the file count must move with the suite')
 
@@ -658,14 +659,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(549), `core heading must say 549, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(567), `core heading must say 567, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(575), `fabric heading must say 575, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(91), `web heading must say 91, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(92), `web heading must say 92, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1215,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1215`,
+    1234,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })
 
@@ -679,7 +680,7 @@ test('the setup guide describes the product that actually runs', () => {
   const setup = squash(doc.setup())
   const raw = doc.setup()
   for (const claim of [
-    'performs **no inference and downloads no models**',
+    'performs **no local inference and downloads no models**',
     'AETHERIS_LITELLM_TRUSTED_ORIGINS=http://127.0.0.1:4000 npm run core',
     '**exact origin**',
     'endpoint_blocked',

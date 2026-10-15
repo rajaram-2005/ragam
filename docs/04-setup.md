@@ -52,7 +52,7 @@ Expected startup banner from the core, on a fresh installation:
 Aetheris online-only API listening on 0.0.0.0:8790
   data dir   /home/you/aetheris-omni/.aetheris-data/online
   sign-in    no accounts yet — open the web app and create the first one; it becomes the owner
-Configure LiteLLM in Provider Settings. No local inference or automatic model downloads.
+Configure an online gateway (LiteLLM, Ollama or llama.cpp server) in Provider Settings. No local inference or automatic model downloads.
 ```
 
 Once an account exists the third line reads `sign-in    1 account(s); owner you@example.com`,
@@ -98,7 +98,7 @@ npm install          # 62 packages, ~12 s
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 91 tests
+npm test             # 92 tests
 ```
 
 | Variable | Default | Purpose |
@@ -213,9 +213,9 @@ Full design, evaluation methodology and limitations:
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1215 tests)
-npm run test:core         # 549
-npm run test:web          # 91
+npm test                  # all three suites (1234 tests)
+npm run test:core         # 567
+npm run test:web          # 92
 npm run test:fabric       # 575 — needs numpy + pytest on the interpreter
 ```
 
@@ -259,9 +259,9 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 549 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Core service** | 567 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
 | **Fabric** | 575 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 91 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Web app** | `npm ci`, 92 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 39-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 
 The Fabric job's release-gate step is the one worth reading, because it asserts the
@@ -318,20 +318,30 @@ Deterministic apart from `latencyMs`. Seeds: data `1`, model `7`. See the
 ## 7. Making chat actually work
 
 The active product — `npm run core`, which is `services/core/src/server.mjs` — performs
-**no inference and downloads no models**. It speaks to exactly one thing: a
-LiteLLM-shaped gateway, called as `GET {base}/models` and `POST {base}/chat/completions`
-with a Bearer key. Until one is saved, `/api/ready` reports `status: "setup_required"`
+**no local inference and downloads no models**. It sends chat to **one** configured online
+endpoint at a time, of one of three kinds: a **LiteLLM** gateway, an **Ollama** server, or a
+**llama.cpp** server (`llama-server`). All three are called the same way:
+`GET {base}/models` and `POST {base}/chat/completions`. A LiteLLM gateway always needs a
+Bearer key. Ollama and llama.cpp need one only if you set it (`llama-server --api-key`).
+Until a connection is saved, `/api/ready` reports `status: "setup_required"`
 with `capabilities.chat: false`, the model list is empty, and Chat says so in a banner
 rather than failing quietly. That empty state is not a defect and no amount of
-re-signing-in changes it: it is the product waiting for a gateway.
+re-signing-in changes it: it is the product waiting for a gateway or runtime.
 
 Sign in as the **owner** account (the first one created on an installation), open
 **Provider Settings**, and enter:
 
 | Field | Value |
 |---|---|
-| LiteLLM API base URL | your gateway's `/v1` base, e.g. `https://gateway.example/v1`. The `/v1` matters: Core appends `/models` and `/chat/completions` to whatever you enter |
-| Gateway API key | the key for that gateway. A saved key is never carried over to a different endpoint |
+| Runtime | `LiteLLM gateway`, `Ollama` or `llama.cpp server`. Choosing one starts from an empty endpoint |
+| API base URL | your gateway's `/v1` base, e.g. `https://gateway.example/v1`; for Ollama `http://<core-host>:11434/v1`; for llama.cpp `http://<core-host>:8080/v1`. The `/v1` matters: Core appends `/models` and `/chat/completions` to whatever you enter |
+| API key | required for LiteLLM; optional for Ollama and llama.cpp. A saved key is never carried over to a different runtime or endpoint |
+
+A **local** Ollama or llama.cpp server is still **online** inference from the product's point
+of view: the request leaves Core for that endpoint, and the UI and the audit ledger say so.
+Because it is a loopback or private address, Core refuses it unless its exact origin is
+listed in `AETHERIS_TRUSTED_ORIGINS` on the Core host, for example
+`AETHERIS_TRUSTED_ORIGINS=http://127.0.0.1:11434`. Run Core with that variable set, then save.
 
 **Save connection**, then **Test connection & refresh models**. The list fills with the
 ids the gateway reports; pick one in Chat. The model you pick is the model that is
@@ -387,7 +397,7 @@ once at boot, so changing it means restarting Core. Comma-separated for more tha
 | `409 provider_changed` | The connection was re-saved while a check or a request was in flight |
 | `409 model_unavailable` | The model asked for is not in the listed set |
 
-### The retained legacy service is the one with local adapters
+### The retained legacy service has its own local adapters
 
 `services/core/src/providers/local.mjs` holds working Ollama (`/api/tags`, streaming
 `/api/chat`) and OpenAI-compatible llama.cpp (`/v1/models`, `/v1/chat/completions`)
@@ -395,19 +405,18 @@ adapters, and `services/core/src/config.mjs` reads `OLLAMA_*` and `LLAMACPP_*`. 
 belong to the **legacy** entry point, `src/legacy-server.mjs` — not what `npm run core`
 runs, and a service with no accounts and no `/api/auth`, so the web app in `apps/web`
 cannot sign into it. Setting `LLAMACPP_ENABLED=true` in front of `npm run core` does
-nothing at all: the online entry never reads that variable. Wiring local runtimes into
-the online entry is a product change rather than a configuration one, and it is listed as
-not delivered in [docs/19](19-online-only-phase-2.md) and
-[docs/20](20-accounts-and-sign-in.md).
+nothing at all: the online entry never reads that variable. The online entry reaches the
+same runtimes through their OpenAI-compatible `/v1` routes instead, with the transport
+controls described in §7 — set the runtime in Provider Settings, not in `.env`.
 
 ---
 
 ## 8. External providers and metadata catalogs
 
-**The active build has exactly one online inference adapter: LiteLLM.** It is the
-gateway `npm run core` speaks to (§7), and it is the only one — there is no
-provider chooser, no direct OpenAI/Anthropic/OpenRouter path and no local runtime
-in the online entry. Universal provider support is planned, not shipped, and it is
+**The active build has one online transport and three runtimes it can point at:
+LiteLLM, Ollama and llama.cpp server** (§7). There is still no provider chooser, no
+direct OpenAI/Anthropic/OpenRouter path and no native Ollama or llama.cpp protocol in the
+online entry; both local runtimes are reached over their OpenAI-compatible routes. Universal provider support is planned, not shipped, and it is
 listed as not delivered in [docs/19](19-online-only-phase-2.md) and
 [docs/20](20-accounts-and-sign-in.md). FreeLLMAPI remains excluded.
 

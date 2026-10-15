@@ -50,8 +50,8 @@ rather than left to be discovered:
 - **The first account created is the owner.** The role is decided by the store, never by
   the request body — a registration that could ask for `owner` would let the second
   person to arrive take the installation from the first. Only the owner can change the
-  gateway connection or its key (`PUT`/`DELETE /api/providers/litellm`,
-  `POST /api/providers/litellm/test`, `POST /api/models/probe`); a member who tries gets
+  gateway connection or its key (`PUT`/`DELETE /api/providers/{litellm,ollama,llamacpp}`,
+  `POST /api/providers/{litellm,ollama,llamacpp}/test`, `POST /api/models/probe`); a member who tries gets
   `403 owner_required`, and Provider Settings says so instead of offering inert controls.
 - **Every account chats through the one configured gateway**, so whoever configured it is
   paying for all of them. `AETHERIS_MAX_ACCOUNTS` (default 64) bounds how many accounts
@@ -185,7 +185,7 @@ history to forget about. Later accounts start empty.
 | `POST /api/auth/password-reset/confirm` | public | Set a new password with a code; revokes that account's sessions |
 | `POST /api/auth/logout` | signed in | End this session, clear the cookie |
 | `POST /api/auth/password` | signed in | Change own password; requires the current one |
-| `PUT`/`DELETE /api/providers/litellm`, `POST …/test`, `POST /api/models/probe` | owner | Gateway connection and key |
+| `PUT`/`DELETE /api/providers/{litellm,ollama,llamacpp}`, `POST …/test`, `POST /api/models/probe` | owner | Online connection and key |
 | everything else under `/api` | signed in | Chat, models, history, memory, knowledge, reviewed tools |
 
 Mutations still require the same-origin check and the non-simple `x-aetheris-request`
