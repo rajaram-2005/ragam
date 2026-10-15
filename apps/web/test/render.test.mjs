@@ -31,6 +31,7 @@ import React from 'react'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { SESSION_ENDED_NOTICE } from '../src/auth.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const WEB = resolve(HERE, '..')
@@ -90,6 +91,11 @@ async function loadComponents() {
     "export { default as McpArea } from '../../src/areas/McpArea.jsx'",
     "export { default as ProviderSettings } from '../../src/components/ProviderSettings.jsx'",
     "export { default as App } from '../../src/App.jsx'",
+    "export { default as SignInPage } from '../../src/pages/SignInPage.jsx'",
+    "export { default as SignUpPage } from '../../src/pages/SignUpPage.jsx'",
+    "export { default as ForgotPasswordPage } from '../../src/pages/ForgotPasswordPage.jsx'",
+    "export { ResetRequestForm, ResetConfirmForm } from '../../src/pages/ForgotPasswordPage.jsx'",
+    "export { default as AccountCard } from '../../src/components/AccountCard.jsx'",
     "export { Shell, StatusCard } from '../../src/components/Shell.jsx'",
     "export { JobTable, JobDetail } from '../../src/components/Jobs.jsx'",
     "export * as ui from '../../src/components/ui.jsx'",
@@ -187,12 +193,165 @@ test('authenticated shell keeps five areas and provides settings outside navigat
 
 })
 
-test('App renders an owner sign-in boundary before loading protected data', () => {
+test('App renders the sign-in page before loading protected data', () => {
+  // Signed out is the first state anybody sees, and it must not be a wall around a
+  // half-loaded workspace: no area chrome, no thread, no navigation.
   const markup = render('App', React.createElement(components.App))
-  assert.match(markup, /Sign in to this installation/)
+  assert.match(markup, /Sign in/)
+  assert.match(markup, /type="email"/)
   assert.match(markup, /type="password"/)
   assert.doesNotMatch(markup, /class="thread"|class="nav-item/)
+  // The removed mechanism must not survive in the signed-out view.
+  assert.doesNotMatch(markup, /access token|installation access|Sign in to this installation/i)
+})
 
+test('the sign-in page is a traditional address-and-password form', () => {
+  const markup = render('SignInPage', React.createElement(components.SignInPage))
+  assert.match(markup, /<h1>Sign in<\/h1>/)
+  // Named fields and the right autoComplete values: this is what lets a password manager
+  // recognise the form, which is most of why a traditional sign-in page is worth having.
+  assert.match(markup, /name="email"/)
+  assert.match(markup, /autoComplete="username"/)
+  assert.match(markup, /name="password"/)
+  assert.match(markup, /autoComplete="current-password"/)
+  assert.match(markup, /type="submit"[^>]*>.*Sign in|Sign in<\/button>/s)
+  // The other two sign-in pages are reachable from it, and no area chrome leaks in.
+  assert.match(markup, /href="#\/signup"/)
+  assert.match(markup, /href="#\/forgot-password"/)
+  assert.doesNotMatch(markup, /class="nav-item|class="thread|Provider Settings/)
+})
+
+test('a session the server no longer recognises is reported, not swallowed', () => {
+  // Ending a session silently is what turns a cookie problem into "I signed in and can't
+  // see anything": the workspace disappears, the sign-in page comes back, and nothing on
+  // screen says the session was dropped rather than never established.
+  const plain = render('SignInPage', React.createElement(components.SignInPage))
+  assert.doesNotMatch(plain, /Your session ended/, 'an ordinary visit is not told its session ended')
+
+  const ended = render('SignInPage (session ended)', React.createElement(components.SignInPage, { notice: SESSION_ENDED_NOTICE }))
+  assert.match(ended, /Your session ended/)
+  assert.match(ended, /data-tone="info"/, 'reported as information about this installation, not as a failed sign-in')
+  assert.match(ended, /AETHERIS_COOKIE_SAMESITE=none/, 'the non-obvious cause is named where somebody can act on it')
+
+  // A dropped session and a wrong password can happen to the same person in the same
+  // minute; both must be able to appear at once.
+  const both = render('SignInPage (ended and refused)', React.createElement(components.SignInPage, {
+    notice: SESSION_ENDED_NOTICE, error: new Error('That address and password do not match an account here.'),
+  }))
+  assert.match(both, /Your session ended/)
+  assert.match(both, /data-tone="bad"/)
+  assert.equal((both.match(/class="banner"/g) ?? []).length, 2)
+})
+
+test('the create-account page states the rules before the form is submitted', () => {
+  const markup = render('SignUpPage', React.createElement(components.SignUpPage))
+  assert.match(markup, /Create your account/)
+  assert.match(markup, /At least 12 characters/)
+  assert.match(markup, /autoComplete="new-password"/)
+  assert.equal((markup.match(/type="password"/g) ?? []).length, 2, 'a password and its confirmation')
+  assert.match(markup, /Confirm password/)
+  assert.match(markup, /first account created on an installation becomes its/, 'who owns the installation is stated where the account is made')
+  assert.match(markup, /href="#\/signin"/)
+})
+
+test('the reset page promises a host-delivered code and never an email', () => {
+  const markup = render('ForgotPasswordPage', React.createElement(components.ForgotPasswordPage))
+  assert.match(markup, /Reset your password/)
+  assert.match(markup, /Request a reset code/)
+  assert.match(markup, /password-resets\.json/, 'where the code actually is')
+  assert.match(markup, /sends no email/)
+  // The one thing this page must never do is claim a message is on its way.
+  assert.doesNotMatch(markup, /check your (?:email|inbox)|we(?:'ve| have) sent|sent you an (?:email|code)|reset link/i)
+  assert.match(markup, /href="#\/signin"/)
+})
+
+test('both steps of the reset page render, not only the first one', () => {
+  // The page starts on step one and only reaches step two after a successful request, so
+  // rendering the page alone leaves the password-setting form unseen by every test. Each
+  // step is exported for exactly this reason.
+  const request = render('ResetRequestForm', React.createElement(components.ResetRequestForm, {
+    email: '', onEmail: noop, busy: false, onSubmit: noop,
+  }))
+  assert.match(request, /Request a reset code/)
+  assert.match(request, /type="email"/)
+  assert.match(request, /autoComplete="username"/)
+  assert.doesNotMatch(request, /name="code"|Set new password/, 'step one must not show step two')
+
+  const confirm = render('ResetConfirmForm', React.createElement(components.ResetConfirmForm, {
+    code: '', onCode: noop, password: '', onPassword: noop, confirm: '', onConfirm: noop, busy: false, onSubmit: noop,
+  }))
+  assert.match(confirm, /Set new password/)
+  assert.match(confirm, /name="code"/)
+  assert.match(confirm, /autoComplete="one-time-code"/)
+  assert.match(confirm, /Single use/, 'the code is single-use and short-lived; say so where it is typed')
+  assert.equal((confirm.match(/type="password"/g) ?? []).length, 2, 'a password and its confirmation')
+  // autoComplete is what lets a password manager store it; name is what the browser posts.
+  assert.equal((confirm.match(/autoComplete="new-password"/g) ?? []).length, 2)
+  assert.match(confirm, /name="password"/)
+  assert.match(confirm, /name="confirm-password"/)
+  assert.match(confirm, /minLength="12"/, 'the server is authoritative, but the form states the same floor')
+  assert.doesNotMatch(confirm, /not the same|aria-invalid/, 'no error before anything is typed')
+
+  // The mismatch state is the one validation this page owns outright — the server never
+  // sees the confirmation field, so nothing downstream catches a typo in it.
+  const mismatched = render('ResetConfirmForm (mismatch)', React.createElement(components.ResetConfirmForm, {
+    code: 'a-single-use-code', onCode: noop, password: 'a-brand-new-password', onPassword: noop,
+    confirm: 'a-different-password', onConfirm: noop, busy: false, onSubmit: noop,
+  }))
+  assert.match(mismatched, /not the same/)
+  assert.match(mismatched, /aria-invalid="true"/)
+  assert.match(mismatched, /disabled/, 'the form must not submit a pair that cannot both be right')
+})
+
+test('the sidebar names the signed-in account without becoming a sixth area', () => {
+  const owner = render('Shell (owner)', React.createElement(components.Shell, { active: 'chat', onSelect: noop, account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onSignOut: noop }))
+  assert.match(owner, /owner@example\.test/)
+  assert.match(owner, /OWNER/)
+  assert.match(owner, /Change password/)
+  assert.match(owner, /Sign out/)
+  assert.equal((owner.match(/class="nav-item/g) ?? []).length, 5, 'the account card must not add a navigation entry')
+  const member = render('Shell (member)', React.createElement(components.Shell, { active: 'chat', onSelect: noop, account: { id: 'a2', email: 'member@example.test', role: 'member' }, onSignOut: noop }))
+  assert.match(member, /MEMBER/)
+  assert.doesNotMatch(member, /OWNER/)
+  // With no account there is no card at all: the shell must not invent an identity.
+  const anonymous = render('Shell (anonymous)', React.createElement(components.Shell, { active: 'chat', onSelect: noop }))
+  assert.doesNotMatch(anonymous, /Change password|Sign out|MEMBER|OWNER/)
+})
+
+test('the change-password dialog asks for the current password and warns about other sessions', () => {
+  // The dialog is in the card's markup from the start (a <dialog> is closed, not absent),
+  // so it can be rendered without clicking anything. It is worth pinning because this is
+  // the only form in the signed-in app that changes a credential, and because what it
+  // promises is a server behaviour: a successful change revokes the account's other
+  // sessions, which feels like a bug unless the form says it is about to happen.
+  const owner = { id: 'a1', email: 'owner@example.test', role: 'owner' }
+  const markup = render('AccountCard', React.createElement(components.AccountCard, { account: owner, onSignOut: noop }))
+  assert.equal((markup.match(/type="password"/g) ?? []).length, 3, 'current, new, and confirm')
+  assert.equal((markup.match(/autoComplete="current-password"/g) ?? []).length, 1, 'exactly one field is the current password')
+  assert.equal((markup.match(/autoComplete="new-password"/g) ?? []).length, 2)
+  assert.match(markup, /name="current-password"[^>]*required/, 'the current password is not optional')
+  assert.match(markup, /minLength="12"/, 'the same floor the server enforces, stated on the form')
+  assert.match(markup, /signs out every other session/, 'say what the server does before it does it')
+  assert.match(markup, /owner@example\.test/)
+  assert.doesNotMatch(markup, /not the same|aria-invalid/, 'no validation error before anything is typed')
+
+  // Three labels read "Change password": the sidebar trigger, the dialog heading, and the
+  // submit button. All three must be present, or the trigger points at nothing.
+  assert.equal((markup.match(/Change password/g) ?? []).length, 3, 'trigger, heading, and submit')
+  assert.match(markup, /aria-labelledby="change-password-title"/)
+  assert.match(markup, /id="change-password-title"/)
+
+  // Without an account there is no card at all: the sidebar must not invent an identity.
+  // `render()` rejects empty markup by design, so this one goes straight to the renderer.
+  assert.equal(renderToStaticMarkup(React.createElement(components.AccountCard, { onSignOut: noop })), '')
+})
+
+test('provider settings are read-only for a member account', () => {
+  const member = render('ProviderSettings (member)', React.createElement(components.ProviderSettings, { account: { id: 'a2', email: 'member@example.test', role: 'member' }, onClose: noop }))
+  assert.match(member, /Only the owner account/)
+  const owner = render('ProviderSettings (owner)', React.createElement(components.ProviderSettings, { account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop }))
+  assert.doesNotMatch(owner, /Only the owner account/)
+  assert.match(owner, /Save connection/)
 })
 
 test('StatusCard distinguishes loading, errors, listings and observed inference', () => {

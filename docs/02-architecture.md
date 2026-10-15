@@ -71,17 +71,18 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 13,979 source lines, 11,130 test lines
+### `services/core` — 14,592 source lines, 11,881 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
 | `hardware/detect.mjs` | 61 | OS memory, CPU features, disk and optional bounded GPU probes |
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
-| `online/app.mjs` | 194 | Authenticated online application and exact-model inference |
-| `online/context-routes.mjs` | 165 | Authenticated context and reviewed read-only tool routes |
+| `online/accounts.mjs` | 387 | Accounts, scrypt password hashes, lockouts, throttling and host-delivered reset codes |
+| `online/app.mjs` | 383 | Authenticated online application, per-account context and exact-model inference |
+| `online/context-routes.mjs` | 175 | Authenticated context and reviewed read-only tool routes |
 | `online/gateway.mjs` | 103 | Bounded LiteLLM HTTPS/SSE transport and destination validation |
-| `online/http.mjs` | 24 | Bounded JSON requests and no-store responses |
+| `online/http.mjs` | 32 | Bounded JSON requests and no-store responses |
 | `online/store.mjs` | 40 | Encrypted credential and persistent model-selection store |
 | `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
@@ -107,7 +108,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `config.mjs` | 248 | Environment → config, secret loading, `publicConfig` redaction |
 | `policy/egress.mjs` | 253 | The egress guard, runtime policies, data classes, `*` allow-all, global fetch hook |
 | `providers/klyvaron.mjs` | 220 | The first-party provider adapter: a local model behind the same contract, with its limitations carried into every response |
-| `server.mjs` | 25 | Entry point, startup banner, graceful shutdown |
+| `server.mjs` | 44 | Entry point, startup banner, graceful shutdown |
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
 | `media/validate.mjs` | 143 | Magic-byte sniffing, video genuineness check |
 | `klyvaron/footprint.mjs` | 137 | The footprint report a user sees: categorized bytes plus unmanaged files, against the 5 GB budget |
@@ -131,10 +132,12 @@ release manager, and a hand-written dual encoder whose **five parameter gradient
 all match central finite differences to ~3e-10**. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 2,015 source lines, 1,347 test lines
+### `apps/web` — 2,665 source lines, 1,803 test lines
 
-Five area components, a shell, shared primitives, an API client and four test
-files. Design tokens and the shell's visual structure come from upstream Aetheris
+Five area components, three sign-in pages (sign in, create account, reset
+password) and the account card in the sidebar, a shell, shared primitives, an API
+client and four test files. The sign-in pages are not areas and add no navigation
+entry; see [20 — Accounts and sign-in](20-accounts-and-sign-in.md). Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).
 
 ---

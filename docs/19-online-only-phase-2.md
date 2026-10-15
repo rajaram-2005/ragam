@@ -15,7 +15,7 @@ The active `npm run core` entry now loads `online/app.mjs`, not the legacy offli
 - Conversation history, optional approved memory and text-file knowledge remain. Files are limited to supported plain-text formats up to 1 MiB in the UI; no PDF/Office parsing. Context is sent only when selected for the request. Sensitive data needs explicit per-request authorization; credential-shaped content is redacted. Classification covers the entire assembled request and cannot be lowered by a caller's `public` label.
 - Plugins/MCP retain reviewed read-only built-ins. Arbitrary extension installs, trust-key modifications, external MCP registration and agent-driven tool execution are disabled in this increment. Built-ins are trusted because they are part of reviewed application source, not because of a publisher signature or a claimed in-process sandbox.
 
-**Not delivered:** real online Image/Video generation adapters, direct native provider integrations, a multi-tenant account system, cloud deployment, durable autonomous tasks, or a qualified Sparsiz training loop. Image/Video clearly state that their adapters are not connected; no synthetic output is substituted. LiteLLM metadata does not prove image/video support or access rights.
+**Not delivered:** real online Image/Video generation adapters, direct native provider integrations, cloud deployment, durable autonomous tasks, or a qualified Sparsiz training loop. Image/Video clearly state that their adapters are not connected; no synthetic output is substituted. LiteLLM metadata does not prove image/video support or access rights.
 
 ## Run and connect
 
@@ -33,7 +33,7 @@ Core binds `0.0.0.0:8790`; Web uses relative `/api` requests through the Vite pr
 AETHERIS_COOKIE_SECURE=false npm run core
 ```
 
-The Core creates an operator token in `.aetheris-data/online/access-token` (mode 0600, protected data directory). Read it on the Core host and paste it into the **installation sign-in form**, not a chat message. This is not a LiteLLM key. Sign-in creates an HttpOnly, SameSite=Strict, eight-hour cookie. Sessions are bounded and revoked on restart; sign-out invalidates the current session. Rotate the installation token by replacing the file securely and restarting Core. Do not publish the token or the data directory.
+**Sign-in is an account, not a token.** The operator token file this increment originally created (`.aetheris-data/online/access-token`) has been **removed**, together with its `{ token }` login route: there is one way in. Open the web app, choose **Create account** (`#/signup`), and sign in with an email address and a password. The first account created owns the installation and is the only one that can change the gateway connection; later accounts are members. Accounts, scrypt password hashes, sessions, per-account data isolation and the host-delivered password-reset flow are specified in [docs/20](20-accounts-and-sign-in.md). Sign-in still creates an HttpOnly, eight-hour cookie whose `SameSite` is `Strict` by default (`AETHERIS_COOKIE_SAMESITE=none` opts in for an installation embedded in another site, and requires secure cookies), sessions are still bounded and revoked on restart, and sign-out still invalidates the current session.
 
 Then:
 
@@ -53,8 +53,11 @@ Export environment variables into the process; the new entry does not load legac
 |---|---|---|
 | `AETHERIS_CORE_HOST` | `0.0.0.0` | Bind address, not authorization |
 | `AETHERIS_CORE_PORT` | `8790` | API port |
-| `AETHERIS_ONLINE_DATA_DIR` | `.aetheris-data/online` | Separate settings, token, history, memory and knowledge directory |
+| `AETHERIS_ONLINE_DATA_DIR` | `.aetheris-data/online` | Separate settings, accounts, history, memory and knowledge directory |
 | `AETHERIS_COOKIE_SECURE` | `true` | Set `false` only for deliberate HTTP local development |
+| `AETHERIS_COOKIE_SAMESITE` | `strict` | `none` when the web app is served inside another site's iframe; requires secure cookies |
+| `AETHERIS_MAX_ACCOUNTS` | `64` | Cap on accounts an open sign-up page can create |
+| `AETHERIS_PRINT_RESET_CODES` | `false` | Also print a password-reset code on the Core console |
 | `AETHERIS_LITELLM_TRUSTED_ORIGINS` | empty | Comma-separated exact origins for explicitly trusted internal gateways |
 | `AETHERIS_CORE_URL` | proxy default | Web server's backend target, never a browser-facing localhost URL |
 | `WEB_PORT` | `5173` | Web server port |
@@ -65,7 +68,7 @@ The provider key is encrypted with AES-256-GCM in `provider.json`, using the ser
 
 ## Security boundary and remaining limitations
 
-This is a **single-operator installation**, not multi-tenancy. All settings, conversation, memory, knowledge and tool APIs require owner authentication. Mutations require a same-origin request and non-simple request header; no permissive CORS is emitted. Only health and sign-in status are public. No client-provided principal grants access to another identity. Sign-in is rate-limited; session count, request sizes, provider responses and inference concurrency are bounded.
+This installation has **accounts**, and sign-up is open to anybody who can reach it. Conversation, memory and file knowledge are per account (separate databases, not filters); the gateway connection and its key belong to the installation and can be changed only by its owner account. All settings, conversation, memory, knowledge and tool APIs require authentication. Mutations require a same-origin request and non-simple request header; no permissive CORS is emitted. Only health, sign-in status, registration, sign-in and password reset are public. No client-provided principal grants access to another identity. Sign-in is rate-limited and locks an account after repeated failures; account count, session count, request sizes, provider responses and inference concurrency are bounded. See [docs/20](20-accounts-and-sign-in.md) for the full account model and for what password reset without a mail transport does and does not protect against.
 
 Provider credentials remain server-side, but inference data necessarily leaves the deployment when sent. The UI explicitly identifies the gateway; upstream disclosure, budget enforcement, retention and training policies must be configured/verified in LiteLLM. No free-access, privacy, quota or price guarantee is inferred from its model list. Prompt injection is not solved by classification: external context remains untrusted, and model outputs do not automatically execute tools.
 
@@ -73,7 +76,7 @@ History is saved for completed turns. Incomplete/failed generations retain the d
 
 ## Validation and preservation
 
-- Full verification: **528 Core + 76 Web + 575 Fabric = 1,179 tests**, followed by production build.
+- Full verification: **549 Core + 91 Web + 575 Fabric = 1,215 tests**, followed by production build. (This increment delivered 528 + 76 + 575 = 1,179; the accounts and sign-in change in [docs/20](20-accounts-and-sign-in.md) added 21 Core and 15 Web tests.)
 - Core adds **19 online-specific tests** for authentication, CSRF, secret storage, model switching/persistence, no fallback, data consent, classification, body deadlines, provider errors, SSE completion, context/history, reviewed tools, and removed routes.
 - Web's superseded offline-control/research-panel assertions were replaced with current online UI assertions; remaining component/API/render regressions remain. A new provider-settings render test verifies key input and connection controls.
 - Existing legacy Core and Fabric suites are retained. Their passing tests do **not** mean their capabilities are in the online product. Counts include retained research/library coverage.
@@ -82,4 +85,4 @@ History is saved for completed turns. Incomplete/failed generations retain the d
 - Prior audit evidence is historical and left unchanged. Local/research modules and data are preserved; `legacy-server.mjs` and `apps/web/legacy/` retain prior entry/UI references, not active imports. Do not deploy the legacy API as an authenticated online service.
 - No additional production dependency, model installation, training, paid inference, commit or push was performed.
 
-Next increment: qualify an actual reachable LiteLLM gateway and authorized models; then implement and test real online image/video adapters one modality at a time. Professional/industrial or autonomous capabilities remain outside this delivered scope.
+Next increment: qualify an actual reachable LiteLLM gateway and authorized models; then implement and test real online image/video adapters one modality at a time, which is where universal provider support starts. The unfinished image/video additions are deliberately **not** part of this increment or of the sign-in change: they still need testing before a follow-up pull request. Professional/industrial or autonomous capabilities remain outside this delivered scope.

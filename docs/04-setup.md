@@ -43,25 +43,27 @@ cd apps/web && npm install && npm run dev
 ```
 
 Open the URL Vite prints. It proxies `/api` to the core service, so the browser
-never needs to know where the backend lives.
+never needs to know where the backend lives. Then **create the first account** at
+`#/signup` — it becomes the owner, and only the owner can connect a gateway (§7).
 
-Expected startup banner from the core, on a host with no model installed:
+Expected startup banner from the core, on a fresh installation:
 
 ```
-aetheris-core listening
-  url           http://0.0.0.0:8790
-  policy        strict_offline
-  readiness     degraded
-  local models  0 ready
-  network       external egress is blocked at the fetch layer
-  provider      ollama: not_installed
-  limitation    no local chat model is installed; /api/chat will return no_model_available
-  limitation    no video generation model is available; /api/video will refuse rather than
-                substitute a still image
+Aetheris online-only API listening on 0.0.0.0:8790
+  data dir   /home/you/aetheris-omni/.aetheris-data/online
+  sign-in    no accounts yet — open the web app and create the first one; it becomes the owner
+Configure LiteLLM in Provider Settings. No local inference or automatic model downloads.
 ```
 
-`degraded` with those two limitations **is the correct output** on a machine with
-no model. It is not an error, and the interface does not soften it.
+Once an account exists the third line reads `sign-in    1 account(s); owner you@example.com`,
+and a `cookie` line appears whenever the session cookie's SameSite policy is not the
+default. A `(node:NNNN) ExperimentalWarning: SQLite is an experimental feature` line
+above the banner comes from `node:sqlite` and is expected on Node 22.
+
+That banner, with no model listed anywhere in it, **is the correct output** on a
+fresh installation: this entry point performs no inference and installs nothing,
+so there is nothing local to report. It is not an error, and the interface does
+not soften it — Chat shows the same fact as a banner until a gateway is saved.
 
 ---
 
@@ -96,7 +98,7 @@ npm install          # 62 packages, ~12 s
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 76 tests
+npm test             # 91 tests
 ```
 
 | Variable | Default | Purpose |
@@ -211,9 +213,9 @@ Full design, evaluation methodology and limitations:
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1179 tests)
-npm run test:core         # 528
-npm run test:web          # 76
+npm test                  # all three suites (1215 tests)
+npm run test:core         # 549
+npm run test:web          # 91
 npm run test:fabric       # 575 — needs numpy + pytest on the interpreter
 ```
 
@@ -257,10 +259,10 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 528 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Core service** | 549 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
 | **Fabric** | 575 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 76 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
-| **Docs** | The 37-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
+| **Web app** | `npm ci`, 91 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Docs** | The 39-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 
 The Fabric job's release-gate step is the one worth reading, because it asserts the
 negative case as well as the positive one:
@@ -315,51 +317,99 @@ Deterministic apart from `latencyMs`. Seeds: data `1`, model `7`. See the
 
 ## 7. Making chat actually work
 
-Out of the box there is no language model, so `/api/chat` returns
-`no_model_available` with the router's explanation. That is honest, and it is the
-one step between this repository and a usable assistant.
+The active product — `npm run core`, which is `services/core/src/server.mjs` — performs
+**no inference and downloads no models**. It speaks to exactly one thing: a
+LiteLLM-shaped gateway, called as `GET {base}/models` and `POST {base}/chat/completions`
+with a Bearer key. Until one is saved, `/api/ready` reports `status: "setup_required"`
+with `capabilities.chat: false`, the model list is empty, and Chat says so in a banner
+rather than failing quietly. That empty state is not a defect and no amount of
+re-signing-in changes it: it is the product waiting for a gateway.
 
-**With Ollama** (the default provider, already enabled):
+Sign in as the **owner** account (the first one created on an installation), open
+**Provider Settings**, and enter:
 
-```bash
-# install Ollama, then:
-ollama pull qwen2.5:1.5b          # or any chat model your hardware can hold
-curl -s http://127.0.0.1:11434/api/tags | head -c 200
-```
+| Field | Value |
+|---|---|
+| LiteLLM API base URL | your gateway's `/v1` base, e.g. `https://gateway.example/v1`. The `/v1` matters: Core appends `/models` and `/chat/completions` to whatever you enter |
+| Gateway API key | the key for that gateway. A saved key is never carried over to a different endpoint |
 
-Then either restart the core service or re-probe from the interface
-(**Re-probe models**, top right). `/api/ready` should report
-`capabilities.chat: true`, and the sidebar card should show `1/1 ready`.
+**Save connection**, then **Test connection & refresh models**. The list fills with the
+ids the gateway reports; pick one in Chat. The model you pick is the model that is
+called — there is no substitution and no fallback, so a model that is listed but broken
+fails visibly instead of quietly answering from somewhere else.
 
-**With llama.cpp:**
+### Local models behind a local gateway
 
-```bash
-LLAMACPP_ENABLED=true \
-LLAMACPP_BASE_URL=http://127.0.0.1:8080/v1 \
-node services/core/src/server.mjs
-```
-
-Both runtimes are on loopback, so they stay reachable under `strict_offline` —
-offline does not mean "nothing works".
-
-**To verify offline enforcement is real** rather than cosmetic:
+The gateway may itself be on your own machine and front a local runtime. That is how this
+product runs on local models without being changed: Core still does no inference, it just
+talks to a gateway that happens to be on loopback.
 
 ```bash
-cd services/core && node --test test/offline.test.mjs
+ollama serve                                    # 127.0.0.1:11434
+ollama pull qwen2.5:1.5b                        # or any chat model your hardware can hold
+pip install 'litellm[proxy]'
+litellm --model ollama/qwen2.5:1.5b --port 4000 --master_key sk-local-dev
+
+AETHERIS_LITELLM_TRUSTED_ORIGINS=http://127.0.0.1:4000 npm run core
+npm run web
 ```
 
-This starts a real HTTP server speaking the Ollama protocol, completes a genuine
-chat round-trip under `strict_offline`, and proves with a recording `fetch` spy
-that `api.openai.com`, `api.example.com`, `huggingface.co` and `api.anthropic.com`
-are rejected without opening a socket or resolving DNS.
+Then in Provider Settings: base URL `http://127.0.0.1:4000/v1`, key `sk-local-dev`. The
+model id you will see is whatever the proxy reports — `ollama/qwen2.5:1.5b` with the
+command above, or `qwen2.5:1.5b` if you configure the proxy with a `model_list` YAML
+instead. Check the two endpoints Core actually calls before blaming the app:
+
+```bash
+curl -H 'authorization: Bearer sk-local-dev' http://127.0.0.1:4000/v1/models
+curl -H 'authorization: Bearer sk-local-dev' -H 'content-type: application/json' \
+  -d '{"model":"ollama/qwen2.5:1.5b","messages":[{"role":"user","content":"Say hi"}],"stream":true}' \
+  http://127.0.0.1:4000/v1/chat/completions
+```
+
+`AETHERIS_LITELLM_TRUSTED_ORIGINS` exists because a private or loopback gateway is
+refused by default — otherwise anybody who can reach the API could point an installation
+at an internal address. It is compared against the URL's **exact origin**: scheme, host
+and port, with no path and no trailing slash. `http://127.0.0.1:4000/` does not match,
+and neither does `http://localhost:4000` when the base URL says `127.0.0.1`. It is read
+once at boot, so changing it means restarting Core. Comma-separated for more than one.
+
+### What the refusals mean
+
+| Response | Cause |
+|---|---|
+| `400 endpoint_blocked` | A private or loopback base URL whose origin is not in `AETHERIS_LITELLM_TRUSTED_ORIGINS`, or does not match it exactly |
+| `400 invalid_endpoint` | Not a parseable HTTP(S) URL, or it carries credentials, a query or a fragment |
+| `400 key_required` | No key was sent, and a saved key is never reused for a different endpoint |
+| `400 invalid_key` | A key over 8192 characters, or one containing a line break |
+| `403 owner_required` | A member account tried to change the gateway; only the owner can |
+| `502 invalid_model_list` | The gateway's `/models` answer was not a list of at most 500 records |
+| `502 invalid_stream` | A streaming request did not get `text/event-stream` back — usually a base URL missing `/v1`, or the gateway answering with an error page |
+| `409 provider_changed` | The connection was re-saved while a check or a request was in flight |
+| `409 model_unavailable` | The model asked for is not in the listed set |
+
+### The retained legacy service is the one with local adapters
+
+`services/core/src/providers/local.mjs` holds working Ollama (`/api/tags`, streaming
+`/api/chat`) and OpenAI-compatible llama.cpp (`/v1/models`, `/v1/chat/completions`)
+adapters, and `services/core/src/config.mjs` reads `OLLAMA_*` and `LLAMACPP_*`. Both
+belong to the **legacy** entry point, `src/legacy-server.mjs` — not what `npm run core`
+runs, and a service with no accounts and no `/api/auth`, so the web app in `apps/web`
+cannot sign into it. Setting `LLAMACPP_ENABLED=true` in front of `npm run core` does
+nothing at all: the online entry never reads that variable. Wiring local runtimes into
+the online entry is a product change rather than a configuration one, and it is listed as
+not delivered in [docs/19](19-online-only-phase-2.md) and
+[docs/20](20-accounts-and-sign-in.md).
 
 ---
 
 ## 8. External providers and metadata catalogs
 
-**This build has no online inference adapter.** The updated universal directive
-makes LiteLLM the preferred planned gateway; the former blanket exclusion of
-online providers no longer governs future development. FreeLLMAPI remains excluded.
+**The active build has exactly one online inference adapter: LiteLLM.** It is the
+gateway `npm run core` speaks to (§7), and it is the only one — there is no
+provider chooser, no direct OpenAI/Anthropic/OpenRouter path and no local runtime
+in the online entry. Universal provider support is planned, not shipped, and it is
+listed as not delivered in [docs/19](19-online-only-phase-2.md) and
+[docs/20](20-accounts-and-sign-in.md). FreeLLMAPI remains excluded.
 
 Optional **metadata-only** sources are now configured using
 `AETHERIS_MODEL_CATALOG_FILE`; see [17 — Model catalog](./17-model-catalog.md).
@@ -367,11 +417,12 @@ Credentials stay in protected server-side files. An explicit refresh is separate
 from inference authorization, and Strict Offline blocks external catalog sources,
 even a loopback model gateway that could consult upstream services.
 
-Image and Video still report no generation provider. The online allowlist does
-not make a model available or authorize sending private task content. Before
-online inference ships it needs tested data policy, identity, budget/usage,
-streaming/cancellation and provider-specific capability handling. The existing
-router's online descriptor support is only a foundation, not a gateway release.
+Image and Video still report no generation provider: both answer
+`capability_unavailable` rather than substituting output, and the refusal is
+audited. Text inference through the LiteLLM gateway does ship, with the data
+policy, identity, streaming and cancellation that the online entry enforces
+([docs/19](19-online-only-phase-2.md)); what has not shipped is *more than one*
+provider, per-account provider connections, and any generation modality.
 
 ---
 
@@ -401,7 +452,10 @@ record rather than leaving an unexplained gap.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `no_model_available` on every chat | No LM installed or not probed | §7, then re-probe |
+| Empty model list, Chat disabled, `/api/ready` says `setup_required` | No gateway saved yet | §7 — Provider Settings, then **Test connection & refresh models** |
+| `400 endpoint_blocked` when saving a gateway | A loopback or private base URL whose origin is not trusted | §7 — set `AETHERIS_LITELLM_TRUSTED_ORIGINS` to the exact origin and restart Core |
+| Sign-in succeeds, then the app returns to the sign-in page | The session cookie is not being sent — the app is inside another site's iframe and the cookie is `SameSite=Strict` | Start Core with `AETHERIS_COOKIE_SAMESITE=none` and `AETHERIS_COOKIE_SECURE=true`; see [docs/20](20-accounts-and-sign-in.md) |
+| `502 invalid_stream` on every message | The base URL is missing `/v1`, or the gateway answers with an error page | §7 — check the two `curl` calls against the gateway directly |
 | Web UI shows "Core service unreachable" | Core not running, or the proxy target is wrong | Start the core; check `AETHERIS_CORE_URL` |
 | UI works locally but not behind a proxy | Dev server rejecting the host | Already handled: `allowedHosts: true`. Check the proxy forwards `/api` |
 | `No module named pytest` | System interpreter has no pytest | `AETHERIS_PYTHON=/path/to/venv/bin/python` |

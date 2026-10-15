@@ -67,6 +67,8 @@ const doc = {
   readme: () => read('README.md'),
   env: () => read('.env.example'),
   notices: () => read('third-party/NOTICES.md'),
+  accounts: () => read('docs/20-accounts-and-sign-in.md'),
+  phase2: () => read('docs/19-online-only-phase-2.md'),
 }
 
 /** Environment variable names read anywhere in core or the web build config. */
@@ -355,6 +357,35 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.setup, 'all three suites (1075 tests)'], [doc.status, '**562 / 562**'],
     [doc.setup, '| **Fabric** | 562 tests pass'], [doc.security, '562 Fabric tests'],
     [doc.setup, '| **Core service** | 445 tests pass'],
+    [doc.setup, 'all three suites (1179 tests)'], [doc.status, '**528 / 528**'],
+    [doc.status, '**76 / 76**'], [doc.setup, 'npm run test:core         # 528'],
+    [doc.setup, '| **Web app** | `npm ci`, 76 tests'],
+    [doc.status, '**84 / 84**'], [doc.status, '**Test totals: 1204 passing'],
+    [doc.status, 'Implemented and tested (84 tests)'], [doc.status, '`apps/web`; 84 tests including'],
+    [doc.status, '199.25 kB'], [doc.status, '61.46 kB gzip'],
+    [doc.setup, 'npm test             # 84 tests'], [doc.setup, 'npm run test:web          # 84'],
+    [doc.setup, 'all three suites (1204 tests)'], [doc.setup, '| **Web app** | `npm ci`, 84 tests'],
+    [doc.readme, '1204 tests: core 545, web 84, fabric 575'], [doc.readme, 'All 1204 run in CI'],
+    [doc.readme, '| 2,622 | 1,490 |'], [doc.architecture, '2,622 source lines, 1,490 test lines'],
+    [doc.phase2, '84 Web + 575 Fabric = 1,204 tests'], [doc.phase2, '17 Core and 8 Web tests'],
+    [doc.accounts, '**8 new tests** across `render.test.mjs` and `structure.test.mjs`'],
+    [doc.architecture, '14,555 source lines, 11,712 test lines'],
+    [doc.readme, '| 14,555 | 11,712 |'],
+    [doc.status, '**545 / 545**'], [doc.status, '**89 / 89**'], [doc.status, '**Test totals: 1209 passing'],
+    [doc.status, 'Implemented and tested (545 tests)'], [doc.status, 'Implemented and tested (89 tests)'],
+    [doc.status, '`apps/web`; 89 tests including'], [doc.status, '`accounts.test.mjs` (16 tests)'],
+    [doc.status, '199.64 kB'], [doc.status, '61.59 kB gzip'], [doc.status, '`test/render.test.mjs` (28 tests)'],
+    [doc.setup, 'all three suites (1209 tests)'], [doc.setup, 'npm run test:core         # 545'],
+    [doc.setup, 'npm run test:web          # 89'], [doc.setup, '| **Core service** | 545 tests pass'],
+    [doc.setup, '| **Web app** | `npm ci`, 89 tests'], [doc.setup, 'npm test             # 89 tests'],
+    [doc.readme, '1209 tests: core 545, web 89, fabric 575'], [doc.readme, 'All 1209 run in CI'],
+    [doc.phase2, '545 Core + 89 Web + 575 Fabric = 1,209 tests'], [doc.phase2, '17 Core and 13 Web tests'],
+    [doc.status, '**547 / 547**'], [doc.status, '**Test totals: 1213 passing'],
+    [doc.status, 'Implemented and tested (547 tests)'], [doc.setup, 'all three suites (1213 tests)'],
+    [doc.setup, 'npm run test:core         # 547'], [doc.setup, '| **Core service** | 547 tests pass'],
+    [doc.readme, '1213 tests: core 547, web 91, fabric 575'], [doc.readme, 'All 1213 run in CI'],
+    [doc.phase2, '547 Core + 91 Web + 575 Fabric = 1,213 tests'], [doc.phase2, '19 Core and 15 Web tests'],
+    [doc.accounts, 'its 19 tests pass'], [doc.setup, '38-test documentation-accuracy suite'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -602,20 +633,21 @@ test('the docs record limitations instead of implying completeness', () => {
 test('the status doc reports the real test totals', () => {
   // Recomputed from the filesystem: one test file per suite.
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
-  // 19 includes this file. If a suite file is added or removed, the counts in
+  // 26 includes the accounts suite added with traditional sign-in. If a suite file
+  // is added or removed, the counts in
   // docs/03-status.md and README.md have to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 25)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 26)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 26)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**528 / 528**'), 'core total must be stated')
+  assert.ok(status.includes('**549 / 549**'), 'core total must be stated')
   assert.ok(status.includes('**575 / 575**'), 'fabric total must be stated')
-  assert.ok(status.includes('**76 / 76**'), 'web total must be stated')
-  assert.ok(status.includes('1179 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1179 tests: core 528, web 76, fabric 575'),
+  assert.ok(status.includes('**91 / 91**'), 'web total must be stated')
+  assert.ok(status.includes('1215 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1215 tests: core 549, web 91, fabric 575'),
     'README must state the same totals')
-  assert.ok(status.includes('(25 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(26 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -626,15 +658,127 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(528), `core heading must say 528, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(549), `core heading must say 549, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(575), `fabric heading must say 575, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(76), `web heading must say 76, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(91), `web heading must say 91, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1179,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1179`,
+    1215,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1215`,
   )
+})
+
+test('the setup guide describes the product that actually runs', () => {
+  // §2 and §7 showed the legacy service's startup banner and told readers to install
+  // Ollama and start the core with LLAMACPP_ENABLED=true. `npm run core` is the online
+  // entry: it never reads that variable, has no local runtime, and answers an unconfigured
+  // installation with setup_required. A setup guide for a different product is worse than
+  // none -- it sends somebody to install a runtime that cannot be reached, and the report
+  // that follows is "I signed in and cannot see the models or chat".
+  const setup = squash(doc.setup())
+  const raw = doc.setup()
+  for (const claim of [
+    'performs **no inference and downloads no models**',
+    'AETHERIS_LITELLM_TRUSTED_ORIGINS=http://127.0.0.1:4000 npm run core',
+    '**exact origin**',
+    'endpoint_blocked',
+    'Aetheris online-only API listening',
+    'AETHERIS_COOKIE_SAMESITE=none',
+  ]) {
+    assert.ok(setup.includes(squash(claim)), `docs/04 must state ${claim}`)
+  }
+  // The legacy instructions must not come back in either form: as a way to start the
+  // active entry, or as an error the active entry can produce.
+  assert.ok(!/LLAMACPP_ENABLED=true\s*\\\s*LLAMACPP_BASE_URL/.test(raw),
+    'docs/04 must not present legacy runtime variables as a way to start the active entry')
+  assert.ok(!setup.includes('no_model_available'),
+    'that error belongs to the legacy router; the active entry reports setup_required')
+  assert.ok(!setup.includes('aetheris-core listening'),
+    'the legacy startup banner is not what npm run core prints')
+  // And the local-gateway path must be reachable in the real code, not only on the page:
+  // the trusted origin is compared exactly, and a private URL is refused without one.
+  const gateway = readFileSync(resolve(CORE, 'src', 'online', 'gateway.mjs'), 'utf8')
+  assert.match(gateway, /trustedOrigins\.includes\(url\.origin\)/,
+    'the guide documents an exact-origin comparison; the code must still do that')
+  assert.match(gateway, /endpoint_blocked/)
+})
+
+test('the account and sign-in document describes the code that implements it', () => {
+  // Sign-in changed shape entirely: an operator token in a file became accounts with
+  // passwords. Every number in that description is a claim about code, so each one is
+  // read out of the module rather than trusted -- a documented "12 characters" next to an
+  // enforced 8 is the kind of drift this suite exists to catch.
+  const text = squash(doc.accounts())
+  const accounts = read('services/core/src/online/accounts.mjs')
+  const online = read('services/core/src/online/app.mjs')
+  const number = (source, name) => Number(new RegExp(`export const ${name} = ([\\d_]+)`).exec(source)[1])
+
+  assert.equal(number(accounts, 'PASSWORD_MIN_LENGTH'), 12, 'the enforced password minimum moved; docs/20 states 12')
+  assert.ok(text.includes('Minimum length | 12 characters'), 'docs/20 must state the minimum it enforces')
+  assert.equal(number(accounts, 'PASSWORD_MAX_LENGTH'), 256)
+  assert.equal(number(accounts, 'MAX_FAILED_LOGINS'), 8)
+  assert.ok(text.includes('Eight consecutive failures lock'), 'docs/20 must state the lockout rule')
+  // Written as expressions in the module, so the expressions are what is compared: a
+  // regex over digits alone would read `15 * 60_000` as 15 and pass against anything.
+  assert.match(accounts, /export const LOCKOUT_MS = 15 \* 60_000/)
+  assert.match(accounts, /export const RESET_CODE_TTL_MS = 15 \* 60_000/)
+  assert.ok(text.includes('fifteen minutes'), 'docs/20 states the reset lifetime in the words the page uses')
+  assert.equal(number(accounts, 'DEFAULT_MAX_ACCOUNTS'), 64)
+  assert.ok(new RegExp('^AETHERIS_MAX_ACCOUNTS=64$', 'm').test(doc.env()), '.env.example must state the real default')
+  assert.ok(new RegExp('^AETHERIS_PRINT_RESET_CODES=false$', 'm').test(doc.env()), '.env.example must ship the console-printing switch off')
+
+  // The cookie policy an embedded deployment needs, and the refusal that keeps the
+  // unusable combination from being served. Both are claims about code, so both are read
+  // out of it: a documented `none` next to a service that only accepts `strict` would send
+  // an operator chasing a variable that does nothing.
+  assert.match(online, /export const COOKIE_SAME_SITE = Object\.freeze\(\['strict', 'lax', 'none'\]\)/)
+  assert.ok(new RegExp('^AETHERIS_COOKIE_SAMESITE=strict$', 'm').test(doc.env()), '.env.example must ship the strict cookie default')
+  assert.ok(text.includes('`SameSite=Strict` by default'), 'docs/20 must state the default cookie policy')
+  assert.ok(text.includes('AETHERIS_COOKIE_SAMESITE=none'), 'docs/20 must state how an embedded deployment opts in')
+  assert.ok(text.includes('refuses to start'), 'docs/20 must say the unusable combination is refused, not served')
+
+  // scrypt work factors are stated in prose and stored in every hash, so the two agree.
+  assert.match(accounts, /N: 16384, r: 8, p: 1, keyLength: 64, saltBytes: 16/)
+  assert.ok(text.includes('scrypt, N=16384, r=8, p=1, 64-byte derived key'), 'docs/20 must state the work factors')
+
+  // Session bounds, read from the module the routes actually use.
+  assert.match(online, /ttlMs: 8 \* 3600_000, perAccount: 8, installation: 64/)
+  for (const claim of ['Lifetime | 8 hours', 'Per account | 8', 'Per installation | 64']) {
+    assert.ok(text.includes(claim), `docs/20 must state the session bound: ${claim}`)
+  }
+
+  // The removed mechanism must stay removed in the prose too: a guide that still tells
+  // somebody to paste a token is a guide for a product that no longer exists.
+  // The README may name the removed mechanism to say it is removed; what it must not do
+  // is instruct anybody to use it. So the instruction is forbidden and the statement of
+  // removal is required -- the distinction a bare keyword scan cannot make.
+  const readme = squash(doc.readme())
+  assert.doesNotMatch(readme, /Sign in using the Core host|paste it (?:here|into)/i,
+    'the README must not instruct the removed token sign-in')
+  assert.ok(readme.includes('access-token file and its login route have been removed'),
+    'the README must state that the token sign-in is gone')
+  assert.ok(readme.includes('create an account'), 'the README must tell the reader how to get in now')
+  assert.doesNotMatch(squash(doc.phase2()), /paste it into the \*\*installation sign-in form\*\*/)
+  assert.ok(squash(doc.phase2()).includes('Sign-in is an account, not a token'), 'docs/19 must point at the change')
+  assert.ok(text.includes('Sign-up is open'), 'the account model states that registration is open')
+  assert.ok(text.includes('first account created is the owner'), 'the owner rule is documented')
+
+  // Reset delivery is the part most likely to be over-claimed, so the denial is checked
+  // as carefully as the claim: no mail transport means no "check your inbox".
+  assert.ok(text.includes('no mail transport'), 'docs/20 must say why a code cannot be emailed')
+  assert.ok(text.includes('password-resets.json'), 'docs/20 must say where the code actually goes')
+  // `withoutDisclaimers` matters here: the guide says it CANNOT email a reset link, and a
+  // naive scan flags the denial as the claim.
+  assert.doesNotMatch(withoutDisclaimers(doc.accounts()), /emails? (?:a|the) reset link|check your inbox/i)
+  assert.ok(text.includes('can reset any password on this installation'),
+    'the host-access consequence must be stated, not implied away')
+
+  // And the guide must carry a limitations list, like every other document here.
+  assert.ok(text.includes('## Not delivered'), 'docs/20 must state what it does not do')
+  for (const gap of ['second factors', 'self-service account deletion', 'Email delivery']) {
+    assert.ok(text.includes(gap), `docs/20 must list ${gap} as not delivered`)
+  }
 })
 
 test('the documented language-model results match its committed model card', () => {

@@ -463,7 +463,12 @@ Stated plainly, because an unstated gap is worse than a stated one.
 2. **No authentication or multi-tenancy on the core service.** `principal` is
    asserted by the caller, not verified. Access control on knowledge is therefore
    only as strong as whatever sits in front of the API. Real multi-user deployment
-   needs an authenticating proxy.
+   needs an authenticating proxy. *This is the retained legacy service.* The active
+   online entry (`npm run core`) does authenticate: accounts with scrypt-hashed
+   passwords, per-account sessions, and a `principal` taken from the session rather
+   than from the request. Its boundaries — including what an open sign-up page and a
+   host-delivered password reset do and do not protect against — are stated in
+   [docs/20](20-accounts-and-sign-in.md).
 3. **Fabric has no authentication at all** (§15). Loopback default is a mitigation,
    not an authn mechanism.
 4. **No rate limiting.** A local client can exhaust the media queue or the God Core
