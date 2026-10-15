@@ -69,13 +69,22 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 1406 tests: core 567, web 92, fabric 747
+npm test          # 1422 tests: core 567, web 92, fabric 763
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
 ```
 
-All 1406 run in CI on every push and pull request
+The optional real Qwen LoRA smoke path is separate from normal setup. On a machine
+with internet access and about 8 GB RAM (a Codespace is sufficient), it bootstraps
+its own reviewed torch/Transformers/PEFT packages and uses CPU when no GPU exists:
+
+```bash
+python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
+# then inspect aetheris-smoke/status.json
+```
+
+All 1422 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -84,8 +93,9 @@ release, and an undertrained one must fail *and* must not become the current mod
 Full instructions, environment variables and troubleshooting:
 [`docs/04-setup.md`](docs/04-setup.md).
 
-> **Do not `pip install torch`.** Nothing here imports it, and on a GPU-less host
-> pip resolves it to the CUDA build. `services/fabric` is NumPy-only by design.
+> **Do not `pip install torch` for normal development or tests.** The Fabric service
+> is NumPy-only. Only the explicit optional LoRA command above bootstraps torch and
+> its model stack; use that runner rather than adding torch to Fabric's dependencies.
 
 ---
 
@@ -136,7 +146,7 @@ Status of every acceptance criterion, with evidence:
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
 | `services/core` | Node 22 ESM | 14,786 | 12,222 | **zero npm packages** | 567 |
-| `services/fabric` | Python 3.11 | 11,700 | 8,828 | NumPy only | 747 |
+| `services/fabric` | Python 3.11 | 11,760 | 9,025 | NumPy only | 763 |
 | `apps/web` | React 18 + Vite | 2,691 | 1,818 | react, react-dom | 92 |
 
 The core service has **no npm dependencies at all** — that is why the root

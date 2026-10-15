@@ -54,6 +54,7 @@ coverage/
 *.lora
 checkpoints/
 artifacts/
+/aetheris-smoke/
 
 # --- generated media -------------------------------------------------------
 # Development fixtures under apps/web/public/media ARE committed and marked as

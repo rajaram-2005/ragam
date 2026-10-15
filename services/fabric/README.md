@@ -52,6 +52,21 @@ pytest                     # the full suite; the current count is in docs/03-sta
 python -m fabric.server    # http://127.0.0.1:8791
 ```
 
+The optional Hugging Face + PEFT smoke job has a separate, self-bootstrapping entry
+point. From the repository root, on a machine with Python 3.11+, internet access,
+about 8 GB RAM and enough disk for the public 0.5B base model:
+
+```bash
+python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
+```
+
+It installs only missing/mismatched reviewed dependencies (retrying with pip's
+`--break-system-packages` escape hatch only after an explicit PEP 668 refusal), uses
+CUDA when available and otherwise runs on CPU, resumes valid checkpoints in the same
+work directory, and always puts the stage ledger at `aetheris-smoke/status.json`. This does not add torch
+to Fabric's runtime dependency set; the normal service and tests remain NumPy-only.
+See [docs/21](../../docs/21-remote-training.md) for exactly what the smoke run proves.
+
 ## The pipeline
 
 ```
@@ -105,11 +120,13 @@ installed here, so no claim about them is made or implied.
 
 Recorded as `blocked_needs_weights` / `blocked_needs_hardware`, not stubbed:
 
-* Real LoRA/QLoRA fine-tuning — needs a base checkpoint and a GPU.
+* Real LoRA/QLoRA fine-tuning — needs a base checkpoint and enough compute. The LoRA
+  smoke configuration can now use either a CPU or CUDA through
+  `remote/run_smoke_local.py`; larger jobs still need a GPU in practice.
   `huggingface.co` and `download.pytorch.org` are both unreachable from this host.
   The remote pipeline (`fabric/training/`, [docs/21](../../docs/21-remote-training.md)) is built. Its
-  logic is tested on a NumPy fixture and a fake backend. The Kaggle notebook and its Transformers + PEFT
-  backend have never been run.
+  logic is tested on a NumPy fixture and a fake backend. The local runner, Kaggle notebook and their
+  Transformers + PEFT backend have never completed a real run.
 * Distillation — needs a teacher model.
 * Preference optimization — needs paired preference data, a reward signal, and the
   compute to justify it. Upstream `sparsiz` simulated this step with `random`

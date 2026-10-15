@@ -11,12 +11,12 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1406 passing, 0 failing.**
+**Test totals: 1422 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
 | `services/core` | `node --test test/*.test.mjs` | **567 / 567** (28 files, ~40 s) |
-| `services/fabric` | `pytest -q` | **747 / 747** (35 files, ~25 s) |
+| `services/fabric` | `pytest -q` | **763 / 763** (36 files, ~25 s) |
 | `apps/web` | `node --test test/*.test.mjs` | **92 / 92** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 200.08 kB → **61.78 kB gzip**, single chunk, no warnings |
 
@@ -240,7 +240,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (747 tests)
+### `services/fabric` — Implemented and tested (763 tests)
 
 | Stage | Status |
 |---|---|
@@ -258,6 +258,13 @@ pieces all tested: failure taxonomy, failure memory (`E_{t+1} = E_t ∪ F_t`),
 experiment ledger (baseline → experiment → verdict), metrics with a latency noise
 floor, DataForge, the Node↔Python text-parity fixture, model cards, and the HTTP
 server (23 tests).
+
+The separate real Hugging Face + PEFT LoRA smoke path is built but **not run**. It no
+longer requires a notebook or GPU: `services/fabric/remote/run_smoke_local.py` installs
+the reviewed optional stack, uses CUDA when available and CPU otherwise, and keeps its
+checkpoints and `status.json` under an explicit work directory. This sandbox still cannot
+reach the model hub, so that implementation does not turn NOT RUN into a result; the first
+external run remains the evidence needed. See [docs/21](./21-remote-training.md).
 
 **Cross-task transfer (L4) is implemented and was run as a pre-registered
 experiment.** `fabric/transfer.py` holds the protocol — five fusion strategies, one

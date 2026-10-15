@@ -5,11 +5,12 @@ imports them lazily. Importing this file on a machine without them is safe. Ever
 that needs them returns a problem, or raises, so the smoke ledger records a FAILED stage
 instead of crashing.
 
-Status: written against the documented APIs of the versions pinned in the notebook
-(see ``remote/build_notebook.py``). It has NOT been executed on a GPU. The first real
-run on Kaggle is the first test of it. Everything that can be checked without torch
-(the Hub pin, the licence text, the weight hash, the data order, the prompt format) is
-checked by ``tests/test_training_resume_and_backend.py`` with an injected fake Hub.
+Status: written against the documented APIs of the versions pinned by the notebook and
+local runner (see ``remote/build_notebook.py`` and ``remote/run_smoke_local.py``). It has
+NOT been executed with the real model on a CPU or GPU. The first real run is the first
+runtime test of it. Everything that can be checked without torch (the Hub pin, the licence
+text, the weight hash, the data order, the prompt format) is checked by
+``tests/test_training_resume_and_backend.py`` with an injected fake Hub.
 
 Design choices, and why:
 
@@ -22,6 +23,7 @@ Design choices, and why:
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import io
 import json
@@ -85,8 +87,10 @@ class HFPeftBackend:
 
     def environment(self) -> dict:
         info: dict = {"python": sys.version.split()[0], "platform": platform.platform(), "problems": [],
-                      "gpu": None, "packages": {name: _version(name) for name in _PACKAGES}}
-        disk_root = KAGGLE_WORKING if KAGGLE_WORKING.exists() else Path.cwd()
+                      "device": None, "gpu": None,
+                      "packages": {name: _version(name) for name in _PACKAGES}}
+        disk_root = KAGGLE_WORKING if KAGGLE_WORKING.exists() else self._work or Path.cwd()
+        disk_root.mkdir(parents=True, exist_ok=True)
         info["disk_free_gb"] = round(shutil.disk_usage(disk_root).free / 1024**3, 2)
         info["disk_root"] = str(disk_root)
         try:
@@ -97,10 +101,15 @@ class HFPeftBackend:
         info["torch"] = torch.__version__
         info["cuda"] = torch.version.cuda
         if torch.cuda.is_available():
+            info["device"] = "cuda"
             props = torch.cuda.get_device_properties(0)
             info["gpu"] = props.name
             info["gpu_memory_gb"] = round(props.total_memory / 1024**3, 2)
             info["gpu_capability"] = f"{props.major}.{props.minor}"
+        else:
+            # The model and LoRA adapter fit in an ordinary 8 GB Codespace once the
+            # previous stage's model is released before the next one is built.
+            info["device"] = "cpu"
         return info
 
     def verify_model(self, job: Mapping) -> dict:
@@ -209,12 +218,29 @@ class HFPeftBackend:
         return text.split(synthetic.INSTRUCTION_MARKER)[0].strip()
 
     def infer(self, prompt: str, adapter_dir: str | Path | None = None) -> str:
-        """Greedy output of the untrained base on ``prompt``. ``adapter_dir`` must be None here."""
+        """Greedy output of the untrained base on ``prompt``. ``adapter_dir`` must be None here.
+
+        The baseline model is deliberately released after generation. Training builds a
+        separate model and reload builds another one; retaining all three makes a CPU run
+        exceed the memory of a standard Codespace without proving anything extra.
+        """
         if adapter_dir is not None:
             raise ValueError("infer runs the untrained base; use reload for an adapter")
         model = self._base()
         model.eval()
-        return self._generate(model, prompt)
+        try:
+            return self._generate(model, prompt)
+        finally:
+            self._base_model = None
+            del model
+            gc.collect()
+            try:
+                import torch
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except ImportError:
+                pass
 
     def reload(self, adapter_dir: str | Path, prompt: str) -> dict:
         """Load the base from scratch, attach the saved adapter, and generate and check logits.
@@ -244,6 +270,7 @@ class HFPeftBackend:
         text = self._generate(model, prompt)
         names = sorted(p.name for p in adapter.iterdir()) if adapter.is_dir() else []
         del model, base
+        gc.collect()
         if self._device().type == "cuda":
             torch.cuda.empty_cache()
         return {"text": text, "finite": finite, "adapter_files": names, "problems": problems}
@@ -407,3 +434,14 @@ class HFLoraTrainer:
             "note": "LoRA adapter only. Load on the pinned base revision.",
         }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return sorted(p.name for p in directory.iterdir() if p.is_file())
+
+    def close(self) -> None:
+        """Release training state before the independent reload check builds a fresh base."""
+        model = getattr(self, "_model", None)
+        optimizer = getattr(self, "_optimizer", None)
+        self._model = None
+        self._optimizer = None
+        del model, optimizer
+        gc.collect()
+        if self._device.type == "cuda":
+            self._torch.cuda.empty_cache()

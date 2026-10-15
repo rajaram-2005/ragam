@@ -124,7 +124,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |
 | `skills/store.mjs` | 246 | Skills on disk: document + state split, version files for rollback, deletion tombstones |
 
-### `services/fabric` — 11,700 source lines, 8,828 test lines
+### `services/fabric` — 11,760 source lines, 9,025 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible
