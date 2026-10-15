@@ -639,16 +639,16 @@ test('the status doc reports the real test totals', () => {
   // with it.
   assert.equal(count('services/core/test', /\.test\.mjs$/), 28)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
-  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 35)
+  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 36)
 
   const status = squash(doc.status())
   assert.ok(status.includes('**567 / 567**'), 'core total must be stated')
-  assert.ok(status.includes('**747 / 747**'), 'fabric total must be stated')
+  assert.ok(status.includes('**761 / 761**'), 'fabric total must be stated')
   assert.ok(status.includes('**92 / 92**'), 'web total must be stated')
-  assert.ok(status.includes('1406 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1406 tests: core 567, web 92, fabric 747'),
+  assert.ok(status.includes('1420 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1420 tests: core 567, web 92, fabric 761'),
     'README must state the same totals')
-  assert.ok(status.includes('(35 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(36 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -660,12 +660,12 @@ test('the status doc reports the real test totals', () => {
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
   assert.ok(fromHeadings.includes(567), `core heading must say 567, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(747), `fabric heading must say 747, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(761), `fabric heading must say 761, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(92), `web heading must say 92, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1406,
+    1420,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })

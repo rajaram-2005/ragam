@@ -1,11 +1,11 @@
 # 21 — Remote training: the free-first LoRA smoke run, and the path to Pro and Max
 
 **Status, stated first.** The pipeline is built and its logic is tested. **No model has been
-trained.** The first real run, one LoRA adapter on Kaggle (Colab as fallback), has **not
-happened**: this sandbox has no GPU and no route to Kaggle, Colab or the Hugging Face hub
-at run time. Every stage in §5 is therefore **NOT RUN** in the record. No Klyvaron Pro or
-Max model exists. Lite is the only trained Klyvaron model, trained from scratch on this
-machine ([11 — Klyvaron family](11-klyvaron-family.md)).
+trained.** The first real run, one LoRA adapter through the plain-Python runner or a hosted
+notebook, has **not happened**: this sandbox has no route to the Hugging Face hub and the
+real backend is deliberately not installed here. Every stage in §5 is therefore **NOT RUN** in the record. No
+Klyvaron Pro or Max model exists. Lite is the only trained Klyvaron model, trained from
+scratch on this machine ([11 — Klyvaron family](11-klyvaron-family.md)).
 
 ## 1. The first milestone
 
@@ -23,10 +23,16 @@ Each of those is reported on its own status line (§5). A stage that did not run
 
 ## 2. Free-first resources, and what they promise
 
-Nothing here needs a purchased GPU, a personal GPU, a Google Drive upload, a manually
-prepared dataset, a new account, or a paid service. The notebook never bypasses a quota.
+Nothing here needs a purchased GPU, a personal GPU, a Google Drive upload or a manually
+prepared dataset. The runner and notebook never bypass a quota.
 
-* **Kaggle Notebooks (primary).** Kaggle's notebook documentation gives **12 hours** of
+* **Plain Python / GitHub Codespaces (simplest path).** The checked-in runner uses CUDA when
+  PyTorch can see it and otherwise runs the same 0.5B LoRA job on CPU. A Codespace or another
+  machine needs Python 3.11+, outbound access to PyPI and Hugging Face, about 8 GB RAM, and
+  enough disk for dependencies, the roughly 1 GB base model and checkpoints. Whether a
+  Codespace is included at no extra charge depends on the account's remaining included
+  quota; the code does not create or upgrade an account.
+* **Kaggle Notebooks (GPU path).** Kaggle's notebook documentation gives **12 hours** of
   execution for CPU and GPU sessions, and 9 hours for TPU
   ([Kaggle: getting started](https://www.kaggle.com/docs/notebooks)). That page also says up to
   **20 GB** may be saved in `/kaggle/working`, and that a longer computation should be run
@@ -48,7 +54,34 @@ prepared dataset, a new account, or a paid service. The notebook never bypasses 
   lifetime and GPU types as things that vary over time. A 12-hour general cap is therefore
   documented; any specific idle figure is community-reported.
 * **Hugging Face (model download).** The base is about 0.5 billion parameters, stored as
-  `model.safetensors` in BF16 (about 1 GB). The notebook needs internet access to fetch it.
+  `model.safetensors` in BF16 (about 1 GB). Every real-run path needs internet access to
+  fetch it.
+
+### One-command local or Codespaces run
+
+Open the repository in Codespaces (or clone it onto another suitable machine), then run from
+its root:
+
+```bash
+python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
+```
+
+The script installs torch when absent and enforces the same reviewed Transformers, PEFT,
+Accelerate, Hub and Safetensors versions as the notebook. It selects CUDA when available and
+CPU otherwise; rewrites checkpoint and log paths under the work directory; records the exact
+repository commit; and calls the same `run_smoke` function as the notebook. Re-run the exact
+command after an interruption to resume the newest checksum-valid checkpoint. When it exits,
+inspect `aetheris-smoke/status.json`; console output is only a summary of that ledger.
+
+A first run may spend most of its time installing packages and downloading the base. CPU time
+is an estimate until this real run is completed, not a benchmark. The work directory is
+ignored by Git and must not be committed: it contains model and optimizer bytes. To exercise
+the separate persistence read-back after a completed run, supply its adapter explicitly:
+
+```bash
+python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke \
+  --persistence-adapter ./aetheris-smoke/run/artifact
+```
 
 ## 3. The base model: pin, licence, and what was checked
 
@@ -118,27 +151,29 @@ own status: **PASSED** (ran and its check succeeded), **FAILED** (ran and failed
 the error is kept), or **NOT RUN** (not executed, because a prerequisite was missing or an
 earlier stage failed).
 
-| Stage | Needs a GPU | What it checks |
+| Stage | Needs model compute | What it checks |
 | --- | --- | --- |
-| `environment` | no | Package versions, disk space, and the GPU if present |
+| `environment` | no | Package versions, disk space, and the CPU/CUDA device |
 | `model_verification` | no | The Hub commit, licence, LICENSE text and weight hash (§3) |
 | `dataset` | no | The generated files match the job's pinned hashes and counts (§4) |
-| `training` | yes | Baseline on the same split, then 200 LoRA steps, checkpoints, an artifact hashed from disk, and the acceptance decision |
-| `reload` | yes | A **fresh** base model with the saved adapter attached; the adapter's recorded base revision must equal the pin; logits must be finite |
-| `inference` | yes | The reloaded output on a fixed prompt differs from the untrained base's. This shows the adapter is applied. It is **not** a quality measure |
-| `quality` | yes | The job's acceptance gate (§9). PASSED only if the gate is met on synthetic validation |
-| `persistence` | yes | The adapter was read back from an attached output of an earlier committed run. Otherwise **NOT RUN** |
+| `training` | CPU or GPU | Baseline on the same split, then 200 LoRA steps, checkpoints, an artifact hashed from disk, and the acceptance decision |
+| `reload` | CPU or GPU | A **fresh** base model with the saved adapter attached; the adapter's recorded base revision must equal the pin; logits must be finite |
+| `inference` | CPU or GPU | The reloaded output on a fixed prompt differs from the untrained base's. This shows the adapter is applied. It is **not** a quality measure |
+| `quality` | CPU or GPU | The job's acceptance gate (§9). PASSED only if the gate is met on synthetic validation |
+| `persistence` | CPU or GPU | The adapter was read back from a separately supplied earlier output. Otherwise **NOT RUN** |
 
 **Verdict.** `REFUSED` if the job breaks a rule (nothing runs). `FAILED` if a technical stage
 failed. `NOT ACCEPTED` if every stage ran but the gate refused the adapter. `PASSED` if every
-core stage passed. `INCOMPLETE` otherwise, for example with no GPU. `PASSED` never says the
-output persisted; that needs the `persistence` stage.
+core stage passed. `INCOMPLETE` otherwise, for example with no usable compute device.
+`PASSED` never says the output persisted; that needs the `persistence` stage.
 
-**Training choices.** Weights are float32, a deliberate choice for a 0.5B model on a 16 GB
-GPU, to avoid precision failures that look like pipeline bugs. LoRA rank 8, alpha 16, dropout
-0.05, on the attention projections. The loss is taken on the answer tokens only, with the
-prompt masked. Batches come from the step number alone, so a resumed run reads the same data
-in the same order.
+**Training choices.** Weights are float32, a deliberate choice for this 0.5B smoke model, to
+avoid precision failures that look like pipeline bugs. LoRA rank 8, alpha 16, dropout 0.05,
+on the attention projections. The loss is taken on the answer tokens only, with the prompt
+masked. Batches come from the step number alone, so a resumed run reads the same data in the
+same order. The baseline model and training model are explicitly released before the next
+fresh model is built, which keeps the CPU route within an ordinary 8 GB Codespace rather than
+holding three copies at once.
 
 **Not promised.** GPU kernels are not guaranteed to be deterministic. A resumed run is
 expected to match an uninterrupted one on the fixture, which is pure NumPy. On the GPU that
@@ -297,7 +332,7 @@ imports the trainer or the runner.
 * **Every CI step was run on this checkout, not just read.** The zero-dependency check on
   `services/core`; the core suite (567); `numpy` present and `torch` **not** importable; the
   advisory audit against the live GitHub Advisory Database (5 packages, none covered, exit 0);
-  the fabric suite (747); the release gate end to end — `partial` status, a released
+  the fabric suite (761); the release gate end to end — `partial` status, a released
   `aetheris-lite-retriever@0.1.0` at mrr 0.8497, and the undertrained run refused; the web
   suite (92); `npm audit` clean on the production tree and the full tree; the production build;
   the bundle check (no loopback URL, no credential-shaped string); the docs guard (39); and the
@@ -308,7 +343,7 @@ imports the trainer or the runner.
 * The docs guard (`services/core/test/docs.test.mjs`) holds the counts in the README, docs 02–05,
   the fabric README and this page. It is re-run after any count changes.
 * **Re-verified on 2026-10-15, on this checkout** (a second pass, after the build pass): the
-  fabric suite is 747/747 and the core suite 567/567; the synthetic data regenerates to the §4
+  fabric suite is 761/761 and the core suite 567/567; the synthetic data regenerates to the §4
   hashes byte-for-byte in two independent builds; every package pin in §12 exists on PyPI at
   that exact version; and `hf_peft.py`'s calls were re-read against those exact wheels —
   `dtype` plumbing with `torch_dtype` kept for back-compatibility in `from_pretrained`,
@@ -327,8 +362,9 @@ imports the trainer or the runner.
 
 **Not verified:**
 
-* **The real backend has never run.** `hf_peft.py` (torch, Transformers, PEFT) has no torch
-  here. Its calls are written against the installed API signatures: `AutoModelForCausalLM`
+* **The real backend has never run.** Torch is deliberately absent here and the local runner
+  cannot reach Hugging Face from this sandbox. Its calls are written against the reviewed API
+  signatures: `AutoModelForCausalLM`
   with `dtype=`, `LoraConfig`, `get_peft_model`, `get_peft_model_state_dict`,
   `set_peft_model_state_dict`, `PeftModel.from_pretrained`, and `hf_hub_download`,
   `snapshot_download`, `model_info(files_metadata=True)`. These were checked against the
@@ -355,17 +391,17 @@ expectation. **Nothing has been run, so every value below that depends on a run 
 | Base-model commit | `7ae557604adf67be50417f59c2c2f167def9a775` (pinned; resolved at run time: NOT RUN) |
 | Licence | Apache-2.0; LICENSE text checked at the pinned commit in this session; run-time check NOT RUN |
 | Dataset hash | train `70b11896…`, validation `571e78d2…`, regression `41cb2f1c…`; manifest digest `b603cbb5…` (generated and checked in this session) |
-| Environment versions | NOT RUN. Pins: transformers 5.19.0, peft 0.21.2, accelerate 1.15.0, huggingface_hub 2.2.0, safetensors 0.8.0; torch is whatever Kaggle provides |
-| Detected GPU | NOT RUN |
+| Environment versions | NOT RUN. Pins: transformers 5.19.0, peft 0.21.2, accelerate 1.15.0, huggingface_hub 2.2.0, safetensors 0.8.0; the local runner keeps an installed torch or installs a compatible wheel |
+| Detected device | NOT RUN (CPU is accepted by the local runner; hosted notebooks still require their configured GPU path) |
 | Optimizer steps | NOT RUN (target 200) |
 | Loss | NOT RUN |
-| Checkpoint location | NOT RUN (planned `/kaggle/working/aetheris-smoke/checkpoints`) |
+| Checkpoint location | NOT RUN (local runner: `<workdir>/checkpoints`; Kaggle: `/kaggle/working/aetheris-smoke/checkpoints`) |
 | Reload result | NOT RUN |
 | Inference result | NOT RUN |
 | Metrics | NOT RUN |
 | Persistence | NOT RUN |
 | Failures | None recorded: nothing has run. Defects found and fixed before any run are listed below (two passes) |
-| Next step | Import the notebook on Kaggle (GPU, Internet on), then Save & Run All. Then run the persistence check |
+| Next step | Run `python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke`, inspect `status.json`, then run the persistence check |
 
 Defects found and fixed in the build pass, before any run: the policy refused `/kaggle/working`,
 which Kaggle keeps as output; `normpath` collapsed `s3://` URIs, so every object-store path
@@ -393,21 +429,24 @@ training".
 
 ## 14. Next steps, in order
 
-1. **Run the smoke notebook once on Kaggle.** Import `services/fabric/remote/notebooks/klyvaron-chat-lora-smoke.ipynb`
-   from the repository, set Accelerator to GPU and Internet to On, then Save & Run All.
-   Expect errors on the first run.
-   The first cell stops before anything is trained if it cannot clone, and it now says which
-   failure it hit instead of raising a bare exit code:
+1. **Run the smoke job once.** The shortest route is a Codespace terminal (or another suitable
+   machine) at the repository root:
+   `python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke`.
+   Kaggle remains the GPU alternative: import
+   `services/fabric/remote/notebooks/klyvaron-chat-lora-smoke.ipynb`, set Accelerator to GPU and
+   Internet to On, then Save & Run All. Expect errors on the first real run.
+   The notebook's clone cell stops before anything is trained and names common failures:
 
    * `Could not resolve host: github.com` — **the Internet switch is off**, which is the default
      on Kaggle. Set it to On in the Settings panel and run again. This is the failure the first
-     attempt at this notebook actually hit.
-   * `Remote branch … not found` — a copy of the notebook that pins a branch which has since been
-     deleted, which is what a saved copy does when its working session ends. Re-import the
-     notebook, or set `REPO_REF = "main"`.
-2. **Read `status.json`.** Each stage shows PASSED, FAILED or NOT RUN. Fill in §12 from it.
-3. **Persistence check.** Copy the notebook, add the committed version's output as an Input,
-   set `PERSISTENCE_ADAPTER`, and run again.
+     notebook attempt actually hit.
+   * `Remote branch … not found` — a saved notebook pins a branch which has since been deleted.
+     Re-import the notebook, or set `REPO_REF = "main"`.
+2. **Read `status.json`.** The local path is `aetheris-smoke/status.json`; each stage shows
+   PASSED, FAILED or NOT RUN. Fill in §12 from it.
+3. **Persistence check.** For local execution, rerun with
+   `--persistence-adapter ./aetheris-smoke/run/artifact`. On Kaggle, copy the notebook, add the
+   committed version's output as an Input, set `PERSISTENCE_ADAPTER`, and run again.
 4. **Replace the estimates** in the job with the measured memory and time.
 5. **Record a human licence review** in `licenceCheckedBy`, in place of the automated entry.
 6. Only after the smoke run passes end to end: consider scaling. Pro and Max each need their own
@@ -421,9 +460,10 @@ training".
   `hf_peft.py` (the Transformers + PEFT backend, isolated), `checkpoint.py` (the store and the
   import), `runner.py` (the loop, the decision, the run record), `lora_fixture.py` (the NumPy
   fixture), `release.py` (candidates and the stable rule), `experience.py` (admission).
-* `services/fabric/remote/` — the job template `jobs/klyvaron-chat-lora-experiment.json`, and the
-  notebook `notebooks/klyvaron-chat-lora-smoke.ipynb`, generated by `build_notebook.py`. Edit the
-  builder and rerun it; never edit the notebook.
+* `services/fabric/remote/` — `run_smoke_local.py` (plain Python CPU/CUDA entry point), the job
+  template `jobs/klyvaron-chat-lora-experiment.json`, and the notebook
+  `notebooks/klyvaron-chat-lora-smoke.ipynb`, generated by `build_notebook.py`. Edit the builder
+  and rerun it; never edit the notebook.
 * `services/fabric/tests/test_training_*.py` — the tests described in §11.
 * The superseded Colab-and-Drive design, in commit `3dc8fb1` on this branch, was replaced by the
   free-first design above.

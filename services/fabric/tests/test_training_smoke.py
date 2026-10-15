@@ -57,9 +57,10 @@ class FakeTrainer:
 
 
 class FakeBackend:
-    def __init__(self, *, gpu="Fake GPU", verify_problems=(), reload_text="tuned answer",
+    def __init__(self, *, gpu="Fake GPU", device=None, verify_problems=(), reload_text="tuned answer",
                  reload_error=None, base_text="base answer", trainer_kwargs=None):
         self.gpu = gpu
+        self.device = device or ("cuda" if gpu else None)
         self.verify_problems = list(verify_problems)
         self.reload_text = reload_text
         self.reload_error = reload_error
@@ -68,7 +69,7 @@ class FakeBackend:
         self.trainers_built = 0
 
     def environment(self):
-        return {"gpu": self.gpu, "problems": [], "torch": "fake"}
+        return {"device": self.device, "gpu": self.gpu, "problems": [], "torch": "fake"}
 
     def verify_model(self, job):
         return {"revision_matches": not self.verify_problems, "problems": list(self.verify_problems)}
@@ -135,7 +136,28 @@ def test_without_a_gpu_only_the_checks_that_need_no_gpu_run(tmp_path):
         assert status(ledger, name) == "NOT RUN", name
     assert backend.trainers_built == 0
     assert ledger.verdict == "INCOMPLETE"
-    assert any("No GPU" in note for note in ledger.notes)
+    assert any("No usable compute device" in note for note in ledger.notes)
+
+
+def test_a_local_cpu_runs_the_same_core_stages_as_a_gpu(tmp_path):
+    ledger, _ = run(tmp_path, FakeBackend(gpu=None, device="cpu"), platform="local")
+    assert ledger.verdict == "PASSED", ledger.to_dict()
+    assert all(status(ledger, name) == "PASSED" for name in smoke.CORE_STAGES)
+
+
+def test_a_notebook_cpu_does_not_accidentally_start_the_long_training_job(tmp_path):
+    ledger, _ = run(tmp_path, FakeBackend(gpu=None, device="cpu"), platform="kaggle")
+    assert ledger.verdict == "INCOMPLETE"
+    assert status(ledger, "training") == "NOT RUN"
+
+
+def test_a_failed_environment_check_stops_training_even_when_a_gpu_was_named(tmp_path):
+    backend = FakeBackend()
+    backend.environment = lambda: {"device": "cuda", "gpu": "Fake GPU", "problems": ["disk is full"]}
+    ledger, _ = run(tmp_path, backend)
+    assert status(ledger, "environment") == "FAILED"
+    assert status(ledger, "training") == "NOT RUN"
+    assert backend.trainers_built == 0
 
 
 def test_a_failed_licence_or_revision_check_stops_before_any_training(tmp_path):
@@ -269,6 +291,12 @@ def test_kaggle_keeps_the_job_paths_as_written(tmp_path):
     job = local_job(tmp_path)
     ledger = smoke.Ledger(platform="kaggle")
     assert smoke.apply_platform(job, "kaggle", ledger) == job
+
+
+def test_local_keeps_the_local_disk_paths_supplied_by_the_runner(tmp_path):
+    job = local_job(tmp_path)
+    ledger = smoke.Ledger(platform="local")
+    assert smoke.apply_platform(job, "local", ledger) == job
 
 
 def test_an_unknown_platform_is_refused():

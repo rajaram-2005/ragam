@@ -5,7 +5,8 @@ The point of this module is honesty about what ran. Each stage has its own statu
 * ``PASSED``   the stage ran and its check succeeded.
 * ``FAILED``   the stage ran and its check failed, or it raised. The error is kept.
 * ``NOT RUN``  the stage was not executed. Its prerequisite was missing (for example no
-               GPU), or an earlier stage failed. Nothing here is treated as a pass.
+               usable compute device), or an earlier stage failed. Nothing here is treated
+               as a pass.
 
 The overall verdict is ``PASSED`` only when every core stage passed. ``persistence``
 is separate: it passes only when the adapter was read back from an attached output of
@@ -44,7 +45,7 @@ CORE_STAGES = ("environment", "model_verification", "dataset", "training", "relo
 #: so a changed answer shows the adapter is actually applied.
 FIXED_PROMPT = "What is 17 plus 25?"
 
-PLATFORMS = ("kaggle", "colab")
+PLATFORMS = ("kaggle", "colab", "local")
 
 COLAB_DIR = "/content/aetheris-smoke"
 
@@ -73,7 +74,7 @@ class Ledger:
     def verdict(self) -> str:
         """REFUSED: the job broke a rule. FAILED: a technical stage failed. NOT ACCEPTED: every
         stage ran, but the acceptance gate refused the adapter. PASSED: every core stage passed.
-        INCOMPLETE: some stage was not run, for example because there is no GPU."""
+        INCOMPLETE: some stage was not run, for example because there is no usable device."""
         if self.refused:
             return "REFUSED"
         technical = [name for name in STAGES if name != "quality"]
@@ -95,8 +96,12 @@ class Ledger:
             "context": dict(self.context),
             "persistence": {
                 "verified": self.stages["persistence"]["status"] == PASSED,
-                "statement": "Read back from an attached output of an earlier committed run."
+                "statement": "Read back from a separately supplied adapter directory."
+                if self.stages["persistence"]["status"] == PASSED and self.platform == "local"
+                else "Read back from an attached output of an earlier committed run."
                 if self.stages["persistence"]["status"] == PASSED
+                else "NOT VERIFIED. Pass an earlier adapter with --persistence-adapter to verify a local read-back."
+                if self.platform == "local"
                 else "NOT VERIFIED. Kaggle /kaggle/working is kept only as the output of a committed "
                      "version; a later run must read it back through /kaggle/input to verify it.",
             },
@@ -112,7 +117,9 @@ def apply_platform(job: Mapping, platform: str, ledger: Ledger) -> dict:
 
     Kaggle keeps ``/kaggle/working`` as notebook output, so the job's own paths are used
     as written. Colab has only its session disk unless Drive is mounted, so checkpoints
-    and logs move to it and are marked ephemeral. Every change is recorded in the ledger.
+    and logs move to it and are marked ephemeral. The local runner supplies ``local_disk``
+    paths rooted in its work directory, so no rewrite is needed here. Every change is
+    recorded in the ledger.
     """
     if platform not in PLATFORMS:
         raise ValueError(f"platform must be one of {PLATFORMS}")
@@ -167,17 +174,22 @@ def run_smoke(job: Mapping, backend: Any, *, out_dir: str | Path, platform: str,
 
         # ---- environment ------------------------------------------------------
         gpu = None
+        device = None
         try:
             env = backend.environment()
             env_problems = list(env.get("problems", []))
             gpu = env.get("gpu")
+            # Older/fake backends only reported ``gpu``. Keep accepting that shape while
+            # letting the real backend name a CPU explicitly for the local runner.
+            device = env.get("device") or ("cuda" if gpu else None)
             ledger.set("environment", FAILED if env_problems else PASSED, **env)
         except Exception as error:  # noqa: BLE001 - recorded, not hidden
             ledger.set("environment", FAILED, error=_error(error))
             env_problems = ["environment check raised"]
-        if not gpu:
-            ledger.note("No GPU is available here: training, reload, inference, quality and persistence "
-                        "are NOT RUN. Model verification and dataset generation still run.")
+        compute_available = bool(gpu) or (platform == "local" and device == "cpu")
+        if not compute_available:
+            ledger.note("No usable compute device is available here: training, reload, inference, quality "
+                        "and persistence are NOT RUN. Model verification and dataset generation still run.")
 
         # ---- model verification (hub and licence; no GPU needed) ---------------
         try:
@@ -199,7 +211,8 @@ def run_smoke(job: Mapping, backend: Any, *, out_dir: str | Path, platform: str,
             ledger.set("dataset", FAILED, error=_error(error))
 
         # Nothing that spends compute runs on an unverified base or on data that does not match its pins.
-        if not gpu or ledger.stages["model_verification"]["status"] != PASSED \
+        if not compute_available or ledger.stages["environment"]["status"] != PASSED \
+                or ledger.stages["model_verification"]["status"] != PASSED \
                 or ledger.stages["dataset"]["status"] != PASSED:
             return ledger
 
@@ -214,6 +227,7 @@ def run_smoke(job: Mapping, backend: Any, *, out_dir: str | Path, platform: str,
         checkpoint_root = Path(job["checkpoint"]["path"])
         store = CheckpointStore(checkpoint_root)
         cdig = config_digest(job)
+        trainer = None
         try:
             imported = None
             for source in job["checkpoint"].get("resumeFrom", []):
@@ -223,6 +237,14 @@ def run_smoke(job: Mapping, backend: Any, *, out_dir: str | Path, platform: str,
         except Exception as error:  # noqa: BLE001
             ledger.set("training", FAILED, error=_error(error))
             return ledger
+        finally:
+            # The CPU route is deliberately viable on an 8 GB Codespace. Do not retain
+            # the training model while reload constructs a fresh base model to prove the
+            # adapter works. Framework backends may expose ``close``; fixture backends do
+            # not need to.
+            close = getattr(trainer, "close", None)
+            if close is not None:
+                close()
 
         if record.status != "completed":
             ledger.set("training", FAILED, status=record.status, error=record.error)
