@@ -135,13 +135,82 @@ no routing decision that considers cost, privacy and modality.
 Ordered as the directive orders them. Each item names the test that will prove it, because a phase
 without a failing-then-passing test is not done.
 
-**Phase 2 — adaptive router and one end-to-end task (the first milestone).** Ship a single command that:
-routes one real task, executes it, verifies it independently, records the lesson with provenance,
-turns the procedure into a versioned skill with its own test, reuses that skill on a second similar
-task, and measures the difference; and whose wording adapts to an interaction state without changing
-its honesty constraints. Acceptance: a test that runs the whole loop, asserts the second run used the
-stored skill (not the original path), asserts the recorded measurement, and asserts that a *failing*
-task is recorded as failed rather than promoted.
+**Phase 2 — adaptive router and one end-to-end task (the first milestone).** ✅ **Met, 2026-10-16.**
+`services/core/test/adaptive-loop.test.mjs` — 16 tests, all passing, one of which is the milestone
+itself ("the milestone: a verified run becomes a tested skill, and the second task reuses it"). The
+loop lives in `services/core/src/adaptive/`: `capability.mjs`, `router.mjs`, `executors.mjs`,
+`verify.mjs`, `episodes.mjs`, `wording.mjs`, `loop.mjs`.
+
+What the milestone test actually runs, in order: a 12-file/3.6 MB tree is counted with the
+*materialising* baseline; the result is verified by recomputing with the *streaming* implementation
+and against sampled `wc -l` output; the episode is recorded as a success with both methods named;
+the procedure is proposed as a skill in `candidate` state; four checks run against it (agreement
+with the baseline on a fixture tree, an empty file, a file with no trailing newline, and a path
+outside its declared read scope being refused); every check passing is what promotion requires; the
+skill is then offered as a third candidate for a *second, similar but different* tree, along with
+the baseline that ran the first task.
+
+Three things the loop refuses to do, each with a test:
+
+| Refusal | Code | Why it is load-bearing |
+|---|---|---|
+| Assert an outcome | `classifyOutcome` computes it from route, execution, verification and acceptance | An outcome a caller can assert is an outcome a caller can inflate; success is `execution.ok && verification.agree && acceptance passed` |
+| Propose a skill from anything but a verified success | `not_a_verified_success`, `unverified` | A procedure extracted from an unverified run encodes whatever went wrong |
+| Promote a skill whose checks did not all pass | `validation_failed`, `not_loadable` | No version exists until every recorded check passed |
+
+The verification independence rule needed correcting mid-build, and the correction is the interesting
+part: independence must be compared on an `implementation` tag, not on a route id. The first version
+required a *routable* second candidate, which made the milestone impossible in the very case it was
+written for — a tree with exactly one route and one implementation behind it — and it would also have
+accepted two routes that are the same code wearing different names (a tool and the skill wrapped
+around it) as mutual verification. Now `verifyWith` may name implementations that are not routable,
+and a verifier sharing the route's implementation is refused with the reason
+*"every available verifier runs the same implementation as the route under test, so it could only
+agree with itself"*. The same rule drives the second half of the milestone: the skill *wraps* the
+streaming implementation, so it is checked against the baseline, not against itself.
+
+**Measured, and where the measurement disagreed with the plan.** The milestone's premise is that the
+stored procedure is the cheaper route on the second task. On the test's tree it is — but running the
+same loop on a differently shaped tree (~180 files of ~200 lines each) showed the *baseline* winning
+5.0 ms to 6.1 ms, and the router chose the baseline. That is the system working, and it is also the
+system's own record disagreeing with its own story, so the comparison was measured properly at
+constant total bytes (3.5 MB) with the measurement method fixed first (`measure()` now interleaves
+candidates round by round instead of measuring one candidate to completion before starting the next,
+which handed the second candidate a warmer page cache):
+
+| Bytes per file | Files | Materialising | Streaming | Result |
+|---|---|---|---|---|
+| 8 KB | 450 | 10.06 ms | 17.94 ms | baseline 1.8x faster |
+| **32 KB** | 113 | 4.17 ms | 4.15 ms | **crossover** |
+| 128 KB | 28 | 4.52 ms | 2.79 ms | streaming 1.62x faster |
+| 300 KB | 12 | 4.18 ms | 2.70 ms | streaming 1.55x faster |
+| 1 MB | 4 | 5.03 ms | 2.94 ms | streaming 1.71x faster |
+| 4 MB | 1 | 5.01 ms | 2.75 ms | streaming 1.82x faster |
+
+Both figures are medians of seven interleaved runs on this box (2 cores, 3,939 MB). The consequence
+is recorded on the skill itself rather than in a note: the stored procedure declares its crossover as
+a limitation, `proposeSkill` refuses to describe an improvement its own measurement contradicts (the
+proposal carries the sentence *"the stored procedure is NOT the cheaper route here, and the router
+will not prefer it on this shape"* or the opposite one, whichever the numbers say), and the router
+re-measures per input, so the choice is made on evidence each time and not on what was true once.
+A second, unrelated defect surfaced at the same time: the default in-memory episode log accepted
+appends while `list()` returned nothing — `count` grew, `verify()` called an empty log intact, and
+`successes()` reported none about a session that had recorded some. It now reads back what it stored.
+
+Wording is audited at render time, not at review time: seven interaction states share one verbatim
+facts block (`renderFacts` is the only place a number is formatted), `renderOutcome` throws
+`forbidden_wording` on a claim of feeling, consciousness, dependency, possessiveness, guilt,
+fabricated emotional history or unsupported praise, and throws `unverified_not_disclosed` on a
+non-boolean claim of verification — `verified: 'probably'` is truthy in JavaScript and would have
+rendered as *"Verified: yes - undefined"*. Personality settings report which of them changed the text
+and which are recorded but have no effect yet (`warmth`, `formality`, `voiceExpression`), because a
+setting the user cannot perceive should not look like one the system is applying quietly. That audit
+caught the page's own author first: the `reflective` closing line said *"keep the diagnosis beside
+the result"*, and the guard refused it — the word is scanned for diagnosis of the *person*, so the
+sentence was rewritten rather than the rule weakened.
+
+**Not claimed.** One narrow capability (counting newline bytes across a tree) routed, verified,
+learned, versioned, reused and measured — not general task competence, and not any of Phases 3-10.
 
 **Phase 3 — memory with provenance and permissions.** The seven layers, each entry carrying
 provenance, timestamp, confidence, scope, permissions and version; contradiction and duplicate
@@ -194,8 +263,19 @@ python3 -m pip install --user --break-system-packages numpy==2.4.6 pytest==9.1.1
 
 ## 6. What this page does not claim
 
-It does not claim that any adaptive capability works. It claims that the direction changed, that
-Sparsiz was inspected at a named commit and is mostly a roadmap rather than an implementation, that
-five small pieces of it are reusable and the rest must not be inherited, that most of the plumbing
-this architecture needs already exists here with tests, and that the loops through that plumbing are
-the work — with the first of them defined precisely enough to be built and tested next.
+It claims exactly one capability, demonstrated end to end in §4 and nothing beyond it: counting
+newline bytes across a tree — routed on measurement, verified by a second implementation, learned as
+a versioned skill, reused on a second tree, and measured. The measurement includes the run that
+contradicted the plan: on a differently shaped tree the stored procedure lost to the baseline and the
+router chose the baseline, which is reported here rather than smoothed over.
+
+It does not claim general task competence. It does not claim that any adaptive capability beyond that
+one works, or that Phases 3-10 are built. Timing here is timing on this box (2 cores, 3,939 MB), at
+the sample counts stated beside each figure — not a property of another machine. And the rule this
+page states rather than claims: no phase is complete before its acceptance tests pass, which is why
+§4 describes Phase 2 by what its test runs and refuses to describe the phases that have none.
+
+What it does claim: the direction changed; Sparsiz was inspected at a named commit and is mostly a
+roadmap rather than an implementation; five small pieces of it are reusable and the rest must not be
+inherited; most of the plumbing this architecture needs already exists here with tests; and the loops
+through that plumbing are the work — the first of them now built, tested and measured.

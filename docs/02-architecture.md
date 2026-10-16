@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 16,527 source lines, 13,503 test lines
+### `services/core` — 18,301 source lines, 14,264 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -128,6 +128,13 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `skills/manifest.mjs` | 319 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
 | `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |
 | `skills/store.mjs` | 246 | Skills on disk: document + state split, version files for rollback, deletion tombstones |
+| `adaptive/capability.mjs` | 194 | The capability descriptor every route is described by: kind, dotted `provides` tags, declared cost with no `measured` escape, fs/network/permission scope, and the `implementation` tag verification independence is decided on |
+| `adaptive/router.mjs` | 230 | `routeTask`: gates, refusals that name their reason, measured cost outranking an unmeasured claim, and a pin that is honoured only when it passes every gate |
+| `adaptive/executors.mjs` | 199 | Two line counters over a tree — a materialising baseline and a 64 KiB streaming one — used as the milestone's genuinely independent pair |
+| `adaptive/verify.mjs` | 139 | Verification by recomputation against a counterpart implementation, plus a stride-sampled `wc -l` check that is honest about being a sample |
+| `adaptive/episodes.mjs` | 296 | Outcome computed rather than asserted, labelled failure hypotheses, acceptance evaluation, and an append-only JSONL episode log with a digest chain that reports where it broke |
+| `adaptive/wording.mjs` | 290 | Seven interaction states over one verbatim facts block, settings that report when they changed nothing, and a render-time §4 audit that throws instead of emitting |
+| `adaptive/loop.mjs` | 426 | The loop itself: measure, run, verify through a named counterpart, propose a skill from a verified success only, test it, promote it, reuse it, roll back by appending a version |
 
 ### `services/fabric` — 12,655 source lines, 9,990 test lines
 

@@ -396,6 +396,12 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.readme, '1213 tests: core 547, web 91, fabric 575'], [doc.readme, 'All 1213 run in CI'],
     [doc.phase2, '547 Core + 91 Web + 575 Fabric = 1,213 tests'], [doc.phase2, '19 Core and 15 Web tests'],
     [doc.accounts, 'its 19 tests pass'], [doc.setup, '38-test documentation-accuracy suite'],
+    [doc.status, '**617 / 617**'], [doc.status, 'Implemented and tested (617 tests)'],
+    [doc.status, '**644 / 644**'], [doc.status, 'Implemented and tested (644 tests)'],
+    [doc.setup, 'npm run test:core         # 644'], [doc.setup, '| **Core service** | 644 tests pass'],
+    [doc.setup, 'npm run test:core         # 617'], [doc.setup, '| **Core service** | 617 tests pass'],
+    [doc.readme, '1523 tests: core 617, web 92, fabric 814'], [doc.readme, 'All 1523 run in CI'],
+    [doc.status, '**Test totals: 1523 passing'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -643,22 +649,24 @@ test('the docs record limitations instead of implying completeness', () => {
 test('the status doc reports the real test totals', () => {
   // Recomputed from the filesystem: one test file per suite.
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
-  // 33 includes the accounts suite (traditional sign-in), the online runtimes suite
+  // 35 includes the accounts suite (traditional sign-in), the online runtimes suite
   // (Ollama and llama.cpp on the online entry), the Klyvaron plan suite, the suites added
   // with the family's differentiation (tier stance and modality rules, the dated-source
   // ledger, the evidence-linked affect reader, the composition path with its accelerator
-  // arithmetic), and the suite covering the family's own architecture. If a suite file is
-  // added or removed, the counts in docs/03-status.md and README.md have to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 33)
+  // arithmetic), the suite covering the family's own architecture, and the two adaptive
+  // suites: routing/refusals, and the loop that carries the first milestone. If a suite
+  // file is added or removed, the counts in docs/03-status.md and README.md have to move
+  // with it.
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 35)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**617 / 617**'), 'core total must be stated')
+  assert.ok(status.includes('**647 / 647**'), 'core total must be stated')
   assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
   assert.ok(status.includes('**92 / 92**'), 'web total must be stated')
-  assert.ok(status.includes('1523 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1523 tests: core 617, web 92, fabric 814'),
+  assert.ok(status.includes('1553 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1553 tests: core 647, web 92, fabric 814'),
     'README must state the same totals')
   assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
 
@@ -671,13 +679,13 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(617), `core heading must say 617, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(647), `core heading must say 647, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(92), `web heading must say 92, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1523,
+    1553,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })
@@ -2003,9 +2011,14 @@ test('the direction change is recorded, and the Sparsiz audit keeps its findings
   assert.ok(text.includes('assert non-emptiness, not correctness'), 'the test weakness must be stated')
   assert.ok(text.includes('Unlicense'), 'the licence that makes reuse possible must be recorded')
 
-  // And the boundary: no consciousness claim, and no claim that a phase is done.
-  assert.ok(/does not claim that any adaptive capability works/i.test(text),
-    'the page must state what it does not claim')
+  // And the boundary. Phase 2 demonstrated one capability, so the page may not claim general
+  // competence, and it may not claim a phase is done without its tests -- the sentence this
+  // assertion used to require ("does not claim that any adaptive capability works") became false
+  // the moment the milestone test passed, and updating the assertion is the point: a page whose
+  // disclaimers outlive their truth is a page nobody can trust.
+  assert.ok(/one capability, demonstrated end to end/i.test(text), 'the page must scope what was demonstrated')
+  assert.ok(/does not claim general task competence/i.test(text), 'the page must state what it does not claim')
+  assert.ok(text.includes('no phase is complete before its acceptance tests pass'), 'the page must state what it does not claim')
   assert.ok(text.includes('consciousness, sentience or human-equivalent'))
 
   // The durability lesson is a fact about this project, not a mood: state it with the evidence.
