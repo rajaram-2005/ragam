@@ -402,6 +402,21 @@ be perfectly valid JavaScript and still throw the first time React renders it. T
 was real but was not evidence that the app rendered, and it should not have been
 treated as near-enough.
 
+### 4.1 A flake in the fabric resume test, found by CI and fixed at the cause
+
+`services/fabric/tests/test_lm_train.py::test_a_resumed_run_is_the_same_run_it_would_have_been`
+failed once in CI on 2026-10-16 with `{'checkpoint': 'r-….ckpt.npz', 'step': 6} == {…, 'step': 5}`,
+while passing locally and passing in every other CI run. It is the one test where two processes touch
+one file: it kills a child mid-run and resumes from the checkpoint that child left behind. The test
+validated the checkpoint in place and *then* copied it, and the child saved the next checkpoint
+between those two calls — so the bytes that were copied came from step 6 while the metadata being
+compared against came from step 5. **The mechanism is confirmed rather than inferred:** with a
+deliberate 40 ms gap between the read and the copy, 3 of 3 trials copied a different step than they
+read (`(3, 6) (4, 7) (2, 5)`); copying first and reading the copy agreed in 3 of 3. The fix is that
+ordering. The assertion is unchanged — the test was right about the run and wrong about which file it
+was holding, and the checkpoint file itself is written to a staging name and moved into place, so a
+reader never sees a half-written one.
+
 ---
 
 ## 5. Built-in plugins and the in-process MCP server

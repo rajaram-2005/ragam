@@ -370,13 +370,18 @@ def test_a_resumed_run_is_the_same_run_it_would_have_been(corpus, tmp_path):
         if not produced:
             continue
         for candidate in produced:
+            # Copy first, then read the copy, and let the copy be the authority on which step was
+            # interrupted. Reading the original and *then* copying it is a race the test lost in CI:
+            # the child saved step 6 between the two calls, so the bytes were step 6 while the
+            # metadata read step 5, and the resumed leg was then accused of resuming from the wrong
+            # place. Copying a file that is replaced by an atomic rename cannot tear, and if the
+            # copy does turn out unreadable the loop simply waits for the next checkpoint.
+            saved.write_bytes(candidate.read_bytes())
             try:
-                candidate_meta, _ = read_checkpoint(candidate)
+                candidate_meta, _ = read_checkpoint(saved)
             except (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile):
-                continue  # mid-write: the child is still going
+                continue
             if candidate_meta["step"] >= 2:
-                # Copy before killing: the child may be halfway through writing the next one.
-                saved.write_bytes(candidate.read_bytes())
                 meta = candidate_meta
                 break
     child.kill()

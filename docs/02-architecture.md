@@ -144,7 +144,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `adaptive/checkpoint.mjs` | 248 | Atomic, digest-chained checkpoints; newest intact record read, torn writes skipped and reported, and a resume against a different plan refused |
 | `adaptive/runner.mjs` | 428 | A plan executed step by step with a checkpoint after each, resumable by inheriting only steps that completed *and* verified; deadlines gated before a synchronous step and reported after it |
 
-### `services/fabric` — 12,655 source lines, 9,990 test lines
+### `services/fabric` — 12,655 source lines, 9,995 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible
