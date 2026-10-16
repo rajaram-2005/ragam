@@ -212,6 +212,51 @@ sentence was rewritten rather than the rule weakened.
 **Not claimed.** One narrow capability (counting newline bytes across a tree) routed, verified,
 learned, versioned, reused and measured — not general task competence, and not any of Phases 3-10.
 
+**Phase 2, second half — the rest of the adaptive core.** ✅ **Built, 2026-10-16.** The milestone above
+covered routing, verification, measurement and the skill cycle. The directive's Phase 2 also names
+intent, planning, a capability registry, context/token budgets, timeouts, checkpoints and resumable
+tasks; those are `intent.mjs`, `plan.mjs`, `registry.mjs`, `budget.mjs`, `checkpoint.mjs` and
+`runner.mjs`, with `adaptive-intent.test.mjs` (19 tests) and `adaptive-runtime.test.mjs` (18).
+
+What was checked before building any of it, because this repository already had a lifecycle claiming
+budgets, checkpoints and pause/resume:
+`godcore/lifecycle.mjs` is real and tested — eight phases, budgets that a custom handler cannot
+bypass, bounded retries, a cancellation signal, an approval gate — and **its checkpoints are in-memory
+labels**: `#checkpoint` sets `task.checkpoint` and emits an event; nothing is written, and "resume" is
+calling `run()` again on the same live object. That is genuine pause/resume within one process and it
+does not survive a restart, which is the case the directive names. So the durable half is new work and
+the vocabulary was reused rather than duplicated (`maxSteps`, `maxCalls`, `maxWallMs`, the distinction
+between `observed` and `planned_only` evidence).
+
+| Piece | What it does, and the decision inside it |
+|---|---|
+| `intent.mjs` | Reads capability requirements from a request, and cites the phrase for each. An unmatched request produces a **question**, not a default — there is no general-purpose route here to fall back to, so a default would be a route to nothing. Emotional signals are read and used for nothing: the interaction state may change how an answer is worded, never which capability is required. |
+| `registry.mjs` | Which implementations exist for a tag, and which tags a plan needs that nothing provides. One id with two meanings is refused (`duplicate_id`); a re-registration of the same interface is idempotent. It does not test that an implementation works — that is verification's job, and a registry claiming otherwise would report an intent as a fact. |
+| `plan.mjs` | Dependencies ordered, cycles and unknown dependencies refused, a digest over the plan. Two deliberate differences from GodCore's planner: a plan longer than the budget is **refused, not truncated** (`plan_too_long`) because a truncated plan drops required work while the run still reports success; and a step whose capability is not installed is refused by name (`capability_unavailable`, *"this is a missing capability, not a failed task"*) unless the step is optional, in which case it stays in the plan marked optional. |
+| `budget.mjs` | Steps, calls, wall time and tokens. The gate is `assertCanStart`: a step whose **measured** cost on this input does not fit what is left is refused before it starts. A charge with no token count is recorded as *unreported* rather than as zero, so `tokensExact: false` and `remainingTokensAtMost` — a limit backed by a guess is not a limit. |
+| `checkpoint.mjs` | Atomic writes (temp then rename), a digest chain, newest-intact-read, and `resume()` refusing a plan that is not the checkpointed one (`checkpoint_mismatch`). A `.tmp` left by a crash is skipped and reported rather than parsed as a shorter run; a tampered record is *readable* and reported, because the edit is the finding. Nothing is deleted. |
+| `runner.mjs` | A plan executed step by step: route, gate, run, verify against a second implementation, charge, checkpoint. Resumable: only steps recorded complete **and verified** are inherited, and the result names `replayed`, `skipped` and `resumedFrom`. |
+
+**The bug the resume test found.** The first version of `resume()` handed the resumed attempt the
+*remaining* budget as its new *limit* — which looks equivalent and is not: the resumed attempt then
+charged nothing for what the first attempt had already spent, and a run that had used its whole
+allowance refused to start anything at all. The fix is carry-over accounting: a resumed attempt runs
+on the run's **original limits** with the earlier spend carried into them, so a run has one budget
+rather than one per attempt. Giving a stuck run more room is still possible, it is now an explicit
+choice, and the result says which happened (`limitsReplaced`).
+
+**Timeouts, stated for what they are.** A synchronous call cannot be interrupted from JavaScript, so a
+`Promise.race` around one would report "timed out" while the function kept running — a claim about the
+past the runtime does not support. The runner therefore gates synchronous steps before they start, and
+reports an overrun after (`overDeadline: true`, and the run stops being a clean success). For work that
+*can* be awaited, `runWithinDeadline` races it and, when the deadline wins, reports `abandoned: true`
+with the note that the underlying work was not interrupted and may still be running. The test asserts
+the abandoned promise really did finish, so the note is a fact rather than a figure of speech.
+
+**Not claimed.** The runner drives synchronous steps: an executor that returns a promise is refused with
+a message saying so rather than compared as an object. Nothing in the product surface calls the runner
+yet — it is exercised by tests, not by a route. And the demonstration is still one capability wide.
+
 **Phase 3 — memory with provenance and permissions.** The seven layers, each entry carrying
 provenance, timestamp, confidence, scope, permissions and version; contradiction and duplicate
 handling; inspect/correct/delete. Acceptance: a test that stores a user claim and a verified fact,
@@ -270,7 +315,9 @@ contradicted the plan: on a differently shaped tree the stored procedure lost to
 router chose the baseline, which is reported here rather than smoothed over.
 
 It does not claim general task competence. It does not claim that any adaptive capability beyond that
-one works, or that Phases 3-10 are built. Timing here is timing on this box (2 cores, 3,939 MB), at
+one works, or that Phases 3-10 are built. It does not claim the adaptive core is reachable from the
+product: intent, planning, budgets, timeouts, checkpoints and the runner are exercised by tests, and no
+HTTP route or Chat panel calls them. Timing here is timing on this box (2 cores, 3,939 MB), at
 the sample counts stated beside each figure — not a property of another machine. And the rule this
 page states rather than claims: no phase is complete before its acceptance tests pass, which is why
 §4 describes Phase 2 by what its test runs and refuses to describe the phases that have none.

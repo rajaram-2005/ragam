@@ -11,11 +11,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1553 passing, 0 failing.**
+**Test totals: 1590 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **647 / 647** (35 files, ~52 s) |
+| `services/core` | `node --test test/*.test.mjs` | **684 / 684** (37 files, ~55 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **92 / 92** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 200.08 kB → **61.78 kB gzip**, single chunk, no warnings |
@@ -227,7 +227,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (647 tests)
+### `services/core` — Implemented and tested (684 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -247,6 +247,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | God Core lifecycle | **Implemented and tested** | Eight phases, budgets, retries, checkpoints, verification |
 | Built-in plugins & MCP server | **Implemented and tested** | 18 tests; see §5 |
 | HTTP layer | **Implemented and tested** | 31 literal routes + segment routes; accurate error statuses |
+| Adaptive core: intent, planning, capability registry, budgets, timeouts, checkpoints, resumable tasks | **Implemented and tested** | `intent.mjs` (requirements with the phrase that produced each; unmatched requests get a question), `registry.mjs`, `plan.mjs` (refuses an over-long plan or an uninstalled capability by name), `budget.mjs` (refuses to start work its measurement cannot cover; unreported token counts stay unreported), `checkpoint.mjs` (atomic, digest-chained, refuses a resume against a different plan) and `runner.mjs` (step-by-step with a checkpoint after each, resumable in a fresh object from the checkpoint alone). Exercised by tests; no route calls it yet. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Adaptive routing, verification, experience & skills | **Implemented and tested, one capability end to end** | The Phase 2 loop: route on measured cost, verify against a second `implementation`, record to an append-only digest-chained episode log, propose a skill only from a verified success, promote only when every recorded check passed, reuse and re-measure. Demonstrated on counting newline bytes across a tree, with the measured crossover recorded as a limitation on the skill itself. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |

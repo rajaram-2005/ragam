@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 18,301 source lines, 14,264 test lines
+### `services/core` — 19,685 source lines, 15,099 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -135,6 +135,12 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `adaptive/episodes.mjs` | 296 | Outcome computed rather than asserted, labelled failure hypotheses, acceptance evaluation, and an append-only JSONL episode log with a digest chain that reports where it broke |
 | `adaptive/wording.mjs` | 290 | Seven interaction states over one verbatim facts block, settings that report when they changed nothing, and a render-time §4 audit that throws instead of emitting |
 | `adaptive/loop.mjs` | 426 | The loop itself: measure, run, verify through a named counterpart, propose a skill from a verified success only, test it, promote it, reuse it, roll back by appending a version |
+| `adaptive/intent.mjs` | 183 | Capability requirements read from a request with the phrase that produced each; an unmatched request gets a question rather than a default, and emotional signals are read and used for nothing |
+| `adaptive/registry.mjs` | 157 | Which implementations exist for a capability tag and which tags a plan needs that nothing provides; one id with two meanings is refused |
+| `adaptive/plan.mjs` | 171 | Dependency-ordered plans with a digest; a plan longer than its budget or needing an uninstalled capability is refused by name rather than truncated |
+| `adaptive/budget.mjs` | 202 | Steps, calls, wall time and tokens; a gate that refuses to *start* work its measurement cannot cover, and unreported token counts kept as unreported rather than counted as zero |
+| `adaptive/checkpoint.mjs` | 248 | Atomic, digest-chained checkpoints; newest intact record read, torn writes skipped and reported, and a resume against a different plan refused |
+| `adaptive/runner.mjs` | 423 | A plan executed step by step with a checkpoint after each, resumable by inheriting only steps that completed *and* verified; deadlines gated before a synchronous step and reported after it |
 
 ### `services/fabric` — 12,655 source lines, 9,990 test lines
 

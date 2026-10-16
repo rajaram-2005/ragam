@@ -398,6 +398,10 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.accounts, 'its 19 tests pass'], [doc.setup, '38-test documentation-accuracy suite'],
     [doc.status, '**617 / 617**'], [doc.status, 'Implemented and tested (617 tests)'],
     [doc.status, '**644 / 644**'], [doc.status, 'Implemented and tested (644 tests)'],
+    [doc.status, '**647 / 647**'], [doc.status, 'Implemented and tested (647 tests)'],
+    [doc.setup, 'npm run test:core         # 647'], [doc.setup, '| **Core service** | 647 tests pass'],
+    [doc.readme, '1553 tests: core 647, web 92, fabric 814'], [doc.readme, 'All 1553 run in CI'],
+    [doc.status, '**Test totals: 1553 passing'],
     [doc.setup, 'npm run test:core         # 644'], [doc.setup, '| **Core service** | 644 tests pass'],
     [doc.setup, 'npm run test:core         # 617'], [doc.setup, '| **Core service** | 617 tests pass'],
     [doc.readme, '1523 tests: core 617, web 92, fabric 814'], [doc.readme, 'All 1523 run in CI'],
@@ -657,16 +661,16 @@ test('the status doc reports the real test totals', () => {
   // suites: routing/refusals, and the loop that carries the first milestone. If a suite
   // file is added or removed, the counts in docs/03-status.md and README.md have to move
   // with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 35)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 37)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**647 / 647**'), 'core total must be stated')
+  assert.ok(status.includes('**684 / 684**'), 'core total must be stated')
   assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
   assert.ok(status.includes('**92 / 92**'), 'web total must be stated')
-  assert.ok(status.includes('1553 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1553 tests: core 647, web 92, fabric 814'),
+  assert.ok(status.includes('1590 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1590 tests: core 684, web 92, fabric 814'),
     'README must state the same totals')
   assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
 
@@ -679,13 +683,13 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(647), `core heading must say 647, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(684), `core heading must say 684, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(92), `web heading must say 92, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1553,
+    1590,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })
