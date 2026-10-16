@@ -298,15 +298,69 @@ fabric, so the fabric offers its own deletion rather than a bridge that reports 
 store remains the only memory a prompt can see. The layers are a schema and a set of rules, not a
 retrieval model — there is no ranking over them beyond SQL ordering, and no embedding of any kind.
 
+**Phase 4 — versioned skills with evaluation, regression and declared permissions.** ✅ **Built,
+2026-10-16.** `services/core/src/skills/evaluation.mjs` and `skills/permissions.mjs`, with
+`test/skills-evaluation.test.mjs` (13 tests). Both acceptance criteria written into this page in
+Phase 1 are met as tests, not as prose; the loop (Phase 2) gained an EVALUATE stage and lost the
+ability to promote anything it has not evaluated.
+
+**The rule that carries the weight: a check that passed for the incumbent version must still pass,
+and it must still be run.** A suite written fresh for each candidate proves the candidate does what
+its author just tested and says nothing about what the previous version did, which is the entire risk
+of an improvement. Three ways that rule breaks, each with its own diagnosis rather than one
+undifferentiated "rejected":
+
+| Diagnosis | What happened | Why it is not a pass |
+|---|---|---|
+| `regression` | a check that passed for the incumbent now fails | the improvement broke something it was supposed to leave alone |
+| `regression_not_run` | a check that passed for the incumbent is missing from the candidate's suite | a suite that dropped a test cannot fail it; every check that *did* run passed, and that is exactly the trap |
+| `new_failure` | a check the candidate introduced fails | the new behaviour does not do what it claims |
+
+The verdict log is append-only and digest-chained, like the episode log, and for the same reason: a
+rejection that can be edited away is not a record. A rejected version **stays in the registry** — its
+document is still retrievable, it is still a candidate, and the rejection survives later acceptances.
+`promote()` now refuses a version with no accepted evaluation (`not_evaluated`) and refuses one whose
+accepted evaluation ran a *different* check list (`evaluation_mismatch`): approval follows evaluation,
+and a pass on one set of checks is not a pass on another.
+
+**Permissions are part of the artifact.** A `SKILL.md` declares `fsRead`, `fsWrite` and `network`, and
+that declaration — not the caller's intentions — is the scope the procedure runs with. Two failures
+the module exists to prevent: a declaration nothing reads, and a runtime that chooses the scope, where
+a procedure written to read one directory is handed the filesystem by whoever wraps it, including the
+agent that proposed it. The direction of the refusal matters:
+
+* **declared ⊄ granted → refuse** (`permission_widening`), naming the root the runtime does not allow.
+  Silently narrowing would run the procedure with less than it declared and fail somewhere inside it.
+* **granted ⊄ declared → the excess is dropped.** The procedure gets exactly what its document asked
+  for, however generous the caller was feeling. A test passes a grant of `/` and asserts the executor
+  still cannot read outside the declared tree.
+* **A skill the agent wrote may not ask for `/`, the home directory or the network.** A human author
+  may; the rule is about who inferred the procedure, not about the parser. Both are still bounded by
+  the grant.
+* Unknown keys, wildcard scopes, empty entries and a string `yes` for `network` are refused rather
+  than ignored — `internet: true` looks to a human like a constraint and would be a restriction
+  nobody enforces, which is worse than no restriction.
+
+**The bug these tests found in existing code.** The frontmatter parser entered a nested block by
+descending into the last key it had seen and never came back up, so two sibling keys in one block
+landed inside each other: `fsWrite` was written into `fsRead`'s list. Every nested block in the
+repository had exactly one child — `metadata: aetheris: tags:` — which is why nothing had caught it.
+Containers are now tracked by indentation. The first permission block with three keys found it
+immediately.
+
+**Not claimed.** Nothing in the product surface evaluates or executes a skill: the 12 skill routes and
+the Chat panel read documents and promotion state, and the evaluation/permission machinery is
+exercised by tests and available to the loop. Only one capability has a stored procedure to evaluate.
+
 **Phase 3 — memory with provenance and permissions.** The seven layers, each entry carrying
 provenance, timestamp, confidence, scope, permissions and version; contradiction and duplicate
 handling; inspect/correct/delete. Acceptance: a test that stores a user claim and a verified fact,
 retrieves both, and asserts the two are distinguishable and that deleting one removes its provenance.
 
-**Phase 4 — versioned skills with evaluation and regression.**
-OBSERVE→RECORD→EVALUATE→DIAGNOSE→PROPOSE→TEST→APPROVE→VERSION→REUSE with rollback. Acceptance: a
-candidate improvement that fails its regression test is **rejected and retained**, and the rejection is
-in the record; a skill's declared permissions are enforced by the executor.
+**Phase 4 — versioned skills with evaluation and regression.** ✅ **Met, 2026-10-16.** See the Phase 4
+record above: `skills/evaluation.mjs` and `skills/permissions.mjs`, `test/skills-evaluation.test.mjs`
+(13 tests). OBSERVE→RECORD→EVALUATE→DIAGNOSE→PROPOSE→TEST→APPROVE→VERSION→REUSE, with rollback, is
+now the loop's actual path rather than its ambition.
 
 **Phase 5 — emotional interaction states and controls.** The seven states, estimated from context,
 treating estimates as uncertain and correctable; personality settings; a switch that disables
