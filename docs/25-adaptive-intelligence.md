@@ -404,9 +404,64 @@ record above: `wording.mjs` (673 lines) with `test/emotional-states.test.mjs` (1
 their alternatives, a correction store the user can withdraw, settings that are refused rather
 than interpreted, and one switch that stops the reading as well as the effect.
 
-**Phase 6 — providers.** Capability registry and adapters. Acceptance: routing refuses a request the
-available capabilities cannot serve rather than degrading silently; offline mode makes no network call
-(already tested for the existing path).
+**Phase 6 — the model and provider fabric.** ✅ **Met, 2026-10-16.**
+`services/core/src/adaptive/providers.mjs` (535 lines) with `test/adaptive-providers.test.mjs`
+(15 tests). Both acceptance criteria written into this page in Phase 1 are tests, and both are
+about refusal:
+
+| Criterion | Test | What it proves |
+|---|---|---|
+| "routing refuses a request the available capabilities cannot serve rather than degrading silently" | `acceptance: a capability nothing declares is refused, with the list of what is declared`; `acceptance: the planner refuses a step whose provider the fabric did not measure` | The refusal names the missing tag, lists what *is* declared, and reaches the Phase 2 planner: `planSteps` refuses with `capability_unavailable` rather than letting a task fail four steps in, which is a missing capability reported as a failed task |
+| "offline mode makes no network call" | `acceptance: nothing is probed that policy forbids, so offline mode makes no call`; `acceptance: the fabric has no way to make a network call of its own` | A **counter on the adapter**, not the absence of an exception: under `strict_offline` the external adapter's `probe` is called 0 times while the loopback one is called once. And the module contains no `fetch`, no `node:http`/`net`/`tls`, no `undici` — checked by reading it — so the property survives future edits rather than depending on a comment |
+
+An adapter declares its kind (`in-process`, `local`, `external`), the tags it serves, its limits and
+its notes; the fabric measures availability by probing and never invents it. **One `eligibility()`
+is shared by `candidates()` and `probe()`**, which is the load-bearing decision: the same function
+that decides who may be routed to decides who may be *contacted*, so a provider the policy forbids
+is never asked anything — not probed, not timed, not counted as unreachable after a failed request.
+An adapter that was never probed is `unverified`, and `allowUnverified` widens *who may be routed
+to*, never what a probe found: a failed probe stays a refusal with its detail ("model llama3 is not
+pulled").
+
+The refusals, each with its own code, because "it did not work" is not a diagnosis:
+
+| Code | When | Why it is not silently fixed |
+|---|---|---|
+| `no_capability` | nothing declares a requested tag | the alternative is substituting a provider that serves a different tag |
+| `only_external_capability` | only a forbidden external adapter declares it | the request needs a capability this machine cannot provide offline |
+| `provider_unavailable` | probed not-ready, with the probe's own message | readiness is a measurement here, not a claim |
+| `capability_exceeds_limits` | the request needs more context or output than the adapter declares | truncating to fit answers a different, shorter question and returns a result that looks complete |
+| `no_eligible_provider` | eligible providers exist but none can take it | every per-adapter reason is attached, including `partial_coverage`: two adapters that between them cover a request are **not** combined, because the combination is a different request |
+| `preference_not_eligible` | the caller named a provider that cannot serve it | naming a provider is not a way to bypass the gates |
+| `no_egress_guard` | an external adapter with no guard installed | without a guard nothing is enforcing the policy, so "external" would be unchecked |
+| `unverified_provider` | a probe was never run | an unmeasured provider is not a maybe |
+
+`allowExternal` is one caller's opt-in and never overrides policy; `requireLocal` forces a local
+adapter; an external adapter registered with `privacy: 'local-only'` is refused at registration,
+because claiming local-only for a provider that leaves the machine is a false claim about where the
+data goes. Eligible adapters become `kind: 'model'` capability descriptors that
+`validateCapability` accepts, carrying their notes — an adapter whose notes say "sampled output at
+temperature 0.7" is described as `sampled`, not `deterministic` — and
+`toCapabilityRegistry(registry, null)` publishes every eligible adapter, so the planner's registry
+holds what was measured and nothing else.
+
+**The bug this phase found in the docs, of the same shape as Phase 4's parser bug.** README's setup
+snippet and its "run in CI" line still said **709 / 1615** while its own component table two
+sections below said 738 — and `docs.test.mjs` required the stale form, so the contradiction passed
+every check. The docs test now requires README and `docs/03` to state the *same* total, and every
+superseded form is refused in both documents. A number stated twice with one test guarding one copy
+is a number nobody is guarding.
+
+**Not claimed.** No external provider was contacted: this sandbox has no provider credentials, so
+the external path is exercised against a stub that records calls, and no adapter for a real
+endpoint is wired in. The fabric feeds `AdaptiveLoop` and the planner's registry; no HTTP route or
+Chat panel calls it, and the online-only entry (`src/router/registry.mjs`) is untouched. It does
+not pick between two eligible providers by quality — that is the router's measurement, and the
+fabric hands it every candidate rather than choosing.
+
+**Phase 6 — providers.** ✅ **Met, 2026-10-16.** See the Phase 6 record above:
+`adaptive/providers.mjs` (535 lines), `test/adaptive-providers.test.mjs` (15 tests), one
+`eligibility()` shared by routing and probing, and refusals by name at every gate.
 
 **Phase 7 — plugins and MCP safeguards.** Acceptance: a tool output containing an instruction that
 conflicts with policy is treated as data, not obeyed.
@@ -450,8 +505,10 @@ It does not claim general task competence. It does not claim that any adaptive c
 one works, or that the later phases are built. It does not claim the adaptive core is reachable from the
 product: intent, planning, budgets, timeouts, checkpoints, the runner and the memory fabric are
 exercised by tests, and no HTTP route or Chat panel calls them. The fabric is a schema and a set of
-rules for what may be believed and why — not a retrieval model. Emotional interaction states,
-providers, plugins, image and video workflows and industry packs are not built. Timing here is timing on this box (2 cores, 3,939 MB), at
+rules for what may be believed and why — not a retrieval model. Emotional interaction states and the provider
+fabric are built and tested but not reachable from the product — the seven states are a wording
+setting, and the provider fabric measures eligibility for a loop no HTTP route calls — and plugins,
+image and video workflows and industry packs are not built. Timing here is timing on this box (2 cores, 3,939 MB), at
 the sample counts stated beside each figure — not a property of another machine. And the rule this
 page states rather than claims: no phase is complete before its acceptance tests pass, which is why
 §4 describes Phase 2 by what its test runs and refuses to describe the phases that have none.

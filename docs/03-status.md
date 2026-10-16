@@ -11,11 +11,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1644 passing, 0 failing.**
+**Test totals: 1659 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **738 / 738** (41 files, ~62 s) |
+| `services/core` | `node --test test/*.test.mjs` | **753 / 753** (42 files, ~41 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **92 / 92** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 200.08 kB → **61.78 kB gzip**, single chunk, no warnings |
@@ -227,7 +227,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (738 tests)
+### `services/core` — Implemented and tested (753 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -251,6 +251,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Adaptive routing, verification, experience & skills | **Implemented and tested, one capability end to end** | The Phase 2 loop: route on measured cost, verify against a second `implementation`, record to an append-only digest-chained episode log, propose a skill only from a verified success, promote only when every recorded check passed, reuse and re-measure. Demonstrated on counting newline bytes across a tree, with the measured crossover recorded as a limitation on the skill itself. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Emotional interaction states and controls | **Implemented and tested; not yet reachable from the product** | Seven states estimated from the user's own phrases, never from a model of them; every estimate reports itself as an estimate with the phrases that produced it and the other families that also matched, and can be corrected, remembered only if the user allows it, and withdrawn. Sensitive material is never read as a signal (the record keeps an offset, not the phrase), a claim about the user over time needs cited signals read with consent, and the forbidden-sentence guard refuses claimed feelings, consciousness, simulated sadness, worry, jealousy, possessiveness, guilt, dependency and invented history. Settings are validated rather than interpreted, and one switch stops the reading as well as the effect. `AdaptiveLoop.explain` renders a run with those rules; nothing in Chat uses it yet. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Skill evaluation, regression and permissions | **Implemented and tested; not yet reachable from the product** | `skills/evaluation.mjs` + `skills/permissions.mjs`. A candidate must run and pass every check that passed for the incumbent version; a suite that lost a check is rejected as `regression_not_run` rather than passing with fewer. Verdicts go to an append-only digest-chained log, a rejected version stays in the registry, and `promote()` refuses a version with no accepted evaluation or a different check list. A skill's permission block is the scope it runs with: a declaration wider than the runtime grant is refused rather than narrowed, a larger grant is never used, and an agent-written skill may not ask for `/`, the home directory or the network. See [docs/25](25-adaptive-intelligence.md) §4 |
+| Model & provider fabric | **Implemented and tested; not yet reachable from the product** | Adapters declare their kind (`in-process`, `local`, `external`), the capability tags they serve, their limits and their notes; availability is measured by probing, never assumed. One `eligibility()` is shared by routing *and* probing, so a provider the policy forbids is never *contacted* — under `strict_offline` the external adapter's `probe` is called **0 times** while a loopback one is called once — and the module contains no network primitive at all (`fetch`, `node:http`/`net`/`tls`, `undici`), which is checked by reading it rather than by a comment. Refusals carry codes: `no_capability` (naming what is declared instead), `only_external_capability`, `provider_unavailable` (with the probe's own message), `capability_exceeds_limits` (a request too large is refused, never truncated to fit), `no_eligible_provider` (with `partial_coverage`: two adapters that between them cover a request are not combined), `preference_not_eligible` and `no_egress_guard`. Eligible adapters become validated `kind: model` descriptors — an adapter whose notes say `sampled` is not described as deterministic — and can be published into the planner's registry, so a plan is only ever built against providers that are registered *and* measured. No real provider, credential or gateway exists in this build: the external path is exercised against a stub that counts calls. `test/adaptive-providers.test.mjs` (15 tests). See [docs/25](25-adaptive-intelligence.md) §4 |
 | Persistent memory fabric | **Implemented and tested; not yet reachable from the product** | Seven layers (working, episodic, semantic, preference, project, skill, failure) with `assertion` and `verification` held as **separate records** on every entry, so *the user said so* and *an independent check confirmed it* cannot be read as the same thing: a claim's confidence has no number at all. Required provenance rows, versions on correction, contradictions kept and listed, scope and readers enforced on read with each exclusion naming its reason, deletion that takes the provenance with it and leaves a content-free tombstone, and the skill/episodic/failure layers **referencing** the registry and the episode log instead of copying them. The bridge with the existing product memory goes one way each way: an approved memory enters as a claim (approval is permission, not verification) and a fabric entry leaves as a candidate a person must approve. Tested by `memory-fabric.test.mjs` (18) and `memory-bridge.test.mjs` (7). No HTTP route or panel reads it yet, and it is not a retrieval model — there is no ranking beyond SQL ordering and no embedding of any kind. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
@@ -419,6 +420,17 @@ ordering. The assertion is unchanged — the test was right about the run and wr
 was holding, and the checkpoint file itself is written to a staging name and moved into place, so a
 reader never sees a half-written one.
 
+### 4.2 A docs check that could not fail, found while writing the Phase 6 record
+
+`README.md` stated **709 / 1615** tests in its setup snippet and in its "run in CI" line while its own
+component table, two sections below, said **738** — and `docs.test.mjs` asserted the *stale* form
+(`README must state the same totals`), so the contradiction passed every check in CI for two phases.
+The status document was checked against the filesystem and the README was checked against a literal,
+which is how the same figure was right in one file and wrong in the other. The test now requires
+README and `docs/03` to state the same total, requires the "run in CI" line to carry it too, and
+refuses every superseded form in both documents. A number stated twice with one test guarding one copy
+is a number nobody is guarding.
+
 ---
 
 ## 5. Built-in plugins and the in-process MCP server
@@ -543,13 +555,17 @@ Ordered by how much it blocks the acceptance criteria.
    network access to a registry, then re-probe. No code change is expected — that
    is the claim the loopback test supports, and it is the single largest gap
    between this repository and a usable product.
-2. **Decide whether to add an external provider at all** (Phase 5). The online
-   integration was removed rather than configured: there is no provider, no
-   credential and no allowlisted gateway in this build. Adding one back is a new
-   decision with its own adapter, credential handling and classification gate —
-   not a configuration change. Until that decision is taken, image and video
-   requests are refused with an explicit limitation, and the readiness view reports
-   those capabilities as unavailable.
+2. **Add an external provider, or keep refusing** (Phase 6 gave the decision an
+   executable form). The online integration was removed rather than configured:
+   there is still no provider, no credential and no allowlisted gateway in this
+   build. What is new is that the *rules* for adding one are code rather than
+   intent: an external adapter cannot even be registered with `privacy:
+   'local-only'`, it is ineligible whenever no egress guard is installed and under
+   `strict_offline` it is never contacted, and it is only probed when the caller
+   opts in. So the remaining work is genuinely the decision and its credentials,
+   not the plumbing — and until it is taken, image and video requests are refused
+   with an explicit limitation, and the readiness view reports those capabilities
+   as unavailable.
 3. **Run the pipeline against a real corpus.** The fixture corpus is generated
    engineering documentation; retrieval quality on real company documents is
    unknown and is recorded as a limitation on the model card.
