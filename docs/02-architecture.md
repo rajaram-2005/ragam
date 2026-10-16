@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 20,618 source lines, 15,797 test lines
+### `services/core` — 21,313 source lines, 16,210 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -118,6 +118,8 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `memory/store.mjs` | 702 | User-approved memory, candidates that need approval before use, and session recall with citations |
 | `memory/fabric.mjs` | 790 | Seven layers, each entry carrying assertion and verification as separate records, required provenance rows, a confidence with a required basis, scope and readers enforced on read, and deletion that takes the provenance with it |
 | `memory/bridge.mjs` | 138 | Approved memory entering the fabric as a claim (never a fact), and fabric entries leaving as candidates a person must approve; one direction, because the schema refuses the other |
+| `skills/permissions.mjs` | 272 | The permission block of a SKILL.md: parsed, refused when malformed or wildcarded, bounded against the runtime grant, and used as the scope the procedure runs with — a caller cannot widen it |
+| `skills/evaluation.mjs` | 274 | EVALUATE and DIAGNOSE: an append-only digest-chained verdict log, the incumbent's passing checks as the regression set, and a closed set of diagnoses (regression, regression_not_run, new_failure) so a rejection says which kind it was |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
 | `klyvaron/tiers.mjs` | 724 | The three-tier model family, the non-competitive stance, the two differentiating capabilities with their acceptance criteria, the modality roles, and the validator that refuses a capability with no artifact behind it, a from-scratch tier that names a base, or an image capability backed by the text artifact |
 | `klyvaron/plan.mjs` | 187 | The development plan: thirteen per-tier gates derived from the tier records, including the stance, the two differentiators, modality separation and `own_weights`, each open gate with its reason |
@@ -126,9 +128,9 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `klyvaron/architecture.mjs` | 615 | The family's own model: the `aetheris-core-v1` design, the Lite/Pro/Max presets, the two differentiators as parts of the model, the parameter and memory arithmetic, the modality models, and the recipe with its per-size open steps |
 | `klyvaron/composition.mjs` | 259 | The training-free path this family refused: the eight composition steps, the licence allowlist, and the rules that keep a composed tier from claiming a trained one or from wearing a tier label |
 | `hardware/accelerators.mjs` | 194 | The accelerator registry (CUDA, ROCm, Metal, Vulkan, OpenVINO GPU/NPU, CPU) and the weight plus KV-cache arithmetic that decides whether a model fits |
-| `skills/registry.mjs` | 397 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
-| `skills/manifest.mjs` | 319 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
-| `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |
+| `skills/registry.mjs` | 425 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
+| `skills/manifest.mjs` | 327 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
+| `skills/lifecycle.mjs` | 286 | The curator walk and the five invariants that make "never delete a skill" structural |
 | `skills/store.mjs` | 246 | Skills on disk: document + state split, version files for rollback, deletion tombstones |
 | `adaptive/capability.mjs` | 194 | The capability descriptor every route is described by: kind, dotted `provides` tags, declared cost with no `measured` escape, fs/network/permission scope, and the `implementation` tag verification independence is decided on |
 | `adaptive/router.mjs` | 230 | `routeTask`: gates, refusals that name their reason, measured cost outranking an unmeasured claim, and a pin that is honoured only when it passes every gate |
@@ -136,7 +138,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `adaptive/verify.mjs` | 139 | Verification by recomputation against a counterpart implementation, plus a stride-sampled `wc -l` check that is honest about being a sample |
 | `adaptive/episodes.mjs` | 296 | Outcome computed rather than asserted, labelled failure hypotheses, acceptance evaluation, and an append-only JSONL episode log with a digest chain that reports where it broke |
 | `adaptive/wording.mjs` | 290 | Seven interaction states over one verbatim facts block, settings that report when they changed nothing, and a render-time §4 audit that throws instead of emitting |
-| `adaptive/loop.mjs` | 426 | The loop itself: measure, run, verify through a named counterpart, propose a skill from a verified success only, test it, promote it, reuse it, roll back by appending a version |
+| `adaptive/loop.mjs` | 529 | The loop itself: measure, run, verify through a named counterpart, propose a skill from a verified success only, test it, promote it, reuse it, roll back by appending a version |
 | `adaptive/intent.mjs` | 183 | Capability requirements read from a request with the phrase that produced each; an unmatched request gets a question rather than a default, and emotional signals are read and used for nothing |
 | `adaptive/registry.mjs` | 157 | Which implementations exist for a capability tag and which tags a plan needs that nothing provides; one id with two meanings is refused |
 | `adaptive/plan.mjs` | 171 | Dependency-ordered plans with a digest; a plan longer than its budget or needing an uninstalled capability is refused by name rather than truncated |

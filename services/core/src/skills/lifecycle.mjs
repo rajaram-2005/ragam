@@ -41,6 +41,7 @@
 // skills"). See docs/10-hermes-audit.md §3.1.
 
 import { SKILL_STATES } from './registry.mjs'
+import { NO_PERMISSIONS } from './permissions.mjs'
 
 export const DEFAULT_LIFECYCLE = Object.freeze({
   staleAfterDays: 30,
@@ -173,6 +174,7 @@ export function proposeFromExperience(registry, experience, { now = Date.now() }
     ],
     pitfalls: experience.pitfalls ?? [`The original failure: ${oneLine(experience.observed)}`],
     verification: experience.verification ?? 'Re-run the recorded reproduction and confirm it now succeeds.',
+    permissions: experience.permissions ?? NO_PERMISSIONS,
     observedAt: new Date(now).toISOString(),
   })
 
@@ -205,6 +207,7 @@ export function renderSkillDocument(fields) {
   const {
     name, description, version, createdBy, author, tags = [],
     whenToUse, prerequisites = [], steps, pitfalls = [], verification, observedAt,
+    permissions = NO_PERMISSIONS,
   } = fields
   const lines = [
     '---',
@@ -218,6 +221,13 @@ export function renderSkillDocument(fields) {
     '  aetheris:',
     `    tags: [${tags.map((t) => String(t).replace(/[^a-z0-9-]/gi, '-')).join(', ')}]`,
     `createdBy: ${createdBy}`,
+    // Declared in the document, not passed at run time: this block is what a human reviews and
+    // what the executor enforces, and it is rendered even when it is empty so that "reads
+    // nothing" is a statement somebody made rather than a field that was forgotten.
+    'permissions:',
+    `  fsRead: [${(permissions.fsRead ?? []).join(', ')}]`,
+    `  fsWrite: [${(permissions.fsWrite ?? []).join(', ')}]`,
+    `  network: ${permissions.network === true}`,
     '---',
     '',
     `# ${name.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')}`,

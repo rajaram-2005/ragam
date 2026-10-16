@@ -20,6 +20,8 @@
 
 import { SKILL_STATES } from '../skills/registry.mjs'
 import { proposeFromExperience } from '../skills/lifecycle.mjs'
+import { EvaluationLog, VERDICTS, evaluateCandidate } from '../skills/evaluation.mjs'
+import { describePermissions, effectivePermissions } from '../skills/permissions.mjs'
 import { validateCapability } from './capability.mjs'
 import {
   EpisodeLog, OUTCOMES, classifyOutcome, diagnose, evaluateAcceptance,
@@ -62,10 +64,15 @@ export class AdaptiveLoop {
    * @param {EpisodeLog} [options.episodes]
    * @param {number} [options.samples] runs per candidate when measuring cost
    */
-  constructor({ registry, episodes = null, samples = DEFAULT_SAMPLES, ledger = null, now = () => Date.now(), timer = () => performance.now() }) {
+  constructor({ registry, episodes = null, evaluations = null, samples = DEFAULT_SAMPLES, ledger = null, now = () => Date.now(), timer = () => performance.now() }) {
     if (!registry) throw new LoopError('the loop needs a skill registry', 'no_registry')
     this.registry = registry
     this.episodes = episodes ?? new EpisodeLog(':memory:')
+    // Where every candidate's verdict is recorded, including -- especially -- the rejections.
+    // A caller can hand in a file-backed log; the default is per-process so a test needs no
+    // filesystem, and it is never `null`, because "no evaluation log" would be a way to promote
+    // a version that was never evaluated.
+    this.evaluations = evaluations ?? new EvaluationLog(':memory:')
     this.samples = samples
     this.ledger = ledger
     this.now = now
@@ -324,12 +331,77 @@ export class AdaptiveLoop {
   }
 
   /**
+   * EVALUATE + DIAGNOSE: run a candidate's checks against the incumbent version's regression
+   * set, and record the verdict either way.
+   *
+   * The interesting outcome is the rejection. A version that fails is *retained*: it stays in
+   * the registry as a candidate, its document is still retrievable, and the log carries the
+   * failing check, what it reported and a diagnosis that says which kind of failure it was.
+   * Deleting a rejected candidate would erase the only record that the improvement was tried.
+   */
+  evaluate({ name, version, checks, baseline = null, by = 'adaptive loop evaluation', note = null }) {
+    const entry = this.registry.describe(name)
+    const target = version ?? entry.version
+    const record = evaluateCandidate({
+      name,
+      version: target,
+      checks,
+      log: this.evaluations,
+      baseline,
+      at: this.now(),
+      by,
+      note,
+    })
+    this.#record('adaptive.skill', 'evaluate', record.verdict === VERDICTS.ACCEPTED ? 'success' : 'denied', {
+      subject: name,
+      version: target,
+      verdict: record.verdict,
+      diagnosis: record.diagnosis,
+      failed: record.failed.map((each) => each.name),
+      notRun: record.notRun,
+    })
+    return record
+  }
+
+  /**
    * APPROVE + VERSION: promote a candidate through the registry, which enforces that every
    * check passed. This method cannot promote anything on its own authority.
+   *
+   * It also cannot promote a version that was not *evaluated*: there must be an accepted record
+   * in the evaluation log for this exact version, and it must have run the same checks being
+   * presented now. Otherwise "promote with a passing check list" is a way to approve a version
+   * whose tests never ran -- and the check list is the only thing standing between a stored
+   * procedure and the next task that reuses it.
    */
   promote({ name, checks, verifiedBy = 'adaptive loop test run' }) {
     if (!checks?.length) {
       throw new LoopError(`cannot promote '${name}' without checks`, 'no_checks')
+    }
+    const version = this.registry.describe(name).version
+    const accepted = this.evaluations.latest(name, { version, verdict: VERDICTS.ACCEPTED })
+    if (!accepted) {
+      const last = this.evaluations.latest(name, { version })
+      this.#record('adaptive.skill', 'promote', 'denied', { subject: name, version, reason: 'not_evaluated' })
+      throw new LoopError(
+        last
+          ? `refusing to promote '${name}' ${version}: its recorded evaluation was ${last.verdict} ` +
+            `(${last.diagnosis}) -- ${last.note ?? 'run the checks again, or fix the version'}`
+          : `refusing to promote '${name}' ${version}: no evaluation is recorded for this version. ` +
+            'Approval follows evaluation; there is no path that skips it.',
+        'not_evaluated',
+        { version, last: last ?? null },
+      )
+    }
+    const presented = checks.map((check) => check.name).sort()
+    const recorded = [...accepted.passed].sort()
+    if (JSON.stringify(presented) !== JSON.stringify(recorded)) {
+      this.#record('adaptive.skill', 'promote', 'denied', { subject: name, version, reason: 'evaluation_mismatch' })
+      throw new LoopError(
+        `refusing to promote '${name}' ${version}: the accepted evaluation ran [${recorded.join(', ')}] ` +
+          `and these are [${presented.join(', ')}]. A pass on one set of checks is not a pass on another.`,
+        'evaluation_mismatch',
+        { recorded, presented },
+      )
     }
     const failed = checks.filter((c) => c.passed !== true)
     if (failed.length) {
@@ -340,7 +412,12 @@ export class AdaptiveLoop {
         { failed },
       )
     }
-    const described = this.registry.validate(name, { verifiedBy, checks, at: new Date(this.now()).toISOString() })
+    const described = this.registry.validate(name, {
+      verifiedBy,
+      checks,
+      at: new Date(this.now()).toISOString(),
+      evaluation: { seq: accepted.seq, digest: accepted.digest, verdict: accepted.verdict },
+    })
     this.#record('adaptive.skill', 'promote', 'success', { subject: name, version: described.version, checks: checks.length })
     return described
   }
@@ -352,7 +429,7 @@ export class AdaptiveLoop {
    * checks its own: a skill is stored content that a later version can edit, and the check
    * that matters is the one enforced by the thing actually running.
    */
-  skillExecutor({ name, version = null, provides, permissions, limitations = [], invoke, implementation = null }) {
+  skillExecutor({ name, version = null, provides, grant, limitations = [], invoke, implementation = null }) {
     const entry = this.registry.describe(name)
     if (entry.state !== SKILL_STATES.VALIDATED && entry.state !== SKILL_STATES.STALE) {
       throw new LoopError(
@@ -361,15 +438,41 @@ export class AdaptiveLoop {
         { state: entry.state },
       )
     }
+    // The permission comes from the stored document and from nowhere else. The caller supplies
+    // the *grant* -- what this runtime is willing to allow -- and the document supplies what
+    // the procedure asked for; the executor exists to see that the second fits inside the
+    // first. A caller cannot widen a skill by passing a bigger scope, which is the whole point:
+    // the wrapper is often the agent, and the agent is the thing being governed.
+    const stored = this.registry.permissionsFor(name, version)
+    let permissions
+    try {
+      permissions = effectivePermissions(stored.permissions, grant, { name, createdBy: stored.createdBy })
+    } catch (error) {
+      this.#record('adaptive.skill', 'execute', 'denied', {
+        subject: name, version: stored.version, code: error.code, detail: error.detail ?? null,
+      })
+      throw error
+    }
+    this.#record('adaptive.skill', 'execute', 'info', {
+      subject: name, version: stored.version, scope: describePermissions(permissions),
+    })
     return validateCapability({
       id: `skill.${name}`,
       kind: 'skill',
       version: version ?? entry.version,
       provides,
+      // The declared scope, frozen into the descriptor that the executor's own permission
+      // checks read. `assertMayRead` refuses a path outside it at the moment of access, so
+      // enforcement happens where the file is opened rather than where the route was chosen.
       permissions,
       privacy: 'local-only',
       determinism: 'deterministic',
-      limitations,
+      limitations: [
+        ...limitations,
+        // Stated on the descriptor rather than only in the document, because a router choosing
+        // between routes is looking at the descriptor.
+        `Runs with the stored declaration: ${describePermissions(permissions)}.`,
+      ],
       // The stored procedure names the code it wraps, so a route using the skill is not
       // mistaken for an independent check of the tool underneath it.
       implementation: implementation ?? `skill.${name}`,

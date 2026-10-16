@@ -90,9 +90,17 @@ export function parseFrontmatter(text) {
 
   const frontmatter = {}
   const errors = []
-  let current = frontmatter
-  let currentIndent = 0
-  const stack = [[frontmatter, -1]]
+  // Containers are tracked by indentation, not by "the most recent key". The previous version
+  // descended into the last key each time the indent increased *without ever coming back up*,
+  // so a nested block with two sibling keys sent the second one into the first one's value:
+  //
+  //   permissions:
+  //     fsRead: [/tmp/a]
+  //     fsWrite: [/tmp/b]     <- landed inside fsRead's list
+  //
+  // Every nested block in the repository had exactly one child, so the bug was invisible until
+  // a frontmatter block declared more than one thing. Found by the Phase 4 permission tests.
+  const stack = [{ container: frontmatter, indent: -1 }]
   // A key whose value is written as a block sequence. Set when a line ends in ':' with
   // nothing after it, and used by the '- item' lines that follow.
   let pendingList = null
@@ -102,13 +110,6 @@ export function parseFrontmatter(text) {
     const indent = raw.length - raw.trimStart().length
     const line = raw.trim()
 
-    if (indent === 0 && !line.startsWith('- ')) {
-      stack.length = 1
-      stack[0] = [frontmatter, -1]
-      current = frontmatter
-      currentIndent = 0
-      pendingList = null
-    }
 
     // A YAML block sequence, which is how hand-written skill documents usually write a
     // list:
@@ -142,16 +143,16 @@ export function parseFrontmatter(text) {
     const key = line.slice(0, colon).trim()
     const value = line.slice(colon + 1).trim()
 
-    if (indent > currentIndent) {
-      // A nested map begins. The parent key was already created as an empty object.
-      const parentKey = Object.keys(current).at(-1)
-      if (!parentKey) { errors.push(`indented block has no parent key: '${line}'`); continue }
-      current = current[parentKey]
-    }
+    // Come back up to the block this line belongs to. A line at the same indent as the previous
+    // key is a sibling; only a deeper indent is a child.
+    while (stack.length > 1 && indent <= stack.at(-1).indent) stack.pop()
+    const current = stack.at(-1).container
 
     if (value === '') {
+      // A map or a block sequence begins here; which one it is, is decided by the next line,
+      // which either names a key (map) or starts with '- ' (list).
       current[key] = {}
-      currentIndent = indent
+      stack.push({ container: current[key], indent })
       pendingList = { container: current, key, indent }
       continue
     }
@@ -262,6 +263,13 @@ export function validateSkillDocument(input, { directoryName = null, requireSect
 
   if (frontmatter.createdBy && !CREATED_BY.includes(frontmatter.createdBy)) {
     errors.push(`createdBy must be one of ${CREATED_BY.join(', ')}; found '${frontmatter.createdBy}'`)
+  }
+
+  // A document with no `permissions:` block declares nothing: no reads, no writes, no network.
+  // That is the safe default, and it still has to be visible, because a procedure that reads
+  // a tree and never said so will fail the moment it is run rather than at review time.
+  if (frontmatter.permissions === undefined) {
+    warnings.push("no 'permissions' block; the procedure declares no filesystem or network access")
   }
 
   // --- sections ----------------------------------------------------------------

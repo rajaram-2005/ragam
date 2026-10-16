@@ -257,7 +257,13 @@ test('the milestone: a verified run becomes a tested skill, and the second task 
   const tested = loop.testSkill({ name: 'line-count-stream', checks })
   assert.equal(tested.passed, true, JSON.stringify(tested.checks, null, 2))
 
+  // EVALUATE before APPROVE. The evaluation is what records the regression set the *next*
+  // version will have to keep passing.
+  const evaluated = loop.evaluate({ name: 'line-count-stream', version: '1.0.0', checks })
+  assert.equal(evaluated.verdict, 'accepted', evaluated.summary)
   const promoted = loop.promote({ name: 'line-count-stream', checks: tested.checks })
+  // `promote` takes the *evaluated results* it re-checks, and refuses any name the accepted
+  // evaluation did not run -- so a check added after the evaluation cannot ride in with it.
   assert.equal(promoted.state, SKILL_STATES.VALIDATED)
   assert.equal(promoted.version, '1.0.0')
   assert.equal(promoted.validation.checks.length, 4)
@@ -266,7 +272,9 @@ test('the milestone: a verified run becomes a tested skill, and the second task 
   const skill = loop.skillExecutor({
     name: 'line-count-stream',
     provides: ['tree.line-count'],
-    permissions: { fsRead: granted, fsWrite: [], network: false },
+    // The grant is what the runtime allows. The scope the skill actually runs with comes from
+    // its stored document, which is where the proposal wrote it down.
+    grant: { fsRead: granted, fsWrite: [], network: false },
     limitations: ['Counts newline bytes, so a file with no trailing newline reports one fewer line.'],
     invoke: (invocation) => stream.invoke(invocation),
   })
@@ -323,17 +331,20 @@ test('a candidate skill is not loadable, and promotion is refused when a check f
     (error) => error instanceof LoopError && error.code === 'not_loadable',
   )
 
-  const failedCheck = loop.testSkill({
-    name: 'line-count-stream',
-    checks: [
-      { name: 'counts correctly', run: () => ({ passed: true, detail: 'ok' }) },
-      { name: 'holds under a tree it has never seen', run: () => ({ passed: false, detail: 'counted 4, expected 5' }) },
-    ],
-  })
+  const failingChecks = [
+    { name: 'counts correctly', run: () => ({ passed: true, detail: 'ok' }) },
+    { name: 'holds under a tree it has never seen', run: () => ({ passed: false, detail: 'counted 4, expected 5' }) },
+  ]
+  const failedCheck = loop.testSkill({ name: 'line-count-stream', checks: failingChecks })
   assert.equal(failedCheck.passed, false)
+  // EVALUATE records the failure -- and the version stays in the registry as a candidate.
+  const rejected = loop.evaluate({ name: 'line-count-stream', version: '1.0.0', checks: failingChecks })
+  assert.equal(rejected.verdict, 'rejected')
+  assert.equal(rejected.diagnosis, 'new_failure')
+  assert.match(rejected.summary, /'holds under a tree it has never seen' reported counted 4, expected 5/)
   assert.throws(
     () => loop.promote({ name: 'line-count-stream', checks: failedCheck.checks }),
-    (error) => error instanceof LoopError && error.code === 'validation_failed',
+    (error) => error instanceof LoopError && error.code === 'not_evaluated',
   )
   // And the registry itself refuses too, so promotion cannot be bypassed by calling it directly.
   assert.throws(() => loop.registry.validate('line-count-stream', { checks: failedCheck.checks }), /did not pass/)
@@ -349,6 +360,13 @@ test('a check that throws is a failed check, not a crashed run', () => {
   assert.equal(tested.passed, false)
   assert.match(tested.checks[0].detail, /raised: boom/)
 })
+
+/**
+ * The checks `promote` re-runs. They are built fresh rather than reused because `promote`
+ * compares the names it is handed against the names in the accepted evaluation, and a helper
+ * keeps that literal from drifting at four call sites.
+ */
+const sanityChecks = () => [{ name: 'sanity', run: () => ({ passed: true, detail: 'ok' }) }]
 
 // --- the episode log ---------------------------------------------------------------
 
@@ -412,9 +430,11 @@ test('rolling back to a previous version is a version pin, and an unknown versio
   loopWith.measure({ candidates: [materialise], task })
   const episode = loopWith.runTask(task, { candidates: [materialise], verifyWith: [stream], acceptance: acceptanceFor(smallLines) })
   loopWith.proposeSkill({ episode, name: 'line-count-stream', version: '1.0.0' })
-  loopWith.promote({ name: 'line-count-stream', checks: [{ name: 'sanity', passed: true, detail: 'ok' }] })
+  const firstEval = loopWith.evaluate({ name: 'line-count-stream', version: '1.0.0', checks: sanityChecks() })
+  loopWith.promote({ name: 'line-count-stream', checks: firstEval.results })
   loopWith.proposeSkill({ episode, name: 'line-count-stream', version: '1.1.0' })
-  loopWith.promote({ name: 'line-count-stream', checks: [{ name: 'sanity', passed: true, detail: 'ok' }] })
+  const secondEval = loopWith.evaluate({ name: 'line-count-stream', version: '1.1.0', checks: sanityChecks() })
+  loopWith.promote({ name: 'line-count-stream', checks: secondEval.results })
   assert.equal(loopWith.registry.describe('line-count-stream').version, '1.1.0')
 
   const rolledBack = loopWith.rollback({ name: 'line-count-stream', version: '1.0.0' })

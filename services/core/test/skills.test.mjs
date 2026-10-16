@@ -315,7 +315,12 @@ test('a missing recommended section is a warning, not an error', () => {
   const report = validateSkillDocument(GOOD_SKILL)
   assert.equal(report.valid, true)
   const missing = RECOMMENDED_SECTIONS.filter((section) => !GOOD_SKILL.includes(`## ${section}`))
-  assert.equal(report.warnings.length, missing.length, `warnings: ${JSON.stringify(report.warnings)}`)
+  // The document also declares no permissions, which is a warning of its own: a procedure that
+  // reads a tree and never said so fails when it runs rather than when it is reviewed.
+  const permissionWarnings = report.warnings.filter((w) => w.includes('permissions'))
+  assert.equal(permissionWarnings.length, 1, `warnings: ${JSON.stringify(report.warnings)}`)
+  assert.equal(report.warnings.length, missing.length + 1, `warnings: ${JSON.stringify(report.warnings)}`)
+  assert.match(permissionWarnings[0], /declares no filesystem or network access/)
   for (const section of missing) {
     assert.ok(report.warnings.some((w) => w.includes(section)), `no warning for ${section}`)
   }

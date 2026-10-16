@@ -665,15 +665,15 @@ test('the status doc reports the real test totals', () => {
   // suites: routing/refusals, and the loop that carries the first milestone. If a suite
   // file is added or removed, the counts in docs/03-status.md and README.md have to move
   // with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 39)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 40)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**709 / 709**'), 'core total must be stated')
+  assert.ok(status.includes('**722 / 722**'), 'core total must be stated')
   assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
   assert.ok(status.includes('**92 / 92**'), 'web total must be stated')
-  assert.ok(status.includes('1615 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('1628 passing'), 'the grand total must equal the sum of the suites')
   assert.ok(squash(doc.readme()).includes('1615 tests: core 709, web 92, fabric 814'),
     'README must state the same totals')
   assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
@@ -687,13 +687,13 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(709), `core heading must say 709, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(722), `core heading must say 722, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(92), `web heading must say 92, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1615,
+    1628,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })
