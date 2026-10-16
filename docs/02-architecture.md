@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 21,313 source lines, 16,210 test lines
+### `services/core` — 21,760 source lines, 16,605 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -137,8 +137,8 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `adaptive/executors.mjs` | 199 | Two line counters over a tree — a materialising baseline and a 64 KiB streaming one — used as the milestone's genuinely independent pair |
 | `adaptive/verify.mjs` | 139 | Verification by recomputation against a counterpart implementation, plus a stride-sampled `wc -l` check that is honest about being a sample |
 | `adaptive/episodes.mjs` | 296 | Outcome computed rather than asserted, labelled failure hypotheses, acceptance evaluation, and an append-only JSONL episode log with a digest chain that reports where it broke |
-| `adaptive/wording.mjs` | 290 | Seven interaction states over one verbatim facts block, settings that report when they changed nothing, and a render-time §4 audit that throws instead of emitting |
-| `adaptive/loop.mjs` | 529 | The loop itself: measure, run, verify through a named counterpart, propose a skill from a verified success only, test it, promote it, reuse it, roll back by appending a version |
+| `adaptive/wording.mjs` | 673 | Seven interaction states over one verbatim facts block, settings that report when they changed nothing, and a render-time §4 audit that throws instead of emitting |
+| `adaptive/loop.mjs` | 593 | The loop itself: measure, run, verify through a named counterpart, propose a skill from a verified success only, test it, promote it, reuse it, roll back by appending a version |
 | `adaptive/intent.mjs` | 183 | Capability requirements read from a request with the phrase that produced each; an unmatched request gets a question rather than a default, and emotional signals are read and used for nothing |
 | `adaptive/registry.mjs` | 157 | Which implementations exist for a capability tag and which tags a plan needs that nothing provides; one id with two meanings is refused |
 | `adaptive/plan.mjs` | 171 | Dependency-ordered plans with a digest; a plan longer than its budget or needing an uninstalled capability is refused by name rather than truncated |

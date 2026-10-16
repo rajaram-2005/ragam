@@ -502,10 +502,20 @@ test('every interaction state renders, and none of the system prose trips its ow
     (error) => error.code === 'forbidden_wording',
   )
 
-  // A setting that changes nothing says so, rather than implying an effect it does not have.
-  const quiet = renderOutcome({ facts, state: 'focused', personality: { warmth: 'low' } })
-  assert.deepEqual(quiet.applied, [])
-  assert.ok(quiet.noEffectYet.includes('warmth'), 'warmth is recorded as having no effect on text yet')
+  // A setting a user changes has to do something, or say that it does not. Warmth now adds one
+  // sentence about the *message* -- never about the result -- and the voice surface is the only
+  // setting still recorded without an effect, which the report states rather than hides.
+  const warm = renderOutcome({ facts, state: 'focused', personality: { warmth: 'warm' } })
+  assert.deepEqual(warm.applied, ['warmth'])
+  assert.equal(warm.factsBlock, renderOutcome({ facts, state: 'focused' }).factsBlock,
+    'a warmth setting must not change one character of the facts')
+  assert.deepEqual(warm.noEffectYet, ['voiceExpression'])
+  // 'low' is not a warmth level, and it used to be accepted silently and then ignored, which is
+  // the worst of the three possible behaviours.
+  assert.throws(
+    () => renderOutcome({ facts, state: 'focused', personality: { warmth: 'low' } }),
+    (error) => error.code === 'invalid_personality_value',
+  )
 
   // The state estimator reports uncertainty and never a sensitive attribute.
   const estimate = estimateInteractionState({ messages: ['this is broken and I am frustrated'], task: {} })

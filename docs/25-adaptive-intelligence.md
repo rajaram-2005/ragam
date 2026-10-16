@@ -298,6 +298,42 @@ fabric, so the fabric offers its own deletion rather than a bridge that reports 
 store remains the only memory a prompt can see. The layers are a schema and a set of rules, not a
 retrieval model — there is no ranking over them beyond SQL ordering, and no embedding of any kind.
 
+**Phase 5 — emotional interaction states and controls.** ✅ **Built, 2026-10-16.**
+`src/adaptive/wording.mjs` grows from a renderer into the layer the directive describes, plus a
+consumer in the loop (`AdaptiveLoop.explain`), exercised by `test/emotional-states.test.mjs` (16
+tests). Both acceptance criteria written into this page in Phase 1 are tests:
+`acceptance: two states produce different wording and byte-identical facts` and
+`acceptance: no state emits an unverified result without saying it is unverified`.
+
+What was already here from Phase 2, and what changed. The seven states, the phrase families they
+are estimated from, the shared facts renderer and the forbidden-sentence guard existed and were
+tested. What they did not have was the rest of the directive's constraints, each of which turned
+out to be a rule that could be broken by code:
+
+| Constraint | What it now means in code |
+|---|---|
+| Estimates are uncertain and correctable | Every estimate carries `uncertain: true`, the phrases that produced it, the other families that *also* matched as `alternatives`, and a `disclosure` sentence a surface can show: *"Tone: supportive, guessed from your message (phrase the user typed: …). It changes wording only, not the result."* No confidence number is produced — one phrase is one phrase, and a percentage would be precision this method cannot have |
+| Corrections persist, and can be withdrawn | `ToneCorrectionLog` — a reloadable store the estimator reads. `storePreferences: false` means the correction applies to the reply and is never written down, and the refusal says which of the two happened rather than assuming "noted". `forget()` deletes a correction outright; this file is deliberately *not* append-only, because it holds user data and the append-only record of which tone was used is the audit ledger |
+| Sensitive material is never a signal | `SENSITIVE_SIGNAL_TERMS` (36 terms, deliberately broad). A message containing any of them is not read for tone at all, and the record stores an **offset**, not the phrase — a test asserts the serialised estimate contains neither the term nor the sentence around it. A dull answer is the cheap side of that trade |
+| No fabricated emotional history | `HISTORY_CLAIM_PATTERNS` refuse any sentence about the user over time unless it cites signals read with `klyvaron/affect.mjs` and consented to by the user. The citation check runs at *render* time, on the composed text, so composing outside the renderer does not bypass it — and the citation source is the module that already refuses to read without consent and stamps every signal with its message id |
+| No feelings, consciousness, sadness, jealousy, possessiveness, guilt or dependency | The forbidden list gained simulated sadness (including the conditional "I'd be sad if you left"), simulated worry, claimed subjective experience, possessiveness in the present tense, an attachment claim ("I care about you", "I love working with you"), and a guilt variant. Each carries the reason it exists, because a refusal that explains itself is the difference between a guard and a mystery |
+| Settings a user owns | `assertPersonality` refuses an unknown key and an unknown value instead of merging it away. The bug this fixed is worth naming: `adaptTone: 'off'` was truthy, so a user asking to switch tone adaptation **off** was switched on. Warmth and formality now change the message — one sentence about the *message*, never about the result — and the only setting still recorded without an effect says so (`noEffectYet`) |
+| Safety outranks every setting | A safety-critical task forces `cautious` and humour stays off, whatever the user asked for |
+
+**The bug the tests found in the tests' own expectation, and one in the code.** An episode whose
+outcome is `failed` was rendered under the opener *"Task complete."* — the facts block said
+`Outcome: failed` underneath a heading that contradicted it, and the heading is the line people
+read. Failures now get their own openers and an `outcome_not_disclosed` guard that refuses any
+rendering where the text does not say the run failed. Separately, `alternatives` came back empty
+because the caller's `extra` object was spread *last* and overwrote the computed list, which made
+every estimate look more certain than it was.
+
+**Not claimed.** The layer is not in the product surface: `AdaptiveLoop.explain` is its only
+consumer, and the Chat panel renders its own text. There is no voice output (the setting is
+recorded, listed as having no effect, and unused), no model is involved in any of this — the
+estimate is a phrase lookup with a stated tie-break and a documented refusal to guess — and the
+seven states are a wording setting, not a model of anybody's inner life.
+
 **Phase 4 — versioned skills with evaluation, regression and declared permissions.** ✅ **Built,
 2026-10-16.** `services/core/src/skills/evaluation.mjs` and `skills/permissions.mjs`, with
 `test/skills-evaluation.test.mjs` (13 tests). Both acceptance criteria written into this page in
@@ -362,10 +398,11 @@ record above: `skills/evaluation.mjs` and `skills/permissions.mjs`, `test/skills
 (13 tests). OBSERVE→RECORD→EVALUATE→DIAGNOSE→PROPOSE→TEST→APPROVE→VERSION→REUSE, with rollback, is
 now the loop's actual path rather than its ambition.
 
-**Phase 5 — emotional interaction states and controls.** The seven states, estimated from context,
-treating estimates as uncertain and correctable; personality settings; a switch that disables
-adaptation. Acceptance: the same input under two states produces different wording and identical
-factual content; no state ever emits an unverified claim, a feeling claim, or a dependency appeal.
+**Phase 5 — emotional interaction states and controls.** ✅ **Met, 2026-10-16.** See the Phase 5
+record above: `wording.mjs` (673 lines) with `test/emotional-states.test.mjs` (16 tests), and
+`AdaptiveLoop.explain` as the consumer. The seven states, estimates reported as estimates with
+their alternatives, a correction store the user can withdraw, settings that are refused rather
+than interpreted, and one switch that stops the reading as well as the effect.
 
 **Phase 6 — providers.** Capability registry and adapters. Acceptance: routing refuses a request the
 available capabilities cannot serve rather than degrading silently; offline mode makes no network call

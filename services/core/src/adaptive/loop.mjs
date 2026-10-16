@@ -21,6 +21,7 @@
 import { SKILL_STATES } from '../skills/registry.mjs'
 import { proposeFromExperience } from '../skills/lifecycle.mjs'
 import { EvaluationLog, VERDICTS, evaluateCandidate } from '../skills/evaluation.mjs'
+import { estimateInteractionState, renderOutcome } from './wording.mjs'
 import { describePermissions, effectivePermissions } from '../skills/permissions.mjs'
 import { validateCapability } from './capability.mjs'
 import {
@@ -478,6 +479,69 @@ export class AdaptiveLoop {
       implementation: implementation ?? `skill.${name}`,
       description: entry.description ?? `stored procedure '${name}'`,
       invoke,
+    })
+  }
+
+  /**
+   * EXPLAIN: say what a run did, in a tone the user chose, without changing what it says.
+   *
+   * This is the one place the adaptive core produces prose for a person, and it is built so
+   * that the prose cannot carry information the record does not: the facts block is rendered
+   * from the episode by a single function that every tone shares, and the tone itself comes
+   * from an estimate that is reported as an estimate, can be corrected, and is switched off
+   * entirely by a setting.
+   */
+  explain({ episode, messages = [], state = null, feedback = null, personality = null, corrections = null, citations = [], consent = null } = {}) {
+    if (!episode || typeof episode !== 'object') {
+      throw new LoopError('explain needs an episode to explain', 'no_episode')
+    }
+    const chosen = episode.route?.chosen ?? null
+    const result = episode.execution?.result ?? null
+    const succeeded = episode.outcome === OUTCOMES.SUCCESS
+    const facts = {
+      task: episode.task?.id ?? episode.task?.root ?? 'the task',
+      outcome: episode.outcome,
+      ...(result && typeof result.lines === 'number' ? { lines: result.lines, files: result.files } : {}),
+      ...(chosen ? { executor: chosen.id, ...(chosen.measuredMedianMs !== undefined ? { medianMs: chosen.measuredMedianMs } : {}) } : {}),
+      ...(chosen?.measuredRuns !== undefined ? { samples: chosen.measuredRuns } : {}),
+      verified: episode.verification?.agree === true,
+      verification: episode.verification?.methods?.length
+        ? `agreed with ${episode.verification.methods.join(', ')}`
+        : "no independent check agreed, so the result is not verified",
+      ...(succeeded ? {} : { correction: episode.because ?? episode.failureKind ?? 'the run did not succeed' }),
+      ...(episode.verification?.methods?.length ? { methods: episode.verification.methods } : {}),
+    }
+    const estimate = state
+      ? Object.freeze({
+        state,
+        because: 'chosen by the caller',
+        basis: Object.freeze(['caller-supplied state']),
+        uncertain: true,
+        // A caller-chosen tone is announced as chosen rather than presented as a guess about
+        // the person, and it is frozen with the rest: building it and then assigning the field
+        // threw, because the object was already immutable.
+        disclosure: Object.freeze({ text: `Tone: ${state}, chosen by the caller.`, basis: 'caller', changeable: true }),
+        alternatives: Object.freeze(['focused']),
+        personality: Object.freeze({}),
+      })
+      : estimateInteractionState({
+        messages,
+        feedback,
+        personality,
+        corrections,
+        task: { reviewOfFailure: !succeeded, safetyCritical: episode.task?.safetyCritical === true, kind: episode.task?.id ?? '' },
+      })
+    const rendered = renderOutcome({ facts, state: estimate.state, personality: estimate.personality ?? personality ?? {}, citations, consent })
+    return Object.freeze({
+      text: rendered.text,
+      facts: rendered.facts,
+      factsBlock: rendered.factsBlock,
+      state: estimate.state,
+      estimate,
+      disclosure: estimate.disclosure,
+      applied: rendered.applied,
+      noEffectYet: rendered.noEffectYet,
+      audit: rendered.audit,
     })
   }
 

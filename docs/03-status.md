@@ -11,11 +11,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1628 passing, 0 failing.**
+**Test totals: 1644 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **722 / 722** (40 files, ~60 s) |
+| `services/core` | `node --test test/*.test.mjs` | **738 / 738** (41 files, ~62 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **92 / 92** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 200.08 kB → **61.78 kB gzip**, single chunk, no warnings |
@@ -227,7 +227,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (722 tests)
+### `services/core` — Implemented and tested (738 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -249,6 +249,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | HTTP layer | **Implemented and tested** | 31 literal routes + segment routes; accurate error statuses |
 | Adaptive core: intent, planning, capability registry, budgets, timeouts, checkpoints, resumable tasks | **Implemented and tested** | `intent.mjs` (requirements with the phrase that produced each; unmatched requests get a question), `registry.mjs`, `plan.mjs` (refuses an over-long plan or an uninstalled capability by name), `budget.mjs` (refuses to start work its measurement cannot cover; unreported token counts stay unreported), `checkpoint.mjs` (atomic, digest-chained, refuses a resume against a different plan) and `runner.mjs` (step-by-step with a checkpoint after each, resumable in a fresh object from the checkpoint alone). Exercised by tests; no route calls it yet. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Adaptive routing, verification, experience & skills | **Implemented and tested, one capability end to end** | The Phase 2 loop: route on measured cost, verify against a second `implementation`, record to an append-only digest-chained episode log, propose a skill only from a verified success, promote only when every recorded check passed, reuse and re-measure. Demonstrated on counting newline bytes across a tree, with the measured crossover recorded as a limitation on the skill itself. See [docs/25](25-adaptive-intelligence.md) §4 |
+| Emotional interaction states and controls | **Implemented and tested; not yet reachable from the product** | Seven states estimated from the user's own phrases, never from a model of them; every estimate reports itself as an estimate with the phrases that produced it and the other families that also matched, and can be corrected, remembered only if the user allows it, and withdrawn. Sensitive material is never read as a signal (the record keeps an offset, not the phrase), a claim about the user over time needs cited signals read with consent, and the forbidden-sentence guard refuses claimed feelings, consciousness, simulated sadness, worry, jealousy, possessiveness, guilt, dependency and invented history. Settings are validated rather than interpreted, and one switch stops the reading as well as the effect. `AdaptiveLoop.explain` renders a run with those rules; nothing in Chat uses it yet. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Skill evaluation, regression and permissions | **Implemented and tested; not yet reachable from the product** | `skills/evaluation.mjs` + `skills/permissions.mjs`. A candidate must run and pass every check that passed for the incumbent version; a suite that lost a check is rejected as `regression_not_run` rather than passing with fewer. Verdicts go to an append-only digest-chained log, a rejected version stays in the registry, and `promote()` refuses a version with no accepted evaluation or a different check list. A skill's permission block is the scope it runs with: a declaration wider than the runtime grant is refused rather than narrowed, a larger grant is never used, and an agent-written skill may not ask for `/`, the home directory or the network. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Persistent memory fabric | **Implemented and tested; not yet reachable from the product** | Seven layers (working, episodic, semantic, preference, project, skill, failure) with `assertion` and `verification` held as **separate records** on every entry, so *the user said so* and *an independent check confirmed it* cannot be read as the same thing: a claim's confidence has no number at all. Required provenance rows, versions on correction, contradictions kept and listed, scope and readers enforced on read with each exclusion naming its reason, deletion that takes the provenance with it and leaves a content-free tombstone, and the skill/episodic/failure layers **referencing** the registry and the episode log instead of copying them. The bridge with the existing product memory goes one way each way: an approved memory enters as a claim (approval is permission, not verification) and a fabric entry leaves as a candidate a person must approve. Tested by `memory-fabric.test.mjs` (18) and `memory-bridge.test.mjs` (7). No HTTP route or panel reads it yet, and it is not a retrieval model — there is no ranking beyond SQL ordering and no embedding of any kind. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
