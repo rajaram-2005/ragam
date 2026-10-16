@@ -67,6 +67,7 @@ const doc = {
   differentiation: () => read('docs/22-klyvaron-differentiation.md'),
   trainingFree: () => read('docs/23-training-free-tiers.md'),
   ownModels: () => read('docs/24-own-models.md'),
+  adaptive: () => read('docs/25-adaptive-intelligence.md'),
   matrix: () => read('docs/12-feature-matrix.md'),
   distillation: () => read('docs/09-distillation.md'),
   distillVerdict: () => read('docs/experiments/distillation-logit-vs-baseline.json'),
@@ -653,11 +654,11 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**616 / 616**'), 'core total must be stated')
+  assert.ok(status.includes('**617 / 617**'), 'core total must be stated')
   assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
   assert.ok(status.includes('**92 / 92**'), 'web total must be stated')
-  assert.ok(status.includes('1522 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1522 tests: core 616, web 92, fabric 814'),
+  assert.ok(status.includes('1523 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1523 tests: core 617, web 92, fabric 814'),
     'README must state the same totals')
   assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
 
@@ -670,13 +671,13 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(616), `core heading must say 616, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(617), `core heading must say 617, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(92), `web heading must say 92, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1522,
+    1523,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })
@@ -1975,6 +1976,41 @@ test('docs/24 states what the own models of this family are, and quotes the prot
   for (const marker of COMPETITOR_MARKERS) {
     assert.ok(!text.toLowerCase().replaceAll('llama.cpp', 'the runtime').includes(marker), `docs/24 names ${marker}`)
   }
+})
+
+test('the direction change is recorded, and the Sparsiz audit keeps its findings', () => {
+  const text = squash(doc.adaptive())
+
+  // The withdrawn requirement, and the one that is NOT reinstated by withdrawing it. A page that
+  // dropped either half would leave the family's rule ambiguous, which is how a refused path gets
+  // quietly re-used.
+  assert.ok(text.includes('withdrawn for the product tiers'),
+    'docs/25 must state which requirement was withdrawn')
+  assert.ok(text.includes('capability profiles over one shared adaptive core'))
+  assert.ok(text.includes('not') && text.includes('the composed path that `23` records as refused'),
+    'docs/25 must say the change does not reinstate the composed path')
+  assert.ok(squash(doc.ownModels()).includes('25-adaptive-intelligence.md'),
+    'docs/24, which the change affects, must point at docs/25')
+
+  // The phase-1 inspection: pinned commit, and the four findings that decided what may be inherited.
+  // These are the load-bearing sentences -- a later edit that deletes one while keeping the reuse
+  // decision would be inheriting a module on the strength of its name, which is what the audit exists
+  // to prevent.
+  assert.ok(text.includes('76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69'), 'the exact commit must be named')
+  assert.ok(text.includes('passed = random.random() > 0.2'), 'the coin-flip validation must be quoted')
+  assert.ok(text.includes('# Baselines simulated'), 'the invented baselines must be quoted')
+  assert.ok(text.includes('# Mock scoring'), 'the random quality score must be quoted')
+  assert.ok(text.includes('assert non-emptiness, not correctness'), 'the test weakness must be stated')
+  assert.ok(text.includes('Unlicense'), 'the licence that makes reuse possible must be recorded')
+
+  // And the boundary: no consciousness claim, and no claim that a phase is done.
+  assert.ok(/does not claim that any adaptive capability works/i.test(text),
+    'the page must state what it does not claim')
+  assert.ok(text.includes('consciousness, sentience or human-equivalent'))
+
+  // The durability lesson is a fact about this project, not a mood: state it with the evidence.
+  assert.ok(text.includes('Only what is committed to Git survives'))
+  assert.ok(text.includes('parked, not abandoned'), 'the training run must be recorded, not dropped')
 })
 
 test('no third-party base ever wears a tier label, and no tier claims an artifact it does not have', () => {

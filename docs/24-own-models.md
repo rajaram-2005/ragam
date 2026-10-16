@@ -1,5 +1,17 @@
 # 24 — Pro and Max are our own models: `aetheris-core-v1`
 
+> **Direction changed, 2026-10-16.** The requirement that **each tier be backed by a model trained by
+> this repository is withdrawn for the product tiers.** Lite, Pro and Max are now capability profiles
+> over one shared adaptive core, chosen from the hardware, models, tools, permissions and services
+> that are actually available — see [25 — Adaptive Intelligence](./25-adaptive-intelligence.md),
+> which is the authority on the new direction. Everything **on this page** stays true as a record: the
+> architecture, the four presets, the parameter and memory arithmetic, the seven-step recipe, and the
+> fact that `klyvaron-pro-lm` and `klyvaron-max-lm` have no weights and that no accelerated trainer
+> backend exists here. What changed is that their absence no longer blocks the product. Nor does the
+> change reinstate the composed path that `23` records as refused: routing a tier to an authorised
+> provider is not the same as presenting that provider's weights as this family's own, and no card may
+> claim the latter.
+
 **Status, stated first.** The architecture exists as data and as code. **The weights do not exist.**
 Pro and Max are `unbuilt`, `klyvaron-pro-lm` and `klyvaron-max-lm` have no artifact, and the family
 plan keeps `artifact`, `measurements` and `own_weights` open until a real training run produces a
