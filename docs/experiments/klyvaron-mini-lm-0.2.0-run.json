@@ -1,0 +1,52 @@
+{
+  "format": "klyvaron-run-record/v1",
+  "run": "klyvaron-mini-lm",
+  "modelId": "klyvaron-mini-lm@0.2.0",
+  "status": "running",
+  "why": "The third artifact of the aetheris-core-v1 architecture and the first one that is a real language model rather than a demonstration: a 4.26M-parameter byte-BPE model trained for one pass over a 167.94 MB licence-checked corpus of public source code and documentation, on the same two-core CPU that trained the first two. It exists because the 0.1.0 artifact was character-level with a 352-token alphabet, which spends most of a small model's capacity on spelling and buys 128 characters of context for a 128-token context window.",
+  "startedAt": "2026-10-16T02:56:25Z",
+  "command": "LR=2e-3 bash /home/user/klyvaron-releases/run-0.2.0.sh",
+  "design": {
+    "shape": "d_model 256, 4 layers, 8 heads, d_ff 1024, context 256 subword tokens, tied embeddings",
+    "parameters": 4264448,
+    "tokenizer": "byte-level BPE, 256 base bytes + 3840 learned merges, fitted on the training split only",
+    "corpus": "artifacts/corpus-large: 17 licence-checked sources, 167.94 MB, record docs/experiments/corpus-sources-large.json",
+    "heldOutSources": [
+      "sveltejs__svelte",
+      "vuejs__core",
+      "pallets__click",
+      "psf__requests"
+    ],
+    "tokens": "13,900 steps x 4,096 = 56,934,400, one pass over the training split",
+    "learningRate": 0.002
+  },
+  "measurementsThatChoseIt": {
+    "stepRate": "4.467 s/step at this shape (12 timed steps after 3 discarded). Candidate table in klyvaron-mini-lm-0.2.0/measurements.json",
+    "learningRateProbe": "300 steps at each of 1e-3 and 2e-3 on the real token stream: 2e-3 ended at 4.1087 against 1e-3's 4.2708 and led at every checkpoint, with grad norms falling (0.788 at step 299). 3e-3 was entered and not finished: it is not measured and nothing is claimed about it.",
+    "evaluationCost": "2,481 tokens/s on a held-out window, so the 5,926,828-token evaluation pass costs about 40 minutes. In measurements.json beside the run",
+    "wallEstimate": "17.8 h of steps + ~40 min evaluation + ~2 min pipeline"
+  },
+  "durability": {
+    "outputDir": "/home/user/klyvaron-releases/klyvaron-mini-lm-0.2.0",
+    "whyOutsideArtifacts": "The 0.1.0 artifact was written under artifacts/, which is gitignored, and did not survive the workspace snapshot: the release exists in documentation and nowhere else. This run's output and log live outside both the repository and artifacts/ for that reason.",
+    "weightsInGit": false,
+    "weightsPolicy": "The repository's own .gitignore states the policy: weights are never redistributed through this repository and are referenced by hash. Nothing here changes that; the record names a digest, not a file.",
+    "checkpoints": "Every 500 steps (about 38 minutes) the full training state -- weights, Adam moments, loss curve, step -- is written to <run>-<configDigest12>.ckpt.npz, atomically. An interrupted run resumes from the last one with train_lm.py --resume-from. tests/test_lm_train.py kills a real training process and asserts the resumed run is bit-identical to the uninterrupted one, including the loss curve and the weight digest. The checkpoint is deleted when the artifact lands."
+  },
+  "outcome": null,
+  "observed": {
+    "firstCheckpointAt": "2026-10-16T03:40Z",
+    "checkpointIntervalSteps": 500,
+    "observedSecondsPerStep": 4.8,
+    "note": "500 steps in about 2,400 s including the first checkpoint write. Slower than the 4.467 s/step measured on an otherwise idle host, so the run's own estimate is 18.5 h of steps, not 17.8, and the projection is updated rather than kept because the earlier number was flattering.",
+    "projectedFinish": "about 2026-10-16T22:00Z plus a ~40 minute evaluation pass"
+  },
+  "nextSteps": [
+    "When the run exits 0: read the report in /home/user/klyvaron-releases/klyvaron-mini-lm-0.2.0/ and run it through the release gate: python3 services/fabric/scripts/lm_release.py --report <report> --version 0.2.0 --name klyvaron-mini-lm --family klyvaron-mini --out docs/model-cards/klyvaron-mini-lm-0.2.0.json",
+    "Write the Markdown card beside it, and set outcome + status in this record. The gate is expected to pass with 0 hard failures and 1 soft failure (wallSeconds over the 3,600 s target, which is not relaxed).",
+    "Update SIZE_PRESETS.mini in services/core/src/klyvaron/architecture.mjs to this artifact's config and artifact name, and keep 0.1.0 as a superseded record the way tiers.mjs keeps aetheris-lite-lm@0.1.0.",
+    "Update services/core/test/architecture.test.mjs: point the mini fixtures at the 0.2.0 card and record, recompute the two literals (parameterCount, configDigest) with the module's own functions rather than by hand, and assert the superseded record is still present.",
+    "Propagate any test/line-count changes to docs/02, docs/03, docs/04, docs/05 and README together (the count literals in services/core/test/docs.test.mjs will fail otherwise), then run core + fabric green.",
+    "State plainly in docs/24 that 0.1.0 and 0.2.0 perplexities are not comparable, and why (character tokens against subword tokens)."
+  ]
+}

@@ -102,6 +102,26 @@ class TransformerConfig:
     init_scale: float = 0.02
     layernorm_eps: float = 1e-5
 
+    # The two differentiators, as parts of the model rather than as wrappers around it.
+    #
+    # `age_buckets` gives every token a learned slot for how old the evidence behind it is, and
+    # `state_classes` gives every sequence a learned slot for the state the user expressed in it.
+    # Both are conditioning tables added to the input hidden state, and both are trained by the
+    # same backward pass as everything else.
+    #
+    # The two heads read the final LayerNorm output at the last position: `verdict` decides
+    # whether the answer is grounded in a source that is still current, or abstains; `state`
+    # predicts the user's expressed state, with a class reserved for "nothing was expressed".
+    # They are trained *with* the language objective, in one loss, which is the difference between
+    # "the model grounds its answers" and "a script checks the model afterwards".
+    #
+    # Zero and False by default, so every artifact trained before these parts existed -- including
+    # the released Lite model -- still has exactly the parameters it recorded.
+    age_buckets: int = 0
+    state_classes: int = 0
+    verdict_head: bool = False
+    state_head: bool = False
+
     def __post_init__(self) -> None:
         if self.vocab_size < 2:
             raise ValueError(f"vocab_size must be at least 2, got {self.vocab_size}")
@@ -116,10 +136,32 @@ class TransformerConfig:
         for name in ("d_model", "n_layers", "n_heads", "d_ff", "seq_len"):
             if getattr(self, name) <= 0:
                 raise ValueError(f"{name} must be positive, got {getattr(self, name)}")
+        for name in ("age_buckets", "state_classes"):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} must not be negative, got {getattr(self, name)}")
+        if self.state_head and not self.state_classes:
+            raise ValueError(
+                "state_head needs state_classes > 0: a head with no classes has nothing to predict"
+            )
 
     @property
     def head_dim(self) -> int:
         return self.d_model // self.n_heads
+
+    @property
+    def differentiator_parameters(self) -> int:
+        """Parameters the two differentiators add, or 0 for a config without them."""
+        d = self.d_model
+        total = 0
+        if self.age_buckets:
+            total += self.age_buckets * d          # how old the evidence is, per token
+        if self.state_classes:
+            total += self.state_classes * d        # what the user expressed, per sequence
+        if self.verdict_head:
+            total += 2 * d + 2                     # grounded or abstain
+        if self.state_head:
+            total += self.state_classes * d + self.state_classes
+        return total
 
     def parameter_count(self) -> int:
         d, ff, v, L = self.d_model, self.d_ff, self.vocab_size, self.n_layers
@@ -128,7 +170,7 @@ class TransformerConfig:
         pos = self.seq_len * d
         final_ln = 2 * d
         head = 0 if self.tie_embeddings else v * d
-        return emb + pos + L * per_layer + final_ln + head
+        return emb + pos + L * per_layer + final_ln + head + self.differentiator_parameters
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -193,6 +235,19 @@ class TransformerLM:
         p["lnf_bias"] = np.zeros(d, self.dtype)
         if not c.tie_embeddings:
             p["head"] = self._normal((v, d))
+        # The differentiator parts. They are created only when the config asks for them, so a
+        # config without them produces a parameter dictionary with exactly the same keys as the
+        # one the released Lite artifact recorded.
+        if c.age_buckets:
+            p["age_emb"] = self._normal((c.age_buckets, d))
+        if c.state_classes:
+            p["state_emb"] = self._normal((c.state_classes, d))
+        if c.verdict_head:
+            p["verdict_w"] = self._normal((d, 2), res)
+            p["verdict_b"] = np.zeros(2, self.dtype)
+        if c.state_head:
+            p["state_head_w"] = self._normal((d, c.state_classes), res)
+            p["state_head_b"] = np.zeros(c.state_classes, self.dtype)
 
     def zero_grads(self) -> dict[str, np.ndarray]:
         return {name: np.zeros_like(array) for name, array in self.params.items()}
@@ -203,15 +258,44 @@ class TransformerLM:
 
     # -- forward -----------------------------------------------------------
 
-    def forward(self, inputs: np.ndarray, *, cache: bool = False):
-        """Returns either logits or (logits, cache) for the backward pass."""
+    def forward(self, inputs: np.ndarray, *, cache: bool = False, ages=None, states=None):
+        """Returns either logits or (logits, cache) for the backward pass.
+
+        `ages` (B, T) and `states` (B,) are the differentiator inputs, and they are required
+        exactly when the config has the parts that consume them: a model with `age_buckets` that
+        was handed no ages would otherwise silently train as if every source were equally fresh.
+        """
         c = self.config
         B, T = inputs.shape
         if T > c.seq_len:
             raise ValueError(f"sequence length {T} exceeds the configured {c.seq_len}")
 
+        if c.age_buckets:
+            if ages is None:
+                raise ValueError(f"this model has age_buckets={c.age_buckets}, so forward needs `ages`")
+            ages = np.asarray(ages, dtype=np.int64)
+            if ages.shape != inputs.shape:
+                raise ValueError(f"ages must have the same shape as inputs, got {ages.shape} and {inputs.shape}")
+            if ages.size and (ages.min() < 0 or ages.max() >= c.age_buckets):
+                raise ValueError(f"ages must be bucket ids in [0, {c.age_buckets})")
+        if c.state_classes:
+            if states is None:
+                raise ValueError(f"this model has state_classes={c.state_classes}, so forward needs `states`")
+            states = np.asarray(states, dtype=np.int64)
+            if states.shape != (B,):
+                raise ValueError(f"states must have shape ({B},), got {states.shape}")
+            if states.size and (states.min() < 0 or states.max() >= c.state_classes):
+                raise ValueError(f"states must be class ids in [0, {c.state_classes})")
+
         emb = self.params["emb"]
         h = emb[inputs] + self.params["pos"][:T]
+        # How old the evidence behind each token is, and what the user expressed in the turn.
+        # Added to the input hidden state, so every layer sees them; the backward pass for both is
+        # a scatter-add over the rows that were selected.
+        if c.age_buckets:
+            h = h + self.params["age_emb"][ages]
+        if c.state_classes:
+            h = h + self.params["state_emb"][states][:, None, :]
         saved = []
         mask = np.triu(np.full((T, T), -1e9, dtype=self.dtype), 1)
 
@@ -251,14 +335,61 @@ class TransformerLM:
         logits = hf @ head.T
         if not cache:
             return logits
-        return logits, {"layers": saved, "hf": hf, "lnf": lnf_cache, "inputs": inputs, "T": T, "B": B}
+        return logits, {
+            "layers": saved, "hf": hf, "lnf": lnf_cache, "inputs": inputs, "T": T, "B": B,
+            "ages": ages, "states": states,
+        }
+
+    def task_logits(self, hf: np.ndarray) -> dict:
+        """The differentiator heads' logits, read from the final LayerNorm output.
+
+        The last position is the one that has seen the whole sequence, and it is the position the
+        heads are trained on. An empty dictionary means the config has no heads.
+        """
+        out = {}
+        last = hf[:, -1, :]
+        if "verdict_w" in self.params:
+            out["verdict"] = last @ self.params["verdict_w"] + self.params["verdict_b"]
+        if "state_head_w" in self.params:
+            out["state"] = last @ self.params["state_head_w"] + self.params["state_head_b"]
+        return out
 
     # -- loss --------------------------------------------------------------
 
-    def loss(self, inputs: np.ndarray, targets: np.ndarray) -> float:
-        """Mean cross-entropy in nats per token."""
-        logits = self.forward(inputs)
-        return float(self._cross_entropy(logits, targets)[0])
+    def loss(self, inputs: np.ndarray, targets: np.ndarray, *, ages=None, states=None,
+             verdict_targets=None, verdict_weight: float = 1.0,
+             state_targets=None, state_weight: float = 1.0) -> float:
+        """Mean cross-entropy in nats per token, plus the differentiator heads when targeted.
+
+        The heads are part of the same number on purpose: a model whose language loss ignores them
+        would be a language model with two attachments, not a model that grounds and abstains.
+        """
+        if verdict_targets is None and state_targets is None:
+            logits = self.forward(inputs, ages=ages, states=states)
+            return float(self._cross_entropy(logits, targets)[0])
+        logits, cache = self.forward(inputs, cache=True, ages=ages, states=states)
+        total = float(self._cross_entropy(logits, targets)[0])
+        heads = self.task_logits(cache["hf"])
+        if "verdict" in heads and verdict_targets is not None:
+            total += verdict_weight * self._row_cross_entropy(heads["verdict"], verdict_targets)[0]
+        if "state" in heads and state_targets is not None:
+            total += state_weight * self._row_cross_entropy(heads["state"], state_targets)[0]
+        return float(total)
+
+    @staticmethod
+    def _row_cross_entropy(logits: np.ndarray, targets: np.ndarray):
+        """Cross-entropy over whole rows (one label per sequence). Returns (loss, dlogits)."""
+        rows = np.arange(logits.shape[0])
+        labels = np.asarray(targets, dtype=np.int64).reshape(-1)
+        shifted = logits - logits.max(axis=-1, keepdims=True)
+        e = np.exp(shifted)
+        probs = e / e.sum(axis=-1, keepdims=True)
+        chosen = probs[rows, labels]
+        loss = float(-np.log(np.maximum(chosen, 1e-12)).mean())
+        grad = probs
+        grad[rows, labels] -= 1.0
+        grad /= logits.shape[0]
+        return loss, grad
 
     @staticmethod
     def _cross_entropy(logits: np.ndarray, targets: np.ndarray):
@@ -277,13 +408,41 @@ class TransformerLM:
 
     # -- backward ----------------------------------------------------------
 
-    def loss_and_grads(self, inputs: np.ndarray, targets: np.ndarray):
-        """Returns (loss_in_nats, grads) for next-token prediction."""
-        logits, cache = self.forward(inputs, cache=True)
-        loss, dlogits = self._cross_entropy(logits, targets)
-        return loss, self.backward_from_dlogits(dlogits, cache)
+    def loss_and_grads(self, inputs: np.ndarray, targets: np.ndarray, *, ages=None, states=None,
+                       verdict_targets=None, verdict_weight: float = 1.0,
+                       state_targets=None, state_weight: float = 1.0):
+        """Returns (loss_in_nats, grads) for next-token prediction plus the targeted heads.
 
-    def backward_from_dlogits(self, dlogits: np.ndarray, cache: dict):
+        The head losses enter the same gradient as the language loss: their weight matrices get
+        their own gradient, and the gradient they send back into the final hidden state is added
+        at the last position, where it flows through every layer that produced it.
+        """
+        logits, cache = self.forward(inputs, cache=True, ages=ages, states=states)
+        loss, dlogits = self._cross_entropy(logits, targets)
+        head_gradient = np.zeros((cache["B"], self.config.d_model), dtype=self.dtype)
+        head_grads = {}
+        heads = self.task_logits(cache["hf"])
+        last = cache["hf"][:, -1, :]
+        if "verdict" in heads and verdict_targets is not None:
+            head_loss, dlogit = self._row_cross_entropy(heads["verdict"], verdict_targets)
+            loss += verdict_weight * head_loss
+            dlogit = dlogit * verdict_weight
+            head_grads["verdict_w"] = last.T @ dlogit
+            head_grads["verdict_b"] = dlogit.sum(axis=0)
+            head_gradient += dlogit @ self.params["verdict_w"].T
+        if "state" in heads and state_targets is not None:
+            head_loss, dlogit = self._row_cross_entropy(heads["state"], state_targets)
+            loss += state_weight * head_loss
+            dlogit = dlogit * state_weight
+            head_grads["state_head_w"] = last.T @ dlogit
+            head_grads["state_head_b"] = dlogit.sum(axis=0)
+            head_gradient += dlogit @ self.params["state_head_w"].T
+        grads = self.backward_from_dlogits(dlogits, cache, head_gradient=head_gradient)
+        for name, value in head_grads.items():
+            grads[name] += value
+        return float(loss), grads
+
+    def backward_from_dlogits(self, dlogits: np.ndarray, cache: dict, *, head_gradient=None):
         """Backpropagate an arbitrary gradient on the logits.
 
         Split out so knowledge distillation can supply its own gradient -- the
@@ -300,6 +459,9 @@ class TransformerLM:
         hf = cache["hf"]
         d_hf = dlogits @ head
         grads["head" if not c.tie_embeddings else "emb"] += dlogits.reshape(-1, c.vocab_size).T @ hf.reshape(-1, c.d_model)
+        if head_gradient is not None:
+            # The heads read the last position, so that is where their gradient enters.
+            d_hf[:, -1, :] = d_hf[:, -1, :] + head_gradient
 
         d_hidden, dlnf_gain, dlnf_bias = layernorm_backward(d_hf, cache["lnf"], self.params["lnf_gain"])
         grads["lnf_gain"] += dlnf_gain
@@ -367,6 +529,20 @@ class TransformerLM:
         pos_onehot = np.zeros((T, B * T), dtype=self.dtype)
         pos_onehot[columns % T, columns] = 1.0
         grads["pos"][:T] += pos_onehot @ d_flat
+
+        # The differentiator inputs, each accumulated into the row it selected. `d_flat` is
+        # row-major over (B, T), which is the order `ages.reshape(-1)` is in; the state row was
+        # added to every position of its sequence, so its gradient is the sum over those positions.
+        ages, states = cache.get("ages"), cache.get("states")
+        if ages is not None and "age_emb" in grads:
+            flat_ages = ages.reshape(-1).astype(np.int64)
+            age_onehot = np.zeros((flat_ages.size, c.age_buckets), dtype=self.dtype)
+            age_onehot[np.arange(flat_ages.size), flat_ages] = 1.0
+            grads["age_emb"] += age_onehot.T @ d_flat
+        if states is not None and "state_emb" in grads:
+            state_onehot = np.zeros((B, c.state_classes), dtype=self.dtype)
+            state_onehot[np.arange(B), states.astype(np.int64)] = 1.0
+            grads["state_emb"] += state_onehot.T @ d_hidden.sum(axis=1)
 
         return grads
 

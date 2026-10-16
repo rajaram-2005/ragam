@@ -1,0 +1,170 @@
+{
+  "budget": {
+    "batchSize": 32,
+    "headWeight": 1.0,
+    "learningRate": 0.003,
+    "seed": 0,
+    "steps": 900
+  },
+  "configDigest": "a5a88470e13ce58dad76e358a9c94a5d2c9970dcf9c1ca052fead87ee22a106f",
+  "corpus": {
+    "digest": "23e99c880aeeed7b62532e78daffa86df66a9458e244f826a568fb5e98b10709",
+    "generator": "closed clause list; closed marker lexicon; uniform age buckets",
+    "kind": "generated",
+    "samples": 1536
+  },
+  "differentiatorParameters": 902,
+  "experiment": "differentiator-parts-prototype",
+  "format": "klyvaron-differentiator-prototype/v1",
+  "hardware": {
+    "accelerator": "none (CPU only)",
+    "machine": "x86_64",
+    "platform": "Linux-6.1.158+-x86_64-with-glibc2.36"
+  },
+  "isArtifact": false,
+  "limitations": [
+    "Generated phrase list, not real sources or real messages: the age buckets are drawn from a distribution rather than observed, so nothing here measures whether a model knows what is current.",
+    "The state markers come from a closed list of three phrases per class; the head is measured on held-out text from the same generator, which is easier than real text and is not comparable to it.",
+    "The carried-in state is a conditioning hint, not the label: the state head has to read the text to score, which is why its accuracy is a reading measurement rather than a lookup.",
+    "This is not a Pro or Max artifact: no weights are saved, nothing can be served, and no tier label may be attached to it.",
+    "There is no comparison against any other model, because the repository has no second model of its own to compare against and this family does not compete with other vendors."
+  ],
+  "loss": {
+    "first": 5.356625,
+    "last": 0.601003,
+    "trajectory": [
+      {
+        "loss": 5.356625,
+        "step": 1
+      },
+      {
+        "loss": 2.454078,
+        "step": 91
+      },
+      {
+        "loss": 1.945159,
+        "step": 181
+      },
+      {
+        "loss": 1.239433,
+        "step": 271
+      },
+      {
+        "loss": 1.039463,
+        "step": 361
+      },
+      {
+        "loss": 0.910128,
+        "step": 451
+      },
+      {
+        "loss": 0.830781,
+        "step": 541
+      },
+      {
+        "loss": 0.744459,
+        "step": 631
+      },
+      {
+        "loss": 0.505935,
+        "step": 721
+      },
+      {
+        "loss": 0.62687,
+        "step": 811
+      },
+      {
+        "loss": 0.601003,
+        "step": 900
+      }
+    ]
+  },
+  "metrics": {
+    "heldOut": {
+      "loss": 1.041076,
+      "samples": 512,
+      "state": {
+        "accuracy": 0.6934,
+        "majorityClassBaseline": 0.2891,
+        "predictedNoneRate": 0.2715,
+        "recallPerClass": {
+          "anxious": 0.6491,
+          "calm": 0.6161,
+          "frustrated": 0.6554,
+          "none": 0.8333
+        }
+      },
+      "verdict": {
+        "abstainRate": 0.4863,
+        "abstainRecall": 1.0,
+        "accuracy": 1.0,
+        "groundedRecall": 1.0,
+        "majorityClassBaseline": 0.5137
+      }
+    },
+    "noMarkerText": {
+      "loss": 0.798763,
+      "samples": 138,
+      "state": {
+        "accuracy": 0.8333,
+        "majorityClassBaseline": 1.0,
+        "predictedNoneRate": 0.8333,
+        "recallPerClass": {
+          "anxious": null,
+          "calm": null,
+          "frustrated": null,
+          "none": 0.8333
+        }
+      },
+      "verdict": {
+        "abstainRate": 0.4783,
+        "abstainRecall": 1.0,
+        "accuracy": 1.0,
+        "groundedRecall": 1.0,
+        "majorityClassBaseline": 0.5217
+      }
+    },
+    "staleOnlySources": {
+      "loss": 0.932612,
+      "samples": 512,
+      "state": {
+        "accuracy": 0.7422,
+        "majorityClassBaseline": 0.2559,
+        "predictedNoneRate": 0.2617,
+        "recallPerClass": {
+          "anxious": 0.6349,
+          "calm": 0.7031,
+          "frustrated": 0.7638,
+          "none": 0.8626
+        }
+      },
+      "verdict": {
+        "abstainRate": 1.0,
+        "abstainRecall": 1.0,
+        "accuracy": 1.0,
+        "groundedRecall": null,
+        "majorityClassBaseline": 1.0
+      }
+    }
+  },
+  "modelConfig": {
+    "age_buckets": 4,
+    "d_ff": 128,
+    "d_model": 64,
+    "dropout": 0.0,
+    "init_scale": 0.02,
+    "layernorm_eps": 1e-05,
+    "n_heads": 4,
+    "n_layers": 2,
+    "seq_len": 64,
+    "state_classes": 4,
+    "state_head": true,
+    "tie_embeddings": true,
+    "verdict_head": true,
+    "vocab_size": 26
+  },
+  "parameterCount": 72838,
+  "purpose": "Train the age/verdict and state parts of aetheris-core-v1 in the same loss as the language objective, and measure them on held-out generated text.",
+  "script": "services/fabric/scripts/lm_differentiator_prototype.py",
+  "wallSeconds": 249.3
+}

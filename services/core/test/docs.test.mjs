@@ -23,7 +23,13 @@ import { DEFAULT_CONFIG, loadConfig } from '../src/config.mjs'
 import { ELEVATED_SCOPES, FORBIDDEN_SCOPES } from '../src/plugins/manifest.mjs'
 import { LIFECYCLE, DEFAULT_BUDGET } from '../src/godcore/lifecycle.mjs'
 import { DEFAULT_ROUTING_WEIGHTS } from '../src/router/registry.mjs'
-import { KLYVARON, TIERS, familyReport, tierClaimForArtifact } from '../src/klyvaron/tiers.mjs'
+import { COMPETITOR_MARKERS, FAMILY_STANCE, KLYVARON, TIERS, familyReport, ownedArtifacts, tierClaimFor, tierClaimForArtifact } from '../src/klyvaron/tiers.mjs'
+import { ACCELERATORS, ACCELERATOR_IDS } from '../src/hardware/accelerators.mjs'
+import { MODALITY_MODELS, presetReport } from '../src/klyvaron/architecture.mjs'
+
+const idMapOf = (plan) => Object.fromEntries(plan.tiers.map((t) => [t.id, t]))
+const gateIn = (tier, id) => tier.gates.find((g) => g.id === id)
+import { developmentPlan, GATES, GATE_STATES } from '../src/klyvaron/plan.mjs'
 
 // HERE is services/core/test, so the repo root is three levels up. Getting this
 // wrong made every doc lookup fail at once — which is the argument for comparing
@@ -58,6 +64,9 @@ const doc = {
   cycle: () => read('docs/07-improvement-cycle.md'),
   hermes: () => read('docs/10-hermes-audit.md'),
   klyvaron: () => read('docs/11-klyvaron-family.md'),
+  differentiation: () => read('docs/22-klyvaron-differentiation.md'),
+  trainingFree: () => read('docs/23-training-free-tiers.md'),
+  ownModels: () => read('docs/24-own-models.md'),
   matrix: () => read('docs/12-feature-matrix.md'),
   distillation: () => read('docs/09-distillation.md'),
   distillVerdict: () => read('docs/experiments/distillation-logit-vs-baseline.json'),
@@ -633,22 +642,24 @@ test('the docs record limitations instead of implying completeness', () => {
 test('the status doc reports the real test totals', () => {
   // Recomputed from the filesystem: one test file per suite.
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
-  // 28 includes the accounts suite (traditional sign-in), the online runtimes suite
-  // (Ollama and llama.cpp on the online entry) and the Klyvaron plan suite. If a suite
-  // file is added or removed, the counts in docs/03-status.md and README.md have to move
-  // with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 28)
+  // 33 includes the accounts suite (traditional sign-in), the online runtimes suite
+  // (Ollama and llama.cpp on the online entry), the Klyvaron plan suite, the suites added
+  // with the family's differentiation (tier stance and modality rules, the dated-source
+  // ledger, the evidence-linked affect reader, the composition path with its accelerator
+  // arithmetic), and the suite covering the family's own architecture. If a suite file is
+  // added or removed, the counts in docs/03-status.md and README.md have to move with it.
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 33)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
-  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 36)
+  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**567 / 567**'), 'core total must be stated')
-  assert.ok(status.includes('**763 / 763**'), 'fabric total must be stated')
+  assert.ok(status.includes('**616 / 616**'), 'core total must be stated')
+  assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
   assert.ok(status.includes('**92 / 92**'), 'web total must be stated')
-  assert.ok(status.includes('1422 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1422 tests: core 567, web 92, fabric 763'),
+  assert.ok(status.includes('1522 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(squash(doc.readme()).includes('1522 tests: core 616, web 92, fabric 814'),
     'README must state the same totals')
-  assert.ok(status.includes('(36 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -659,13 +670,13 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(567), `core heading must say 567, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(763), `fabric heading must say 763, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(616), `core heading must say 616, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(92), `web heading must say 92, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1422,
+    1522,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })
@@ -1815,4 +1826,169 @@ test('the L4 transfer numbers quoted in the documents are the recorded ones', ()
   assert.ok(protocol.includes('MIN_SEEDS = 3'), 'the registered seed floor must be in the module')
   assert.ok(exists(resolve(REPO, 'services/fabric/scripts/l4_transfer.py')),
     'the documents claim a runner; the runner must exist')
+})
+
+// ---------------------------------------------------------------------------
+// The family's purpose: the stance, the two differentiators, and the modalities
+// ---------------------------------------------------------------------------
+
+test('docs/22 states the stance and the two differentiators the family record defines', () => {
+  const text = squash(doc.differentiation())
+  const report = familyReport()
+
+  // The stance is stated as a refusal, not as an aspiration.
+  assert.ok(text.includes('this family does not compete'), 'the stance must be stated')
+  assert.equal(FAMILY_STANCE.competitive, false)
+  for (const phrase of ['No benchmark win over a named or unnamed competitor is claimed',
+                        'No feeling or diagnosis the user did not express']) {
+    assert.ok(text.includes(phrase), `docs/22 must carry the forbidden claim: ${phrase}`)
+  }
+  // And the document never names a competitor, which is the rule it is describing.
+  for (const marker of COMPETITOR_MARKERS) {
+    assert.ok(!text.toLowerCase().includes(marker), `docs/22 names ${marker}, which its own stance forbids`)
+  }
+
+  // Both differentiators are named, and described as unbacked rather than as delivered.
+  for (const name of FAMILY_STANCE.differentiators) {
+    assert.ok(text.includes(`\`${name}\``), `docs/22 must name ${name}`)
+  }
+  assert.ok(text.includes('A mechanism is not a model'), 'the mechanism-versus-artifact distinction must be stated')
+  assert.ok(text.includes('stale-source answer counts as wrong'), 'the trend acceptance rule must be stated')
+  assert.ok(text.includes('abstention'), 'the affect acceptance rule must include abstention')
+
+  // The tier table in docs/22 agrees with the module, cell by cell, exactly as docs/11 does.
+  for (const tier of report.tiers) {
+    const row = new RegExp(`\\| \\*\\*${tier.displayName}\\*\\* \\|[^|]+\\|[^|]+\\| ${tier.availableCapabilities.length} of ${tier.capabilityCount} \\|`).exec(text)
+    assert.ok(row, `docs/22 must table ${tier.displayName} with ${tier.availableCapabilities.length} of ${tier.capabilityCount}`)
+  }
+  // The gates the plan derives are the gates the document lists.
+  const plan = developmentPlan()
+  for (const gate of plan.tiers[0].gates) {
+    if (![GATES.DIFFERENTIATION, GATES.TREND_AWARENESS, GATES.AFFECT_HISTORY, GATES.MODALITY_SEPARATION].includes(gate.id)) continue
+    assert.equal(gate.status, gate.id === GATES.DIFFERENTIATION ? GATE_STATES.MET : GATE_STATES.OPEN,
+      `${gate.id} status changed; docs/22 describes it as ${gate.status}`)
+  }
+})
+
+test('docs/22 keeps image and video as separate models, with no artifact claimed anywhere', () => {
+  const text = squash(doc.differentiation())
+  assert.ok(text.includes('Image and video are different models, not different prompts'))
+  assert.ok(text.includes('refuses rather than substituting a text answer'),
+    'the refusal that stands in for an image model must be stated')
+
+  // No tier has an image or video artifact, and the document says so in those words.
+  for (const tier of familyReport().tiers) {
+    for (const modality of ['image', 'video']) {
+      const role = tier.modalityArtifacts[modality]
+      if (role) assert.equal(role.artifact, null, `${tier.id}.${modality} must have no artifact`)
+    }
+  }
+  const noArtifact = (text.match(/no artifact/g) ?? []).length
+  assert.ok(noArtifact >= 4, `docs/22 must say "no artifact" for each empty cell, found ${noArtifact}`)
+  assert.ok(!/image generation is (?:available|released)/i.test(text))
+})
+
+test('docs/23 keeps the composed path as a technique this family refused, and says why', () => {
+  const text = squash(doc.trainingFree())
+
+  // The page is honest about its own status first: implemented, and not taken by any tier.
+  assert.ok(text.includes('No tier of this family takes it'), 'the status must be stated first')
+  assert.ok(text.includes('rejected'), 'the decision must be recorded, not implied')
+  for (const phrase of ['A candidate is not a placement', 'Unknown memory is a refusal, not a zero',
+                        'CPU is not a GPU tier', 'a plan is not a measurement']) {
+    assert.ok(text.includes(phrase), `docs/23 must state: ${phrase}`)
+  }
+
+  // The rule it was refused by is the rule the plan derives, and no tier is composed.
+  for (const tier of familyReport().tiers) {
+    assert.equal(tier.backingPath.path, 'trained_from_scratch', `${tier.id} must not be composed`)
+    assert.equal(tier.backingPath.bases.length, 0)
+  }
+  const plan = idMapOf(developmentPlan())
+  for (const id of ['pro', 'max']) {
+    assert.equal(gateIn(plan[id], 'own_weights').status, 'open')
+    assert.equal(gateIn(plan[id], 'accelerated_runtime').status, 'open')
+  }
+  assert.ok(text.includes('own_weights'), 'the checked form of the refusal must be named')
+  assert.ok(text.includes('composed tier can never satisfy it') || text.includes('can never satisfy it'),
+    'the page must state that a composed tier cannot satisfy it')
+
+  // The accelerator table names the accelerators the registry implements, and no others.
+  for (const id of ACCELERATOR_IDS) {
+    if (id === 'cpu') continue
+    assert.ok(text.toLowerCase().includes(ACCELERATORS[id].vendor.toLowerCase().split(' ')[0]),
+      `docs/23 must describe ${id}`)
+  }
+  assert.ok(text.includes('OpenVINO NPU'), 'the NPU path is the "any other" answer and must be named')
+  // And it names no competitor to compare against. `llama.cpp` is an inference runtime this
+  // repository would drive, not a model it measures itself against, so the runtime is masked
+  // before the scan rather than added to the allowlist of vendor names.
+  const withoutRuntime = text.toLowerCase().replaceAll('llama.cpp', 'the runtime')
+  for (const marker of COMPETITOR_MARKERS) {
+    assert.ok(!withoutRuntime.includes(marker), `docs/23 names ${marker}`)
+  }
+  // The composed base still cannot wear a tier label: the lookup is the enforcement.
+  assert.equal(tierClaimFor('third-party/small-instruct'), null)
+})
+
+test('docs/24 states what the own models of this family are, and quotes the prototype it measured', () => {
+  const text = squash(doc.ownModels())
+  const report = familyReport()
+
+  // Whose models these are, and the consequence stated rather than softened.
+  assert.ok(text.includes('`aetheris-core-v1`'), 'the architecture must be named')
+  assert.ok(text.includes('trained from random initialisation'))
+  assert.ok(text.includes('there is no technique that avoids it'), 'the honest consequence must be stated')
+  assert.ok(text.includes('no base checkpoint'), 'the rule that makes it ours must be stated')
+  assert.ok(text.includes('own_weights'), 'the derived gate must be named')
+
+  // The parameters the page states are the parameters the module computes.
+  for (const id of ['pro', 'max']) {
+    const parameters = presetReport(id).parameters.toLocaleString('en-US')
+    assert.ok(text.includes(parameters), `docs/24 must state ${id}'s ${parameters} parameters`)
+  }
+  assert.equal(presetReport('pro').parameters, 27_559_946)
+  assert.equal(presetReport('max').parameters, 92_077_066)
+  assert.ok(text.includes('assumptions, not measurements'), 'the training arithmetic must be labelled')
+
+  // The parts are named as parts of the model, and the prototype numbers in the page are the
+  // numbers in the record it points at.
+  for (const part of ['age_buckets', 'verdict_head', 'state_emb', 'state_head']) {
+    assert.ok(text.includes(part), `docs/24 must name the ${part} part`)
+  }
+  const prototype = JSON.parse(read('docs/experiments/differentiator-prototype.json'))
+  assert.equal(prototype.isArtifact, false)
+  const heldOut = prototype.metrics.heldOut
+  for (const score of [heldOut.verdict.accuracy, heldOut.state.accuracy,
+                       heldOut.verdict.majorityClassBaseline, heldOut.state.majorityClassBaseline]) {
+    assert.ok(text.includes(score.toFixed(4)), `docs/24 must quote the measured ${score.toFixed(4)}`)
+  }
+  assert.ok(text.includes('mechanism prototype'), 'the prototype must be labelled as one')
+  assert.ok(text.includes('not a model artifact'))
+
+  // Image and video are separate designs, and no tier has one.
+  for (const modality of ['image', 'video']) {
+    assert.ok(text.includes(MODALITY_MODELS[modality].modelId), `docs/24 must name the ${modality} model`)
+    assert.equal(MODALITY_MODELS[modality].implemented, false)
+  }
+  for (const tier of report.tiers) assert.equal(tier.availability, undefined, 'no phantom field')
+  for (const marker of COMPETITOR_MARKERS) {
+    assert.ok(!text.toLowerCase().replaceAll('llama.cpp', 'the runtime').includes(marker), `docs/24 names ${marker}`)
+  }
+})
+
+test('no third-party base ever wears a tier label, and no tier claims an artifact it does not have', () => {
+  // The enforcement is a lookup, not a paragraph: a label is only assigned by finding an artifact
+  // in the backings of *available* capabilities, and the family has no artifact for Pro or Max.
+  assert.ok(squash(doc.trainingFree()).includes('tierClaimForArtifact()'),
+    'the enforcement must be named in docs/23, where the composed base is described')
+  assert.equal(tierClaimFor('third-party/small-instruct'), null)
+  assert.equal(tierClaimForArtifact('third-party/small-instruct', '7ae5576'), null)
+  for (const id of [TIERS.PRO, TIERS.MAX]) {
+    assert.deepEqual(ownedArtifacts(id), [], `${id} owns no artifact yet`)
+    assert.deepEqual(KLYVARON[id].backingPath.bases, [], 'a from-scratch tier records no base')
+    assert.equal(KLYVARON[id].backingPath.verified, false)
+  }
+  // And the released Lite artifact keeps its label: the rule is not "no labels at all".
+  assert.equal(tierClaimFor('aetheris-lite-lm-0.1.1'), TIERS.LITE)
 })

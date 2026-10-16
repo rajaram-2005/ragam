@@ -11,13 +11,27 @@ from __future__ import annotations
 
 import json
 import math
+import subprocess
+import sys
+import time
+import zipfile
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from fabric.lm.model import TransformerConfig, TransformerLM, weights_digest
-from fabric.lm.train import AdamW, TrainConfig, _is_matrix, train
+from fabric.lm.train import AdamW, TrainConfig, _is_matrix, read_checkpoint, train
+
+
+#: The child process of the resume test. It trains with a checkpoint after every step, so killing
+#: it leaves exactly what an interrupted run leaves: a state file and no artifact.
+_INTERRUPTIBLE_LEG = """
+import json, sys
+from fabric.lm.train import TrainConfig, train
+corpus, out, base = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
+train(TrainConfig(**base), output_dir=out, corpus_root=corpus, run_name="r", checkpoint_every=1)
+"""
 
 
 @pytest.fixture(scope="module")
@@ -285,6 +299,150 @@ def test_the_corpus_snapshot_is_written_and_hashed(corpus, tmp_path):
     assert len(manifest["validation"]) == report.corpus["validationFiles"]
 
 
+def test_a_digest_only_corpus_record_carries_no_text_and_says_so(corpus, tmp_path):
+    """A 168 MB corpus cannot be copied into its own run record, and a record that claimed to
+    hold it while holding nothing would be worse than one that admits it holds a manifest."""
+    report = train(small_config(), output_dir=tmp_path, corpus_root=corpus, run_name="r",
+                   snapshot_text=False)
+    record = Path(report.artifact["path"]).parent / report.artifact["corpusSnapshot"]
+    assert record.exists()
+    assert record.name.endswith(".manifest.json")
+    assert report.artifact["corpusSnapshotFormat"] == "aetheris-corpus-manifest/v1"
+
+    payload = json.loads(record.read_text(encoding="utf-8"))
+    assert "train" not in payload and "validation" not in payload
+    assert payload["manifestDigest"] == report.corpus["manifestDigest"]
+    # The manifest itself still names every file, so the corpus is identified rather than lost.
+    assert len(payload["manifest"]["train"]) == report.corpus["trainFiles"]
+    assert all(len(entry["sha256"]) == 64 for entry in payload["manifest"]["train"])
+
+    from fabric.lm.train import load_corpus_snapshot
+
+    with pytest.raises(ValueError, match="by digest, not by copy"):
+        load_corpus_snapshot(record)
+
+
+def test_a_full_snapshot_says_which_format_it_wrote(corpus, tmp_path):
+    """The report has to name the record it kept, so a reader is never left guessing whether
+    the text is here or has to be re-assembled."""
+    report = train(small_config(), output_dir=tmp_path, corpus_root=corpus, run_name="r")
+    assert report.artifact["corpusSnapshotFormat"] == "aetheris-corpus-snapshot/v1"
+    assert report.artifact["corpusSnapshot"].endswith(".corpus.json")
+
+
+# ---------------------------------------------------------------------------
+# Checkpoints and resuming
+# ---------------------------------------------------------------------------
+
+
+def test_a_resumed_run_is_the_same_run_it_would_have_been(corpus, tmp_path):
+    """The only assertion that matters for a resume: the result must be identical, not close.
+
+    Adam's moment estimates and step counter, the loss curve and the seeded data stream all have
+    to survive the interruption. Drop any one of them and the run still finishes and still reports
+    a falling loss -- it just trains a different model than the command describes.
+
+    The interruption is a real one: a second process trains with checkpointing and is killed, so
+    what the parent resumes from is the file a killed process actually leaves behind. A run that
+    is allowed to finish deletes that file, and it should: a leftover checkpoint beside a release
+    is a state somebody will eventually try to load as the release.
+    """
+    straight = tmp_path / "straight"
+    interrupted = tmp_path / "interrupted"
+    interrupted.mkdir()
+    base = dict(d_model=32, n_layers=2, n_heads=2, d_ff=64, seq_len=32, batch_size=4,
+                steps=12, warmup_steps=3, learning_rate=3e-2)
+
+    whole = train(TrainConfig(**base), output_dir=straight, corpus_root=corpus, run_name="r")
+
+    # A child process does the steps nobody finishes.
+    child = subprocess.Popen(
+        [sys.executable, "-c", _INTERRUPTIBLE_LEG,
+         str(corpus), str(interrupted), json.dumps(base)],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+    )
+    saved = interrupted / "r.ckpt.npz"
+    deadline = time.time() + 60
+    meta = None
+    while time.time() < deadline and meta is None:
+        time.sleep(0.05)
+        produced = sorted(interrupted.glob("*.ckpt.npz"))
+        if not produced:
+            continue
+        for candidate in produced:
+            try:
+                candidate_meta, _ = read_checkpoint(candidate)
+            except (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile):
+                continue  # mid-write: the child is still going
+            if candidate_meta["step"] >= 2:
+                # Copy before killing: the child may be halfway through writing the next one.
+                saved.write_bytes(candidate.read_bytes())
+                meta = candidate_meta
+                break
+    child.kill()
+    child.wait(timeout=30)
+
+    assert meta is not None, f"the child never wrote a readable checkpoint; output:\n{child.stdout.read()}"
+    assert 0 < meta["step"] < base["steps"], f"the interruption landed at step {meta['step']}"
+
+    second = train(TrainConfig(**base), output_dir=interrupted, corpus_root=corpus, run_name="r",
+                   resume_from=saved, overwrite=True)
+
+    assert second.provenance["resumedFrom"] == {"checkpoint": saved.name, "step": meta["step"]}
+    assert [entry["step"] for entry in second.loss_curve] == list(range(base["steps"]))
+    for a, b in zip(whole.loss_curve, second.loss_curve):
+        assert a["loss"] == pytest.approx(b["loss"], rel=0, abs=0), "the loss curve must be identical"
+    assert second.artifact["weightsDigest"] == whole.artifact["weightsDigest"], "different weights"
+    # A resumed run's wall clock is the sum of its legs, not the age of the last one.
+    assert second.resource["wallSeconds"] >= 0
+    assert second.resource["trainingSeconds"] <= second.resource["wallSeconds"]
+    assert second.checkpoints is None, "checkpointing was off for the second leg"
+
+
+def test_resuming_under_another_configuration_is_refused(corpus, tmp_path):
+    """Weights from one configuration loaded into another train happily at the wrong shape and
+    report a number for a model that was never trained. Shape agreement is not agreement."""
+    first = train(TrainConfig(d_model=16, n_layers=1, n_heads=2, d_ff=32, seq_len=12, batch_size=4,
+                              learning_rate=1e-2, warmup_steps=2, steps=6),
+                  output_dir=tmp_path, corpus_root=corpus, run_name="r", checkpoint_every=3,
+                  keep_checkpoint=True)
+    checkpoint = tmp_path / first.checkpoints["path"]
+
+    with pytest.raises(RuntimeError, match="different configuration"):
+        train(TrainConfig(d_model=16, n_layers=1, n_heads=2, d_ff=32, seq_len=12, batch_size=4,
+                          learning_rate=1e-2, warmup_steps=2, steps=6, model_seed=7),
+              output_dir=tmp_path, corpus_root=corpus, run_name="r", resume_from=checkpoint)
+
+
+def test_a_finished_checkpoint_has_nothing_to_continue(corpus, tmp_path):
+    first = train(TrainConfig(d_model=16, n_layers=1, n_heads=2, d_ff=32, seq_len=12, batch_size=4,
+                              learning_rate=1e-2, warmup_steps=2, steps=6),
+                  output_dir=tmp_path, corpus_root=corpus, run_name="r", checkpoint_every=3,
+                  keep_checkpoint=True)
+    checkpoint = tmp_path / first.checkpoints["path"]
+    with pytest.raises(RuntimeError, match="nothing to continue"):
+        train(TrainConfig(d_model=16, n_layers=1, n_heads=2, d_ff=32, seq_len=12, batch_size=4,
+                          learning_rate=1e-2, warmup_steps=2, steps=6),
+              output_dir=tmp_path, corpus_root=corpus, run_name="r", resume_from=checkpoint,
+              overwrite=True)
+
+
+def test_a_run_without_checkpointing_records_no_checkpoint(corpus, tmp_path):
+    """None, not an empty dict: a run that never wrote a checkpoint and a run that wrote fourteen
+    are different records, and the report has to distinguish them."""
+    report = train(small_config(), output_dir=tmp_path, corpus_root=corpus, run_name="r")
+    assert report.checkpoints is None
+    assert report.provenance["resumedFrom"] is None
+
+
+def test_a_completed_run_does_not_leave_its_checkpoint_behind(corpus, tmp_path):
+    report = train(TrainConfig(d_model=16, n_layers=1, n_heads=2, d_ff=32, seq_len=12, batch_size=4,
+                               learning_rate=1e-2, warmup_steps=2, steps=6),
+                   output_dir=tmp_path, corpus_root=corpus, run_name="r", checkpoint_every=3)
+    assert report.checkpoints["retained"] is False
+    assert not (tmp_path / report.checkpoints["path"]).exists()
+
+
 def test_an_expected_manifest_digest_that_does_not_match_is_refused(corpus, tmp_path):
     """Silent drift is the failure this prevents: a reproduction run that quietly
     trains a different model and reports success."""
@@ -336,3 +494,53 @@ def test_the_report_digest_ignores_where_the_artifact_was_written(corpus, tmp_pa
     a = train(small_config(), output_dir=tmp_path / "a", corpus_root=corpus, run_name="r")
     b = train(small_config(), output_dir=tmp_path / "b", corpus_root=corpus, run_name="r")
     assert a.digest == b.digest
+
+
+# ---------------------------------------------------------------------------
+# Evaluation held out by source
+# ---------------------------------------------------------------------------
+
+
+def test_a_held_out_source_is_recorded_and_never_trained_on(tmp_path):
+    """The validation text must come from a source the training text does not contain.
+
+    Checked end to end rather than on the manifest alone: the snapshot written beside the
+    artifact holds both texts, so the claim "the model was evaluated on a source it never
+    read" is verifiable from the run's own record instead of from the split code.
+    """
+    root = tmp_path / "corpus"
+    (root / "trained").mkdir(parents=True)
+    (root / "unseen").mkdir(parents=True)
+    for i in range(4):
+        (root / "trained" / f"t{i}.mjs").write_text("const alpha = 'TRAINONLY';\n" * (4 + i), encoding="utf-8")
+    for i in range(2):
+        (root / "unseen" / f"u{i}.mjs").write_text("const beta = 'HOLDOUTONLY';\n" * (4 + i), encoding="utf-8")
+
+    report = train(
+        small_config(steps=4, warmup_steps=1, validation_sources=("unseen",)),
+        output_dir=tmp_path / "out", corpus_root=root, run_name="held-out",
+    )
+    assert report.corpus["heldOutSources"] == ["unseen"]
+    assert {Path(f["path"]).parts[0] for f in report.corpus["validation"]} == {"unseen"}
+    assert {Path(f["path"]).parts[0] for f in report.corpus["train"]} == {"trained"}
+    assert report.corpus["sources"]["unseen"]["splits"] == ["validation"]
+
+    snapshot = json.loads(
+        (Path(report.artifact["path"]).parent / report.artifact["corpusSnapshot"]).read_text(encoding="utf-8")
+    )
+    # The file paths themselves contain the source name, so the assertion is on content that
+    # only one side's text can contain.
+    assert "HOLDOUTONLY" in snapshot["validation"] and "TRAINONLY" not in snapshot["validation"]
+    assert "TRAINONLY" in snapshot["train"] and "HOLDOUTONLY" not in snapshot["train"]
+
+
+def test_a_source_that_does_not_exist_in_the_corpus_stops_the_run(tmp_path):
+    root = tmp_path / "corpus"
+    root.mkdir()
+    (root / "a").mkdir()
+    (root / "a" / "x.mjs").write_text("const a = 1;\n", encoding="utf-8")
+    (root / "b").mkdir()
+    (root / "b" / "y.mjs").write_text("const b = 2;\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="not under the corpus root"):
+        train(small_config(steps=4, warmup_steps=1, validation_sources=("typo",)),
+              output_dir=tmp_path / "out", corpus_root=root, run_name="refused")

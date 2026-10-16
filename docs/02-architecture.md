@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 14,786 source lines, 12,222 test lines
+### `services/core` — 16,527 source lines, 13,467 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -117,20 +117,26 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
 | `memory/store.mjs` | 702 | User-approved memory, candidates that need approval before use, and session recall with citations |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
-| `klyvaron/tiers.mjs` | 485 | The three-tier model family, backing records, and the validator that refuses a capability with no artifact behind it |
-| `klyvaron/plan.mjs` | 120 | The development plan: per-tier gates derived from the tier records, each open gate with its reason |
+| `klyvaron/tiers.mjs` | 724 | The three-tier model family, the non-competitive stance, the two differentiating capabilities with their acceptance criteria, the modality roles, and the validator that refuses a capability with no artifact behind it, a from-scratch tier that names a base, or an image capability backed by the text artifact |
+| `klyvaron/plan.mjs` | 187 | The development plan: thirteen per-tier gates derived from the tier records, including the stance, the two differentiators, modality separation and `own_weights`, each open gate with its reason |
+| `klyvaron/trends.mjs` | 186 | Dated, sourced observations that expire and abstain; the mechanism `trend.awareness` is defined against, with no model behind it |
+| `klyvaron/affect.mjs` | 181 | Consent-gated, evidence-cited states from the user's own messages, with abstention and no diagnosis; the mechanism `affect.history` is defined against |
+| `klyvaron/architecture.mjs` | 615 | The family's own model: the `aetheris-core-v1` design, the Lite/Pro/Max presets, the two differentiators as parts of the model, the parameter and memory arithmetic, the modality models, and the recipe with its per-size open steps |
+| `klyvaron/composition.mjs` | 259 | The training-free path this family refused: the eight composition steps, the licence allowlist, and the rules that keep a composed tier from claiming a trained one or from wearing a tier label |
+| `hardware/accelerators.mjs` | 194 | The accelerator registry (CUDA, ROCm, Metal, Vulkan, OpenVINO GPU/NPU, CPU) and the weight plus KV-cache arithmetic that decides whether a model fits |
 | `skills/registry.mjs` | 397 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
 | `skills/manifest.mjs` | 319 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
 | `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |
 | `skills/store.mjs` | 246 | Skills on disk: document + state split, version files for rollback, deletion tombstones |
 
-### `services/fabric` — 11,760 source lines, 9,025 test lines
+### `services/fabric` — 12,655 source lines, 9,990 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible
 `Pipeline`. Plus the experiment ledger, the failure-memory recurrence, the model
-release manager, and a hand-written dual encoder whose **five parameter gradients
-all match central finite differences to ~3e-10**. See its own
+release manager, a hand-written dual encoder whose **five parameter gradients all match
+central finite differences to ~3e-10**, and a prototype that trains the two differentiator parts
+in the same loss as the language objective. See its own
 [`README`](../services/fabric/README.md).
 
 ### `apps/web` — 2,691 source lines, 1,818 test lines

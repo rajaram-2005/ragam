@@ -37,9 +37,18 @@ DEFAULT_EXTENSIONS = (".md", ".mjs", ".js", ".jsx", ".py", ".json", ".css", ".ht
 # model's entire training text into the next model's corpus twice over, and inflated every
 # corpus figure the report states. A model trained on its own previous run's report is
 # still a language model; it is just no longer the model the card describes.
+#: Directories that are never corpus text. Two kinds are in here: **build output and checkouts**
+#: (`node_modules`, `dist`, `build`) which are copies of text that has a source elsewhere, and
+#: **environment or tooling directories** (`.pylibs`, `.cache`, `.mypy_cache`) which hold vendored
+#: third-party code. The second kind matters more than it looks: a virtualenv dropped inside the
+#: repository is thousands of `.py` files from libraries this project did not license and does not
+#: cite, and a walk that reads them would produce a corpus whose record is wrong. `artifacts` is
+#: here because a run writes its own corpus into it: a training run must never see a previous run.
 DEFAULT_EXCLUDE_DIRS = (
     ".git", "node_modules", "dist", "__pycache__", ".aetheris-data", "build",
     ".pytest_cache", "coverage", ".venv", "venv", "artifacts",
+    ".pylibs", "site-packages", ".cache", ".ruff_cache", ".mypy_cache", ".tox", ".nox",
+    ".next", ".vite", ".svelte-kit", ".turbo", ".parcel-cache", ".arena", "out", "target",
 )
 
 
@@ -63,6 +72,10 @@ class DatasetManifest:
     exclude_dirs: tuple[str, ...]
     split_seed: int
     validation_fraction: float
+    #: Sources held out whole. A source is the first path component under the corpus root, so a
+    #: corpus assembled from several repositories can be evaluated on repositories it never read.
+    #: Empty means the ordinary by-document split, which no source decides on its own.
+    validation_sources: tuple[str, ...] = ()
 
     @property
     def train_bytes(self) -> int:
@@ -71,6 +84,21 @@ class DatasetManifest:
     @property
     def validation_bytes(self) -> int:
         return sum(f.bytes for f in self.validation)
+
+    def source(self, record: CorpusFile) -> str:
+        return record.path.split("/", 1)[0]
+
+    def source_summary(self) -> dict:
+        """Per-source bytes and the side each source landed on, for the run record."""
+        summary: dict[str, dict] = {}
+        for split, records in (("train", self.train), ("validation", self.validation)):
+            for record in records:
+                entry = summary.setdefault(self.source(record), {"bytes": 0, "files": 0, "splits": []})
+                entry["bytes"] += record.bytes
+                entry["files"] += 1
+                if split not in entry["splits"]:
+                    entry["splits"].append(split)
+        return dict(sorted(summary.items()))
 
     def overlap(self) -> set[str]:
         """Files appearing on both sides. Must always be empty."""
@@ -88,6 +116,8 @@ class DatasetManifest:
             "validationBytes": self.validation_bytes,
             "trainFiles": len(self.train),
             "validationFiles": len(self.validation),
+            "sources": self.source_summary(),
+            "heldOutSources": list(self.validation_sources),
         }
 
     @property
@@ -136,14 +166,42 @@ def build_manifest(
     exclude_dirs=DEFAULT_EXCLUDE_DIRS,
     validation_fraction: float = 0.10,
     split_seed: int = 20251012,
+    validation_sources: tuple[str, ...] = (),
 ) -> DatasetManifest:
-    """Hash every file and partition them into disjoint train / validation sets."""
+    """Hash every file and partition them into disjoint train / validation sets.
+
+    Two ways to choose the validation side, and they make different claims:
+
+    * by default, a seeded fraction of *documents* -- no document is split, but a source
+      (a repository, say) can appear on both sides;
+    * with `validation_sources`, whole sources -- the evaluation text then comes from
+      repositories the model was never trained on, which is the stronger claim, and the
+      only reason the weaker one is the default is that it needs no judgement about which
+      source is representative.
+    """
     if not 0.0 < validation_fraction < 1.0:
         raise ValueError(f"validation_fraction must be in (0, 1), got {validation_fraction}")
     root = Path(root)
     relatives = discover(root, extensions=extensions, exclude_dirs=exclude_dirs)
     if len(relatives) < 2:
         raise ValueError(f"need at least 2 corpus files to make a split, found {len(relatives)}")
+
+    held_out = tuple(dict.fromkeys(validation_sources))
+    if held_out:
+        present = {relative.parts[0] for relative in relatives}
+        unknown = sorted(set(held_out) - present)
+        if unknown:
+            raise ValueError(
+                f"held-out sources {unknown} are not under the corpus root; a hold-out that "
+                f"matches nothing would silently evaluate on training text. Present: {sorted(present)}"
+            )
+        keep = [relative for relative in relatives if relative.parts[0] not in set(held_out)]
+        drop = [relative for relative in relatives if relative.parts[0] in set(held_out)]
+        if not keep or not drop:
+            raise ValueError("a held-out source set must leave both sides non-empty")
+        test_relatives = set(drop)
+    else:
+        test_relatives = None
 
     records = []
     for relative in relatives:
@@ -152,16 +210,20 @@ def build_manifest(
             CorpusFile(path=relative.as_posix(), bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
         )
 
-    # Shuffle by index with a seeded generator over the *sorted* list, so the split
-    # depends on the seed and the file set only -- not on directory order.
-    order = np.random.default_rng(split_seed).permutation(len(records))
-    n_validation = max(1, int(round(len(records) * validation_fraction)))
-    if n_validation >= len(records):
-        raise ValueError("the validation fraction would consume the whole corpus")
-    validation_idx = set(order[:n_validation].tolist())
+    if test_relatives is not None:
+        train = tuple(r for relative, r in zip(relatives, records) if relative not in test_relatives)
+        validation = tuple(r for relative, r in zip(relatives, records) if relative in test_relatives)
+    else:
+        # Shuffle by index with a seeded generator over the *sorted* list, so the split
+        # depends on the seed and the file set only -- not on directory order.
+        order = np.random.default_rng(split_seed).permutation(len(records))
+        n_validation = max(1, int(round(len(records) * validation_fraction)))
+        if n_validation >= len(records):
+            raise ValueError("the validation fraction would consume the whole corpus")
+        validation_idx = set(order[:n_validation].tolist())
+        train = tuple(r for i, r in enumerate(records) if i not in validation_idx)
+        validation = tuple(r for i, r in enumerate(records) if i in validation_idx)
 
-    train = tuple(r for i, r in enumerate(records) if i not in validation_idx)
-    validation = tuple(r for i, r in enumerate(records) if i in validation_idx)
     return DatasetManifest(
         train=train,
         validation=validation,
@@ -169,6 +231,7 @@ def build_manifest(
         exclude_dirs=tuple(exclude_dirs),
         split_seed=split_seed,
         validation_fraction=validation_fraction,
+        validation_sources=held_out,
     )
 
 

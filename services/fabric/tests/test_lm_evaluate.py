@@ -15,6 +15,7 @@ import pytest
 
 from fabric.lm.evaluate import (
     Baseline,
+    EvaluationResult,
     bigram_baseline,
     evaluate_model,
     generate,
@@ -82,10 +83,33 @@ def test_baseline_arguments_are_validated():
 def test_baseline_derived_quantities_are_consistent():
     baseline = Baseline(name="x", nll_nats_per_token=math.log(8), description="d")
     assert baseline.perplexity == pytest.approx(8.0)
-    assert baseline.bits_per_character == pytest.approx(math.log(8) / math.log(2))
+    assert baseline.bits_per_token == pytest.approx(math.log(8) / math.log(2))
     assert set(baseline.to_dict()) == {
-        "name", "description", "nllNatsPerToken", "perplexity", "bitsPerCharacter",
+        "name", "description", "nllNatsPerToken", "perplexity", "bitsPerToken",
     }
+
+
+def test_bits_per_character_needs_a_character_count_and_is_not_bits_per_token():
+    """With one token per character the two figures coincide; with subwords they do not.
+
+    A 2-token-per-character vocabulary costs more bits per token and the same bits per
+    character as the character tokenizer would -- so a report that printed the per-token
+    figure under a per-character name would overstate the model by a factor of two.
+    """
+    without = EvaluationResult(nll_nats_per_token=1.0, tokens_evaluated=100)
+    assert without.bits_per_token == pytest.approx(1.0 / math.log(2))
+    assert without.bits_per_character is None
+
+    character_like = EvaluationResult(
+        nll_nats_per_token=1.0, tokens_evaluated=100, characters_evaluated=100,
+    )
+    assert character_like.bits_per_character == pytest.approx(character_like.bits_per_token)
+
+    subword = EvaluationResult(
+        nll_nats_per_token=1.0, tokens_evaluated=50, characters_evaluated=100,
+    )
+    assert subword.bits_per_character == pytest.approx(subword.bits_per_token / 2)
+    assert "bitsPerToken" in subword.to_dict() and "bitsPerCharacter" in subword.to_dict()
 
 
 # ---------------------------------------------------------------------------

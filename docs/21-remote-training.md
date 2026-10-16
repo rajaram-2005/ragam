@@ -74,7 +74,10 @@ Network, resolver and disk failures are not retried as permission errors. The ru
 CUDA when available and CPU otherwise; rewrites checkpoint and log paths under the work
 directory; records the exact repository commit; and calls the same `run_smoke` function as
 the notebook. Re-run the exact command after an interruption to resume the newest
-checksum-valid checkpoint. When it exits,
+checksum-valid checkpoint. A checkpoint belongs to one configuration: changing a training
+setting, the base revision or the data makes the older checkpoints a different run, and the store
+refuses a directory holding both rather than guessing which one is wanted. A changed
+configuration therefore needs a new `--workdir`, not a mixed one. When it exits,
 inspect `aetheris-smoke/status.json`; console output is only a summary of that ledger.
 
 A first run may spend most of its time installing packages and downloading the base. CPU time
@@ -447,7 +450,19 @@ training".
    * `Remote branch … not found` — a saved notebook pins a branch which has since been deleted.
      Re-import the notebook, or set `REPO_REF = "main"`.
 2. **Read `status.json`.** The local path is `aetheris-smoke/status.json`; each stage shows
-   PASSED, FAILED or NOT RUN. Fill in §12 from it.
+   PASSED, FAILED or NOT RUN. Fill in §12 from it. If the verdict is **NOT ACCEPTED**, every
+   technical stage passed and the job's acceptance gate refused the adapter; the reason it gave is
+   stored verbatim in the quality stage, and the terminal summary prints the stage words only, so
+   read the block:
+
+   ```bash
+   python -c "import json; print(json.dumps(json.load(open('aetheris-smoke/status.json'))['stages']['quality']['detail'], indent=2))"
+   ```
+
+   A refusal is a result, not a fault: it means the gate of §9 was not met on synthetic
+   validation, which is what the gate is for. The repair is a changed run or a fixed defect,
+   never a threshold moved after seeing the number. Re-running the same command unchanged
+   re-judges the adapter already in the work directory; it does not train further.
 3. **Persistence check.** For local execution, rerun with
    `--persistence-adapter ./aetheris-smoke/run/artifact`. On Kaggle, copy the notebook, add the
    committed version's output as an Input, set `PERSISTENCE_ADAPTER`, and run again.

@@ -161,3 +161,51 @@ def test_targets_are_inputs_shifted_by_one():
 def test_a_corpus_shorter_than_the_window_is_refused():
     with pytest.raises(ValueError, match="too short for seq_len"):
         list(make_batches(np.arange(5, dtype=np.int32), batch_size=1, seq_len=16, seed=0, steps=1))
+
+
+# ---------------------------------------------------------------------------
+# Held out by source
+# ---------------------------------------------------------------------------
+#
+# The by-document split makes one claim: no document is on both sides. It does NOT make
+# the stronger one -- that the evaluation text comes from a source the model never read --
+# because a source that contributes ten documents can contribute nine to training and one
+# to validation. These tests are about the stronger claim, which is the one a released
+# card should quote.
+
+
+def test_a_held_out_source_contributes_nothing_to_training(corpus):
+    manifest = build_manifest(corpus, validation_sources=("src",))
+    assert manifest.validation, "the hold-out emptied the validation side"
+    assert manifest.train, "the hold-out emptied the training side"
+    assert {f.path for f in manifest.validation} == {"src/c.mjs", "src/d.mjs"}
+    assert all(not f.path.startswith("src/") for f in manifest.train)
+    assert manifest.validation_sources == ("src",)
+    assert manifest.overlap() == set()
+
+
+def test_a_held_out_source_that_matches_nothing_is_refused(corpus):
+    """A hold-out that matches no file would silently evaluate on training text."""
+    with pytest.raises(ValueError, match="not under the corpus root"):
+        build_manifest(corpus, validation_sources=("nowhere",))
+
+
+def test_the_hold_out_is_recorded_in_the_manifest_the_digest_covers(corpus):
+    held = build_manifest(corpus, validation_sources=("src",))
+    default = build_manifest(corpus)
+    assert held.to_dict()["heldOutSources"] == ["src"]
+    assert default.to_dict()["heldOutSources"] == []
+    # Two splits of the same files are two different datasets, so they must not share a digest.
+    assert held.digest != default.digest
+    # The per-source record says which side each source landed on, for the run report.
+    summary = held.source_summary()
+    assert summary["src"]["splits"] == ["validation"]
+    assert summary["docs"]["splits"] == ["train"]
+    assert default.source_summary()["src"]["bytes"] == summary["src"]["bytes"]
+
+
+def test_the_default_split_still_does_not_hold_a_source_out(corpus):
+    manifest = build_manifest(corpus, validation_fraction=0.4)
+    assert manifest.validation_sources == ()
+    assert manifest.validation and manifest.train
+    assert manifest.overlap() == set()

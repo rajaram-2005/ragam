@@ -69,7 +69,7 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 1422 tests: core 567, web 92, fabric 763
+npm test          # 1522 tests: core 616, web 92, fabric 814
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -84,7 +84,7 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1422 run in CI on every push and pull request
+All 1522 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -145,8 +145,8 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 14,786 | 12,222 | **zero npm packages** | 567 |
-| `services/fabric` | Python 3.11 | 11,760 | 9,025 | NumPy only | 763 |
+| `services/core` | Node 22 ESM | 16,527 | 13,467 | **zero npm packages** | 616 |
+| `services/fabric` | Python 3.11 | 12,655 | 9,990 | NumPy only | 814 |
 | `apps/web` | React 18 + Vite | 2,691 | 1,818 | react, react-dom | 92 |
 
 The core service has **no npm dependencies at all** — that is why the root
@@ -161,7 +161,7 @@ Architecture, component responsibilities and enforcement points:
 
 ## Aetheris Lite
 
-Two first-party models exist, and both are real.
+Three first-party artifacts exist, and all three are real.
 
 ### A language model, trained from nothing
 
@@ -193,6 +193,50 @@ request returns a continuation labelled as one, carrying the model's own limitat
 The model never answers as if it were an assistant. See
 [`docs/08-aetheris-lite.md`](docs/08-aetheris-lite.md) and
 [`docs/11-klyvaron-family.md`](docs/11-klyvaron-family.md).
+
+The family does not compete. It is built for two things instead — knowing what is
+current, with a date and a source, and understanding what the user expressed across a
+session, quoted from their own words — and it refuses benchmark-superiority claims in
+code rather than in a disclaimer. Pro and Max are **unbuilt** and **this family's own
+models**: presets of `aetheris-core-v1` trained from random initialisation, with the two
+differentiators as parts of the model rather than wrappers around it, on the user's own
+accelerator (CUDA, ROCm, Metal, Vulkan, an OpenVINO GPU or NPU). No third-party weights are
+involved anywhere in the plan — and no weights exist yet. See
+[`docs/22-klyvaron-differentiation.md`](docs/22-klyvaron-differentiation.md) and
+[`docs/23-training-free-tiers.md`](docs/23-training-free-tiers.md) — and
+[`docs/24-own-models.md`](docs/24-own-models.md), which records the decision that Pro and Max are
+trained models of this family's own architecture rather than someone else's weights behind a tier label.
+
+### A second language model, on a corpus that was assembled and licensed
+
+**`klyvaron-mini-lm@0.1.0`** — a **1,421,952-parameter character-level transformer**, the `mini`
+preset of the same `aetheris-core-v1` architecture, trained from random initialisation on **9.87 MB
+of text assembled from seven licence-checked sources**: this repository's own text plus
+`pallets/flask`, `expressjs/express`, `psf/requests`, `microsoft/TypeScript`, `pytest-dev/pytest` and
+`pallets/click`. Every source is pinned to a commit SHA and its licence is read **at that commit**.
+`numpy/numpy` was **refused** — GitHub reports its licence as `NOASSERTION` — so it contributed zero
+bytes rather than a note that someone thought it looked permissive.
+
+The evaluation split is **held out by source**: `pallets__click` and `psf__requests` are validation
+in their entirety and supply **not one byte** of training text. On those 1,907,072 held-out
+characters it reaches **perplexity 4.7342** against a bigram baseline of **15.8644** — 29.8 % of the
+baseline, 3.35× better than the best non-neural one. That is a harder test than the Lite model's
+file-disjoint split, and the two perplexities are not comparable with each other.
+
+It took **8,456 s (2 h 21 min) on two CPU cores**, and the release gate recorded **one soft failure
+rather than waiving it**: the wall-clock target is 3,600 s. The miss is on the card and in its
+limitation list. The run's command, config, digests and outcome are in
+[`docs/experiments/klyvaron-mini-lm-run.json`](docs/experiments/klyvaron-mini-lm-run.json), which
+carried `status: running` until the run exited and was not written ahead of it.
+
+> **Its output is no better in kind than the Lite model's**: character-level text shaped like source
+> code and mostly meaningless. `mini` is **not a tier** and it moves nothing — Pro and Max stay
+> unbuilt. What it is for is making the whole recipe real: corpus assembly, licence checking, a
+> tokenizer fitted on the training split only, training, evaluation and a release gate that refuses.
+> It has **not** been exported to the runtime's artifact format or verified there; that path exists
+> and has not been run for these weights.
+
+Model card: [`docs/model-cards/klyvaron-mini-lm-0.1.0.md`](docs/model-cards/klyvaron-mini-lm-0.1.0.md).
 
 ### Hardware-based execution
 
@@ -282,6 +326,9 @@ Details, including seven open items stated plainly:
 | [`docs/09-distillation.md`](docs/09-distillation.md) | Distillation: the logit path that runs here, the credentialed path that does not |
 | [`docs/10-hermes-audit.md`](docs/10-hermes-audit.md) | Hermes Agent audit: what was adopted, what was rejected, and why |
 | [`docs/11-klyvaron-family.md`](docs/11-klyvaron-family.md) | The Klyvaron family, the six learning levels, and what is not built |
+| [`docs/22-klyvaron-differentiation.md`](docs/22-klyvaron-differentiation.md) | What the family is for: the present, the person, and the comparisons it refuses |
+| [`docs/23-training-free-tiers.md`](docs/23-training-free-tiers.md) | The composed path this family considered and refused, kept because the refusal is a checked rule |
+| [`docs/24-own-models.md`](docs/24-own-models.md) | Pro and Max as this family's own models: the `aetheris-core-v1` architecture, the two differentiators as parts of it, and what training them costs |
 | [`docs/12-feature-matrix.md`](docs/12-feature-matrix.md) | Every capability marked completed / partial / planned / unsupported |
 | [`docs/model-cards/`](docs/model-cards/) | Versioned model cards (Markdown + machine-readable JSON) |
 | [`third-party/NOTICES.md`](third-party/NOTICES.md) | Provenance, what was adopted vs replaced, licence compatibility |

@@ -11,12 +11,12 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1422 passing, 0 failing.**
+**Test totals: 1522 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **567 / 567** (28 files, ~40 s) |
-| `services/fabric` | `pytest -q` | **763 / 763** (36 files, ~25 s) |
+| `services/core` | `node --test test/*.test.mjs` | **616 / 616** (33 files, ~50 s) |
+| `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **92 / 92** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 200.08 kB → **61.78 kB gzip**, single chunk, no warnings |
 
@@ -32,6 +32,14 @@ For Phase 2, superseded offline UI expectations were replaced with online-only U
 they had counted absolute registry size, and now assert about the plugin the test
 installed *and* separately verify the built-ins are present, enabled and bound.
 That is a stronger claim than the count it replaced.
+
+For the own-models increment, Pro and Max stopped being a composition of somebody else's
+weights and became presets of this family's architecture: `aetheris-core-v1` is recorded in
+`klyvaron/architecture.mjs` with its parameter arithmetic, and the two differentiators are parts of
+the model rather than wrappers around it. `services/fabric/tests/test_lm_model.py` gains
+finite-difference checks for the new arrays, and a prototype trained them in one loss on generated
+data (`docs/experiments/differentiator-prototype.json`, 900 steps, CPU). No weights exist, so the
+tiers stay `unbuilt` — see [24 — Own models](./24-own-models.md).
 
 For the accounts increment, the operator-token sign-in was **removed rather than
 supplemented**: `services/core/test/accounts.test.mjs` (18 tests) covers scrypt password
@@ -114,6 +122,8 @@ instead.
 | 12 | Release readiness docs | **Complete** | This document plus 04, 05, 06 and the model card |
 | — | From-scratch language model | **Complete** | [`08-aetheris-lite.md`](./08-aetheris-lite.md): character-level transformer, 98 new tests including every gradient against a finite difference. Found and fixed a real positional-gradient bug the numeric check reported as `pos: exceeds tolerance by 1.6e-01` |
 | — | Remote training: free-first LoRA smoke run (Kaggle, Colab fallback) | **Built; smoke run not executed** | [`21-remote-training.md`](./21-remote-training.md): pinned base (Qwen2.5-0.5B-Instruct at a commit, licence checked at that commit), synthetic starter data with pinned hashes, a stage ledger that reports PASSED, FAILED or NOT RUN per stage, and persistence only after a read-back. Tested with a fake backend and a torch-free Hub gate; the Transformers + PEFT backend and the notebook have never run. No Pro or Max model is trained. A 2026-10-15 audit re-ran both suites, re-derived the dataset hashes, checked every package pin against PyPI, re-read the backend's calls against those exact wheels, corrected three widened Sparsiz numbers in §7, and stopped the notebook cloning a session branch |
+| — | Klyvaron family: the stance, the two differentiators and the modalities | **Specified and enforced; the differentiators have no artifact yet** | [`22-klyvaron-differentiation.md`](./22-klyvaron-differentiation.md): the non-competitive stance and the four new plan gates are values in `klyvaron/tiers.mjs` and `klyvaron/plan.mjs`, so a tier that names a competitor is invalid and a relabelled text model cannot back an image capability. Trend awareness and understanding the user's expressed history are defined on every tier with acceptance criteria and are **`unavailable` everywhere**: the dated-source ledger (`klyvaron/trends.mjs`) and the consent-gated, evidence-cited reader (`klyvaron/affect.mjs`) are implemented and tested, and a mechanism is not a model artifact. Pro and Max remain **unbuilt**; no image or video artifact exists at any tier |
+| — | Klyvaron: the family's own models | **Two artifacts released, two presets unbuilt** | `aetheris-core-v1` — four presets, the parameter and memory arithmetic and the seven-step recipe, all in `klyvaron/architecture.mjs` ([24](./24-own-models.md)). `aetheris-lite-lm@0.1.1` is the released Lite artifact. **`klyvaron-mini-lm@0.1.0`** is the second: 1,421,952 parameters trained from random initialisation on a corpus assembled from seven licence-checked sources, evaluated with the split held out **by source** — perplexity **4.7342** against a bigram baseline of **15.8644**, 0 hard failures and **one soft failure recorded rather than waived** (8,456 s against a 3,600 s wall-clock target; the threshold was not relaxed to pass it). `klyvaron-pro-lm` and `klyvaron-max-lm` have no weights: for them `corpus`, `tokenizer`, `backend`, `train`, `evaluate` and `release` are open |
 | — | Aetheris Lite release gate | **Complete** | `fabric/lm/card.py` drives the existing `ModelReleaseManager`. Hard requirements: beat the bigram baseline, unknown-rate ≤ 2%, loss must fall. The rejection path is tested more than the acceptance path |
 
 ### Phase 4 in detail — the most important limitation
@@ -217,7 +227,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (567 tests)
+### `services/core` — Implemented and tested (616 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -240,7 +250,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
-### `services/fabric` — Implemented and tested (763 tests)
+### `services/fabric` — Implemented and tested (814 tests)
 
 | Stage | Status |
 |---|---|

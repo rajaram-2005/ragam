@@ -13,7 +13,8 @@
 // A gate that the record cannot express at all (hardware qualification, today) is `open`
 // for every tier. Absence of evidence is reported as absence, not as a pending success.
 
-import { KLYVARON, CAPABILITY_STATES, TIER_STATUS, MOBILE_TARGETS, validateFamily } from './tiers.mjs'
+import { KLYVARON, CAPABILITY_STATES, TIER_STATUS, MOBILE_TARGETS, FAMILY_STANCE, SEPARATE_MODALITIES, modalityArtifacts, validateFamily } from './tiers.mjs'
+import { backingPathGates } from './composition.mjs'
 
 export const GATE_STATES = Object.freeze({ MET: 'met', OPEN: 'open' })
 
@@ -25,6 +26,19 @@ export const GATES = Object.freeze({
   COVERAGE: 'capability_coverage',
   STORAGE: 'storage_target',
   HARDWARE: 'hardware_qualification',
+  // What this family is for, rather than how large it is. Each of these is derived from the
+  // tier record exactly like the gates above, so none of them can be marked met by writing
+  // a document: the differentiators move only when an artifact with measurements backs them,
+  // and modality separation moves only when image and video have artifacts of their own.
+  DIFFERENTIATION: 'differentiation_stance',
+  TREND_AWARENESS: 'trend_awareness',
+  AFFECT_HISTORY: 'affect_history',
+  MODALITY_SEPARATION: 'modality_separation',
+  // Whose model this is: weights trained from random initialisation in this repository, with
+  // nothing third-party underneath them. Met only by a released artifact -- an architecture and a
+  // config are not an artifact, and a composed tier can never satisfy it.
+  OWN_WEIGHTS: 'own_weights',
+  ACCELERATED: 'accelerated_runtime',
 })
 
 const gate = (id, label, met, evidence, reason) => ({ id, label, status: met ? GATE_STATES.MET : GATE_STATES.OPEN, evidence: met ? evidence : null, reason: met ? null : reason })
@@ -51,6 +65,28 @@ export function tierGates(tier, { violations = [] } = {}) {
   // in the record, so its size is not evidence of meeting one.
   const storageMet = tier.targetHardware === 'mobile' && profile.primaryArtifactBytes != null && profile.primaryArtifactBytes <= MOBILE_TARGETS.primaryModelBytes
 
+  // The differentiating capabilities are the family's purpose. They are read from the same
+  // place as everything else: a state, a backing and measurements, or an open gate.
+  const differentiatorState = (name) => {
+    const claim = tier.capabilities[name]
+    return claim?.state === CAPABILITY_STATES.AVAILABLE && claim.backing ? claim : null
+  }
+  const trend = differentiatorState('trend.awareness')
+  const affect = differentiatorState('affect.history')
+  // Modalities this tier actually names. A modality with no artifact is an open gate, and the
+  // reason names the modality so a reader sees which one is missing.
+  const roles = modalityArtifacts(tier)
+  const namedModalities = SEPARATE_MODALITIES.filter((modality) => roles[modality])
+  const missingModalities = namedModalities.filter((modality) => !roles[modality].artifact)
+  // An artifact being present is not enough: the validator also refuses one artifact serving
+  // both text and image/video. A plan that read only the presence would call a relabelled text
+  // model separated, so a violation on that modality keeps the gate open too.
+  const sharedArtifact = tierViolations.filter((v) => namedModalities.some((modality) => v.startsWith(`${tier.id}.${modality}:`)))
+  const separated = missingModalities.length === 0 && sharedArtifact.length === 0
+  // Derived from the tier's recorded backing path, so a composed tier cannot be reported as
+  // verified, and a trained tier cannot be reported as training-free.
+  const pathGates = backingPathGates(tier.backingPath)
+
   return [
     gate(GATES.ARTIFACT, 'A model artifact backs at least one capability', owned.length > 0,
       [...new Set(backings.map((b) => b.artifact))].join(', ') || null, 'No artifact has been produced for this tier.'),
@@ -70,6 +106,37 @@ export function tierGates(tier, { violations = [] } = {}) {
       tier.targetHardware === 'mobile' ? 'No artifact size is recorded for this tier.' : `The 1.5 GB per-model target is the mobile budget. No storage target is recorded for ${tier.targetHardware} hardware.`),
     gate(GATES.HARDWARE, 'Qualified on the target hardware class', false, null,
       `The family record has no hardware qualification for ${tier.targetHardware} devices. Tier targeting is not evidence of eligibility.`),
+    // The stance is a record, so it is already met and the evidence says what it forbids.
+    // It is on this list because a stance nobody checks is a slogan.
+    gate(GATES.DIFFERENTIATION, 'The family records what it is for and refuses competitive claims',
+      FAMILY_STANCE.competitive === false && FAMILY_STANCE.forbiddenClaims.length > 0,
+      'stance: not competitive; allowed comparisons are computed baselines and this family\'s own earlier artifacts',
+      'No stance is recorded.'),
+    gate(GATES.TREND_AWARENESS, 'Trend awareness is backed: dated, sourced and scored on held-out questions', Boolean(trend),
+      trend?.backing?.artifact ?? null,
+      'No artifact backs trend.awareness at this tier. Three pieces exist and none of them is enough on its own: '
+      + 'the dated-source mechanism in klyvaron/trends.mjs, the age-bucket input and verdict head in '
+      + 'architecture.mjs, and a measured prototype of those parts on generated data '
+      + '(docs/experiments/differentiator-prototype.json). This gate moves on an artifact trained on real '
+      + 'sources and scored on held-out questions, because a mechanism is not a model capability.'),
+    gate(GATES.AFFECT_HISTORY, 'Understanding the user\'s expressed history is backed and evaluated', Boolean(affect),
+      affect?.backing?.artifact ?? null,
+      'No artifact backs affect.history at this tier. The evidence-linked signal reader in klyvaron/affect.mjs '
+      + 'abstains without consent, the state input and state head are parts of the model, and the prototype '
+      + 'measured the head on generated text. A model capability still needs an artifact evaluated on real '
+      + 'messages, including the abstention cases, and that is what stays open here.'),
+    gate(GATES.MODALITY_SEPARATION, 'Image and video have artifacts of their own, not a relabelled text model', separated,
+      separated ? (namedModalities.join(', ') || 'no image or video capability is named at this tier') : null,
+      missingModalities.length > 0
+        ? `No artifact exists for the ${missingModalities.join(' and ')} modalit${missingModalities.length > 1 ? 'ies' : 'y'} this tier names. `
+          + 'A text artifact is never relabelled as an image or video model; the validator refuses that outright.'
+        : sharedArtifact.join(' ')),
+    // Last, because these two are about how the tier is *backed* rather than what it can do:
+    // whose weights these are, and whether a measured run on a confirmed accelerator exists.
+    gate(GATES.OWN_WEIGHTS, 'The weights are this family\'s own, trained from random initialisation here', pathGates.ownWeights.met,
+      pathGates.ownWeights.evidence, pathGates.ownWeights.reason),
+    gate(GATES.ACCELERATED, 'A confirmed accelerator has been measured running this tier', pathGates.accelerated.met,
+      pathGates.accelerated.evidence, pathGates.accelerated.reason),
   ]
 }
 

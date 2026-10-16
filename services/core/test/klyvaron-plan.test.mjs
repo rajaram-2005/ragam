@@ -19,13 +19,21 @@ test('every tier is asked the same questions, in the same order', () => {
   assert.deepEqual(plan.tiers[0].gates.map((g) => g.id), Object.values(GATES))
 })
 
-test('Pro and Max are unbuilt: no gate is met and every open gate says why', () => {
+test('Pro and Max are unbuilt: the only met gate is the recorded stance, and every open gate says why', () => {
   const tiers = byId(developmentPlan())
   for (const id of [TIERS.PRO, TIERS.MAX]) {
     assert.equal(tiers[id].status, 'unbuilt')
-    assert.equal(tiers[id].met, 0, `${id} must have no met gate`)
+    // One gate is met on every tier, including an unbuilt one: the stance. It is a recorded
+    // decision -- the family does not compete -- rather than a capability, so it needs no
+    // artifact. Everything that would need one is open.
+    assert.equal(tiers[id].met, 1, `${id} must have exactly the stance gate met`)
     for (const g of tiers[id].gates) {
-      assert.equal(g.status, GATE_STATES.OPEN)
+      if (g.id === GATES.DIFFERENTIATION) {
+        assert.equal(g.status, GATE_STATES.MET)
+        assert.ok(g.evidence && g.evidence.length > 10, 'the stance gate names the stance')
+        continue
+      }
+      assert.equal(g.status, GATE_STATES.OPEN, `${id}.${g.id} must not be met`)
       assert.ok(g.reason && g.reason.length > 10, `${id}.${g.id} needs a reason`)
       assert.equal(g.evidence, null)
     }
@@ -37,9 +45,15 @@ test('Lite meets what its released record shows, and stays open where the record
   for (const id of [GATES.ARTIFACT, GATES.PROVENANCE, GATES.MEASUREMENTS, GATES.STORAGE]) {
     assert.equal(gateOf(lite, id).status, GATE_STATES.MET, id)
   }
-  // The released model does not chat, and it covers 2 of 11 capabilities. Both stay open.
+  // The released model does not chat, and it covers 2 of 13 capabilities. Both stay open.
   assert.equal(gateOf(lite, GATES.CHAT).status, GATE_STATES.OPEN)
-  assert.match(gateOf(lite, GATES.COVERAGE).reason, /9 of 11/)
+  assert.match(gateOf(lite, GATES.COVERAGE).reason, /11 of 13/)
+  // The two differentiators and modality separation are open at Lite too: the mechanisms
+  // exist, the artifacts do not.
+  assert.equal(gateOf(lite, GATES.TREND_AWARENESS).status, GATE_STATES.OPEN)
+  assert.equal(gateOf(lite, GATES.AFFECT_HISTORY).status, GATE_STATES.OPEN)
+  assert.equal(gateOf(lite, GATES.MODALITY_SEPARATION).status, GATE_STATES.OPEN)
+  assert.equal(gateOf(lite, GATES.DIFFERENTIATION).status, GATE_STATES.MET)
   // Nothing in the record qualifies Lite on a phone or a CPU profile, so the gate stays open.
   assert.equal(gateOf(lite, GATES.HARDWARE).status, GATE_STATES.OPEN)
 })
