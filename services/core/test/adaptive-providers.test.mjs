@@ -218,6 +218,18 @@ test('an adapter that probed as unavailable is excluded with the probe detail, n
   )
   assert.equal(fabric.status('ollama.llama3').status.availability, 'not_installed')
   // A probe that raises is recorded as unreachable with the message, never as ready.
+  // `allowUnverified` is the escape hatch for an adapter nobody has probed yet. It must not become
+  // a way to route to one whose probe said it does not work: that would overrule the fabric's own
+  // measurement, which is the thing the measurement exists to prevent.
+  const escape = new ProviderFabric({ guard: guardFor(RUNTIME_POLICIES.STRICT_OFFLINE) })
+  escape.register({ id: 'ollama.not-pulled', kind: PROVIDER_KINDS.LOCAL, capabilities: CHAT_ONLY, provider: spyProvider({ availability: 'not_installed', detail: 'model llama3 is not pulled' }), invoke: () => ({}) })
+  escape.register({ id: 'inproc.never-probed', kind: PROVIDER_KINDS.IN_PROCESS, capabilities: CHAT_ONLY, invoke: () => ({}) })
+  await escape.probe()
+  const allowUnverified = escape.route(CHAT_ONLY, { allowUnverified: true })
+  assert.equal(allowUnverified.chosen.id, 'inproc.never-probed', 'an unprobed adapter may be routed to when the caller says so')
+  assert.deepEqual(allowUnverified.rejected.map((each) => each.code), ['provider_unavailable'],
+    'a failed probe stays a refusal, whatever the caller allows')
+
   const raising = new ProviderFabric({ guard: guardFor(RUNTIME_POLICIES.STRICT_OFFLINE) })
   raising.register({ id: 'ollama.broken', kind: PROVIDER_KINDS.LOCAL, capabilities: CHAT_ONLY, provider: spyProvider({ raise: new Error('socket hang up') }), invoke: () => ({}) })
   const report = await raising.probe()
