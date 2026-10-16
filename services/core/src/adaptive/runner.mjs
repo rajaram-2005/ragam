@@ -305,7 +305,12 @@ export class AdaptiveRunner {
       acceptance,
       candidates,
       inheritedSteps,
-      carriedUsage: previous?.usage ?? null,
+      // The carried spend includes the earlier attempt's *unreported* token count: dropping it
+      // would let a resumed run report `tokensExact: true` about a run that never measured half
+      // its tokens, which is the one thing this accounting exists to prevent.
+      carriedUsage: previous
+        ? { ...previous.usage, tokensUnreported: previous.tokensUnreported ?? 0 }
+        : null,
       resumedFrom: resumed.record.seq,
       limitsReplaced: replacedLimits,
     })

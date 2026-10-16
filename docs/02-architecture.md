@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 19,685 source lines, 15,099 test lines
+### `services/core` — 19,690 source lines, 15,101 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -140,7 +140,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `adaptive/plan.mjs` | 171 | Dependency-ordered plans with a digest; a plan longer than its budget or needing an uninstalled capability is refused by name rather than truncated |
 | `adaptive/budget.mjs` | 202 | Steps, calls, wall time and tokens; a gate that refuses to *start* work its measurement cannot cover, and unreported token counts kept as unreported rather than counted as zero |
 | `adaptive/checkpoint.mjs` | 248 | Atomic, digest-chained checkpoints; newest intact record read, torn writes skipped and reported, and a resume against a different plan refused |
-| `adaptive/runner.mjs` | 423 | A plan executed step by step with a checkpoint after each, resumable by inheriting only steps that completed *and* verified; deadlines gated before a synchronous step and reported after it |
+| `adaptive/runner.mjs` | 428 | A plan executed step by step with a checkpoint after each, resumable by inheriting only steps that completed *and* verified; deadlines gated before a synchronous step and reported after it |
 
 ### `services/fabric` — 12,655 source lines, 9,990 test lines
 

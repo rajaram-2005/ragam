@@ -317,6 +317,8 @@ test('a run that stopped at its budget resumes from the checkpoint in a fresh ob
   assert.equal(resumed.result.length, 2)
   assert.equal(resumed.limitsReplaced, true, 'this resume was given new limits deliberately')
   assert.equal(resumed.budget.carried.steps, 1, 'and it carries what the earlier attempt spent, so the run has one budget')
+  assert.equal(resumed.budget.carried.tokensUnreported, 2, 'including the charges that reported no token count')
+  assert.equal(resumed.budget.tokensExact, false, 'so the resumed attempt cannot claim an exact token total')
 
   // Resuming against a different plan is refused, so progress cannot be transplanted.
   const other = planSteps({
