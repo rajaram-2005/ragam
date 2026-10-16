@@ -110,7 +110,7 @@ instead.
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
 | 8 | Multimodal pipelines | **Complete** | Job queue, validation, video genuineness check |
-| — | Procedural skills (meta-learning L3) | **Partial** | Documents on disk with append-only history, evidence-gated promotion, rollback, deletion tombstones and lexical relevance matching — reachable over 12 routes and from a panel inside Chat. Nothing loads a procedure automatically when a task needs it, and no proposal is captured from a failure without being asked |
+| — | Procedural skills (meta-learning L3) | **Partial** | Documents on disk with append-only history, evidence-gated promotion, rollback, deletion tombstones and lexical relevance matching — reachable over 12 routes and from a panel inside Chat. **Partly closed 2026-10-16:** the adaptive loop does both things this row used to say nothing did — it offers a stored procedure to a task as a candidate route without being asked, and it proposes one from a recorded verified success — demonstrated end to end for one capability ([docs/25](25-adaptive-intelligence.md) §4). What remains partial is the product surface: no HTTP route or Chat panel runs the loop, and its routing choice comes from a *fresh* measurement on the current input rather than from what past tasks showed |
 | 9 | Sparsiz integration | **Complete** | Responsibility defined; taxonomies and `Q(x)` adopted, scoring replaced |
 | — | Klyvaron artifact format, runtime and model library | **Complete** | `klyvaron/format.mjs` (manifest + digest verification, a ZIP/`.npy` reader in the core), `klyvaron/runtime.mjs` (the forward pass in JavaScript, parity-checked against NumPy), `klyvaron/store.mjs` (install/verify/load/remove inside the storage budget), `providers/klyvaron.mjs` and `scripts/export_lm.py`; a committed parity fixture ties the two implementations together |
 | — | On-device storage accounting | **Complete** | `storage/budget.mjs` plus `klyvaron/footprint.mjs`; `/api/storage` reports measured bytes, verification results and headroom |
@@ -247,6 +247,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 | God Core lifecycle | **Implemented and tested** | Eight phases, budgets, retries, checkpoints, verification |
 | Built-in plugins & MCP server | **Implemented and tested** | 18 tests; see §5 |
 | HTTP layer | **Implemented and tested** | 31 literal routes + segment routes; accurate error statuses |
+| Adaptive routing, verification, experience & skills | **Implemented and tested, one capability end to end** | The Phase 2 loop: route on measured cost, verify against a second `implementation`, record to an append-only digest-chained episode log, propose a skill only from a verified success, promote only when every recorded check passed, reuse and re-measure. Demonstrated on counting newline bytes across a tree, with the measured crossover recorded as a limitation on the skill itself. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Local image generation | **Not implemented** | Refuses with `not_implemented` (501) and an audited refusal |
 | Local video generation | **Not implemented** | Refuses with `needs_hardware` (501); **never substitutes a still image** |
 
@@ -545,11 +546,14 @@ Ordered by how much it blocks the acceptance criteria.
 6. **SFT / preference optimization / distillation** (Phase 10). All three need
    weights and, for the first and third, a GPU. Not achievable on this host and
    not faked.
-7. **Connect a verified procedure to a running task** (L3). Skills are stored, verified,
-   served and visible, but the step that loads the relevant one while a task runs, and the
-   step that proposes one from a failure without being asked, are not implemented. Until
-   they are, a procedure is something a person loads deliberately, and the release notes
-   say so rather than implying the assistant teaches itself.
+7. **Connect a verified procedure to a running task** (L3) — **narrowed 2026-10-16.** The step
+   that offers a stored procedure to a task while it runs, and the step that proposes one from
+   a recorded success without being asked, both exist now in the adaptive loop and carry the
+   milestone test ([docs/25](25-adaptive-intelligence.md) §4). What is still absent is the
+   product surface: no HTTP route and no Chat panel runs the loop, so in the running product a
+   procedure is still something a person loads deliberately. The demonstration is also one
+   capability wide — counting newline bytes across a tree — and its measured crossover is
+   recorded on the skill, so nothing here implies the assistant teaches itself in general.
 8. **Select a strategy from experience while serving** (L4). The transfer test is
    implemented and has been run, and its result was a null: nothing beat the a-priori
    fusion weights, so there is nothing to select. The gap that remains is the plumbing
