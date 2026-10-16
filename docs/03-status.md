@@ -11,11 +11,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1590 passing, 0 failing.**
+**Test totals: 1615 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **684 / 684** (37 files, ~55 s) |
+| `services/core` | `node --test test/*.test.mjs` | **709 / 709** (39 files, ~58 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **92 / 92** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 200.08 kB → **61.78 kB gzip**, single chunk, no warnings |
@@ -227,7 +227,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (684 tests)
+### `services/core` — Implemented and tested (709 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|

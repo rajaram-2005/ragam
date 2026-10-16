@@ -257,6 +257,47 @@ the abandoned promise really did finish, so the note is a fact rather than a fig
 a message saying so rather than compared as an object. Nothing in the product surface calls the runner
 yet — it is exercised by tests, not by a route. And the demonstration is still one capability wide.
 
+**Phase 3 — the memory fabric with provenance and permissions.** ✅ **Built, 2026-10-16.**
+`services/core/src/memory/fabric.mjs` and `memory/bridge.mjs`, with `memory-fabric.test.mjs` (18 tests)
+and `memory-bridge.test.mjs` (7). The acceptance criterion written into this page in Phase 1 — *store a
+user claim and a verified fact, retrieve both, assert the two are distinguishable, and assert that
+deleting one removes its provenance* — is the third test in the fabric suite, met directly.
+
+What was checked before writing it, because `memory/store.mjs` already existed: the store is the
+*product* memory — what a user asked Aetheris to remember — and it is disciplined in the right places
+(`approved_by` is a CHECK that only accepts `'user'`, `training_use` is a CHECK that only accepts
+`'prohibited'`, deletion removes the row and its index entries and writes a tombstone). What it does
+**not** have is any difference between *a user said so* and *an independent check confirmed it*: it has
+`kind = 'fact'` and `approved_by = 'user'`, which is a statement about permission, and a reader who
+takes those two columns for verification has turned a sentence into a fact. So the fabric is built
+around that difference and the store is left alone, with a bridge between them.
+
+| Rule | How it is enforced |
+|---|---|
+| A user statement is not a fact | Two separate records on every entry: `assertion` (who said it, and how) and `verification` (whether an independent check confirmed it, naming the check). A claim's `confidence.value` is **null** with basis `user-stated` and the record says in words that it records the saying and not the truth |
+| Evidence must be independent | A `check` provenance row is the only thing that verifies, it must have `agreed: true`, and it may not come from the source that asserted the entry (`self_verification`) — the same independence rule the loop applies to routes |
+| Provenance is required | An entry with no provenance row is refused (`missing_provenance`), and provenance is rows in its own table, not a string field |
+| Nothing is silently overwritten | A correction appends a version and supersedes the old one, which stays readable; `history()` walks the chain from either end; replacing a verified entry with a claim is refused (`would_downgrade`) unless forced with a reason |
+| Contradictions are kept | Two live entries that disagree about one subject and predicate are both retrievable, each marked `contradicts`, and `conflicts()` lists the groups. Resolving requires a reason and supersedes rather than deletes |
+| Duplicates collapse | The same content, layer and scope from a second source is one belief held twice: `seenCount` rises and the provenance gains a row |
+| Confidence is never a bare number | Every value has a basis; `inferred` must name the entries it came from and those entries must exist; `measured` needs a measured provenance row; a claim may not carry a number at all (`no_truth_estimate_for_claim`) |
+| Scope and readers are enforced on read | Scope is applied over candidate rows rather than in SQL, so `allowScopes` can widen a query and every exclusion is reported with its reason. `denied` means *matched the request but was withheld* — an entry from another layer was never in the question, and keeping those apart stops a denial list reading as "the system is hiding things" |
+| Deletion takes the provenance | `forget()` deletes the entry and its provenance rows, clears the bookkeeping links, and writes a tombstone holding the id, layer, time, actor, reason and the number of provenance rows removed — and no subject, content or value. A test searches the tombstone table for the deleted text and subject and finds neither |
+| References, not copies | The skill, episodic and failure layers point at the skill registry and the episode log and refuse a dangling pointer (`unknown_reference`); with no checker configured the pointer is stored marked `unchecked` rather than assumed good |
+
+**The bridge, and why it goes one way only.** An approved memory enters the fabric as a **claim** whose
+provenance records the approval, the store's own label and a note that approval is permission rather
+than verification — never as a verified fact, whatever `kind` the store row carries. In the other
+direction an entry becomes a **candidate** in the store, pending, for a person to approve; the bridge
+has no path that approves anything, which is also what the store's schema enforces. The bridge's status
+view reports the gap — approved memories the fabric has not yet recorded — and a test pins the
+consequence of two different deletion semantics: deleting a memory in the store does not reach into the
+fabric, so the fabric offers its own deletion rather than a bridge that reports a deletion it did not do.
+
+**Not claimed.** Nothing in the product surface reads the fabric: it is exercised by tests, and the
+store remains the only memory a prompt can see. The layers are a schema and a set of rules, not a
+retrieval model — there is no ranking over them beyond SQL ordering, and no embedding of any kind.
+
 **Phase 3 — memory with provenance and permissions.** The seven layers, each entry carrying
 provenance, timestamp, confidence, scope, permissions and version; contradiction and duplicate
 handling; inspect/correct/delete. Acceptance: a test that stores a user claim and a verified fact,
@@ -315,9 +356,11 @@ contradicted the plan: on a differently shaped tree the stored procedure lost to
 router chose the baseline, which is reported here rather than smoothed over.
 
 It does not claim general task competence. It does not claim that any adaptive capability beyond that
-one works, or that Phases 3-10 are built. It does not claim the adaptive core is reachable from the
-product: intent, planning, budgets, timeouts, checkpoints and the runner are exercised by tests, and no
-HTTP route or Chat panel calls them. Timing here is timing on this box (2 cores, 3,939 MB), at
+one works, or that the later phases are built. It does not claim the adaptive core is reachable from the
+product: intent, planning, budgets, timeouts, checkpoints, the runner and the memory fabric are
+exercised by tests, and no HTTP route or Chat panel calls them. The fabric is a schema and a set of
+rules for what may be believed and why — not a retrieval model. Emotional interaction states,
+providers, plugins, image and video workflows and industry packs are not built. Timing here is timing on this box (2 cores, 3,939 MB), at
 the sample counts stated beside each figure — not a property of another machine. And the rule this
 page states rather than claims: no phase is complete before its acceptance tests pass, which is why
 §4 describes Phase 2 by what its test runs and refuses to describe the phases that have none.

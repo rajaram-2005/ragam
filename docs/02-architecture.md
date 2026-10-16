@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 19,690 source lines, 15,101 test lines
+### `services/core` — 20,618 source lines, 15,797 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -116,6 +116,8 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `policy/classify.mjs` | 143 | Secret and sensitivity classification, redaction |
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
 | `memory/store.mjs` | 702 | User-approved memory, candidates that need approval before use, and session recall with citations |
+| `memory/fabric.mjs` | 790 | Seven layers, each entry carrying assertion and verification as separate records, required provenance rows, a confidence with a required basis, scope and readers enforced on read, and deletion that takes the provenance with it |
+| `memory/bridge.mjs` | 138 | Approved memory entering the fabric as a claim (never a fact), and fabric entries leaving as candidates a person must approve; one direction, because the schema refuses the other |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
 | `klyvaron/tiers.mjs` | 724 | The three-tier model family, the non-competitive stance, the two differentiating capabilities with their acceptance criteria, the modality roles, and the validator that refuses a capability with no artifact behind it, a from-scratch tier that names a base, or an image capability backed by the text artifact |
 | `klyvaron/plan.mjs` | 187 | The development plan: thirteen per-tier gates derived from the tier records, including the stance, the two differentiators, modality separation and `own_weights`, each open gate with its reason |
