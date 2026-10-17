@@ -92,7 +92,7 @@ export function gatewayUrl(value, trustedOrigins = []) {
 
 export class OnlineGateway {
   constructor({ trustedOrigins = [], timeoutMs = 120_000, maxBytes = 2 * 1024 * 1024 } = {}) { Object.assign(this, { trustedOrigins, timeoutMs, maxBytes }) }
-  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, binary = false } = {}) {
+  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, binary = false, method: requestedMethod = null } = {}) {
     const runtime = runtimeFor(config.kind ?? config.id ?? 'litellm'), label = runtime.label
     const base = gatewayUrl(config.baseUrl, this.trustedOrigins)
     const url = new URL(`${base}${path}`)
@@ -122,13 +122,17 @@ export class OnlineGateway {
         if (options.all) callback(null, allowed)
         else callback(null, allowed[0].address, allowed[0].family)
       })
+      const method = requestedMethod ?? (payload ? 'POST' : 'GET')
+      if (!['GET', 'POST', 'DELETE', 'PUT', 'PATCH'].includes(method)) return done(failure('invalid_method', 'Unsupported request method.', 400))
       req = (url.protocol === 'https:' ? https : http).request(url, {
-        method: payload ? 'POST' : 'GET', lookup: safeLookup,
+        method, lookup: safeLookup,
         headers: {
           // A wire adapter supplies its own credential header. The default is the OpenAI shape,
           // kept for callers that predate the adapters; an adapter never mixes the two.
           ...(headers ?? (config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {})),
-          accept: binary ? '*/*' : onFrame ? 'text/event-stream' : 'application/json',
+          // A wire that negotiates a representation (Stability's `Accept: image/*`) must keep
+          // its header. The default only fills in when the adapter did not choose one.
+          accept: headers?.accept ?? (binary ? '*/*' : onFrame ? 'text/event-stream' : 'application/json'),
           ...(payload ? { 'content-type': contentType ?? 'application/json', 'content-length': Buffer.byteLength(payload) } : {}),
         },
       }, (res) => {

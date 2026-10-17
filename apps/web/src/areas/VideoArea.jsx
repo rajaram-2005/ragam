@@ -25,7 +25,7 @@ const when = (value) => {
   return Number.isFinite(time) && time > 0 ? new Date(time).toLocaleString() : '—'
 }
 
-export default function VideoArea({ provider, refreshReadiness, onSettings }) {
+export default function VideoArea({ provider, readiness, refreshReadiness, onSettings }) {
   const [jobs, setJobs] = useState([])
   const [prompt, setPrompt] = useState('')
   const [aspectRatio, setAspectRatio] = useState(ASPECT_RATIOS[0])
@@ -35,16 +35,32 @@ export default function VideoArea({ provider, refreshReadiness, onSettings }) {
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState('')
 
-  const connection = useMemo(
-    () => (provider?.connections ?? []).find((entry) => entry.wire === 'gemini_veo') ?? null,
-    [provider],
-  )
+  // Same rule as the Image area: the server names the connection a request will use and the
+  // controls that wire documents. An empty list means the adapter has no such input, so the
+  // field is not rendered and no guessed value is sent.
+  const connection = useMemo(() => {
+    const preferred = readiness?.media?.video?.connectionId
+    const candidates = provider?.connections ?? []
+    return candidates.find((entry) => entry.id === preferred)
+      ?? candidates.find((entry) => entry.modality === 'video' && entry.configured)
+      ?? null
+  }, [provider, readiness])
   const models = connection?.models ?? []
+  const aspectOptions = connection?.aspectRatios ?? []
+  const resolutionOptions = connection?.resolutions ?? []
 
   useEffect(() => {
     if (models.length && !models.includes(model)) setModel(models[0])
     if (!models.length && model) setModel('')
   }, [models, model])
+
+  useEffect(() => {
+    if (aspectOptions.length && !aspectOptions.includes(aspectRatio)) setAspectRatio(aspectOptions[0])
+  }, [aspectOptions, aspectRatio])
+
+  useEffect(() => {
+    if (resolutionOptions.length && !resolutionOptions.includes(resolution)) setResolution(resolutionOptions[0])
+  }, [resolutionOptions, resolution])
 
   useEffect(() => {
     let alive = true
@@ -105,7 +121,7 @@ export default function VideoArea({ provider, refreshReadiness, onSettings }) {
   return <Panel title="Online video generation" actions={<Button onClick={onSettings}>Provider Settings</Button>}>
     {!connection
       ? <Banner tone="warn" title="No video provider is configured">
-          <p>Add a <strong>Google Veo</strong> connection in Provider Settings and test it. A chat or image connection is not reused for video: a model name in another list does not prove video generation.</p>
+          <p>Add a video-capable connection in Provider Settings (Google Veo, Runway, Luma, fal.ai video or Replicate video) and test it. A chat or image connection is not reused for video: a model name in another list does not prove video generation.</p>
           <p>No simulated output or local fallback is ever shown here.</p>
         </Banner>
       : null}
@@ -126,16 +142,20 @@ export default function VideoArea({ provider, refreshReadiness, onSettings }) {
                 {models.map((id) => <option key={id} value={id}>{id}</option>)}
               </select>
             </Field>
-            <Field label="Aspect ratio" hint="What the provider is asked for; the artifact records what arrived.">
-              <select className="select" value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} disabled={busy}>
-                {ASPECT_RATIOS.map((value) => <option key={value} value={value}>{value}</option>)}
-              </select>
-            </Field>
-            <Field label="Resolution" hint="720p or 1080p, the values this adapter accepts.">
-              <select className="select" value={resolution} onChange={(e) => setResolution(e.target.value)} disabled={busy}>
-                {RESOLUTIONS.map((value) => <option key={value} value={value}>{value}</option>)}
-              </select>
-            </Field>
+            {aspectOptions.length
+              ? <Field label="Aspect ratio" hint="What the provider is asked for; the artifact records what arrived.">
+                  <select className="select" value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} disabled={busy}>
+                    {aspectOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                </Field>
+              : null}
+            {resolutionOptions.length
+              ? <Field label="Resolution" hint="The resolutions this adapter documents for the selected provider.">
+                  <select className="select" value={resolution} onChange={(e) => setResolution(e.target.value)} disabled={busy}>
+                    {resolutionOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                </Field>
+              : null}
             <Button type="submit" variant="primary" busy={busy} disabled={busy || !prompt.trim() || !model}>Generate video</Button>
           </div>
         </form>

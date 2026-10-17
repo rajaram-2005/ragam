@@ -260,6 +260,19 @@ export class OnlineApp {
     // custom endpoint would report chat unavailable on an installation that can chat.
     let chatWire = null
     try { chatWire = s.kind ? wireFor(runtimeFor(s.kind).wire) : null } catch { chatWire = null }
+    const mediaFor = (kind) => {
+      const id = s.preferred?.[kind] ?? null
+      const connection = id ? (s.connections ?? []).find((entry) => entry.id === id) : null
+      return {
+        connectionId: id,
+        wire: connection?.wire ?? null,
+        sizes: connection?.sizes ?? [],
+        aspectRatios: connection?.aspectRatios ?? [],
+        resolutions: connection?.resolutions ?? [],
+        models: connection?.models ?? [],
+        keyConfigured: Boolean(connection?.keyConfigured),
+      }
+    }
     return { status: !s.configured ? 'setup_required' : s.checkedAt ? 'configured' : 'connection_unchecked', policy: 'online_only', offlineEnforced: false,
       models: { total: s.models.length, ready: Object.keys(s.verified).length },
       capabilities: {
@@ -267,23 +280,24 @@ export class OnlineApp {
         imageGeneration: this.imageAvailable(),
         videoGeneration: this.videoAvailable(),
       },
+      media: { image: mediaFor('image'), video: mediaFor('video') },
       provider: { kind: s.kind, name: s.name, baseUrl: s.baseUrl, selectedModel: s.selectedModel, checkedAt: s.checkedAt },
       accounts: { total: this.accounts.count() },
       note: 'Listing a model does not verify inference or modality support. No local inference or fallback.' }
   }
   models() { const kind = this.store.kind(); return this.store.state.models.map((id) => ({ id, displayName: id, provider: kind, location: 'online', availability: this.store.state.verified[id] ? 'inference_observed' : 'listed_unverified', selectable: true })) }
 
-  /** The saved connection an image request will use, or a refusal that names what is missing. */
+  /**
+   * The saved connection an image request will use, or a refusal that names what is missing.
+   *
+   * Any configured connection whose wire generates images, not one hard-coded vendor. The
+   * preference (OpenAI Images first, then any other) is computed by the store and published in
+   * `preferred`, so the settings page, the Image area and this method cannot disagree.
+   */
   imageConnection() {
-    // Any saved connection whose wire generates images, not one hard-coded vendor. The preference
-    // for OpenAI Images when both are saved keeps an installation's existing choice stable; a
-    // second connection is used when it is the only one.
-    const candidates = this.store.connections.filter((connection) => {
-      try { return wireFor(runtimeFor(connection.id).wire)?.modality === 'image' } catch { return false }
-    })
-    const record = candidates.find((connection) => runtimeFor(connection.id).wire === 'openai_images') ?? candidates[0]
-    if (!record) throw failure('provider_not_configured', 'Add an image connection in Provider Settings (OpenAI Images or Google Gemini Images).', 503)
-    return this.store.config(record.id)
+    const id = this.store.public().preferred.image
+    if (!id) throw failure('provider_not_configured', 'Add and test an image connection in Provider Settings (OpenAI Images, Gemini Images, Stability AI, Recraft, Ideogram, FLUX, fal.ai, Replicate or Adobe Firefly).', 503)
+    return this.store.config(id)
   }
 
   /** Whether the installation can generate an image now: a key and a listed model, not a maybe. */
@@ -291,7 +305,7 @@ export class OnlineApp {
     try {
       const config = this.imageConnection()
       const record = this.store.connections.find((connection) => connection.id === config.id)
-      return Boolean(record?.key && (record.models ?? []).length)
+      return Boolean((record?.key || !runtimeFor(config.id).keyRequired) && (record.models ?? []).length)
     } catch { return false }
   }
 
@@ -313,17 +327,25 @@ export class OnlineApp {
     if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
     if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps image prompts at 4,000 characters.', 400)
     // Refused here rather than inside the asynchronous job: an unsupported size must be a 400 in
-    // front of the person who chose it, not a failed record they discover by polling.
-    if (body.size !== undefined && !(wire.SIZES ?? []).includes(body.size)) {
-      throw failure('invalid_parameters', `Size must be one of ${(wire.SIZES ?? []).join(', ')}.`, 400)
+    // front of the person who chose it, not a failed record they discover by polling. A wire with
+    // no size list deliberately offers no control (the model decides geometry); a supplied size
+    // is ignored rather than sent to a provider that never documented it.
+    const sizes = wire.SIZES ?? []
+    const size = sizes.length ? body.size : undefined
+    if (size !== undefined && !sizes.includes(size)) {
+      throw failure('invalid_parameters', `Size must be one of ${sizes.join(', ')}.`, 400)
     }
     const context = this.contextFor(session.accountId)
     const job = context.media.enqueue({
       kind: 'image',
-      params: { prompt, size: body.size ?? null, model, provider: config.id },
+      params: { prompt, size: size ?? null, model, provider: config.id, wire: config.wire },
       subject: session.accountId,
       filenameHint: `${config.id}-image`,
-      run: ({ signal }) => wire.generate(this.gateway.request.bind(this.gateway), config, { model, prompt, size: body.size, signal }),
+      run: ({ signal }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
+        model, prompt, size, signal,
+        poll: this.mediaPoll ?? undefined,
+        trustedOrigins: this.gateway.trustedOrigins,
+      }),
     })
     this.ledger.record({ category: 'media', action: 'image_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model } })
     return job
@@ -331,10 +353,9 @@ export class OnlineApp {
 
   /** The saved connection a video request will use, or a refusal that names what is missing. */
   videoConnection() {
-    const candidates = this.store.connections.filter((connection) => runtimeFor(connection.id).wire === 'gemini_veo')
-    const record = candidates.find((connection) => connection.id === 'veo') ?? candidates[0]
-    if (!record) throw failure('provider_not_configured', 'Add a Google Veo connection in Provider Settings.', 503)
-    return this.store.config(record.id)
+    const id = this.store.public().preferred.video
+    if (!id) throw failure('provider_not_configured', 'Add and test a video connection in Provider Settings (Google Veo, Runway, Luma, fal.ai video or Replicate video).', 503)
+    return this.store.config(id)
   }
 
   /** Whether this installation can start a video job now: a key and a listed model, not a maybe. */
@@ -342,7 +363,7 @@ export class OnlineApp {
     try {
       const config = this.videoConnection()
       const record = this.store.connections.find((connection) => connection.id === config.id)
-      return Boolean(record?.key && (record.models ?? []).length)
+      return Boolean((record?.key || !runtimeFor(config.id).keyRequired) && (record.models ?? []).length)
     } catch { return false }
   }
 
@@ -362,11 +383,18 @@ export class OnlineApp {
     const prompt = body.prompt
     if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
     if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps video prompts at 4,000 characters.', 400)
-    if (body.aspectRatio !== undefined && !(wire.ASPECT_RATIOS ?? []).includes(body.aspectRatio)) {
-      throw failure('invalid_parameters', `Aspect ratio must be one of ${(wire.ASPECT_RATIOS ?? []).join(', ')}.`, 400)
+    // A wire with an empty list does not send that control at all. Replicate video, for
+    // example, documents no common geometry input across its models; sending one would be a
+    // guess. An unsupported value on a wire that DOES document the control is a 400 here.
+    const aspects = wire.ASPECT_RATIOS ?? []
+    const resolutions = wire.RESOLUTIONS ?? []
+    const aspectRatio = aspects.length ? body.aspectRatio : undefined
+    const resolution = resolutions.length ? body.resolution : undefined
+    if (body.aspectRatio !== undefined && aspects.length && !aspects.includes(body.aspectRatio)) {
+      throw failure('invalid_parameters', `Aspect ratio must be one of ${aspects.join(', ')}.`, 400)
     }
-    if (body.resolution !== undefined && !(wire.RESOLUTIONS ?? []).includes(body.resolution)) {
-      throw failure('invalid_parameters', `Resolution must be one of ${(wire.RESOLUTIONS ?? []).join(', ')}.`, 400)
+    if (body.resolution !== undefined && resolutions.length && !resolutions.includes(body.resolution)) {
+      throw failure('invalid_parameters', `Resolution must be one of ${resolutions.join(', ')}.`, 400)
     }
     const context = this.contextFor(session.accountId)
     const job = context.media.enqueue({
@@ -374,14 +402,14 @@ export class OnlineApp {
       // Video renders for minutes and the provider operation is paid for once; the deadline is
       // bounded and stated in the job record, and the job is failed honestly if it is exceeded.
       timeoutMs: 15 * 60 * 1000,
-      params: { prompt, aspectRatio: body.aspectRatio ?? null, resolution: body.resolution ?? null, model, provider: config.id },
+      params: { prompt, aspectRatio: aspectRatio ?? null, resolution: resolution ?? null, model, provider: config.id, wire: config.wire },
       subject: session.accountId,
       filenameHint: `${config.id}-video`,
       run: ({ signal, progress }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
         model,
         prompt,
-        aspectRatio: body.aspectRatio,
-        resolution: body.resolution,
+        aspectRatio,
+        resolution,
         signal,
         onProgress: progress,
         poll: this.mediaPoll ?? undefined,

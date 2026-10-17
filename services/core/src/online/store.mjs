@@ -2,6 +2,7 @@ import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, chmodSy
 import { join } from 'node:path'
 import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto'
 import { failure, runtimeFor } from './gateway.mjs'
+import { wireFor } from '../providers/wires/index.mjs'
 
 // Server-owned store of provider connections. Several connections, one active at a time.
 //
@@ -194,11 +195,28 @@ export class OnlineStore {
     // It is listed with `unsupported` and `configured: false`, and a request through it is refused
     // by `config()` with the catalogue's own code.
     const describe = (id) => {
-      try { return { runtime: runtimeFor(id), unsupported: null } }
-      catch (error) { return { runtime: null, unsupported: error.code ?? 'invalid_runtime' } }
+      try {
+        const runtime = runtimeFor(id)
+        // The wire's own controls, so the UI does not keep a second copy of which provider
+        // accepts a size, an aspect ratio or a resolution. An empty list means the adapter
+        // deliberately offers no such control (model-specific geometry), not that the value
+        // is unknown.
+        let wire = null
+        try { wire = wireFor(runtime.wire) } catch { wire = null }
+        return {
+          runtime, unsupported: null,
+          media: wire ? {
+            modality: wire.modality ?? null,
+            sizes: Array.isArray(wire.SIZES) ? [...wire.SIZES] : [],
+            aspectRatios: Array.isArray(wire.ASPECT_RATIOS) ? [...wire.ASPECT_RATIOS] : [],
+            resolutions: Array.isArray(wire.RESOLUTIONS) ? [...wire.RESOLUTIONS] : [],
+            curatedModels: Array.isArray(wire.MODELS),
+          } : null,
+        }
+      } catch (error) { return { runtime: null, unsupported: error.code ?? 'invalid_runtime', media: null } }
     }
     const records = this.connections.map((record) => {
-      const { runtime, unsupported } = describe(record.id)
+      const { runtime, unsupported, media } = describe(record.id)
       return {
         id: record.id,
         label: runtime?.label ?? record.id,
@@ -212,9 +230,19 @@ export class OnlineStore {
         selectedModel: record.selectedModel,
         checkedAt: record.checkedAt,
         verified: record.verified,
+        ...(media ?? {}),
         ...(unsupported ? { unsupported } : {}),
       }
     })
+    // Which saved connection a media request will use, computed once here so the settings
+    // page and the Image/Video areas agree with the server rather than each implementing a
+    // preference rule that can drift. A configured connection is required; an unconfigured
+    // OpenAI Images record must not shadow a configured Gemini Images one.
+    const usable = records.filter((record) => record.configured)
+    const preferredImage = usable.find((record) => record.wire === 'openai_images' && record.modality === 'image')
+      ?? usable.find((record) => record.modality === 'image') ?? null
+    const preferredVideo = usable.find((record) => record.wire === 'gemini_veo' && record.modality === 'video')
+      ?? usable.find((record) => record.modality === 'video') ?? null
     const active = this.data.active
     const record = this.#record(active)
     const runtime = active ? describe(active).runtime : null
@@ -237,6 +265,12 @@ export class OnlineStore {
       verified: record?.verified ?? {},
       revision: this.data.revision,
       connections: records,
+      // The connection each media area will act on, and why it is not simply the active one:
+      // chat may be pointed at a text provider while images are rendered by another.
+      preferred: {
+        image: preferredImage?.id ?? null,
+        video: preferredVideo?.id ?? null,
+      },
     }
   }
 }

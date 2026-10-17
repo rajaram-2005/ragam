@@ -11,11 +11,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1817 passing, 0 failing.**
+**Test totals: 1828 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **908 / 908** (56 files, ~52 s) |
+| `services/core` | `node --test test/*.test.mjs` | **919 / 919** (57 files, ~78 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **95 / 95** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 235.62 kB → **70.30 kB gzip**, single chunk, no warnings |
@@ -234,7 +234,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (908 tests)
+### `services/core` — Implemented and tested (919 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -512,7 +512,7 @@ Measured release verification on this host:
 
 | Check | Result |
 |---|---|
-| `node services/core/scripts/release-check.mjs --core 908 --web 95 --fabric 814` | `release 0.2.0 verified against 908 + 95 + 814 = 1817 tests` |
+| `node services/core/scripts/release-check.mjs --core 919 --web 95 --fabric 814` | `release 0.2.0 verified against 919 + 95 + 814 = 1828 tests` |
 | `node services/core/scripts/benchmark-adaptive.mjs` | 7/7 benchmarks, 0 failed, artefact at `docs/experiments/phase10-benchmark.json` |
 | `VERSION` / three `package.json` / `package-lock.json` | all `0.2.0` |
 
