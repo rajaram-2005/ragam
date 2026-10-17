@@ -186,7 +186,7 @@ jobs:
         working-directory: apps/web
         run: npm ci
 
-      - name: Test (56 tests)
+      - name: Test
         working-directory: apps/web
         run: node --test test/*.test.mjs
 
@@ -236,6 +236,87 @@ jobs:
           fi
           echo "bundle is clean"
 
+  release:
+    name: Release verification (measured, not remembered)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # The release check compares the totals the documentation states with the totals the
+      # suites produced, so the suites have to run here. Reading the numbers out of docs/03 and
+      # then checking docs/03 against them would verify nothing.
+      - name: Core suite, counted
+        working-directory: services/core
+        run: |
+          set +e
+          node --test --test-reporter=tap test/*.test.mjs > /tmp/core.tap 2>&1
+          status=$?
+          tail -n 10 /tmp/core.tap
+          if [ "$status" -ne 0 ]; then
+            grep -E '^not ok ' /tmp/core.tap | head -n 5 |
+              while IFS= read -r line; do echo "::error::$line"; done
+            exit "$status"
+          fi
+          core=$(awk '/^# tests /{print $3}' /tmp/core.tap | tail -n 1)
+          echo "CORE_TESTS=$core" >> "$GITHUB_ENV"
+          echo "core tests: $core"
+
+      - name: Web suite, counted
+        working-directory: apps/web
+        run: |
+          npm ci
+          set +e
+          node --test --test-reporter=tap test/*.test.mjs > /tmp/web.tap 2>&1
+          status=$?
+          tail -n 10 /tmp/web.tap
+          if [ "$status" -ne 0 ]; then
+            grep -E '^not ok ' /tmp/web.tap | head -n 5 |
+              while IFS= read -r line; do echo "::error::$line"; done
+            exit "$status"
+          fi
+          web=$(awk '/^# tests /{print $3}' /tmp/web.tap | tail -n 1)
+          echo "WEB_TESTS=$web" >> "$GITHUB_ENV"
+          echo "web tests: $web"
+
+      - name: Fabric suite, counted
+        working-directory: services/fabric
+        run: |
+          python -m pip install --upgrade pip > /dev/null && pip install numpy pytest
+          set +e
+          # Not `-q`: in pytest 9 the summary line ("814 passed") is suppressed when
+          # stdout is a file, and the summary is exactly what this step counts.
+          python -m pytest > /tmp/fabric.log 2>&1
+          status=$?
+          tail -n 5 /tmp/fabric.log
+          if [ "$status" -ne 0 ]; then
+            grep -E '^(FAILED|ERROR) ' /tmp/fabric.log | head -n 5 |
+              while IFS= read -r line; do echo "::error::$line"; done
+            exit "$status"
+          fi
+          fabric=$(grep -oE '[0-9]+ passed' /tmp/fabric.log | tail -n 1 | awk '{print $1}')
+          echo "FABRIC_TESTS=$fabric" >> "$GITHUB_ENV"
+          echo "fabric tests: $fabric"
+
+      - name: Verify the release
+        run: |
+          node services/core/scripts/release-check.mjs \
+            --core "$CORE_TESTS" --web "$WEB_TESTS" --fabric "$FABRIC_TESTS"
+
+      - name: Benchmark the adaptive core
+        run: |
+          # The benchmark is checked for *shape*, not for matching the committed artefact:
+          # rates belong to the runner. What must hold is that no benchmark failed and every
+          # one produced a measurement.
+          node services/core/scripts/benchmark-adaptive.mjs
+
   docs:
     name: Documentation matches implementation
     runs-on: ubuntu-latest
@@ -254,7 +335,7 @@ jobs:
         working-directory: apps/web
         run: npm ci
 
-      - name: Docs accuracy suite (23 tests)
+      - name: Docs accuracy suite
         working-directory: services/core
         run: node --test test/docs.test.mjs
 

@@ -604,7 +604,104 @@ requests are out of scope: `count` above 1 is refused rather than silently reduc
 `media/workflow.mjs` (487 lines), `test/media-workflow.test.mjs` (11 tests), routed and refused
 through the provider fabric, measured from artifact headers, and a still image refused as a video.
 
-**Phase 9 — industry packs.** **Phase 10 — benchmark, harden, document, release.**
+**Phase 9 — industry packs.** ✅ **Met, 2026-10-17.**
+`services/core/src/packs/manifest.mjs` (249), `packs/registry.mjs` (277), `packs/builtin.mjs` (131)
+and `test/industry-packs.test.mjs` (12 tests). A pack is content and restriction, never capability
+and never authority.
+
+The directive does not state Phase 9's criteria either, so they are derived from the standing rules
+and each is a named test:
+
+| Rule | Criterion | Test |
+|---|---|---|
+| "industry packs for regulated industries … should stay optional" + the tier rule that a profile narrows and never widens | a pack can only narrow a policy: a weaker data-class floor, an unknown key or a non-refusable action is refused at validation | `acceptance: a pack can only narrow policy, never widen it` |
+| tool output is data and cannot authorise anything (Phase 7) | a pack is data too: applying one yields a frozen profile, and presenting that profile as an authority is refused | `acceptance: a pack is data and cannot authorise anything` |
+| "Do not falsely advertise a capability the available model or hardware cannot deliver" | a pack whose capability this installation cannot serve reports it by name and is not applied unless the caller acknowledges the gap | `acceptance: a pack whose capability is unavailable is reported, never substituted` |
+
+**What a pack is.** A versioned document: `id`, `industry`, `description`, `capabilities` (each with
+the file in this repository that evidences it, or `unimplemented: true`), `vocabulary`,
+`disclaimers`, `sources`, `refuses` and `restrictions`. The validator refuses unknown keys, refuses a
+`dataClassFloor` below `internal` (so a pack cannot declassify `confidential` data to `public`), and
+requires a regulated pack (`finance`, `healthcare`, `legal`, `public-sector`) to set
+`requireHumanReview` and to name at least one refused action. Installing, enabling and uninstalling
+are all governance events: history is kept, a downgrade needs an explicit flag, and there is no
+`grant`, `authorise`, `approve`, `execute` or `invoke` on the registry, so a pack cannot become a
+principal.
+
+**Readiness is measured, not asserted.** `readiness(id)` asks the Phase 6 fabric for each required
+tag and reports one of four states, which exist because they have four different answers:
+`unknown` (no fabric configured — *not* a claim that it works), `unavailable` (a capability the pack
+relies on is not served; application is refused as `pack_unavailable` unless
+`profileFor(id, { allowPartial: true })` is asked for by name), `partial` (everything it relies on is
+served, but it declares a gap it admits to), and `complete`. That fourth case was found by the
+Phase 10 benchmark, which failed on it: the first implementation treated a pack's *honest admission*
+that a capability is unimplemented as though the capability were missing, which would have made
+disclosure more expensive than silence. Fixed before release, and the fix has its own assertion.
+
+**Shipped packs.** `engineering.repo-maintenance` (refuses `fs.delete`, `network.external`, requires
+human review), `legal.document-review` (confidential floor, refuses `fs.write`, `fs.delete`,
+`network.external`, `media.generate`, and carries "reading support, not legal advice" as a disclaimer
+rather than a footnote) and `education.grounded-tutoring` (refuses `network.external`,
+`media.generate`). Their capabilities are the modules this repository actually has —
+`tree.line-count`, `memory.layer.*` — plus `chat.completion` marked unimplemented, because no chat
+provider ships in this build. Neither source-citing pack cites a source: `requireSources` is false
+for both, since inventing a citation to satisfy a field is the failure the field exists to prevent.
+
+**Not claimed.** No pack is reachable from the product, and a pack is not a compliance
+certification. `profileFor` returns restrictions; it does not enforce them — enforcement is the
+Phase 5/7 gates, and the profile is an input to them.
+
+**Phase 10 — benchmark, harden, document, release.** ✅ **Met, 2026-10-17.**
+`src/benchmark/harness.mjs` (254), `src/release/manifest.mjs` (268), `test/benchmark.test.mjs`
+(7 tests), `test/release.test.mjs` (14 tests), a measured artefact at
+`docs/experiments/phase10-benchmark.json`, the release note [26 — Release 0.2.0](26-release.md) and a
+`VERSION`/`CHANGELOG.md` pair at **0.2.0**.
+
+The derived criteria, each a named test:
+
+| Rule | Criterion | Test/artefact |
+|---|---|---|
+| "Do not report success without execution evidence" | every benchmark number comes from calling the real module, and a benchmark that fails is kept in the table and fails the run | `acceptance: a benchmark reports the measurement its number came from`; `acceptance: a failed benchmark is kept in the table and fails the run` (in `test/benchmark.test.mjs`) |
+| a documented number is a claim | the release is refused unless the documents' totals equal the measured suites | crafted refusals in `test/release.test.mjs`, including two documents that agree with each other and not with the suite |
+| no release without its artefacts | `VERSION`, one version across three packages, a dated changelog entry, required files and every pack capability's evidence | `a consistent release verifies` / `a required artefact that is missing is refused` |
+
+**The benchmark measures the modules, and says so.** Seven entries — authority decisions,
+instruction classification, PNG header parsing, MP4 `mvhd` parsing, provider routing, pack
+application and a line count over 24 files on disk — each produced by a real call with an assertion
+inside the timed loop, so a benchmark that stops doing the work fails instead of getting faster. The
+report carries `environment` (Node, platform, CPU count) and a `scope` string stating that it is not
+a product throughput claim. A zero-elapsed-time run raises rather than reporting `0 ops/s`; the
+`recordBenchmark` failure paths are tested directly.
+
+**One measured run**, 2026-10-17, 2 CPUs, Node v22.22.3, in the committed artefact (absolute rates
+vary by host and by run; the medians are what the run had):
+
+| Benchmark | ops/s | p50 ms | p95 ms |
+|---|---|---|---|
+| `authority.decide` | 58,576 | 0.013 | 0.025 |
+| `authority.scan` | 59,327 | 0.015 | 0.022 |
+| `media.measure-image` | 358,766 | 0.001 | 0.005 |
+| `media.measure-video` | 97,310 | 0.002 | 0.004 |
+| `fabric.route` | 137,846 | 0.005 | 0.009 |
+| `packs.profile` | 71,474 | 0.009 | 0.023 |
+| `adaptive.line-count` | 119 | 6.827 | 22.397 |
+
+**The release verifier is the deliverable, not the tag.** `verifyRelease(state)` takes the version,
+the package versions, the changelog, the status document, the README, the artefact list and the
+*measured* suite totals, and refuses on disagreement. `scripts/release-check.mjs` makes the totals
+arguments rather than reading them from the documents it is checking, because a verifier that reads
+its own expectations verifies nothing. The tests prove it refuses: a package on an old version, an
+undated changelog entry, an empty one, a total one too high, a stale grand total, a README that
+drifts, two documents that corroborate a wrong number, a missing artefact, a pack citing evidence
+that is not there, and a pack that does not validate.
+
+**What was hardened.** The benchmark found the `partial`/`unavailable` conflation described above;
+the release verifier found nothing new in the tree, because the documentation counts it checks were
+already the ones `docs.test.mjs` pins to the filesystem. No API was changed in this phase, so no
+consumer needed updating.
+
+**Not claimed.** This is not a performance claim, not a load test, and not a security review. It is
+a reproducible benchmark of a library and a release check for a version number.
 
 ## 5. Durability, and the run that is not running
 

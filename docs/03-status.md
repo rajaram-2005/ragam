@@ -11,18 +11,20 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1681 passing, 0 failing.**
+**Test totals: 1715 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **775 / 775** (44 files, ~48 s) |
+| `services/core` | `node --test test/*.test.mjs` | **809 / 809** (47 files, ~49 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **92 / 92** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 200.08 kB → **61.78 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
-([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as four jobs split so a
-failure names the component that broke. The CI run also asserts two properties that
+([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as five jobs split so a
+failure names the component that broke. The fifth runs all three suites, counts what they
+reported, and passes those counts to the release verifier — a release gate that read the totals out
+of the document it was checking would verify nothing. The CI run also asserts two properties that
 are easy to lose silently: that `services/core` still declares **zero** npm
 dependencies, and that the Fabric release gate refuses an undertrained model rather
 than merely accepting a trained one.
@@ -104,7 +106,7 @@ instead.
 |---|---|---|---|
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
-| 3 | Unified app, five areas | **Complete** | `apps/web`; 91 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
+| 3 | Unified app, five areas | **Complete** | `apps/web`; 92 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
 | 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,616-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 11, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 28 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
 | 5 | Online provider integration | **Partially met** | The online entry reaches a LiteLLM gateway, an Ollama server or a llama.cpp server through one OpenAI-compatible transport, with the same destination checks, consent, deadline and size limits for each. Verified only against synthetic loopback fixtures; no real gateway or runtime has been qualified in this sandbox. Provider-native protocols are not used online, and Image and Video have no adapter |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
@@ -204,6 +206,10 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ---
 
+The ten phases of the *Klyvaron adaptive intelligence* directive are a separate programme with its
+own acceptance criteria and records: [25 — Adaptive intelligence](25-adaptive-intelligence.md).
+Phases 9 and 10 of that programme are summarised in §4 below.
+
 ## 3. Acceptance criteria
 
 | Criterion | Status | Evidence |
@@ -227,7 +233,7 @@ that way in §2 rather than being upgraded by the loopback fixture.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (775 tests)
+### `services/core` — Implemented and tested (809 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -460,13 +466,45 @@ cleared on every path.
 |---|---|
 | `services/core/src/legacy-server.mjs` (153) | Nothing imports it, but it is a documented entry point (`docs/02`, `docs/04`) over `app.mjs`, which `builtins.test.mjs` does exercise. Removing an entry point is a product decision, not hygiene |
 | `third-party/licenses/aetheris-MIT.txt` | Byte-identical to `LICENSE`, but it is the record of the *upstream* repository's licence and is asserted by `docs.test.mjs` and by CI. The duplicate is the point: a licence record has to travel with the code it covers |
-| `docs/experiments/*.json` (15) | Measurement records with dates and machine details. Deleting one deletes the evidence for a claim in the docs |
+| `docs/experiments/*.json` (15) and `phase1-probes.mjs` | Measurement records with dates and machine details. Deleting one deletes the evidence for a claim in the docs |
 | `services/fabric/remote/*` | The notebook, its job spec and the local runner are exercised by `test_training_notebook.py` and `test_training_local_runner.py` |
 | `apps/web/src/components/ContextPanels.jsx` | One direct importer, but that importer is the Chat panel that renders it, and two web tests assert its contents |
 
 No untracked or ignored artefacts were found in the tree beyond the empty, gitignored
-`.aetheris-data/`. The suite after the change: **775 / 775** core, 45/45 docs, 92/92 web (run with
+`.aetheris-data/`. The suite after the change: **809 / 809** core, 46/46 docs, 92/92 web (run with
 `npm ci`), 814 fabric.
+
+### Phases 9–10 — industry packs, and a release that verifies its own numbers
+
+Two increments, both additive: no existing module changed API, and the product routes are untouched.
+
+| Module | Lines | What it establishes |
+|---|---|---|
+| `packs/manifest.mjs` | 249 | A pack is content and restriction: unknown keys refused, `dataClassFloor` can only rise, a regulated pack must require human review and name a refusal, and every capability carries either the file that evidences it or `unimplemented: true` |
+| `packs/registry.mjs` | 277 | Install/enable/disable/uninstall with history and no downgrade by accident; readiness measured against the provider fabric in four states (`unknown`, `unavailable`, `partial`, `complete`); `profileFor` refuses an unavailable pack unless the gap is acknowledged; **no method grants, authorises or executes** |
+| `packs/builtin.mjs` | 131 | Three shipped packs — engineering repo maintenance, legal document review, grounded tutoring — each narrowing only |
+| `benchmark/harness.mjs` | 254 | Seven benchmarks over the real modules; a failed entry is kept with its error and fails the run; a zero-duration run raises instead of reporting `0 ops/s` |
+| `release/manifest.mjs` | 268 | One version across `VERSION` and three packages, a dated changelog entry, documented totals compared against *supplied* measurements, required artefacts present, pack evidence on disk |
+
+**The benchmark found a defect before the release did.** The first `readiness()` reported a pack that
+honestly declared an unimplemented capability as `partial` alongside packs whose dependencies were
+genuinely missing, and `profileFor` refused both. That made disclosure more expensive than silence —
+the exact incentive a project about not overclaiming cannot afford. The states were split:
+`unavailable` (a dependency is not served; application refused by name) and `partial` (everything
+required is served, a declared gap remains; applies normally). The fix has its own assertion.
+
+**What the release check refuses**, each case a crafted test rather than a comment: a package on an
+old version; a changelog with no entry, no date, or nothing in it; a documented total one too high; a
+stale grand total; a README that drifts from `docs/03`; **two documents that agree with each other
+and not with the suite**; a missing artefact; a pack citing a file that is not there.
+
+Measured release verification on this host:
+
+| Check | Result |
+|---|---|
+| `node services/core/scripts/release-check.mjs --core 809 --web 92 --fabric 814` | `release 0.2.0 verified against 809 + 92 + 814 = 1715 tests` |
+| `node services/core/scripts/benchmark-adaptive.mjs` | 7/7 benchmarks, 0 failed, artefact at `docs/experiments/phase10-benchmark.json` |
+| `VERSION` / three `package.json` / `package-lock.json` | all `0.2.0` |
 
 ---
 

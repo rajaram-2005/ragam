@@ -8,6 +8,8 @@ Exactly **Chat, Image, Video, Plugins, MCP**, with LiteLLM Provider Settings in 
 
 Run `npm run core` and `npm run web`, then **create an account** at `#/signup` and sign in with it at `#/signin`. Sign-in is traditional — an email address and a password, on three pages (sign in, create account, reset password) — and it is the only way in: the operator access-token file and its login route have been removed. The first account created owns the installation and is the only one that can change the gateway connection; later accounts are members with their own history, memory and knowledge. Then open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. On HTTP-only local development, start Core with `AETHERIS_COOKIE_SECURE=false`; keep secure cookies enabled for HTTPS deployments. If the web app is served inside another site's iframe, also start Core with `AETHERIS_COOKIE_SAMESITE=none` — a strict session cookie is never sent cross-site, so sign-in would appear to work and every request after it would be a `401`. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md).
 
+Current release: **0.2.0** — [release note](docs/26-release.md), [changelog](CHANGELOG.md), version in [`VERSION`](VERSION). The release carries the adaptive core (ten phases, code and tests) as a library; the product surface described above is unchanged by it.
+
 **Current limits:** online Image/Video adapters and remote MCP are not connected, and universal provider support is not delivered — LiteLLM is the only gateway. No real provider credentials or remote inference have been tested in this restricted sandbox. The product needs a reachable, authorized LiteLLM gateway; synthetic fixtures are used only in tests. Accounts have no email delivery, no second factor and no self-service deletion. See the [Phase 2 guide](docs/19-online-only-phase-2.md) for security boundaries and setup, and [accounts and sign-in](docs/20-accounts-and-sign-in.md) for the account model.
 
 ## Retained legacy architecture and verification history
@@ -69,7 +71,7 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 1681 tests: core 775, web 92, fabric 814
+npm test          # 1715 tests: core 809, web 92, fabric 814
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -84,9 +86,10 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1681 run in CI on every push and pull request
-([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
-component, plus one that fails if this documentation stops matching the code. The
+All 1715 run in CI on every push and pull request
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as five jobs — one per
+component, plus one that fails if this documentation stops matching the code, plus one
+that counts what the suites reported and verifies the release against those counts. The
 Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
 
@@ -145,7 +148,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 23,374 | 17,832 | **zero npm packages** | 775 |
+| `services/core` | Node 22 ESM | 24,553 | 18,533 | **zero npm packages** | 809 |
 | `services/fabric` | Python 3.11 | 12,655 | 9,995 | NumPy only | 814 |
 | `apps/web` | React 18 + Vite | 2,691 | 1,818 | react, react-dom | 92 |
 

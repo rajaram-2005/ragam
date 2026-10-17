@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 23,374 source lines, 17,832 test lines
+### `services/core` — 24,553 source lines, 18,533 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -149,6 +149,11 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `adaptive/budget.mjs` | 202 | Steps, calls, wall time and tokens; a gate that refuses to *start* work its measurement cannot cover, and unreported token counts kept as unreported rather than counted as zero |
 | `adaptive/checkpoint.mjs` | 248 | Atomic, digest-chained checkpoints; newest intact record read, torn writes skipped and reported, and a resume against a different plan refused |
 | `adaptive/runner.mjs` | 428 | A plan executed step by step with a checkpoint after each, resumable by inheriting only steps that completed *and* verified; deadlines gated before a synchronous step and reported after it |
+| `packs/manifest.mjs` | 249 | The pack document: vocabulary, refusals, review requirements and restriction *floors* — unknown keys refused and the data-class floor only ever raised, so a pack cannot be used to widen a policy |
+| `packs/registry.mjs` | 277 | Installed, enabled and disabled packs; readiness measured against the provider fabric (a capability this installation cannot serve is reported by name, never substituted), application that refuses an unavailable pack unless the caller acknowledges it, and no method that grants, authorises or executes |
+| `packs/builtin.mjs` | 131 | Three shipped packs — engineering repo maintenance, legal document review (confidential, human review, "reading support, not legal advice"), grounded tutoring — each narrow, and each capability either evidenced by a file in this repository or marked unimplemented |
+| `benchmark/harness.mjs` | 254 | The measured benchmark of the adaptive core: every entry calls the real module, a failed entry is kept in the table with its error and fails the run, and a benchmark that measures nothing is refused rather than reported as zero |
+| `release/manifest.mjs` | 268 | Release verification: one version across `VERSION` and the three packages, a dated changelog entry, documented totals compared against supplied measurements (not against each other), required artefacts present, and every shipped pack capability evidenced |
 
 ### `services/fabric` — 12,655 source lines, 9,995 test lines
 
