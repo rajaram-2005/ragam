@@ -275,6 +275,45 @@ cancelled job stays visible with its reason and has no media element.
   artifacts. No model card claims one. There is no registry for them yet, because a registry of
   models that do not exist would be a fiction with good formatting.
 
+### 6.1 Product tiers in the online build
+
+The online entry sells **Lite, Pro and Max as product tiers**, and says so in the payload rather
+than only in the documentation. `GET /api/klyvaron` returns:
+
+```
+{ product: 'klyvaron', independentWeights: false, revision,
+  note: 'Klyvaron Lite, Pro and Max are product tiers, not first-party model weights. …',
+  tiers: [{ id, label, intent,
+            presets: { chat|image|video: { configured, connectionId, provider, wire, model,
+                                           provenance } } }] }
+```
+
+- A preset is a **pointer** to a saved connection and a model that connection already listed. It
+  holds no credential; the connection names the secret.
+- `provenance` is `{ kind: 'third_party_api', providerId, provider, wire, model,
+  firstPartyWeights: false, training: 'none_by_this_project', statement }`. The fields are
+  machine-readable so a later view cannot drop the disclosure while keeping the tier name.
+- `PUT /api/klyvaron/{lite|pro|max}` is owner-only and validates the tier, the modality, that the
+  connection is saved and configured, that the wire serves that modality, and that the model is on
+  the connection's tested list (`model_unlisted`, 409). Changing a preset bumps the store revision,
+  so the next chat re-asks for consent to the destination it will actually use.
+- `DELETE /api/klyvaron/{tier}/{modality}` clears one preset and leaves the connection and its key
+  untouched.
+- A request carrying `tier` resolves **before** model selection: an unconfigured tier is
+  `klyvaron_tier_unconfigured` (409) and is never silently replaced by the active connection's
+  model. A chat request may also carry `authorization.providerId`; a mismatch is
+  `consent_provider_mismatch` (409) rather than a redirect.
+- Image and video jobs record `params.tier` and `params.provenance` beside the prompt, provider
+  and model. Chat responses carry `klyvaron: { tier, provenance }`, or `null` when no tier was used.
+- Provider Settings renders the panel: each row names the provider and model that will serve the
+  tier, shows the provenance sentence, and offers only the connections and models the server
+  already validated. Before the read resolves it says so instead of showing a tier it cannot name.
+
+What this is **not:** it is not a family of pretrained models, not fine-tuning, and not a claim that
+a tier's name describes a capability the underlying vendor model lacks. The local artifacts in
+documents 08 and 24 remain the only Klyvaron weights that exist, and the online build does not load
+them.
+
 ---
 
 ## 7. Security posture for an online-first product

@@ -30,6 +30,15 @@ Not in 0.2.0. On this branch only.
   Video adds Runway (version header and task polling), Luma (generation polling), fal video and
   Replicate video. Every adapter refuses a provider URL on a foreign origin instead of sending the
   key there, and no CDN/download hop carries a credential.
+- **Klyvaron tiers are pointers with provenance.** `GET /api/klyvaron` lists Lite, Pro and Max
+  with `independentWeights: false`, and each preset resolves to a saved connection and a listed
+  model. `PUT /api/klyvaron/<tier>` is owner-only, refuses an unlisted model (`model_unlisted`), a
+  wrong modality (`klyvaron_tier_modality`) and an unconfigured connection, and bumps the store
+  revision so the next chat re-consents. Chat accepts `tier` and returns
+  `klyvaron: { tier, provenance }`; image and video jobs store `params.tier` and
+  `params.provenance`. A tier with no preset refuses with `klyvaron_tier_unconfigured`; it never
+  falls back to another model. Provider Settings gains a read-and-assign panel that names the
+  third-party provider and model behind every tier.
 - **The Image and Video areas follow the wire's modality, not a vendor id.** A connection's
   `SIZES`/`ASPECT_RATIOS`/`RESOLUTIONS` are published by its adapter; an empty list hides the
   control and the request omits it. Readiness names the exact connection and wire a media request

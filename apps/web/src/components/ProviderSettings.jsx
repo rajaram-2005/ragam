@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 import { Banner, Button, Field } from './ui.jsx'
 import ProviderCatalogue from './ProviderCatalogue.jsx'
+import KlyvaronTiers from './KlyvaronTiers.jsx'
 // `account` decides what this dialog offers. The gateway connection and its key belong to
 // the installation, so only the owner account may change them: with an open sign-up page,
 // letting any member re-point the connection or delete the stored key would hand a
@@ -200,6 +201,7 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
         <Button type="submit" disabled={busy || !owner || !addUrl}>Save and use</Button>
       </form> : null}
     </details> : null}
+    <KlyvaronTiers providers={provider} owner={owner} onChanged={onChanged} />
     <ProviderCatalogue catalog={catalog} />
   </dialog>
 }

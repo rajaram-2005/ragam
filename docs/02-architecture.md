@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 29,651 source lines, 21,909 test lines
+### `services/core` — 29,897 source lines, 22,162 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -79,12 +79,13 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
 | `online/accounts.mjs` | 387 | Accounts, scrypt password hashes, lockouts, throttling and host-delivered reset codes |
-| `online/app.mjs` | 807 | Authenticated online application, per-account context, exact-model inference, and a provider-connection family: a route per saved connection, an active-connection switch, and a probe that reads only the connection it names |
+| `online/app.mjs` | 895 | Authenticated online application, per-account context, exact-model inference and Klyvaron tier presets, and a provider-connection family: a route per saved connection, an active-connection switch, and a probe that reads only the connection it names |
 | `online/context-routes.mjs` | 260 | Authenticated context and reviewed read-only tool routes |
 | `online/gateway.mjs` | 199 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
 | `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
 | `online/http.mjs` | 32 | Bounded JSON requests and no-store responses |
-| `online/store.mjs` | 280 | Multi-connection encrypted store (schema 2): one sealed credential per connection, an active id, a store-wide revision, and a migration that preserves the key of a schema-1 file |
+| `online/klyvaron.mjs` | 87 | Klyvaron product tiers in the online build: resolve a tier to a saved connection and a listed model, refuse an unconfigured tier by name, and name the third-party provider and model as provenance |
+| `online/store.mjs` | 351 | Multi-connection encrypted store (schema 2): one sealed credential per connection, an active id, a store-wide revision, a migration that preserves the key of a schema-1 file, and optional Klyvaron tier presets stored as connection/model pointers |
 | `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `klyvaron/format.mjs` | 622 | The Klyvaron artifact format: manifest validation, the shared vocabulary digest, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
@@ -199,11 +200,11 @@ central finite differences to ~3e-10**, and a prototype that trains the two diff
 in the same loss as the language objective. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 3,552 source lines, 1,894 test lines
+### `apps/web` — 3,677 source lines, 1,903 test lines
 
 Five area components, three sign-in pages (sign in, create account, reset
-password) and the account card in the sidebar, a shell, shared primitives, an API
-client and four test files. The sign-in pages are not areas and add no navigation
+password), the account card and the Klyvaron tier panel, a shell, shared primitives,
+an API client and four test files. The sign-in pages are not areas and add no navigation
 entry; see [20 — Accounts and sign-in](20-accounts-and-sign-in.md). Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).
 

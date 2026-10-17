@@ -250,7 +250,7 @@ test('a schema-1 store migrates to one connection without losing the key', (t) =
 
 test('the migration is pure and refuses a record that is neither schema', () => {
   const fresh = migrateState(null)
-  assert.deepEqual(fresh, { schema: STORE_SCHEMA, revision: 0, active: null, connections: {} })
+  assert.deepEqual(fresh, { schema: STORE_SCHEMA, revision: 0, active: null, connections: {}, klyvaron: { tiers: {} } })
   const legacy = migrateState({ kind: 'litellm', baseUrl: 'https://g.example/v1', key: null, revision: 2 })
   assert.equal(legacy.active, 'litellm')
   assert.equal(legacy.revision, 2)

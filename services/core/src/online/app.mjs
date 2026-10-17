@@ -21,6 +21,7 @@ import { PluginRegistry } from '../plugins/registry.mjs'
 import { McpRegistry, RISK, SERVER_KINDS } from '../mcp/layer.mjs'
 import { PROVIDERS, catalogueReport, describeProvider } from '../providers/catalog.mjs'
 import { normaliseCredential, wireFor } from '../providers/wires/index.mjs'
+import { KLYVARON_TIERS, MODALITIES, KLYVARON_NOTE, tierFor, provenanceFor, resolveTier } from './klyvaron.mjs'
 
 /**
  * Session bounds.
@@ -254,6 +255,68 @@ export class OnlineApp {
       providers: PROVIDERS.map((provider) => describeProvider(provider.id)),
     }
   }
+  /**
+   * Klyvaron product tiers, with the exact provider and model each preset resolves to.
+   *
+   * The name on the outside is a tier; the model on the inside is a third-party API the operator
+   * configured. A tier with no preset is returned as `configured: false` rather than silently
+   * pointing at the active connection: the label would otherwise describe a different model than
+   * the one the operator chose.
+   */
+  klyvaronView() {
+    const view = this.store.public()
+    const connections = new Map(view.connections.map((connection) => [connection.id, connection]))
+    return {
+      product: 'klyvaron',
+      independentWeights: false,
+      note: KLYVARON_NOTE,
+      revision: view.revision,
+      tiers: KLYVARON_TIERS.map((tier) => ({
+        id: tier.id,
+        label: tier.label,
+        intent: tier.intent,
+        presets: Object.fromEntries(MODALITIES.map((modality) => {
+          const preset = this.store.klyvaronPreset(tier.id, modality)
+          if (!preset) return [modality, { configured: false, provenance: null }]
+          const connection = connections.get(preset.connectionId)
+          return [modality, {
+            configured: Boolean(connection?.configured),
+            connectionId: preset.connectionId,
+            provider: connection?.label ?? preset.connectionId,
+            wire: connection?.wire ?? null,
+            model: preset.model,
+            provenance: connection ? provenanceFor(connection, preset.model) : null,
+          }]
+        })),
+      })),
+    }
+  }
+
+  /** Point a tier at a saved connection and a model that connection already lists. */
+  setKlyvaronPreset(tier, body, session) {
+    const entry = tierFor(tier)
+    if (!entry) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
+    if (!MODALITIES.includes(body?.modality)) throw failure('invalid_modality', 'A tier preset is for chat, image or video.', 400)
+    if (typeof body?.connectionId !== 'string' || typeof body?.model !== 'string') throw failure('invalid_preset', 'A preset needs a saved connection and a listed model.', 400)
+    // `config()` refuses an unconfigured connection, so a preset can never point at a name that
+    // has no endpoint or key behind it.
+    const config = this.store.config(body.connectionId)
+    const wire = wireFor(config.wire)
+    const actual = wire.modality ?? 'chat'
+    if (actual !== body.modality) {
+      throw failure('klyvaron_tier_modality', `${entry.label} is a ${body.modality} tier; ${config.label} serves ${actual}.`, 409)
+    }
+    this.store.saveKlyvaronPreset(tier, body.modality, { connectionId: body.connectionId, model: body.model })
+    this.ledger.record({ category: 'provider', action: 'klyvaron_preset', outcome: 'success', subject: session?.accountId ?? null, detail: { tier, modality: body.modality, provider: config.id, model: body.model } })
+    return this.klyvaronView()
+  }
+
+  clearKlyvaronPreset(tier, modality) {
+    if (!tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
+    this.store.removeKlyvaronPreset(tier, modality)
+    return this.klyvaronView()
+  }
+
   readiness() {
     const s = this.store.public()
     // `kind` is a connection id, not a wire name: resolve the wire the connection will use, or a
@@ -315,10 +378,13 @@ export class OnlineApp {
    * configured provider; no other connection's key is touched.
    */
   async startImage(body, session) {
-    const config = this.imageConnection()
+    const tier = body.tier === undefined || body.tier === null ? null : body.tier
+    if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
+    const resolved = tier === null ? null : resolveTier({ tier, modality: 'image', store: this.store, configFor: (id) => this.store.config(id), wireFor })
+    const config = resolved?.config ?? this.imageConnection()
     const record = this.store.connections.find((connection) => connection.id === config.id)
     const models = record?.models ?? []
-    const model = typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0])
+    const model = resolved?.model ?? (typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0]))
     if (!model) throw failure('model_unavailable', 'Test the image connection to list its models, then choose one.', 409)
     if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
     const wire = wireFor(config.wire)
@@ -338,7 +404,7 @@ export class OnlineApp {
     const context = this.contextFor(session.accountId)
     const job = context.media.enqueue({
       kind: 'image',
-      params: { prompt, size: size ?? null, model, provider: config.id, wire: config.wire },
+      params: { prompt, size: size ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
       subject: session.accountId,
       filenameHint: `${config.id}-image`,
       run: ({ signal }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
@@ -347,7 +413,7 @@ export class OnlineApp {
         trustedOrigins: this.gateway.trustedOrigins,
       }),
     })
-    this.ledger.record({ category: 'media', action: 'image_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model } })
+    this.ledger.record({ category: 'media', action: 'image_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model, tier: resolved?.tier ?? null } })
     return job
   }
 
@@ -372,10 +438,13 @@ export class OnlineApp {
    * the job record and nothing else; polling, cancellation and the restart rule live in the queue.
    */
   async startVideo(body, session) {
-    const config = this.videoConnection()
+    const tier = body.tier === undefined || body.tier === null ? null : body.tier
+    if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
+    const resolved = tier === null ? null : resolveTier({ tier, modality: 'video', store: this.store, configFor: (id) => this.store.config(id), wireFor })
+    const config = resolved?.config ?? this.videoConnection()
     const record = this.store.connections.find((connection) => connection.id === config.id)
     const models = record?.models ?? []
-    const model = typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0])
+    const model = resolved?.model ?? (typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0]))
     if (!model) throw failure('model_unavailable', 'Test the video connection to list its models, then choose one.', 409)
     if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
     const wire = wireFor(config.wire)
@@ -402,7 +471,7 @@ export class OnlineApp {
       // Video renders for minutes and the provider operation is paid for once; the deadline is
       // bounded and stated in the job record, and the job is failed honestly if it is exceeded.
       timeoutMs: 15 * 60 * 1000,
-      params: { prompt, aspectRatio: aspectRatio ?? null, resolution: resolution ?? null, model, provider: config.id, wire: config.wire },
+      params: { prompt, aspectRatio: aspectRatio ?? null, resolution: resolution ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
       subject: session.accountId,
       filenameHint: `${config.id}-video`,
       run: ({ signal, progress }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
@@ -416,7 +485,7 @@ export class OnlineApp {
         trustedOrigins: this.gateway.trustedOrigins,
       }),
     })
-    this.ledger.record({ category: 'media', action: 'video_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model } })
+    this.ledger.record({ category: 'media', action: 'video_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model, tier: resolved?.tier ?? null } })
     return job
   }
   async configure(body, { session, kind = 'litellm' } = {}) {
@@ -479,11 +548,17 @@ export class OnlineApp {
     // This account's own history, memory and knowledge. Nothing here can reach another
     // account's stores, because they are different databases, not different filters.
     const context = this.contextFor(session.accountId)
-    const state = this.store.state, config = this.store.config(), revision = state.revision
-    const model = body.model || state.selectedModel
+    const state = this.store.state, revision = state.revision
+    const tier = body.tier === undefined || body.tier === null ? null : body.tier
+    if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
+    const resolved = tier === null ? null : resolveTier({ tier, modality: 'chat', store: this.store, configFor: (id) => this.store.config(id), wireFor })
+    const config = resolved?.config ?? this.store.config()
+    const model = resolved?.model ?? (body.model || state.selectedModel)
+    const modelSource = resolved ? (this.store.connections.find((connection) => connection.id === config.id)?.models ?? []) : state.models
     if (body.executionMode && body.executionMode !== 'online') throw failure('online_only', 'Local and hybrid inference are not available.', 400)
-    if (!state.models.includes(model)) throw failure('model_unavailable', 'Choose a listed model. This request will not switch to another model.', 409)
+    if (!modelSource.includes(model)) throw failure('model_unavailable', 'Choose a listed model. This request will not switch to another model.', 409)
     if (body.authorization?.providerRevision !== revision || body.authorization?.confirmed !== true) throw failure('consent_required', 'Confirm sending this request to the current gateway.', 403)
+    if (resolved && body.authorization?.providerId && body.authorization.providerId !== config.id) throw failure('consent_provider_mismatch', 'The request is authorized for a different provider than this tier uses.', 409)
     const incoming = body.messages ?? [{ role: 'user', content: body.prompt }]
     if (!Array.isArray(incoming) || incoming.length < 1 || incoming.length > 100 || incoming.some((m) => !m || !['user','assistant'].includes(m.role) || typeof m.content !== 'string' || m.content.length > 100_000)) throw failure('invalid_messages', 'Send up to 100 text user/assistant messages.')
     if (incoming.at(-1).role !== 'user' || !incoming.at(-1).content.trim()) throw failure('invalid_messages', 'The last message must be a nonempty user message.')
@@ -555,17 +630,18 @@ export class OnlineApp {
       this.ledger.record({ category: 'policy', action: 'style_violation', outcome: 'blocked', subject: session.accountId, detail: { model, rules: [...new Set(refusal.map((v) => v.name))] } })
       throw failure('style_violation', `The reply made a claim the product does not allow (${[...new Set(refusal.map((v) => v.name))].join(', ')}). It was discarded, not stored, and nothing was counted. Try again or choose another style.`, 502)
     }
-    if (revision === this.store.state.revision && this.store.state.models.includes(model)) this.store.save({ verified: { ...this.store.state.verified, [model]: new Date().toISOString() } })
+    // A tier may target a connection other than the active one; recording 'observed inference' on the active connection would be a false record, so this path records the ledger entry only.
+    if (!resolved && revision === this.store.state.revision && this.store.state.models.includes(model)) this.store.save({ verified: { ...this.store.state.verified, [model]: new Date().toISOString() } })
     if (body.sessionId) {
       context.memory.appendTurn(body.sessionId, { role: 'user', content: prompt, dataClass: classification })
       context.memory.appendTurn(body.sessionId, { role: 'assistant', content: text, dataClass: classification })
     }
-    this.ledger.record({ category: 'model', action: 'online_chat', outcome: 'success', subject: session.accountId, detail: { model, provider: this.store.kind(), classification, redacted: redacted.findings.length, role: session.role, skill: skillUsed?.name ?? null } })
+    this.ledger.record({ category: 'model', action: 'online_chat', outcome: 'success', subject: session.accountId, detail: { model, provider: config.id, classification, redacted: redacted.findings.length, role: session.role, skill: skillUsed?.name ?? null, tier: resolved?.tier ?? null } })
     if (skillUsed) {
       this.skills.recordUse(skillUsed.name)
       this.ledger.record({ category: 'skills', action: 'skill_use', outcome: 'success', subject: session.accountId, detail: { skill: skillUsed.name, version: skillUsed.version } })
     }
-    return { text, modelId: model, providerModel: reportedModel, provider: runtimeFor(this.store.kind()).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null, skill: skillUsed, style: body.style ?? null, styleAudit }
+    return { text, modelId: model, providerModel: reportedModel, provider: config.label ?? runtimeFor(config.id).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null, skill: skillUsed, style: body.style ?? null, styleAudit, klyvaron: resolved ? { tier: resolved.tier, provenance: resolved.provenance } : null }
   }
   authenticated(req) {
     const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]
@@ -691,10 +767,22 @@ export class OnlineApp {
         if (req.method === 'GET' && path === '/api/providers') return sendJson(res, 200, this.store.public())
         // Read-only meta-information about providers, separate from the installation's connection.
         if (req.method === 'GET' && path === '/api/providers/catalog') return sendJson(res, 200, this.providerCatalogue())
+        // Product tiers are read-only information until the owner assigns a preset to one.
+        if (req.method === 'GET' && path === '/api/klyvaron') return sendJson(res, 200, this.klyvaronView())
         // The gateway connection and its key belong to the installation, so they belong
         // to the account that owns it. An open sign-up page cannot be an open door to
         // re-pointing somebody else's provider credentials or spending their key.
         const requireOwner = () => { if (session.role !== ROLES.OWNER) throw failure('owner_required', 'Only the owner account of this installation can change its gateway connection.', 403) }
+        const tierMatch = /^\/api\/klyvaron\/(lite|pro|max)$/.exec(path)
+        const tierModalityMatch = /^\/api\/klyvaron\/(lite|pro|max)\/(chat|image|video)$/.exec(path)
+        if (req.method === 'PUT' && tierMatch) {
+          requireOwner()
+          return sendJson(res, 200, this.setKlyvaronPreset(tierMatch[1], await readBody(req, { principal: session.accountId }), session))
+        }
+        if (req.method === 'DELETE' && tierModalityMatch) {
+          requireOwner()
+          return sendJson(res, 200, this.clearKlyvaronPreset(tierModalityMatch[1], tierModalityMatch[2]))
+        }
         // One route per connection, so the connection a request means is in the URL and never
         // guessed from the body. The three runtimes keep their literal paths; any other catalogue
         // provider or named custom endpoint uses the same shape under its own id.
