@@ -76,7 +76,7 @@ What exists, read rather than assumed:
 | Klyvaron Lite/Pro/Max runtime adapters | partially implemented | docs/24: two Lite artifacts released, Pro/Max unbuilt |
 | Klyvaron Image / Video registries | planned | docs/22 records the modality roles; no weights exist |
 | Persistent memory, provenance, deletion | implemented and tested (product routes; the layered fabric remains a library) | `/api/memory` in `context-routes.mjs`; `memory/store.mjs` |
-| Versioned skills, permissions, rollback | **implemented and tested (reviewed procedures)**; execution of declared permissions remains a library | `/api/skills` in `context-routes.mjs`, `skills/product.mjs`, `test/online-skills.test.mjs` |
+| Versioned skills, permissions, rollback | **implemented and tested (reviewed procedures and measured comparison)**; execution of declared permissions remains a library | `/api/skills` and `/measure` in `context-routes.mjs`, `skills/product.mjs`, `skills/measure.mjs` |
 | Experience-driven adaptation, regression gates | implemented and tested (library) | `adaptive/loop.mjs`, `adaptive/episodes.mjs` |
 | Response styles (user-chosen) | **implemented and tested (product surface)** | `/api/styles` in `context-routes.mjs`, `online/styles.mjs`, `test/online-styles.test.mjs`; the state *estimator* remains a library in `adaptive/wording.mjs` |
 | Plugins and MCP least privilege | implemented and tested (library) | `plugins/*`, `mcp/*` |
@@ -378,6 +378,10 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
   automatic retry, so the user chooses whether to try again.
 - **The style preference is per account, not per conversation.** Changing it applies to the next
   message; earlier turns are not re-rendered.
+- **A measurement is only as good as its cases.** The route accepts up to five cases and scores
+  them by phrases the caller supplied; it cannot judge an answer, and one sample is one sample. It
+  records latency and tokens but makes no claim about quality beyond those checks. A measurement
+  never changes a state or a version; promotion stays a separate review.
 
 ## 10. Remaining work, ranked
 
@@ -408,6 +412,7 @@ node --test services/core/test/online-image.test.mjs    # 9 tests, the image wir
 node --test services/core/test/online-video.test.mjs    # 9 tests, Veo polling, download policy and cancellation
 node --test services/core/test/online-skills.test.mjs   # 9 tests, install, review, versions and chat selection
 node --test services/core/test/online-styles.test.mjs   # 8 tests, preferences, instructions, audit and refusal
+node --test services/core/test/online-skill-measure.test.mjs # 6 tests, deterministic comparison and honest verdicts
 node --test services/core/test/provider-framework.test.mjs
 npm run test:web                       # includes the catalogue and saved-connection renders
 ```

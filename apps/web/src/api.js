@@ -204,6 +204,7 @@ export const api = {
   setSkill: (name, body) => request('PATCH', `/api/skills/${encodeURIComponent(name)}`, body),
   rollbackSkill: (name, version) => request('POST', `/api/skills/${encodeURIComponent(name)}/rollback`, { version }),
   deleteSkill: (name) => request('DELETE', `/api/skills/${encodeURIComponent(name)}`, {}),
+  measureSkill: (name, body) => request('POST', `/api/skills/${encodeURIComponent(name)}/measure`, body),
 
   // --- plugins ------------------------------------------------------------
   plugins: (state) => request('GET', `/api/plugins${state ? `?state=${encodeURIComponent(state)}` : ''}`),

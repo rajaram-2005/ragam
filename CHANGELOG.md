@@ -93,6 +93,24 @@ Not in 0.2.0. On this branch only.
   refusal, cancellation, pre-queue validation, failed/filtered/still-image outcomes and the
   transport's binary ceiling. No vendor was called.
 
+### Measured procedure comparison (phase 7)
+
+- **A review is not a measurement.** `POST /api/skills/:name/measure` runs the same cases through
+  the baseline and the candidate version, scores each answer deterministically against phrases it
+  must and must not contain, and reports pass rates, latency and tokens for both.
+- **Regressions come first.** A case the baseline passed and the candidate failed stops the verdict
+  regardless of the aggregate. Equal scores are `no_difference_measured`, never an improvement; a
+  sample that cannot distinguish two versions says so.
+- **The record keeps the measurement, not the prompt.** `skills/measurements.jsonl` stores case ids,
+  digests, checks and results; prompt text is never written. `GET /api/skills/:name` lists the last
+  three measurements, and a restart keeps them.
+- **It costs money and changes nothing.** Measurement requires the owner, explicit consent for the
+  current gateway revision and a listed model; it never switches models and never promotes, enables
+  or rolls back a version. The Chat panel's Measure button makes the two-call cost explicit.
+- **Tests:** `services/core/test/online-skill-measure.test.mjs` (6 tests) covers an improvement, a
+  regression, a no-difference verdict, owner-only access, consent, an unlisted model, invalid cases
+  and durability across a restart.
+
 ### Response styles (phase 6)
 
 - **A style is a preference the person sets, not a guess about how they feel.** Seven styles

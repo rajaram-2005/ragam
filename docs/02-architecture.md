@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 27,692 source lines, 20,937 test lines
+### `services/core` — 27,971 source lines, 21,131 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -80,7 +80,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
 | `online/accounts.mjs` | 387 | Accounts, scrypt password hashes, lockouts, throttling and host-delivered reset codes |
 | `online/app.mjs` | 716 | Authenticated online application, per-account context, exact-model inference, and a provider-connection family: a route per saved connection, an active-connection switch, and a probe that reads only the connection it names |
-| `online/context-routes.mjs` | 220 | Authenticated context and reviewed read-only tool routes |
+| `online/context-routes.mjs` | 258 | Authenticated context and reviewed read-only tool routes |
 | `online/gateway.mjs` | 195 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
 | `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
 | `online/http.mjs` | 32 | Bounded JSON requests and no-store responses |
@@ -136,7 +136,8 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `skills/manifest.mjs` | 327 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
 | `skills/lifecycle.mjs` | 286 | The curator walk and the five invariants that make "never delete a skill" structural |
 | `skills/store.mjs` | 246 | Skills on disk: document + state split, version files for rollback, deletion tombstones |
-| `skills/product.mjs` | 254 | Reviewed procedures as a product surface: structured install, a structural review that promotes a candidate, versions and rollback, per-account selection for one message, and deletion with a tombstone. No executor, so a procedure that declares access is refused in chat |
+| `skills/product.mjs` | 337 | Reviewed procedures as a product surface: structured install, a structural review that promotes a candidate, versions and rollback, per-account selection for one message, and deletion with a tombstone. No executor, so a procedure that declares access is refused in chat |
+| `skills/measure.mjs` | 158 | Deterministic scoring and comparison for two versions of a procedure on the same cases; a regression rule before aggregation, and a no-difference verdict that refuses to call equal scores an improvement |
 | `online/styles.mjs` | 87 | Seven user-controlled response styles over one fixed instruction, a per-account durable preference, and a store that reports an unreadable preference instead of guessing one. No inference from message content |
 | `adaptive/capability.mjs` | 194 | The capability descriptor every route is described by: kind, dotted `provides` tags, declared cost with no `measured` escape, fs/network/permission scope, and the `implementation` tag verification independence is decided on |
 | `adaptive/router.mjs` | 230 | `routeTask`: gates, refusals that name their reason, measured cost outranking an unmeasured claim, and a pin that is honoured only when it passes every gate |
@@ -183,7 +184,7 @@ central finite differences to ~3e-10**, and a prototype that trains the two diff
 in the same loss as the language objective. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 3,334 source lines, 1,894 test lines
+### `apps/web` — 3,374 source lines, 1,894 test lines
 
 Five area components, three sign-in pages (sign in, create account, reset
 password) and the account card in the sidebar, a shell, shared primitives, an API

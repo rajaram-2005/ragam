@@ -622,11 +622,14 @@ export function HistoryPanel({ sessionId }) {
  * one that declares file or network access, because this product has no executor to grant it.
  * Validation here is structural review; the panel says so rather than implying a measured gain.
  */
-export function SkillsPanel({ value, onChange, account }) {
+export function SkillsPanel({ value, onChange, account, model, provider }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState('')
   const [form, setForm] = useState({ name: '', description: '', whenToUse: '', steps: '', verification: '' })
+  const [detail, setDetail] = useState(null)
+  const [measureForm, setMeasureForm] = useState({ baselineVersion: '', candidateVersion: '', prompt: '', mustInclude: '' })
+  const [measureResult, setMeasureResult] = useState(null)
 
   const load = useCallback(async () => {
     try { setData(await api.skills()); setError(null) } catch (e) { setError(e) }
@@ -685,11 +688,47 @@ export function SkillsPanel({ value, onChange, account }) {
           <span className="small"><strong>{skill.name}</strong> v{skill.version} · {skill.state}{skill.enabled ? '' : ' · disabled'}</span>
           <span className="row">
             {skill.state === 'candidate' ? <Button busy={busy === `validate-${skill.name}`} onClick={() => act(`validate-${skill.name}`, () => api.validateSkill(skill.name))}>Validate</Button> : null}
+            {skill.versionCount > 1 ? <Button onClick={async () => {
+              setMeasureResult(null)
+              try {
+                const described = await api.skill(skill.name)
+                setDetail({ name: skill.name, versions: described.versions })
+                setMeasureForm({ baselineVersion: described.versions.at(-2)?.version ?? '', candidateVersion: described.versions.at(-1)?.version ?? '', prompt: '', mustInclude: '' })
+              } catch (e) { setError(e) }
+            }}>Measure</Button> : null}
             <Button onClick={() => act(`toggle-${skill.name}`, () => api.setSkill(skill.name, { enabled: !skill.enabled }))}>{skill.enabled ? 'Disable' : 'Enable'}</Button>
             <Button variant="danger" busy={busy === `delete-${skill.name}`} onClick={() => act(`delete-${skill.name}`, () => api.deleteSkill(skill.name))}>Delete</Button>
           </span>
         </div>)}
       </div>
+      {detail ? <div className="stack" style={{ marginTop: 12 }}>
+        <h4>Measure {detail.name} on one case</h4>
+        <p className="small">Both versions answer the same question and the reply is scored by what it must contain. This spends provider calls and records the result; it does not promote the candidate.</p>
+        <div className="row">
+          <Field label="Baseline"><select className="select" value={measureForm.baselineVersion} onChange={(e) => setMeasureForm({ ...measureForm, baselineVersion: e.target.value })}>{detail.versions.map((v) => <option key={v.version} value={v.version}>{v.version}</option>)}</select></Field>
+          <Field label="Candidate"><select className="select" value={measureForm.candidateVersion} onChange={(e) => setMeasureForm({ ...measureForm, candidateVersion: e.target.value })}>{detail.versions.map((v) => <option key={v.version} value={v.version}>{v.version}</option>)}</select></Field>
+        </div>
+        <Field label="Test question"><textarea className="textarea" rows={2} value={measureForm.prompt} onChange={(e) => setMeasureForm({ ...measureForm, prompt: e.target.value })} maxLength={2000} /></Field>
+        <Field label="The answer must contain" hint="Comma-separated phrases. At least one is required; the check is not a judgement."><input className="input" value={measureForm.mustInclude} onChange={(e) => setMeasureForm({ ...measureForm, mustInclude: e.target.value })} /></Field>
+        <Button variant="primary" busy={busy === 'measure'} disabled={!model || !measureForm.prompt.trim() || !measureForm.mustInclude.trim() || measureForm.baselineVersion === measureForm.candidateVersion} onClick={async () => {
+          setBusy('measure'); setError(null); setMeasureResult(null)
+          try {
+            setMeasureResult(await api.measureSkill(detail.name, {
+              baselineVersion: measureForm.baselineVersion,
+              candidateVersion: measureForm.candidateVersion,
+              cases: [{ prompt: measureForm.prompt.trim(), mustInclude: measureForm.mustInclude.split(',').map((s) => s.trim()).filter(Boolean) }],
+              model,
+              authorization: { confirmed: true, providerRevision: provider?.revision },
+            }))
+            await load()
+          } catch (e) { setError(e) } finally { setBusy('') }
+        }}>Measure (2 provider calls)</Button>
+        {measureResult ? <div className="small">
+          <p><strong>{measureResult.verdict.replaceAll('_', ' ')}</strong> — {measureResult.reason}</p>
+          <p>Baseline v{measureResult.baselineVersion}: {measureResult.baseline.passed}/{measureResult.baseline.total} · candidate v{measureResult.candidateVersion}: {measureResult.candidate.passed}/{measureResult.candidate.total}. Mean latency {measureResult.baseline.meanLatencyMs ?? '?'} ms vs {measureResult.candidate.meanLatencyMs ?? '?'} ms.</p>
+          <p className="muted">{measureResult.disclosure}</p>
+        </div> : null}
+      </div> : null}
     </details> : null}
   </div>
 }

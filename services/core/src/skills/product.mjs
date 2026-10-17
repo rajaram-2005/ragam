@@ -15,7 +15,10 @@
 import { failure } from '../online/failure.mjs'
 import { buildDescription, renderSkillDocument } from './lifecycle.mjs'
 import { SkillRegistry, SKILL_STATES } from './registry.mjs'
+import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { SkillStore } from './store.mjs'
+import { MeasureError, buildRecord, scoreText, validateCases } from './measure.mjs'
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,62}$/
 const VERSION = /^\d+\.\d+\.\d+$/
@@ -96,6 +99,7 @@ export class SkillService {
     this.store = new SkillStore({ dir, now })
     this.registry = new SkillRegistry({ now })
     this.loadReport = this.store.load(this.registry)
+    this.measurementsFile = join(this.store.dir, 'measurements.jsonl')
     this.seeded = []
     this.#seed()
   }
@@ -143,7 +147,7 @@ export class SkillService {
     // `document(name)` without a version returns the newest version, not the current one. After a
     // rollback those differ, and showing the newest text under the rolled-back version number would
     // misrepresent what a selection would send.
-    return { ...described, document: this.registry.document(name, described.version) }
+    return { ...described, document: this.registry.document(name, described.version), versions: this.versions(name), measurements: this.measurements(name, { limit: 3 }) }
   }
 
   /** Install a reviewed procedure from structured fields; the server renders the document. */
@@ -220,13 +224,92 @@ export class SkillService {
     this.require(name)
     const described = this.registry.rollback(name, version)
     this.store.save(this.registry, name)
-    return { ...described, document: this.registry.document(name, described.version) }
+    return { ...described, document: this.registry.document(name, described.version), versions: this.versions(name), measurements: this.measurements(name, { limit: 3 }) }
   }
 
   remove(name, reason = null) {
     this.require(name)
     this.store.remove(this.registry, name, { reason, requestedBy: 'user' })
     return { removed: true, name }
+  }
+
+  /** Every stored version, newest last. A reader needs the list before choosing a baseline. */
+  versions(name) {
+    this.require(name)
+    return this.registry.record(name).versions.map(({ version, installedAt, digest }) => ({ version, installedAt, digest }))
+  }
+
+  /**
+   * Past measurements, newest first. The log is append-only; an unreadable line is skipped rather
+   * than allowed to take the whole list down, because a partial record is still evidence.
+   */
+  measurements(name, { limit = 20 } = {}) {
+    this.require(name)
+    if (!existsSync(this.measurementsFile)) return []
+    const records = []
+    for (const line of readFileSync(this.measurementsFile, 'utf8').split('\n')) {
+      if (!line.trim()) continue
+      try {
+        const record = JSON.parse(line)
+        if (record.name === name) records.push(record)
+      } catch { /* a torn line is not a measurement */ }
+    }
+    return records.reverse().slice(0, limit)
+  }
+
+  /**
+   * Measure two versions on the same cases through a caller-supplied runner.
+   *
+   * The service does not know which provider answered, and it does not need to: it owns the
+   * comparison, the deterministic scoring and the record. The caller owns the provider call, its
+   * consent and its cost. Prompts are not written to the record; a digest identifies the case.
+   */
+  async measure(name, { baselineVersion, candidateVersion, cases, run, by = 'owner' } = {}) {
+    this.require(name)
+    if (typeof run !== 'function') throw failure('invalid_measurement', 'A measurement needs a provider call.', 400)
+    const known = new Set(this.versions(name).map((entry) => entry.version))
+    if (!known.has(baselineVersion)) throw failure('skill_not_found', `No version ${baselineVersion} of '${name}'.`, 404)
+    if (!known.has(candidateVersion)) throw failure('skill_not_found', `No version ${candidateVersion} of '${name}'.`, 404)
+    if (baselineVersion === candidateVersion) throw failure('invalid_measurement', 'Choose two different versions to compare.', 400)
+    let normalised
+    try { normalised = validateCases(cases) } catch (error) {
+      if (error instanceof MeasureError) throw failure('invalid_measurement', error.message, 400)
+      throw error
+    }
+    const textFor = (version) => this.registry.document(name, version)
+    const caseResults = []
+    for (const entry of normalised) {
+      const measured = {}
+      for (const version of [baselineVersion, candidateVersion]) {
+        const started = Date.now()
+        const answered = await run({ system: textFor(version), prompt: entry.prompt })
+        const latencyMs = Number.isFinite(answered?.latencyMs) ? answered.latencyMs : Date.now() - started
+        const text = answered?.text
+        if (typeof text !== 'string' || !text) throw failure('invalid_completion', 'The provider returned no text for a measurement case.', 502)
+        const usage = answered?.usage ?? null
+        const tokens = usage?.totalTokens ?? usage?.total_tokens ?? null
+        measured[version] = {
+          version,
+          text,
+          latencyMs,
+          tokens: Number.isFinite(tokens) ? tokens : null,
+          ...scoreText(text, entry),
+        }
+      }
+      // compareRuns identifies a regression by case id; the two runs are stored side by side so
+      // the record can show which check failed rather than only the aggregate.
+      caseResults.push({
+        id: entry.id,
+        prompt: entry.prompt,
+        mustInclude: entry.mustInclude,
+        mustExclude: entry.mustExclude,
+        baseline: measured[baselineVersion],
+        candidate: measured[candidateVersion],
+      })
+    }
+    const record = buildRecord({ name, baselineVersion, candidateVersion, cases: normalised, caseResults, by })
+    appendFileSync(this.measurementsFile, `${JSON.stringify(record)}\n`, { mode: 0o600 })
+    return record
   }
 
   /**

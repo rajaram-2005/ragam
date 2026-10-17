@@ -63,6 +63,6 @@ export default function ChatArea({ provider, refreshReadiness, onSettings, accou
     <details className="context-section"><summary>Conversation history</summary><HistoryPanel sessionId={sessionId} /></details>
     <details className="context-section"><summary>Optional files & knowledge</summary><KnowledgePanel /></details>
     <details className="context-section"><summary>Optional approved memory</summary><MemoryPanel /></details>
-    <details className="context-section"><summary>Reviewed procedure (optional)</summary><SkillsPanel value={skill} onChange={setSkill} account={account} /></details>
+    <details className="context-section"><summary>Reviewed procedure (optional)</summary><SkillsPanel value={skill} onChange={setSkill} account={account} model={model} provider={provider} /></details>
   </div>
 }
