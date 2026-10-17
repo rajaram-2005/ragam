@@ -19,6 +19,7 @@
 import { randomUUID } from 'node:crypto'
 import { assertValidSchema, validateAgainstSchema } from './schema.mjs'
 import { ELEVATED_SCOPES } from '../plugins/manifest.mjs'
+import { TRUST, provenanceOf } from './authority.mjs'
 
 export const SERVER_KINDS = Object.freeze({ IN_PROCESS: 'in_process', TRANSPORT: 'transport' })
 
@@ -425,6 +426,11 @@ export class McpRegistry {
       }
 
       const sanitised = sanitizeUntrusted(output, this.maxOutputBytes)
+      // The result carries a provenance label rather than a bare boolean, so a consumer that
+      // wants to act on it has something to hand to the authority broker: origin, digest, and
+      // whether the text is instruction-shaped. The label is what makes "treat this as data" a
+      // property a caller can be held to, instead of a sentence in a comment.
+      const provenance = provenanceOf(sanitised.value, { kind: TRUST.TOOL_OUTPUT, origin: `${serverId}:${toolName}` })
       const result = {
         ok: true,
         callId,
@@ -433,7 +439,8 @@ export class McpRegistry {
         tool: toolName,
         risk: tool.risk,
         // Consumers MUST treat this as data. It is never an instruction source.
-        untrusted: true,
+        untrusted: provenance.untrusted,
+        provenance,
         outputValidated,
         output: sanitised.value,
         truncated: sanitised.truncated,
@@ -447,6 +454,9 @@ export class McpRegistry {
         durationMs: result.durationMs,
         outputBytes: sanitised.bytes,
         truncated: result.truncated,
+        // Recorded so a tool that tries to give orders is visible in the audit trail, and
+        // recorded as evidence: nothing here changes whether the call was permitted.
+        instructionShaped: provenance.instruction.instructionShaped,
       }, subject ?? serverId)
       this.onEvent({ type: 'mcp_call', ...result, output: undefined })
       return result
@@ -471,8 +481,12 @@ export class McpRegistry {
     const startedAt = Date.now()
     const raw = await withTimeout(resource.handler({ uri, signal }), 30_000, `${serverId}:resource:${uri}`, signal)
     const sanitised = sanitizeUntrusted(raw, this.maxOutputBytes)
-    this.#audit('resource_read', 'success', { server: serverId, uri, bytes: sanitised.bytes, durationMs: Date.now() - startedAt }, subject ?? serverId)
-    return { ok: true, serverId, uri, untrusted: true, content: sanitised.value, truncated: sanitised.truncated }
+    const provenance = provenanceOf(sanitised.value, { kind: TRUST.DOCUMENT, origin: `${serverId}:resource:${uri}` })
+    this.#audit('resource_read', 'success', {
+      server: serverId, uri, bytes: sanitised.bytes, durationMs: Date.now() - startedAt,
+      instructionShaped: provenance.instruction.instructionShaped,
+    }, subject ?? serverId)
+    return { ok: true, serverId, uri, untrusted: provenance.untrusted, provenance, content: sanitised.value, truncated: sanitised.truncated }
   }
 
   /** Expand a prompt template. Arguments are schema-validated first. */
@@ -489,8 +503,14 @@ export class McpRegistry {
     if (typeof prompt.handler !== 'function') throw new McpError(`prompt '${name}' has no handler bound`, { code: 'not_implemented', server: serverId })
     const raw = await prompt.handler(args)
     const sanitised = sanitizeUntrusted(raw, this.maxOutputBytes)
-    this.#audit('prompt_get', 'success', { server: serverId, prompt: name }, subject ?? serverId)
-    return { ok: true, serverId, prompt: name, untrusted: true, messages: sanitised.value, truncated: sanitised.truncated }
+    const provenance = provenanceOf(sanitised.value, { kind: TRUST.DOCUMENT, origin: `${serverId}:prompt:${name}` })
+    this.#audit('prompt_get', 'success', {
+      server: serverId, prompt: name, instructionShaped: provenance.instruction.instructionShaped,
+    }, subject ?? serverId)
+    // A prompt template is a document from a server, not a message from the user: expanding
+    // one produces untrusted text that a renderer may quote and a broker will not accept as a
+    // reason for anything.
+    return { ok: true, serverId, prompt: name, untrusted: provenance.untrusted, provenance, messages: sanitised.value, truncated: sanitised.truncated }
   }
 
   #audit(action, outcome, detail, subject) {

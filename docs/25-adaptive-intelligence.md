@@ -388,10 +388,14 @@ immediately.
 the Chat panel read documents and promotion state, and the evaluation/permission machinery is
 exercised by tests and available to the loop. Only one capability has a stored procedure to evaluate.
 
-**Phase 3 — memory with provenance and permissions.** The seven layers, each entry carrying
-provenance, timestamp, confidence, scope, permissions and version; contradiction and duplicate
-handling; inspect/correct/delete. Acceptance: a test that stores a user claim and a verified fact,
-retrieves both, and asserts the two are distinguishable and that deleting one removes its provenance.
+**Phase 3 — memory with provenance and permissions.** ✅ **Met, 2026-10-16.** The seven layers, each
+entry carrying provenance, timestamp, confidence, scope, permissions and version; contradiction and
+duplicate handling; inspect/correct/delete. Acceptance: a test that stores a user claim and a
+verified fact, retrieves both, and asserts the two are distinguishable and that deleting one removes
+its provenance — `test/memory-fabric.test.mjs` (18 tests), with `test/memory-bridge.test.mjs` (7) for
+the one-way bridge to and from the product memory. Stated as a debt rather than a claim: this
+paragraph read as outstanding work for three phases because the detail lived in `docs/03` and this
+page never said so.
 
 **Phase 4 — versioned skills with evaluation and regression.** ✅ **Met, 2026-10-16.** See the Phase 4
 record above: `skills/evaluation.mjs` and `skills/permissions.mjs`, `test/skills-evaluation.test.mjs`
@@ -463,8 +467,79 @@ fabric hands it every candidate rather than choosing.
 `adaptive/providers.mjs` (535 lines), `test/adaptive-providers.test.mjs` (15 tests), one
 `eligibility()` shared by routing and probing, and refusals by name at every gate.
 
-**Phase 7 — plugins and MCP safeguards.** Acceptance: a tool output containing an instruction that
-conflicts with policy is treated as data, not obeyed.
+**Phase 7 — plugins and MCP safeguards.** ✅ **Met, 2026-10-16.**
+`services/core/src/mcp/authority.mjs` (537 lines) with `test/mcp-authority.test.mjs` (11 tests),
+plus a provenance label on every result that `mcp/layer.mjs` and `plugins/registry.mjs` already
+returned.
+
+**The acceptance criterion is achievable only in its strong reading, and that is the one built.**
+"Treat tool output as data, not as instructions" has a weak reading — *filter instructions out of
+tool output* — and a strong one — *nothing that arrives as data can authorise anything*. The weak
+reading cannot be implemented: any keyword filter is defeated by paraphrase, translation, encoding
+or a sentence that simply does not look like an order, and its test suite passes because it only
+contains payloads its author imagined. The strong reading is a property of the program: it never
+consults the phrasing, so an instruction it fails to recognise is still not obeyed.
+
+So the module has two mechanisms and keeps them apart:
+
+| Mechanism | What it is | What it decides |
+|---|---|---|
+| `scanInstructions` | a classifier over nine signal families, returning the matched spans | **nothing.** Every result says so in a `note` field. Its output goes into the audit record so a human can see what a tool tried to say |
+| `AuthorityBroker` | provenance on every value, an authority minted only from a user turn, a decision that reads provenance and never text | whether a consequential action may run |
+
+The test that carries the criterion is `acceptance: the gate does not depend on the detector`: a
+sentence that matches **no** signal (asserted: `instructionShaped === false`) is put through the
+same path and refused with the same code, and the refusal records explicitly that it detected
+nothing. The other is `acceptance: an instruction in tool output is recorded as data and never
+obeyed`, which proves the output is labelled, **kept rather than censored** — deleting the sentence
+would also delete the evidence that the tool is hostile, and silently alter a document the user
+asked to read — and refused as the reason for `repo.delete`, while the same action with a reason
+from the user's own turn is allowed.
+
+The rules, each with its own code rather than one undifferentiated "denied":
+
+| Refusal | When |
+|---|---|
+| `not_a_user_turn` | authority requested from a tool, a document, a model output, or an unlabelled source |
+| `wildcard_grant` | a grant names `*` or `all`; every action is named, so the record says what the user approved |
+| `action_not_granted` / `risk_exceeds_authority` | the action is not in the grant, or its tier is above the ceiling |
+| `authority_tampered` | the presented token's **fields** re-digest differently from the stored record |
+| `authority_expired` / `authority_revoked` | the grant's clock ran out, or the user withdrew it |
+| `tainted_justification` | a write/destructive/external/system action's reason came from data — including when a model summarised that data first |
+| `justification_missing` | a consequential action with no reason, or with nothing but endorsements |
+| `unlabelled_justification` | a reason that does not say where it came from, which is treated as the least trusted thing rather than the most |
+
+Taint survives derivation (`combineProvenance`): *"the model read the tool output and wrote a
+plan"* produces a derived value whose provenance still begins at the tool, so the laundering step
+is refused as `tainted_justification`. `endorse` is the one way across: a **user turn** may take
+responsibility for acting on a tool's suggestion, it must record the reason the user gave, and the
+returned provenance still says `untrusted` while carrying `endorsedBy` — because the user approved
+an action, not a fact.
+
+**Two bugs found by writing the tests rather than by reading the code.** First, scanning
+`JSON.stringify(value)` looked equivalent to scanning the text and was not: JSON escapes a newline
+as `\n`, so a line beginning `IGNORE …` became `nIGNORE …`, and `\bignore\b` stopped matching
+because `n` and `I` are both word characters. The same sentence matched when scanned alone and was
+missed when it arrived inside an object — which is how every tool result arrives. It is now scanned
+as the text a person would read, with a regression test for the exact pair. Second, a token is
+spreadable and the spread keeps the `digest` property, so a verifier that compared only that string
+accepted `{ ...authority, actions: ['fs.delete'] }`. The fields are re-digested now and privileges
+are read from the stored record, not from the caller's copy. A third slip was caught the same way:
+the tamper assertion was written with `assert.throws` on an async call, which sees nothing, and it
+reported "missing expected exception" while the refusal was in fact happening — the same
+static-versus-runtime distinction as the shell bug in docs/03 §4.2.
+
+**Not claimed.** The classifier is not a defence and does not claim to be; the defence is that no
+consequential action can be authorised by text. The broker is **not yet wired to a route** — the
+same position as the rest of the adaptive core — so nothing here claims the running HTTP server is
+protected by it. The 11 tests exercise the boundary through the real `McpRegistry` and
+`PluginRegistry`, and what is claimed is narrower and checkable: **the boundary exists, it refuses
+by name, and its correctness does not depend on recognising an attacker's phrasing.**
+
+**Phase 7 — plugins and MCP safeguards.** ✅ **Met, 2026-10-16.** See the Phase 7 record above:
+`mcp/authority.mjs` (537 lines), `test/mcp-authority.test.mjs` (11 tests), provenance on every
+tool/plugin/resource/prompt result, and a named test proving the gate does not consult the
+classifier that exists only as evidence.
 
 **Phase 8 — image and video workflows.** **Phase 9 — industry packs.** **Phase 10 — benchmark, harden,
 document, release.**
@@ -507,8 +582,9 @@ product: intent, planning, budgets, timeouts, checkpoints, the runner and the me
 exercised by tests, and no HTTP route or Chat panel calls them. The fabric is a schema and a set of
 rules for what may be believed and why — not a retrieval model. Emotional interaction states and the provider
 fabric are built and tested but not reachable from the product — the seven states are a wording
-setting, and the provider fabric measures eligibility for a loop no HTTP route calls — and plugins,
-image and video workflows and industry packs are not built. Timing here is timing on this box (2 cores, 3,939 MB), at
+setting, and the provider fabric measures eligibility for a loop no HTTP route calls — and the plugin/MCP authority
+boundary is built and tested but the HTTP layer does not consult it, so the running server is not
+protected by it yet. Image and video workflows and industry packs are not built. Timing here is timing on this box (2 cores, 3,939 MB), at
 the sample counts stated beside each figure — not a property of another machine. And the rule this
 page states rather than claims: no phase is complete before its acceptance tests pass, which is why
 §4 describes Phase 2 by what its test runs and refuses to describe the phases that have none.

@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 22,295 source lines, 17,019 test lines
+### `services/core` — 22,861 source lines, 17,468 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -92,8 +92,9 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `klyvaron/runtime.mjs` | 405 | Klyvaron Lite inference in plain JavaScript: the forward pass, seeded sampling, greedy decode, token budgets and cancellation |
 | `providers/local.mjs` | 329 | Ollama and OpenAI-compatible local providers |
 | `router/registry.mjs` | 356 | Model descriptors, capability matching, candidate scoring, tag exclusions |
-| `plugins/registry.mjs` | 617 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation, signature checks |
-| `mcp/layer.mjs` | 611 | Servers, tools, risk tiers, approval gates, allowlist, output neutralisation |
+| `plugins/registry.mjs` | 626 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation, signature checks |
+| `mcp/layer.mjs` | 631 | Servers, tools, risk tiers, approval gates, allowlist, output neutralisation |
+| `mcp/authority.mjs` | 537 | The data/instruction boundary: provenance on every tool, plugin, resource and prompt output, an authority that only a user turn can mint, and a consequential action refused when its only reason is data — with the classifier kept as audit evidence precisely so the refusal does not depend on it |
 | `knowledge/pipeline.mjs` | 470 | Ingest, dedupe, chunk, index, search, grounded context, purge |
 | `knowledge/store.mjs` | 385 | SQLite metadata, chunks, ACL rows, deletion records |
 | `mcp/schema.mjs` | 246 | JSON Schema subset: validation of schemas *and* of arguments/output |

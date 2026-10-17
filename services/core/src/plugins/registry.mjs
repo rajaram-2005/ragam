@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto'
 import { validateManifest, compareSemver, ELEVATED_SCOPES, SCOPES, PROTOCOLS, ManifestError } from './manifest.mjs'
 import { validateAgainstSchema } from '../mcp/schema.mjs'
 import { PluginSignatureError, SIGNATURE_STATE, canonicalJson, verifyManifest } from './signing.mjs'
+import { TRUST, provenanceOf } from '../mcp/authority.mjs'
 
 export const PLUGIN_STATES = Object.freeze({
   DISCOVERED: 'discovered',
@@ -489,6 +490,10 @@ export class PluginRegistry {
 
       record.invocations += 1
       record.lastInvokedAt = Date.now()
+      // A plugin's output is data for the same reason a tool's is, and it gets the same label
+      // from the same function, so the authority boundary cannot be bypassed by calling a
+      // plugin instead of a tool.
+      const provenance = provenanceOf(outputCheck.value, { kind: TRUST.TOOL_OUTPUT, origin: `plugin:${pluginId}:${capabilityName}` })
       const result = {
         ok: true,
         invocationId,
@@ -497,12 +502,16 @@ export class PluginRegistry {
         version: record.version,
         protocol: record.manifest.protocol,
         // Consumers must treat this as untrusted data, not as instructions.
-        untrusted: true,
+        untrusted: provenance.untrusted,
+        provenance,
         output: outputCheck.value,
         scopesUsed: capability.requiredScopes,
         durationMs: Date.now() - startedAt,
       }
-      this.#audit(`invoke:${capabilityName}`, 'success', { pluginId, invocationId, durationMs: result.durationMs, scopes: capability.requiredScopes }, subject ?? pluginId)
+      this.#audit(`invoke:${capabilityName}`, 'success', {
+        pluginId, invocationId, durationMs: result.durationMs, scopes: capability.requiredScopes,
+        instructionShaped: provenance.instruction.instructionShaped,
+      }, subject ?? pluginId)
       this.onEvent({ type: 'plugin_invoked', ...result, output: undefined })
       return result
     } catch (error) {

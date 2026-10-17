@@ -423,6 +423,18 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.setup, '| **Core service** | 738 tests pass'],
     [doc.readme, '1615 tests: core 709, web 92, fabric 814'], [doc.readme, 'All 1615 run in CI'],
     [doc.readme, '1644 tests: core 738, web 92, fabric 814'], [doc.readme, 'All 1644 run in CI'],
+    // The Phase 6 total.
+    [doc.status, '**753 / 753**'], [doc.status, 'Implemented and tested (753 tests)'],
+    [doc.status, '**Test totals: 1659 passing'],
+    [doc.setup, 'all three suites (1659 tests)'], [doc.setup, 'npm run test:core         # 753'],
+    [doc.setup, '| **Core service** | 753 tests pass'],
+    [doc.readme, '1659 tests: core 753, web 92, fabric 814'], [doc.readme, 'All 1659 run in CI'],
+    // The Phase 7 total, superseded when the two regression tests above were added.
+    [doc.status, '**762 / 762**'], [doc.status, 'Implemented and tested (762 tests)'],
+    [doc.status, '**Test totals: 1668 passing'],
+    [doc.setup, 'all three suites (1668 tests)'], [doc.setup, 'npm run test:core         # 762'],
+    [doc.setup, '| **Core service** | 762 tests pass'],
+    [doc.readme, '1668 tests: core 762, web 92, fabric 814'], [doc.readme, 'All 1668 run in CI'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -679,22 +691,22 @@ test('the status doc reports the real test totals', () => {
   // evaluation and permission suites, the emotional-states suite, and the provider fabric.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 42)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 43)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**753 / 753**'), 'core total must be stated')
+  assert.ok(status.includes('**764 / 764**'), 'core total must be stated')
   assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
   assert.ok(status.includes('**92 / 92**'), 'web total must be stated')
-  assert.ok(status.includes('1659 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('1670 passing'), 'the grand total must equal the sum of the suites')
   // README and docs/03 must state the *same* total. They disagreed for two phases: README said
   // 709/1615 in its setup snippet while its own component table said 738, and this assertion
   // pinned the stale form, so the contradiction passed every check. A total is stated in both
   // documents or it is stated in neither.
-  assert.ok(squash(doc.readme()).includes('1659 tests: core 753, web 92, fabric 814'),
+  assert.ok(squash(doc.readme()).includes('1670 tests: core 764, web 92, fabric 814'),
     'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1659 run in CI'),
+  assert.ok(squash(doc.readme()).includes('All 1670 run in CI'),
     'README must state the same totals where it describes CI')
   assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
 
@@ -707,13 +719,13 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(753), `core heading must say 753, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(764), `core heading must say 764, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(92), `web heading must say 92, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1659,
+    1670,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })
@@ -2048,6 +2060,24 @@ test('the direction change is recorded, and the Sparsiz audit keeps its findings
   assert.ok(/does not claim general task competence/i.test(text), 'the page must state what it does not claim')
   assert.ok(text.includes('no phase is complete before its acceptance tests pass'), 'the page must state what it does not claim')
   assert.ok(text.includes('consciousness, sentience or human-equivalent'))
+
+  // A "see the Phase N record above" that points at nothing is how a sixty-line record vanished
+  // without a single check failing: a scripted edit replaced the backlog line with a summary that
+  // referenced a record it had not inserted, and every existing assertion still passed. The
+  // reference is now checked against the document it lives in.
+  const raw = doc.adaptive()
+  const records = new Map()
+  for (const line of raw.split('\n')) {
+    const record = /^\*\*Phase (\d+)(?:, second half)? — /.exec(line)
+    // A backlog line is a pointer, not a record: it says "see above" and must not count itself.
+    if (record && !/record above/.test(line)) records.set(record[1], (records.get(record[1]) ?? 0) + 1)
+    const pointer = /See the Phase (\d+) record above/.exec(line)
+    if (pointer) {
+      assert.ok((records.get(pointer[1]) ?? 0) > 0,
+        `docs/25 says "see the Phase ${pointer[1]} record above" and no Phase ${pointer[1]} record is above it`)
+    }
+  }
+  assert.ok(records.size >= 5, `expected records for the delivered phases, found ${[...records.keys()].join(', ')}`)
 
   // The durability lesson is a fact about this project, not a mood: state it with the evidence.
   assert.ok(text.includes('Only what is committed to Git survives'))

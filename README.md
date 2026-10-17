@@ -69,7 +69,7 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 1659 tests: core 753, web 92, fabric 814
+npm test          # 1670 tests: core 764, web 92, fabric 814
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -84,7 +84,7 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1659 run in CI on every push and pull request
+All 1670 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
 component, plus one that fails if this documentation stops matching the code. The
 Fabric job asserts the release gate in **both** directions: a trained model must
@@ -145,7 +145,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 22,295 | 17,019 | **zero npm packages** | 753 |
+| `services/core` | Node 22 ESM | 22,861 | 17,468 | **zero npm packages** | 764 |
 | `services/fabric` | Python 3.11 | 12,655 | 9,995 | NumPy only | 814 |
 | `apps/web` | React 18 + Vite | 2,691 | 1,818 | react, react-dom | 92 |
 
