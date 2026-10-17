@@ -25,14 +25,27 @@ model per tier. Ten phases, each shipped as working code, tests, documentation a
 
 ## What it does not claim
 
-**The adaptive core is not reachable from the product.** No HTTP route calls the loop, the memory
-fabric, the provider fabric, the authority boundary, the media workflow or the packs. The online
-product still refuses image and video generation with its own limitation codes
-(`not_implemented`, `needs_hardware`).
+**The adaptive loop, the layered fabric, the provider fabric, the authority boundary and the
+industry packs remain library-only.** No HTTP route calls `adaptive/loop.mjs`, the fabric layers,
+`adaptive/providers.mjs`, `mcp/authority.mjs` or the packs. The memory *store*, reviewed procedures,
+response styles and the media job routes are product surfaces, and they are built on the same
+modules rather than a second implementation.
 
-**No image or video provider exists in this build.** The workflows are exercised against test
-doubles that return real containers; the *provider* half is unproven here, and the benchmark says
-the same thing in its own `scope` field.
+**Image and video are real routes with native adapters, never a live call in this build.** OpenAI
+Images and Gemini Images generate through inline bytes; Veo starts an operation, polls it and
+downloads the clip under the stated origin policy. All three are contract-tested against fixtures
+that return the published shapes; no vendor credential exists in this sandbox, and the matrix says
+so. The older `media/workflow.mjs` remains the measured library path and is not what the product
+routes call.
+
+| Surface added after the first 0.2.0 note | Route | Tests |
+|---|---|---|
+| Image generation, durable jobs | `POST /api/image/generate`; `GET /api/image/jobs/<id>[/content]` | `online-image` (9), `online-gemini-images` (3) |
+| Video generation, polling, cancellation | `POST /api/video/generate`; `GET /api/video/jobs/<id>[/content]` | `online-video` (9) |
+| Reviewed procedures, versions and selection | `/api/skills`, chat `skill` | `online-skills` (9) |
+| Measured procedure comparison | `POST /api/skills/:name/measure` | `online-skill-measure` (6) |
+| Response styles | `GET|PUT /api/styles`, chat `style` | `online-styles` (8) |
+| MCP servers and reviewed tools | `/api/mcp/*` | `online-mcp` (5) |
 
 **No external model provider was contacted.** This sandbox has no provider credentials. The external
 path is tested against stubs that record calls — which is how the offline guarantee is proven, and
@@ -66,7 +79,10 @@ rather than reporting zero.
 
 ## Known limitations
 
-- The product surface is unchanged: the adaptive core is a library with tests, not a feature.
+- The adaptive core's loop and its layered fabric remain a library with tests, not a feature;
+  memory, procedures, styles, media jobs and MCP are the product surfaces built on parts of it.
+- Image generation has two vendors and no editing; video is text-to-video through Veo only.
+- No provider has been called live; every adapter is a tested code path, not a verified account.
 - `legacy-server.mjs` remains as a documented entry point with no importers.
 - The instruction classifier is audit evidence and is not a defence; the defence is that no
   consequential action can be authorised by text.
