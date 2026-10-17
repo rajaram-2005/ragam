@@ -28,6 +28,7 @@ const ENDPOINT_FOR_WIRE = Object.freeze({
   gcp_vertex: { placeholder: 'https://us-central1-aiplatform.googleapis.com', hint: 'The regional Vertex AI endpoint. The service-account JSON names the project; the region comes from this host.' },
   aws_bedrock: { placeholder: 'https://bedrock-runtime.us-east-1.amazonaws.com', hint: 'The Bedrock runtime endpoint for your credential\u2019s region. Requests are signed with SigV4.' },
   cohere_chat: { placeholder: 'https://api.cohere.com', hint: 'Cohere\u2019s API host. This client adds /v2/chat and /v1/models.' },
+  openai_images: { placeholder: 'https://api.openai.com/v1', hint: 'OpenAI Images API base, including /v1. The Image area generates through this connection; it is not used for chat.' },
   anthropic_messages: { placeholder: 'https://api.anthropic.com/v1', hint: 'Anthropic\u2019s API base, including /v1.' },
   gemini_generate: { placeholder: 'https://generativelanguage.googleapis.com/v1beta', hint: 'The Gemini API base, including /v1beta.' },
 })

@@ -116,7 +116,7 @@ test('every API call uses a relative path, never an absolute host', async () => 
 
 test('the artifact URL is relative so an <img>/<video> tag resolves through the proxy', () => {
   const url = api.artifactUrl('job-123')
-  assert.equal(url, '/api/media/artifact/job-123')
+  assert.equal(url, '/api/image/jobs/job-123/content')
   assert.ok(!url.includes('localhost'))
 })
 
@@ -548,6 +548,10 @@ function servedByOnlineRouter(path, router) {
   // ids are the catalogue plus named custom endpoints. The router declares the prefix it serves,
   // and the id shape is asserted by the core's own tests.
   if (parts[1] === 'providers' && router.includes("'/api/providers/'")) return true
+  // Media jobs are one route family with a UUID in the path, matched by a regular expression
+  // rather than a literal. The router declares the family; the id and `/content` shape are
+  // exercised by services/core/test/online-image.test.mjs.
+  if (['image', 'video', 'media'].includes(parts[1]) && parts[2] === 'jobs' && router.includes('mediaJob =')) return true
   if (!router.includes(`segments[1] === '${parts[1]}'`)) return false
   return parts.slice(2).filter((part) => part && !part.includes('${'))
     .every((part) => router.includes(`'${part}'`))
@@ -568,13 +572,7 @@ test('every endpoint the online UI calls is served by the active online router',
   }
   assert.ok(used.size >= 30, `expected the UI to call the client, found ${used.size} methods`)
 
-  // Stated rather than hidden, and self-checking below: Jobs.jsx can build an artifact
-  // URL, and the online router serves no artifacts -- because it reports no media jobs at
-  // all. If media jobs ever become real, the assertion under this list fails first and
-  // the entry has to be removed together with the reason.
-  const EXCEPTIONS = new Map([
-    ['artifactUrl', 'the online product reports no media jobs, so no artifact URL is rendered'],
-  ])
+  const EXCEPTIONS = new Map()
 
   const missing = []
   for (const [method, file] of used) {
@@ -585,14 +583,11 @@ test('every endpoint the online UI calls is served by the active online router',
   }
   assert.deepEqual(missing, [], `the online router does not serve: ${missing.join(', ')}`)
 
-  // The exception is a fact about the router, not an opinion: every media list is empty
-  // and there is no artifact route to serve.
-  assert.match(router, /'\/api\/image\/jobs','\/api\/video\/jobs','\/api\/media\/jobs'\]\.includes\(path\)\) return sendJson\(res, 200, \{ jobs: \[\] \}\)/,
-    'the media job lists must still be empty for the artifactUrl exception to hold')
-  // Probing with a real id would pass or fail on the id rather than on the route, so the
-  // check names the mechanism an artifact route would have to use.
-  assert.ok(!router.includes("segments[2] === 'artifact'") && !router.includes("'/api/media/artifact"),
-    'an artifact route now exists: remove the artifactUrl exception and the reason with it')
+  // Image jobs are now real, so the artifact URL has a route behind it. Assert the mechanism
+  // rather than an empty list, which was the old reason no artifact could be rendered.
+  assert.match(router, /const mediaJob = \//, 'the media job route family must be declared')
+  assert.ok(router.includes('/content'), 'the artifact content route must be served')
+  assert.ok(!router.includes("'/api/media/artifact'"), 'the old, never-served artifact path must not return')
 
   // streamChat calls fetch directly rather than going through the client, so it is not in
   // the map above and is pinned on its own.

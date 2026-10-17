@@ -4,7 +4,7 @@ Every entry below is a claim about what the repository contains, and each one is
 `services/core/src/release/manifest.mjs` against the files and the measured suites — a version with
 no entry here cannot be released, and an entry is not a substitute for the tests.
 
-## Unreleased — universal provider framework (phases 1–2)
+## Unreleased — universal provider framework (phases 1–3)
 
 **Direction (2026-10-17): online-first.** The product requires connectivity for its AI
 functionality. Offline operation and OS-level network isolation are not requirements; local
@@ -50,8 +50,28 @@ Not in 0.2.0. On this branch only.
   bodies the product sent, including a SigV4 signature checked against AWS's published worked
   example. All six native adapters are `ready` in the catalogue — a tested code path — and the matrix
   says in as many words that no vendor has been called.
-- No live provider call was made. The ten `pending` entries are media and local-model vendors; see
+- No live provider call was made. The nine `pending` entries are media and local-model vendors; see
   `docs/27-provider-framework.md` for the audited status.
+
+### Image generation (phase 3)
+
+- **OpenAI Images is a real adapter, not a placeholder.** `openai_images` posts
+  `{base}/images/generations` with an explicit model, `n: 1` and an allowed size, decodes
+  `data[0].b64_json` and accepts the artifact only if the bytes re-encode to the same container.
+  A URL-only response, a non-image payload or a truncated base64 value is `invalid_completion`;
+  the returned URL is never fetched.
+- **Image jobs are durable, asynchronous and per account.** `POST /api/image/generate` returns
+  `202` with a job record; `GET /api/image/jobs` and `GET /api/image/jobs/<id>` report it;
+  `GET /api/image/jobs/<id>/content` serves the stored bytes with `nosniff` and a sandbox CSP; and
+  `DELETE` removes the record and the artifact. The queue persists terminal records atomically and
+  marks an interrupted job as failed with `interrupted` instead of replaying it as running.
+- **The Image area is a provider surface.** It polls the job list, renders only succeeded jobs,
+  shows the prompt, provider, model, digest and size, and keeps a failed job visible with its
+  reason and no image element. A chat connection cannot be used as an image provider, and an image
+  connection refuses chat with `capability_unavailable` before contacting the vendor.
+- **Tests:** `services/core/test/online-image.test.mjs` (9 tests) covers the request shape, base64
+  decoding and tamper rejection, URL-only and non-image responses, per-account isolation, deletion,
+  restart persistence and the prompt/size/model refusals. No vendor was called.
 
 ## [0.2.0] — 2026-10-17
 

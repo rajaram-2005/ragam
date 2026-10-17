@@ -11,14 +11,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1768 passing, 0 failing.**
+**Test totals: 1777 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **859 / 859** (49 files, ~48 s) |
+| `services/core` | `node --test test/*.test.mjs` | **868 / 868** (50 files, ~48 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **95 / 95** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 206.68 kB → **63.62 kB gzip**, single chunk, no warnings |
+| `apps/web` build | `vite build` | 214.54 kB → **66.02 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as five jobs split so a
@@ -234,7 +234,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (859 tests)
+### `services/core` — Implemented and tested (868 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -249,7 +249,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Klyvaron development plan | **Implemented and tested** | Per-tier gates derived from the tier records, `klyvaron.mjs plan`; see [docs/11](11-klyvaron-family.md) §1.5 |
 | Klyvaron CPU execution | **Implemented and tested** | Single worker, bounded incremental streaming, cancellation/deadlines, one-model residency; see doc 15 |
 | Knowledge pipeline | **Implemented and tested** | SQLite + filesystem + in-memory rebuildable BM25 |
-| Media queue & validation | **Implemented and tested** | Progress, cancellation, timeouts, retry-after, state history |
+| Media queue & validation | **Implemented and tested** | Progress, cancellation, timeouts, retry-after, state history; an optional state file makes a terminal job and its artifact survive a restart, and a job interrupted mid-run is recorded as `failed` with `interrupted`, never replayed as running |
 | Plugin registry & manifests | **Implemented and tested** | Preflight vs invoke distinction; uninstall keeps a record |
 | MCP layer & schema validator | **Implemented and tested** | Risk tiers, approval gates, output neutralisation, per-tool timeouts |
 | God Core lifecycle | **Implemented and tested** | Eight phases, budgets, retries, checkpoints, verification |
@@ -262,7 +262,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Model & provider fabric | **Implemented and tested; not yet reachable from the product** | Adapters declare their kind (`in-process`, `local`, `external`), the capability tags they serve, their limits and their notes; availability is measured by probing, never assumed. One `eligibility()` is shared by routing *and* probing, so a provider the policy forbids is never *contacted* — under `strict_offline` the external adapter's `probe` is called **0 times** while a loopback one is called once — and the module contains no network primitive at all (`fetch`, `node:http`/`net`/`tls`, `undici`), which is checked by reading it rather than by a comment. Refusals carry codes: `no_capability` (naming what is declared instead), `only_external_capability`, `provider_unavailable` (with the probe's own message), `capability_exceeds_limits` (a request too large is refused, never truncated to fit), `no_eligible_provider` (with `partial_coverage`: two adapters that between them cover a request are not combined), `preference_not_eligible` and `no_egress_guard`. Eligible adapters become validated `kind: model` descriptors — an adapter whose notes say `sampled` is not described as deterministic — and can be published into the planner's registry, so a plan is only ever built against providers that are registered *and* measured. No real provider, credential or gateway exists in this build: the external path is exercised against a stub that counts calls. `test/adaptive-providers.test.mjs` (15 tests). See [docs/25](25-adaptive-intelligence.md) §4 |
 | Persistent memory fabric | **Implemented and tested; not yet reachable from the product** | Seven layers (working, episodic, semantic, preference, project, skill, failure) with `assertion` and `verification` held as **separate records** on every entry, so *the user said so* and *an independent check confirmed it* cannot be read as the same thing: a claim's confidence has no number at all. Required provenance rows, versions on correction, contradictions kept and listed, scope and readers enforced on read with each exclusion naming its reason, deletion that takes the provenance with it and leaves a content-free tombstone, and the skill/episodic/failure layers **referencing** the registry and the episode log instead of copying them. The bridge with the existing product memory goes one way each way: an approved memory enters as a claim (approval is permission, not verification) and a fabric entry leaves as a candidate a person must approve. Tested by `memory-fabric.test.mjs` (18) and `memory-bridge.test.mjs` (7). No HTTP route or panel reads it yet, and it is not a retrieval model — there is no ranking beyond SQL ordering and no embedding of any kind. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Plugin and MCP authority boundary | **Implemented and tested; not yet reachable from the product** | Every tool, plugin, resource and prompt result now carries a **provenance** — origin, digest of the exact bytes, and whether the text is instruction-shaped — instead of a bare `untrusted: true`. A consequential action (write, destructive, external, system) must cite a reason, and a reason that came from data is refused (`tainted_justification`) no matter how clearly it asks: authority is minted only from a **user turn** (`not_a_user_turn`), a grant names its actions rather than `*`, the ceiling is checked against the action's risk tier, a hand-edited copy of a token is `authority_tampered` because the fields are re-digested and privileges are read from the stored record, and taint survives derivation so a model's summary of a tool output is refused for the same reason the output was. The instruction classifier is **audit evidence, not the gate**: one named test proves an instruction it does not recognise is refused identically, so a false negative costs nothing. A user turn may `endorse` acting on data, and the record names who and why while the provenance stays untrusted. `test/mcp-authority.test.mjs` (11 tests). See [docs/25](25-adaptive-intelligence.md) §4 |
-| Image workflow | **Implemented and tested; no provider installed** | `media/workflow.mjs`: a request is validated by field, routed through the provider fabric (`image.generate`), and refused by name when nothing can serve it — `unavailable` carrying the fabric's own code and reason. A delivered artifact is measured from its own header (PNG/GIF/JPEG width and height) and the digest of its bytes recorded; a size that does not match the request is `dimensions_mismatch` rather than a quietly different answer, and anything this build cannot measure is reported as `verified: partial` with the gap named. The legacy route still refuses with `not_implemented` (501); this workflow is not wired to it yet. `test/media-workflow.test.mjs` (11 tests). See [docs/25](25-adaptive-intelligence.md) §4 |
+| Image generation | **Implemented and tested for OpenAI Images; no live call** | `POST /api/image/generate` validates prompt (4,000 characters), size and model, then queues a durable per-account job (202). The `openai_images` wire posts to `{base}/images/generations`, decodes inline `b64_json`, and accepts the artifact only if the container re-encodes to the same bytes; a URL-only or non-image response is `invalid_completion`. Jobs survive a restart, are owned by one account, and `GET /api/image/jobs/<id>/content` serves the stored bytes with `nosniff` and a sandbox CSP. The Image area renders only a succeeded job and shows its prompt, provider, model, size, digest and byte length. `test/online-image.test.mjs` (9 tests); see [docs/27](27-provider-framework.md) §5 |
 | Video workflow | **Implemented and tested; no provider installed** | Same module: a video request needs a real clip — a still image returned instead is refused as `still_image_substitution`, a stub under 8 KiB as `output_too_small`, and a clip shorter than requested as `duration_short`. Duration is read from the MP4 `mvhd` box; a WebM returns `verified: partial` naming the unparsed EBML duration rather than assuming it. The legacy route still refuses with `needs_hardware` (501); **never substitutes a still image**, and this workflow is the check that would catch it if it tried. See [docs/25](25-adaptive-intelligence.md) §4 |
 
 ### `services/fabric` — Implemented and tested (814 tests)
@@ -504,7 +504,7 @@ Measured release verification on this host:
 
 | Check | Result |
 |---|---|
-| `node services/core/scripts/release-check.mjs --core 859 --web 95 --fabric 814` | `release 0.2.0 verified against 859 + 95 + 814 = 1768 tests` |
+| `node services/core/scripts/release-check.mjs --core 868 --web 95 --fabric 814` | `release 0.2.0 verified against 868 + 95 + 814 = 1777 tests` |
 | `node services/core/scripts/benchmark-adaptive.mjs` | 7/7 benchmarks, 0 failed, artefact at `docs/experiments/phase10-benchmark.json` |
 | `VERSION` / three `package.json` / `package-lock.json` | all `0.2.0` |
 

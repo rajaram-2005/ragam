@@ -187,16 +187,16 @@ test('the catalogue refuses the excluded aggregator by name', () => {
 test('the report states the three counts and the honest headline', () => {
   const report = catalogueReport()
   assert.equal(report.valid, true)
-  assert.equal(report.counts.ready, 9)
+  assert.equal(report.counts.ready, 10)
   assert.equal(report.counts.gateway_only, 14)
-  assert.equal(report.counts.pending, 10)
-  assert.match(report.summary, /^9 ready/)
+  assert.equal(report.counts.pending, 9)
+  assert.match(report.summary, /^10 ready/)
   const matrix = capabilityMatrix()
   assert.equal(matrix.valid, true)
   // Catalogue order, not alphabetical: the matrix is a table a reader compares row by row.
   assert.deepEqual(matrix.tested, [
     'litellm', 'ollama', 'llamacpp', 'anthropic', 'gemini',
-    'cohere', 'azure-openai', 'vertex', 'bedrock',
+    'cohere', 'azure-openai', 'vertex', 'bedrock', 'openai-images',
   ])
   assert.ok(matrix.rows.every((row) => row.status !== PROVIDER_STATUS.READY || row.tested.length > 0))
 })

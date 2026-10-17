@@ -45,6 +45,7 @@ export const WIRE_FORMATS = Object.freeze({
   AZURE_OPENAI: 'azure_openai',
   AWS_BEDROCK: 'aws_bedrock',
   GCP_VERTEX: 'gcp_vertex',
+  OPENAI_IMAGES: 'openai_images',
 })
 
 /**
@@ -71,6 +72,8 @@ export const CAPABILITIES = Object.freeze({
   REASONING: 'reasoning',
   CANCELLATION: 'cancellation',
   ASYNC_JOBS: 'async_jobs',
+  IMAGE_GENERATION: 'image_generation',
+  VIDEO_GENERATION: 'video_generation',
 })
 
 export class ProviderError extends Error {
@@ -107,12 +110,31 @@ const GATEWAY_TESTS = 'test/online.test.mjs'
 const streaming = cap(CAPABILITIES.STREAMING, 'test', GATEWAY_TESTS)
 const cancellation = cap(CAPABILITIES.CANCELLATION, 'test', GATEWAY_TESTS)
 const WIRE_TESTS = 'test/online-wires.test.mjs'
+const IMAGE_TESTS = 'test/online-image.test.mjs'
 const wireStreaming = cap(CAPABILITIES.STREAMING, 'test', WIRE_TESTS)
 const wireCancellation = cap(CAPABILITIES.CANCELLATION, 'test', WIRE_TESTS)
 
 // A native adapter: a published wire this build speaks, contract-tested against a local fixture.
 // `ready` here means exactly what it means for the three runtimes — a tested code path — and not
 // that the vendor has been called. The note says the second part.
+/**
+ * An image adapter. It is `ready` for the same reason a chat wire is: a test exercises the request
+ * and the response parser against a local fixture. It makes no streaming claim, because image
+ * generation has no stream in this build, and no attempt is made to reuse chat's capability ids.
+ */
+const imageNative = (id, label, doc, wire, auth) => Object.freeze({
+  id, label,
+  category: 'media',
+  wire,
+  auth,
+  credential: credentialFor(wire),
+  status: PROVIDER_STATUS.READY,
+  docsUrl: doc,
+  capabilities: Object.freeze([cap(CAPABILITIES.IMAGE_GENERATION, 'test', IMAGE_TESTS)]),
+  egress: Object.freeze({ https: true, operatorConfigured: false }),
+  notes: 'Native image adapter, contract-tested against a local fixture. No live call has been made in this build; the key you save is sent only to the endpoint you configure.',
+})
+
 const native = (id, label, doc, wire, auth, { streaming: streams = true, capabilities = [] } = {}) => Object.freeze({
   id, label,
   category: 'vendor',
@@ -175,10 +197,10 @@ export const PROVIDERS = Object.freeze([
     notes: `OpenAI-compatible. Reachable by pointing a compatible endpoint at ${docsRoot.replace('https://', '')}; not independently verified in this build.`,
   })),
 
-  // Media vendors. The product's Image and Video areas have no adapter; these entries exist so the
-  // matrix is complete, and every one is `pending`.
+  // Image vendors. OpenAI Images is a tested code path; every other media vendor is still pending,
+  // and the video list has no adapter at all.
+  imageNative('openai-images', 'OpenAI Images', 'https://developers.openai.com/api/reference/resources/images/methods/generate', WIRE_FORMATS.OPENAI_IMAGES, AUTH_KINDS.BEARER),
   ...[
-    ['openai-images', 'OpenAI Images', 'https://platform.openai.com/docs/api-reference/images'],
     ['stability', 'Stability AI', 'https://platform.stability.ai/docs/api-reference'],
     ['fal', 'fal.ai', 'https://docs.fal.ai/'],
     ['replicate', 'Replicate', 'https://replicate.com/docs/reference/http'],

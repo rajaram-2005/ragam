@@ -10,6 +10,7 @@ import * as azure from './azure.mjs'
 import * as bedrock from './bedrock.mjs'
 import * as cohere from './cohere.mjs'
 import * as gemini from './gemini.mjs'
+import * as images from './images.mjs'
 import * as openai from './openai.mjs'
 import * as vertex from './vertex.mjs'
 
@@ -21,6 +22,7 @@ const WIRES = Object.freeze({
   [azure.wire]: azure,
   [bedrock.wire]: bedrock,
   [vertex.wire]: vertex,
+  [images.wire]: images,
 })
 
 /**

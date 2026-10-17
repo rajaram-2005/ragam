@@ -9,6 +9,7 @@ import { contextRoutes } from './context-routes.mjs'
 import { AccountStore, ROLES, DEFAULT_MAX_ACCOUNTS } from './accounts.mjs'
 import { AuditLedger } from '../audit/ledger.mjs'
 import { MemoryStore } from '../memory/store.mjs'
+import { MediaJobQueue } from '../media/jobs.mjs'
 import { KnowledgePipeline } from '../knowledge/pipeline.mjs'
 import { classifyText, redactDeep } from '../policy/classify.mjs'
 import { mostSensitiveDataClass } from '../policy/egress.mjs'
@@ -126,7 +127,15 @@ export class OnlineApp {
       const memory = new MemoryStore(join(this.dir, `memory-${id}.sqlite`))
       const knowledge = new KnowledgePipeline({ dbFile: join(this.dir, `knowledge-${id}.sqlite`), ledger: this.ledger, defaultPrincipal: id })
       knowledge.rebuildIndex()
-      context = { accountId: id, memory, knowledge }
+      // Generated media is per account for the same reason history is: a separate directory and
+      // a separate durable job record, not a filter that a forgotten WHERE could bypass.
+      const media = new MediaJobQueue({
+        storageDir: join(this.dir, `media-${id}`),
+        statePath: join(this.dir, `media-jobs-${id}.json`),
+        concurrency: 1,
+        ledger: this.ledger,
+      })
+      context = { accountId: id, memory, knowledge, media }
       this.contexts.set(id, context)
     }
     return context
@@ -165,14 +174,73 @@ export class OnlineApp {
   }
   readiness() {
     const s = this.store.public()
+    // `kind` is a connection id, not a wire name: resolve the wire the connection will use, or a
+    // custom endpoint would report chat unavailable on an installation that can chat.
+    let chatWire = null
+    try { chatWire = s.kind ? wireFor(runtimeFor(s.kind).wire) : null } catch { chatWire = null }
     return { status: !s.configured ? 'setup_required' : s.checkedAt ? 'configured' : 'connection_unchecked', policy: 'online_only', offlineEnforced: false,
       models: { total: s.models.length, ready: Object.keys(s.verified).length },
-      capabilities: { chat: s.configured && s.models.length > 0, imageGeneration: false, videoGeneration: false },
+      capabilities: {
+        chat: s.configured && s.models.length > 0 && typeof chatWire?.chat === 'function',
+        imageGeneration: this.imageAvailable(),
+        videoGeneration: false,
+      },
       provider: { kind: s.kind, name: s.name, baseUrl: s.baseUrl, selectedModel: s.selectedModel, checkedAt: s.checkedAt },
       accounts: { total: this.accounts.count() },
       note: 'Listing a model does not verify inference or modality support. No local inference or fallback.' }
   }
   models() { const kind = this.store.kind(); return this.store.state.models.map((id) => ({ id, displayName: id, provider: kind, location: 'online', availability: this.store.state.verified[id] ? 'inference_observed' : 'listed_unverified', selectable: true })) }
+
+  /** The saved connection an image request will use, or a refusal that names what is missing. */
+  imageConnection() {
+    const candidates = this.store.connections.filter((connection) => runtimeFor(connection.id).wire === 'openai_images')
+    const record = candidates.find((connection) => connection.id === 'openai-images') ?? candidates[0]
+    if (!record) throw failure('provider_not_configured', 'Add an OpenAI Images connection in Provider Settings.', 503)
+    return this.store.config(record.id)
+  }
+
+  /** Whether the installation can generate an image now: a key and a listed model, not a maybe. */
+  imageAvailable() {
+    try {
+      const config = this.imageConnection()
+      const record = this.store.connections.find((connection) => connection.id === config.id)
+      return Boolean(record?.key && (record.models ?? []).length)
+    } catch { return false }
+  }
+
+  /**
+   * Queue one image generation for this account and return immediately. The HTTP response is not
+   * the generation: the job is the record, and the caller polls it. The prompt is sent only to the
+   * configured provider; no other connection's key is touched.
+   */
+  async startImage(body, session) {
+    const config = this.imageConnection()
+    const record = this.store.connections.find((connection) => connection.id === config.id)
+    const models = record?.models ?? []
+    const model = typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0])
+    if (!model) throw failure('model_unavailable', 'Test the image connection to list its models, then choose one.', 409)
+    if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
+    const wire = wireFor(config.wire)
+    if (typeof wire.generate !== 'function') throw failure('capability_unavailable', 'That connection does not generate images.', 409)
+    const prompt = body.prompt
+    if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
+    if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps image prompts at 4,000 characters.', 400)
+    // Refused here rather than inside the asynchronous job: an unsupported size must be a 400 in
+    // front of the person who chose it, not a failed record they discover by polling.
+    if (body.size !== undefined && !(wire.SIZES ?? []).includes(body.size)) {
+      throw failure('invalid_parameters', `Size must be one of ${(wire.SIZES ?? []).join(', ')}.`, 400)
+    }
+    const context = this.contextFor(session.accountId)
+    const job = context.media.enqueue({
+      kind: 'image',
+      params: { prompt, size: body.size ?? null, model, provider: config.id },
+      subject: session.accountId,
+      filenameHint: `${config.id}-image`,
+      run: ({ signal }) => wire.generate(this.gateway.request.bind(this.gateway), config, { model, prompt, size: body.size, signal }),
+    })
+    this.ledger.record({ category: 'media', action: 'image_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model } })
+    return job
+  }
   async configure(body, { session, kind = 'litellm' } = {}) {
     const runtime = runtimeFor(kind)
     if (typeof body.baseUrl !== 'string') throw failure('invalid_endpoint', 'A gateway URL is required.')
@@ -264,7 +332,9 @@ export class OnlineApp {
     // The connection's wire decides the request shape, the credential header and the completion
     // signal. The app supplies one internal conversation shape and receives one internal result;
     // it never inspects a provider's JSON.
-    const result = await wireFor(config.wire).chat(this.gateway.request.bind(this.gateway), config, {
+    const wire = wireFor(config.wire)
+    if (typeof wire.chat !== 'function') throw failure('capability_unavailable', 'This connection generates images, not chat. Activate a chat connection in Provider Settings.', 409)
+    const result = await wire.chat(this.gateway.request.bind(this.gateway), config, {
       model,
       messages: redacted.value,
       maxTokens,
@@ -458,8 +528,45 @@ export class OnlineApp {
           try { const result = await this.chat(body, { signal: controller.signal, emit, session }); emit('done', result); res.end(); return }
           catch (error) { if (started) { emit('error', { error: error.code ?? 'request_failed', message: error.message }); res.end(); return } throw error }
         }
-        if (req.method === 'GET' && ['/api/image/jobs','/api/video/jobs','/api/media/jobs'].includes(path)) return sendJson(res, 200, { jobs: [] })
-        if (req.method === 'POST' && ['/api/image/generate','/api/video/generate'].includes(path)) throw failure('capability_unavailable', 'This online modality has no qualified adapter yet. No substitute output is generated.', 503)
+        // Generated media is per account, like history: the queue is opened under the account id
+        // and a job id from another account is a 404 here, not a record with a different owner.
+        const mediaJob = /^\/api\/(?:image|media)\/jobs\/([0-9a-f-]{36})(\/content)?$/.exec(path)
+        const mediaFor = () => this.contextFor(session.accountId).media
+        if (req.method === 'GET' && path === '/api/image/jobs') return sendJson(res, 200, { jobs: mediaFor().list({ kind: 'image', limit: 50 }) })
+        if (req.method === 'GET' && path === '/api/media/jobs') return sendJson(res, 200, { jobs: mediaFor().list({ limit: 50 }) })
+        if (req.method === 'GET' && path === '/api/video/jobs') return sendJson(res, 200, { jobs: [] })
+        if (req.method === 'POST' && path === '/api/image/generate') {
+          const job = await this.startImage(await readBody(req, { principal: session.accountId }), session)
+          return sendJson(res, 202, job)
+        }
+        if (req.method === 'POST' && path === '/api/video/generate') throw failure('capability_unavailable', 'No video adapter is qualified in this build. No substitute output is generated.', 503)
+        if (mediaJob && req.method === 'GET' && mediaJob[2]) {
+          const media = mediaFor()
+          const job = media.has(mediaJob[1]) ? media.get(mediaJob[1]) : null
+          if (!job?.artifact) throw failure('job_not_found', 'No stored artifact for this job.', 404)
+          const { bytes, artifact } = await media.readArtifact(mediaJob[1])
+          res.writeHead(200, {
+            'content-type': artifact.mime,
+            'content-length': artifact.byteLength,
+            'cache-control': 'private, no-store',
+            'x-content-type-options': 'nosniff',
+            // The bytes are an image, but a browser should still treat the response as inert.
+            'content-security-policy': "default-src 'none'; sandbox",
+          })
+          return res.end(Buffer.from(bytes))
+        }
+        if (mediaJob && req.method === 'GET') {
+          const media = mediaFor()
+          if (!media.has(mediaJob[1])) throw failure('job_not_found', 'No such media job for this account.', 404)
+          return sendJson(res, 200, media.get(mediaJob[1]))
+        }
+        if (mediaJob && req.method === 'DELETE') {
+          const media = mediaFor()
+          if (!media.has(mediaJob[1])) throw failure('job_not_found', 'No such media job for this account.', 404)
+          const removed = await media.remove(mediaJob[1])
+          this.ledger.record({ category: 'media', action: 'media_delete', outcome: 'success', subject: session.accountId, detail: { jobId: mediaJob[1] } })
+          return sendJson(res, 200, removed)
+        }
         if (await contextRoutes(req, res, this, session)) return
         throw failure('not_found', 'This route is not part of the online product.', 404)
       } catch (error) {
