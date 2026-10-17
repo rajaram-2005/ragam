@@ -75,8 +75,8 @@ What exists, read rather than assumed:
 | Video generation, async jobs, cancellation | **implemented and tested for Google Veo**; other video vendors pending | `wires/veo.mjs`, `/api/video/*`, `test/online-video.test.mjs`; no vendor called live |
 | Klyvaron Lite/Pro/Max runtime adapters | partially implemented | docs/24: two Lite artifacts released, Pro/Max unbuilt |
 | Klyvaron Image / Video registries | planned | docs/22 records the modality roles; no weights exist |
-| Persistent memory, provenance, deletion | implemented and tested (library) | `memory/fabric.mjs`; not on a route |
-| Versioned skills, permissions, rollback | implemented and tested (library) | `skills/*` |
+| Persistent memory, provenance, deletion | implemented and tested (product routes; the layered fabric remains a library) | `/api/memory` in `context-routes.mjs`; `memory/store.mjs` |
+| Versioned skills, permissions, rollback | **implemented and tested (reviewed procedures)**; execution of declared permissions remains a library | `/api/skills` in `context-routes.mjs`, `skills/product.mjs`, `test/online-skills.test.mjs` |
 | Experience-driven adaptation, regression gates | implemented and tested (library) | `adaptive/loop.mjs`, `adaptive/episodes.mjs` |
 | Emotional interaction states | implemented and tested (library) | `adaptive/wording.mjs` |
 | Plugins and MCP least privilege | implemented and tested (library) | `plugins/*`, `mcp/*` |

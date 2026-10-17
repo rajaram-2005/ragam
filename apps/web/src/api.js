@@ -192,6 +192,15 @@ export const api = {
   // imageJobs/videoJobs for a filtered view.
   mediaJobs: (limit = 25) => request('GET', `/api/media/jobs?limit=${limit}`),
 
+  // --- skills -------------------------------------------------------------
+  skills: () => request('GET', '/api/skills'),
+  skill: (name) => request('GET', `/api/skills/${encodeURIComponent(name)}`),
+  installSkill: (body) => request('POST', '/api/skills', body),
+  validateSkill: (name) => request('POST', `/api/skills/${encodeURIComponent(name)}/validate`, {}),
+  setSkill: (name, body) => request('PATCH', `/api/skills/${encodeURIComponent(name)}`, body),
+  rollbackSkill: (name, version) => request('POST', `/api/skills/${encodeURIComponent(name)}/rollback`, { version }),
+  deleteSkill: (name) => request('DELETE', `/api/skills/${encodeURIComponent(name)}`, {}),
+
   // --- plugins ------------------------------------------------------------
   plugins: (state) => request('GET', `/api/plugins${state ? `?state=${encodeURIComponent(state)}` : ''}`),
   pluginCapabilities: () => request('GET', '/api/plugins/capabilities'),

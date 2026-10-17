@@ -113,6 +113,33 @@ export async function contextRoutes(request, response, app, session) {
   }
 
 
+  // --- skills -------------------------------------------------------------
+  // A skill is a reviewed procedure, not code. Installing or changing one is an owner act;
+  // selecting one is the person's own choice and is recorded when the provider answers.
+  const requireOwner = () => {
+    if (session.role !== 'owner') throw failure('owner_required', 'Only the owner account of this installation can change installed procedures.', 403)
+  }
+  if (path === '/api/skills') {
+    if (method === 'GET') return sendJson(response, 200, app.skills.list(), app)
+    if (method === 'POST') { requireOwner(); return sendJson(response, 201, app.skills.install(await readJson(), { actor: accountId }), app) }
+  }
+  if (segments[1] === 'skills' && segments[2]) {
+    if (method === 'GET' && segments.length === 3) return sendJson(response, 200, app.skills.describe(segments[2]), app)
+    if (method === 'POST' && segments[3] === 'validate') { requireOwner(); return sendJson(response, 200, app.skills.validate(segments[2]), app) }
+    if (method === 'POST' && segments[3] === 'rollback') {
+      requireOwner()
+      const body = await readJson()
+      return sendJson(response, 200, app.skills.rollback(segments[2], body.version), app)
+    }
+    if (method === 'PATCH' && segments.length === 3) { requireOwner(); return sendJson(response, 200, app.skills.setSetting(segments[2], await readJson()), app) }
+    if (method === 'DELETE' && segments.length === 3) {
+      requireOwner()
+      const url2 = new URL(request.url, 'http://core.invalid')
+      const reason = url2.searchParams.get('reason')
+      return sendJson(response, 200, app.skills.remove(segments[2], reason), app)
+    }
+  }
+
   // --- plugins ------------------------------------------------------------
   if (method === 'GET' && path === '/api/plugins') {
     // The UI needs to tell an enabled plugin from a disabled or uninstalled one,

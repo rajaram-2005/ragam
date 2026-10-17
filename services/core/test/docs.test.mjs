@@ -712,22 +712,22 @@ test('the status doc reports the real test totals', () => {
   // media workflow, the industry packs, the benchmark harness and the release verifier.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 51)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 52)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**877 / 877**'), 'core total must be stated')
+  assert.ok(status.includes('**886 / 886**'), 'core total must be stated')
   assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
   assert.ok(status.includes('**95 / 95**'), 'web total must be stated')
-  assert.ok(status.includes('1786 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('1795 passing'), 'the grand total must equal the sum of the suites')
   // README and docs/03 must state the *same* total. They disagreed for two phases: README said
   // 709/1615 in its setup snippet while its own component table said 738, and this assertion
   // pinned the stale form, so the contradiction passed every check. A total is stated in both
   // documents or it is stated in neither.
-  assert.ok(squash(doc.readme()).includes('1786 tests: core 877, web 95, fabric 814'),
+  assert.ok(squash(doc.readme()).includes('1795 tests: core 886, web 95, fabric 814'),
     'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1786 run in CI'),
+  assert.ok(squash(doc.readme()).includes('All 1795 run in CI'),
     'README must state the same totals where it describes CI')
   assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
 
@@ -740,13 +740,13 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(877), `core heading must say 877, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(886), `core heading must say 886, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(95), `web heading must say 95, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1786,
+    1795,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })
@@ -1818,9 +1818,16 @@ test('the memory interface the documents describe is the one in the app', () => 
 
   // The rows that make claims about this surface must still say what is true of it.
   assert.match(matrix, /L2 user-approved memory \| \*\*Implemented and tested\*\*/, 'the L2 row must stay honest about what it is')
+  // Learned procedures are still archived: automatic curation is not a product surface. What the
+  // panel adds is reviewed procedures, and the two rows must stay distinct so "skills are back"
+  // cannot silently mean "the agent is learning procedures again".
   assert.match(matrix, /Learned procedures visible and controllable \| \*\*Archived\*\*/,
-    'the skills surface is in the same panel area and must be stated in the matrix')
-  assert.doesNotMatch(chat, /SkillsPanel/, 'research skills are not in the active online product')
+    'learned procedures remain archived and the matrix must say so')
+  assert.match(matrix, /Reviewed procedures \(installed, versioned, selected for one message\) \| \*\*Implemented and tested\*\*/,
+    'the reviewed-procedure row must state what was built')
+  assert.match(chat, /SkillsPanel/)
+  assert.match(chat, /A procedure is reference text, not code/,
+    'the panel must say that a procedure is not executed')
 
   // And the history row: the note says the search is lexical rather than semantic, which
   // is a claim about the implementation, so the implementation is what is checked.

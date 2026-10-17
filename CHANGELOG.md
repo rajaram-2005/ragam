@@ -93,6 +93,25 @@ Not in 0.2.0. On this branch only.
   refusal, cancellation, pre-queue validation, failed/filtered/still-image outcomes and the
   transport's binary ceiling. No vendor was called.
 
+### Reviewed procedures (phase 5)
+
+- **Skills are a product surface, not a library-only module.** `GET /api/skills` lists every
+  procedure with its version, state, declared scope and usage; the owner installs a structured
+  document and promotes a candidate through a **named structural review** (parses, at least two
+  steps, scope declared, no network). A new version is a candidate again, and a rollback restores
+  the text without inheriting a review it never had.
+- **A procedure is text, not code.** A validated, text-only procedure can be selected for one chat
+  message; its steps are sent as reference material with an explicit boundary, and usage is counted
+  only when the provider answers. A document that declares file or network access is refused with
+  `skill_requires_executor` because this product has no executor to grant the scope.
+- **Deletion is a deletion with a tombstone.** The document and its versions are removed; a
+  restart does not reseed a deleted built-in, and the tombstone records the act, never the content.
+- **Built-ins are reviewed procedures:** evidence-first answers, incident triage and release audit,
+  each installed as a candidate, structurally reviewed and stored with `createdBy: bundled`.
+- **Tests:** `services/core/test/online-skills.test.mjs` (9 tests) covers the built-ins, the
+  candidate gate, owner-only mutation, member selection, version reset and rollback, disabled and
+  permission-bearing refusals, deletion and restart persistence.
+
 ## [0.2.0] — 2026-10-17
 
 The adaptive intelligence work, phases 1–10 of the directive: capability profiles over one shared

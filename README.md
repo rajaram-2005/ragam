@@ -4,7 +4,7 @@
 
 ## Current product
 
-Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog and an explicit persistent model picker. Inference is online-only; there are no active local-runtime, hardware-tier, training or task-diagnostic panels. Optional history, approved memory and text-file knowledge remain.
+Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog and an explicit persistent model picker. Inference is online-only; there are no active local-runtime, hardware-tier, training or task-diagnostic panels. Optional history, approved memory, text-file knowledge and reviewed procedures remain.
 
 Run `npm run core` and `npm run web`, then **create an account** at `#/signup` and sign in with it at `#/signin`. Sign-in is traditional — an email address and a password, on three pages (sign in, create account, reset password) — and it is the only way in: the operator access-token file and its login route have been removed. The first account created owns the installation and is the only one that can change the gateway connection; later accounts are members with their own history, memory and knowledge. Then open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. On HTTP-only local development, start Core with `AETHERIS_COOKIE_SECURE=false`; keep secure cookies enabled for HTTPS deployments. If the web app is served inside another site's iframe, also start Core with `AETHERIS_COOKIE_SAMESITE=none` — a strict session cookie is never sent cross-site, so sign-in would appear to work and every request after it would be a `401`. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md).
 
@@ -72,7 +72,7 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 1786 tests: core 877, web 95, fabric 814
+npm test          # 1795 tests: core 886, web 95, fabric 814
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -87,7 +87,7 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1786 run in CI on every push and pull request
+All 1795 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as five jobs — one per
 component, plus one that fails if this documentation stops matching the code, plus one
 that counts what the suites reported and verifies the release against those counts. The
@@ -149,9 +149,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 27,250 | 20,497 | **zero npm packages** | 877 |
+| `services/core` | Node 22 ESM | 27,551 | 20,742 | **zero npm packages** | 886 |
 | `services/fabric` | Python 3.11 | 12,655 | 9,995 | NumPy only | 814 |
-| `apps/web` | React 18 + Vite | 3,233 | 1,885 | react, react-dom | 95 |
+| `apps/web` | React 18 + Vite | 3,322 | 1,890 | react, react-dom | 95 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web
