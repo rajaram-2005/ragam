@@ -85,11 +85,12 @@ export const api = {
   provider: () => request('GET', '/api/providers'),
   // The capability catalogue is metadata about providers in general, not about this connection.
   catalog: () => request('GET', '/api/providers/catalog'),
-  // One route per runtime, mirrored from PROVIDER_ROUTES in services/core/src/online/app.mjs.
-  // The literals are spelled out in each method so the route is visible where it is called.
-  saveProvider: (kind, body) => request('PUT', { litellm: '/api/providers/litellm', ollama: '/api/providers/ollama', llamacpp: '/api/providers/llamacpp' }[kind], body),
-  testProvider: (kind) => request('POST', `${{ litellm: '/api/providers/litellm', ollama: '/api/providers/ollama', llamacpp: '/api/providers/llamacpp' }[kind]}/test`, {}),
-  removeProvider: (kind) => request('DELETE', { litellm: '/api/providers/litellm', ollama: '/api/providers/ollama', llamacpp: '/api/providers/llamacpp' }[kind], {}),
+  // One route per connection id. The id is validated again on the server against the catalogue,
+  // so a name this client invents is refused there rather than trusted here.
+  saveProvider: (kind, body) => request('PUT', `/api/providers/${encodeURIComponent(kind)}`, body),
+  testProvider: (kind) => request('POST', `/api/providers/${encodeURIComponent(kind)}/test`, {}),
+  removeProvider: (kind) => request('DELETE', `/api/providers/${encodeURIComponent(kind)}`, {}),
+  activateProvider: (id) => request('PUT', '/api/providers/active', { id }),
   selectModel: (model) => request('PUT', '/api/models/selection', { model }),
   modelCatalog: (q = '') => request('GET', `/api/models/catalog?q=${encodeURIComponent(q)}`),
   refreshCatalog: (sourceId, authorizeNetwork = false) => request('POST', '/api/models/catalog/refresh', { sourceId, authorizeNetwork }),

@@ -231,8 +231,8 @@ limitations.
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1738 tests)
-npm run test:core         # 831
+npm test                  # all three suites (1748 tests)
+npm run test:core         # 839
 npm run test:web          # 92
 npm run test:fabric       # 814 — needs numpy + pytest on the interpreter
 ```
@@ -287,9 +287,9 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 831 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Core service** | 839 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
 | **Fabric** | 814 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 93 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Web app** | `npm ci`, 95 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 48-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |
 

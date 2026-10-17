@@ -203,33 +203,74 @@ it is the first item in §9.
 
 ---
 
-## 8. Known limitations of this increment
+## 8. Saved connections (store schema 2)
+
+The catalogue describes vendors; the store keeps what the user saved. Since the second increment the
+store holds **more than one connection**:
+
+```
+{ schema: 2, revision, active, connections: { [id]: { id, baseUrl, key, models, selectedModel,
+                                                       verified, checkedAt } } }
+```
+
+- **A connection id is a catalogue id or `custom-<name>`.** `custom` and `custom-<name>` are
+  first-class keyless OpenAI-compatible endpoints, so an OpenAI-compatible server that is not in the
+  catalogue can be saved without pretending to be one that is.
+- **One sealed key per connection.** `key` is AES-256-GCM ciphertext under the same `master.key`
+  (directory `0700`, file `0600`, atomic temp-file + rename). No API response returns it: `public()`
+  reports `keyConfigured: true` and nothing else.
+- **`revision` is store-wide** and increments on any connection change, so a chat authorisation
+  recorded against an older revision does not silently authorise a newer configuration.
+- **Migration is a read, not a rewrite the user has to trigger.** A schema-1 file — one record whose
+  id was its runtime kind — is read as one connection with `active` set to that kind, the sealed key
+  preserved, and the file is rewritten in schema 2 on construction. A test writes a synthetic
+  schema-1 file and asserts both the key and the revision survive.
+
+Routes (all session-gated; mutations owner-only, CSRF-checked, origin-checked):
+
+| Route | Meaning |
+|---|---|
+| `GET /api/providers` | The saved connections plus which one is active. Never a secret |
+| `PUT /api/providers/<id>` | Save that connection and make it active |
+| `POST /api/providers/<id>/test` | Probe **that** connection and store its models |
+| `DELETE /api/providers/<id>` | Remove **that** connection |
+| `PUT /api/providers/active` | Switch the active id without rewriting credentials |
+
+A route names one connection; it cannot act on a different one. `POST /api/providers/litellm/test`
+against a store that only holds `ollama` is `404 provider_not_found` and contacts nothing — one key
+is never spent on another vendor's endpoint. `PUT /api/providers/not-a-provider` is
+`400 invalid_runtime`; a real catalogue id whose adapter is `pending` is `400 adapter_pending`. The
+three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes and semantics.
+
+## 9. Known limitations of this increment
 
 - **No live provider call was made.** "Implemented, awaiting live credentials" is the ceiling for
   every vendor outside the three tested runtimes.
 - **No direct per-vendor adapter exists** beyond the OpenAI-compatible transport. Anthropic, Gemini,
-  Bedrock, Vertex, Cohere and Azure need their own request builders; they are `pending`.
-- **The product still has one connection slot.** The catalogue describes vendors; it does not store
-  several credentials. Multi-connection storage is a store migration and is not in this increment.
-- **The UI matrix is read-only and cannot configure a pending provider.** That is deliberate: a
-  control that cannot work is a claim that it can.
+  Bedrock, Vertex, Cohere and Azure need their own request builders; they are `pending`, and adding
+  a connection for one is refused with `adapter_pending` rather than accepted and quietly broken.
+- **A catalogue id is usable only when its `wire` is `openai_chat`.** The fourteen `gateway_only`
+  entries that speak that wire can be saved against the implemented transport; the rest cannot.
+- **The UI cannot configure a pending provider.** That is deliberate: a control that cannot work is
+  a claim that it can.
 
-## 9. Remaining work, ranked
+## 10. Remaining work, ranked
 
-1. A direct OpenAI-compatible **custom endpoint** provider (multi-connection store + migration) so a
-   vendor key can be used without LiteLLM in front of it.
-2. Anthropic Messages and Gemini `generateContent` adapters, each with contract tests and a
-   `ready` promotion that validation will only accept with a test behind it.
-3. Image generation through one verified provider, reusing `media/workflow.mjs` and the job queue.
-4. Video generation, async lifecycle, cancellation and restart recovery.
-5. An OS-level offline test (network namespace or a hooked DNS resolver), then strict offline can be
+1. Anthropic Messages and Gemini `generateContent` adapters, each with contract tests and a
+   `ready` promotion that validation will only accept with a test behind it. This needs a raw
+   request transport first: the current gateway only speaks the OpenAI chat wire.
+2. Image generation through one verified provider, reusing `media/workflow.mjs` and the job queue.
+3. Video generation, async lifecycle, cancellation and restart recovery.
+4. An OS-level offline test (network namespace or a hooked DNS resolver), then strict offline can be
    called *verified* rather than *policy-enforced*.
-6. Product routes for the adaptive core, which remains a library.
+5. Product routes for the adaptive core, which remains a library.
 
-## 10. Tests
+## 11. Tests
 
 ```
 npm run test:core                      # includes test/provider-framework.test.mjs
+node --test services/core/test/online.test.mjs          # 29 tests, including schema 2
+node --test services/core/test/online-runtimes.test.mjs # 10 tests
 node --test services/core/test/provider-framework.test.mjs
-npm run test:web                       # includes the catalogue render test
+npm run test:web                       # includes the catalogue and saved-connection renders
 ```

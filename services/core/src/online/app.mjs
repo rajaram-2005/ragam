@@ -52,6 +52,17 @@ export const PROVIDER_ROUTES = Object.freeze({
   llamacpp: '/api/providers/llamacpp',
 })
 
+/**
+ * The connection family: `/api/providers/<id>` and `/api/providers/<id>/test`.
+ *
+ * Written as a prefix plus a pattern rather than a table of literals, because the set of ids is
+ * now the catalogue plus named custom endpoints, and a table would have to be edited whenever the
+ * catalogue grows. The prefix is a literal so that a reader — and the web test that checks the UI
+ * only calls routes the router serves — can see the family in the source.
+ */
+export const PROVIDER_CONNECTION_PREFIX = '/api/providers/'
+const PROVIDER_CONNECTION = new RegExp(`^${PROVIDER_CONNECTION_PREFIX}([a-z0-9]+(?:-[a-z0-9]+)*)(/test)?$`)
+
 /** Answered identically for a known and an unknown address, on purpose. */
 export const RESET_REQUESTED_MESSAGE = 'If an account on this installation uses that email address, a single-use reset code is now waiting on the Core host. It expires in 15 minutes.'
 
@@ -165,28 +176,39 @@ export class OnlineApp {
     const runtime = runtimeFor(kind)
     if (typeof body.baseUrl !== 'string') throw failure('invalid_endpoint', 'A gateway URL is required.')
     const baseUrl = gatewayUrl(body.baseUrl, this.gateway.trustedOrigins)
-    const old = this.store.state, oldKind = this.store.kind()
+    const existing = this.store.connections.find((connection) => connection.id === kind)
     const key = body.apiKey
     if (key !== undefined && (typeof key !== 'string' || key.length > 8192 || /[\r\n]/.test(key))) throw failure('invalid_key', 'Invalid gateway key.')
-    // A destination is the runtime AND the endpoint. Changing either one is a new recipient,
-    // so the stored key is not forwarded to it: the caller must supply one or, for a local
-    // runtime that needs none, go without.
-    const sameDestination = oldKind === kind && baseUrl === old.baseUrl
-    if (!key && runtime.keyRequired && (!sameDestination || !old.key)) throw failure('key_required', 'Enter a key for this gateway. Existing keys are never carried to a different endpoint.')
-    const stored = key ? this.store.seal(key) : (sameDestination ? old.key : null)
-    this.store.save({ kind, baseUrl, key: stored, models: [], selectedModel: '', verified: {}, checkedAt: null, revision: old.revision + 1 })
+    // A destination is the connection AND the endpoint. Changing either one is a new recipient, so
+    // that connection's stored key is not forwarded to it: the caller must supply one or, for a
+    // local endpoint that needs none, go without. Other connections' keys are never touched.
+    const sameDestination = Boolean(existing) && baseUrl === existing.baseUrl
+    if (!key && runtime.keyRequired && (!sameDestination || !existing?.key)) {
+      throw failure('key_required', 'Enter a key for this provider. Existing keys are never carried to a different endpoint.')
+    }
+    const stored = key ? this.store.seal(key) : (sameDestination ? existing.key : null)
+    this.store.saveConnection(kind, { baseUrl, key: stored, models: [], selectedModel: '', verified: {}, checkedAt: null })
     this.ledger.record({ category: 'provider', action: 'configure', outcome: 'success', subject: session?.accountId ?? 'owner', detail: { kind, role: session?.role ?? null, keyStored: Boolean(stored) } })
     return this.store.public()
   }
-  /** A route for a runtime that is not the saved one must not act on the saved one. */
-  requireActiveRuntime(kind) {
-    if (kind !== this.store.kind()) throw failure('provider_mismatch', `The saved connection is ${runtimeFor(this.store.kind()).label}. Save ${runtimeFor(kind).label} first, or remove the saved connection.`, 409)
+  /** A route for a saved connection must not act on another one. */
+  requireSavedConnection(kind) {
+    if (!this.store.connections.some((connection) => connection.id === kind)) {
+      throw failure('provider_not_found', 'No such saved connection.', 404)
+    }
   }
-  async refreshModels() {
-    const revision = this.store.state.revision
-    const models = await this.gateway.models(this.store.config())
-    if (revision !== this.store.state.revision) throw failure('provider_changed', 'Connection changed while checking models. Check it again.', 409)
-    this.store.save({ models, checkedAt: new Date().toISOString(), selectedModel: models.includes(this.store.state.selectedModel) ? this.store.state.selectedModel : '', verified: Object.fromEntries(Object.entries(this.store.state.verified).filter(([id]) => models.includes(id))) })
+  async refreshModels(kind = this.store.kind()) {
+    const revision = this.store.revision
+    const config = this.store.config(kind)
+    const models = await this.gateway.models(config)
+    if (revision !== this.store.revision) throw failure('provider_changed', 'Connection changed while checking models. Check it again.', 409)
+    const record = this.store.connections.find((connection) => connection.id === kind)
+    this.store.saveConnection(kind, {
+      models,
+      checkedAt: new Date().toISOString(),
+      selectedModel: models.includes(record?.selectedModel) ? record.selectedModel : '',
+      verified: Object.fromEntries(Object.entries(record?.verified ?? {}).filter(([id]) => models.includes(id))),
+    })
     return this.store.public()
   }
   async chat(body, options = {}) {
@@ -379,19 +401,31 @@ export class OnlineApp {
         // to the account that owns it. An open sign-up page cannot be an open door to
         // re-pointing somebody else's provider credentials or spending their key.
         const requireOwner = () => { if (session.role !== ROLES.OWNER) throw failure('owner_required', 'Only the owner account of this installation can change its gateway connection.', 403) }
-        // One route per runtime, so the runtime a request means is in the URL and never
-        // guessed from the body. The path is the only place a kind comes from.
-        const providerKind = Object.keys(PROVIDER_ROUTES).find((kind) => path === PROVIDER_ROUTES[kind] || path === `${PROVIDER_ROUTES[kind]}/test`)
-        const providerTest = providerKind !== undefined && path.endsWith('/test')
-        if (req.method === 'PUT' && providerKind && !providerTest) { requireOwner(); return sendJson(res, 200, await this.configure(await readBody(req, { principal: session.accountId }), { session, kind: providerKind })) }
-        if (req.method === 'DELETE' && providerKind && !providerTest) {
-          requireOwner(); this.requireActiveRuntime(providerKind)
-          const kind = this.store.kind()
-          this.store.save({ baseUrl: '', key: null, models: [], selectedModel: '', verified: {}, checkedAt: null, revision: this.store.state.revision + 1 })
-          this.ledger.record({ category: 'provider', action: 'remove', outcome: 'success', subject: session.accountId, detail: { kind, role: session.role } })
-          return sendJson(res, 200, this.store.public())
+        // One route per connection, so the connection a request means is in the URL and never
+        // guessed from the body. The three runtimes keep their literal paths; any other catalogue
+        // provider or named custom endpoint uses the same shape under its own id.
+        const connectionMatch = PROVIDER_CONNECTION.exec(path)
+        const connectionId = connectionMatch?.[1] === 'catalog' || connectionMatch?.[1] === 'active' ? null : (connectionMatch?.[1] ?? null)
+        const providerTest = Boolean(connectionMatch?.[2])
+        if (req.method === 'PUT' && path === '/api/providers/active') {
+          requireOwner()
+          const { id } = await readBody(req, { principal: session.accountId })
+          const next = this.store.activate(id)
+          this.ledger.record({ category: 'provider', action: 'activate', outcome: 'success', subject: session.accountId, detail: { kind: id, role: session.role } })
+          return sendJson(res, 200, next)
         }
-        if (req.method === 'POST' && ((providerKind && providerTest) || path === '/api/models/probe')) { requireOwner(); if (providerKind) this.requireActiveRuntime(providerKind); return sendJson(res, 200, await this.refreshModels()) }
+        if (req.method === 'PUT' && connectionId && !providerTest) { requireOwner(); return sendJson(res, 200, await this.configure(await readBody(req, { principal: session.accountId }), { session, kind: connectionId })) }
+        if (req.method === 'DELETE' && connectionId && !providerTest) {
+          requireOwner(); this.requireSavedConnection(connectionId)
+          const next = this.store.removeConnection(connectionId)
+          this.ledger.record({ category: 'provider', action: 'remove', outcome: 'success', subject: session.accountId, detail: { kind: connectionId, role: session.role } })
+          return sendJson(res, 200, next)
+        }
+        if (req.method === 'POST' && ((connectionId && providerTest) || path === '/api/models/probe')) {
+          requireOwner()
+          if (connectionId) this.requireSavedConnection(connectionId)
+          return sendJson(res, 200, await this.refreshModels(connectionId ?? this.store.kind()))
+        }
         if (req.method === 'GET' && path === '/api/models') return sendJson(res, 200, { models: this.models(), selectedModel: this.store.state.selectedModel })
         if (req.method === 'PUT' && path === '/api/models/selection') {
           const { model } = await readBody(req, { principal: session.accountId })

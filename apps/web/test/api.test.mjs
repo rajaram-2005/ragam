@@ -544,6 +544,10 @@ function servedByOnlineRouter(path, router) {
   if (parts[0] !== 'api' || parts.length < 2) return false
   const literal = `/${parts.join('/')}`
   if (!literal.includes('${') && router.includes(`'${literal}'`)) return true
+  // The provider connection family is matched by one pattern rather than by literals, because the
+  // ids are the catalogue plus named custom endpoints. The router declares the prefix it serves,
+  // and the id shape is asserted by the core's own tests.
+  if (parts[1] === 'providers' && router.includes("'/api/providers/'")) return true
   if (!router.includes(`segments[1] === '${parts[1]}'`)) return false
   return parts.slice(2).filter((part) => part && !part.includes('${'))
     .every((part) => router.includes(`'${part}'`))

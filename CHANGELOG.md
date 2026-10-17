@@ -4,7 +4,7 @@ Every entry below is a claim about what the repository contains, and each one is
 `services/core/src/release/manifest.mjs` against the files and the measured suites — a version with
 no entry here cannot be released, and an entry is not a substitute for the tests.
 
-## Unreleased — universal provider framework (phase 1)
+## Unreleased — universal provider framework (phases 1–2)
 
 Not in 0.2.0. On this branch only.
 
@@ -16,6 +16,16 @@ Not in 0.2.0. On this branch only.
 - Error normalisation with retry classification and redaction of six credential shapes.
 - `GET /api/providers/catalog` (session-gated, secret-free) and a read-only capability matrix in
   Provider Settings.
+- **Several saved connections (store schema 2).** Each connection keeps its own encrypted key, model
+  list, selected model and verification record; one is active. A schema-1 file migrates on read with
+  its key and revision preserved, and is rewritten in the new shape.
+- **Custom OpenAI-compatible endpoints.** `custom` and `custom-<name>` are first-class keyless
+  connections, so a compatible server that is not in the catalogue does not have to masquerade as one
+  that is. Catalogue ids resolve through the same path: `wire: 'openai_chat'` is admitted, `pending`
+  is refused with `adapter_pending`, and an invented id is `invalid_runtime`.
+- **`PUT /api/providers/active`** switches connections without rewriting a credential, and a probe
+  (`POST /api/providers/<id>/test`) reads and writes only the connection it names — a key is never
+  spent on another vendor's endpoint.
 - No live provider call was made, and no direct per-vendor adapter exists beyond the tested
   OpenAI-compatible transport. See `docs/27-provider-framework.md` for the audited status.
 

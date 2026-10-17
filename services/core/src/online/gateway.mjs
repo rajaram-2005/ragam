@@ -10,6 +10,7 @@ import http from 'node:http'
 import https from 'node:https'
 import { lookup } from 'node:dns'
 import { isIP, BlockList } from 'node:net'
+import { IMPLEMENTED_WIRES, PROVIDER_STATUS, providerById } from '../providers/catalog.mjs'
 
 export function failure(code, message, status = 400) { return Object.assign(new Error(message), { code, status }) }
 
@@ -28,11 +29,46 @@ export const RUNTIMES = Object.freeze({
   llamacpp: Object.freeze({ id: 'llamacpp', label: 'llama.cpp server', keyRequired: false }),
 })
 
-/** The runtime record for a kind. Unknown kinds are refused, never mapped to a default. */
+/**
+ * The runtime record for a connection id.
+ *
+ * Three sources, in order: the three runtimes this build has always shipped, the catalogue (a
+ * vendor whose wire format this transport speaks), and a named custom endpoint. Everything else is
+ * refused — and a catalogue entry that is `pending`, or whose wire this transport cannot speak, is
+ * refused with the code that says why rather than being treated as unknown.
+ *
+ * `keyRequired` is the only behavioural difference. Cloud vendors need a key; local servers
+ * usually do not, and a key is sent only if one was stored.
+ */
+const KEYLESS = Object.freeze(new Set(['ollama', 'llamacpp', 'vllm', 'localai', 'custom']))
 export function runtimeFor(kind = 'litellm') {
-  const runtime = Object.hasOwn(RUNTIMES, kind) ? RUNTIMES[kind] : null
-  if (!runtime) throw failure('invalid_runtime', 'Choose LiteLLM, Ollama or llama.cpp server.', 400)
-  return runtime
+  if (typeof kind !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(kind)) {
+    throw failure('invalid_runtime', 'Connection ids are lower-case words separated by single hyphens.', 400)
+  }
+  if (Object.hasOwn(RUNTIMES, kind)) {
+    const runtime = RUNTIMES[kind]
+    return { ...runtime, wire: 'openai_chat' }
+  }
+  if (keylessCustom(kind)) {
+    return { id: kind, label: 'Custom OpenAI-compatible endpoint', keyRequired: false, wire: 'openai_chat' }
+  }
+  let provider
+  try {
+    provider = providerById(kind)
+  } catch {
+    throw failure('invalid_runtime', 'Choose a provider from the catalogue or a custom endpoint.', 400)
+  }
+  if (provider.status === PROVIDER_STATUS.PENDING) {
+    throw failure('adapter_pending', `${provider.label} has no adapter in this build.`, 400)
+  }
+  if (!IMPLEMENTED_WIRES.includes(provider.wire)) {
+    throw failure('wire_not_implemented', `${provider.label} needs a wire format this build does not implement.`, 400)
+  }
+  return { id: provider.id, label: provider.label, keyRequired: !KEYLESS.has(kind), wire: provider.wire }
+}
+/** `custom` or `custom-<name>`: a user-named OpenAI-compatible endpoint. */
+function keylessCustom(kind) {
+  return kind === 'custom' || /^custom-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(kind)
 }
 const blocked = new BlockList(), blocked6 = new BlockList()
 for (const [address, prefix] of [['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],['172.16.0.0',12],['192.0.0.0',24],['192.168.0.0',16],['198.18.0.0',15],['224.0.0.0',4],['240.0.0.0',4]]) blocked.addSubnet(address, prefix, 'ipv4')

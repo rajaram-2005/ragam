@@ -1,10 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { OnlineApp } from '../src/online/app.mjs'
+import { OnlineStore, migrateState, STORE_SCHEMA } from '../src/online/store.mjs'
 import { gatewayUrl, privateAddress, OnlineGateway } from '../src/online/gateway.mjs'
 const listen = (s) => new Promise((done) => s.listen(0, '127.0.0.1', () => done(`http://127.0.0.1:${s.address().port}`)))
 const close = (s) => new Promise((done) => { s.closeAllConnections(); s.close(done) })
@@ -214,4 +215,169 @@ test('public HTTPS endpoints are required unless the operator trusts an exact in
 test('an already cancelled request never reaches the gateway', async (t) => {
  const f=await fixture(t);await f.configure();const controller=new AbortController();controller.abort();const n=f.calls.length
  await assert.rejects(f.app.chat(f.chat(),{signal:controller.signal,session:f.session()}),{code:'cancelled'});assert.equal(f.calls.length,n)
+})
+
+
+test('a schema-1 store migrates to one connection without losing the key', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'aetheris-migrate-'))
+  const seed = new OnlineStore(dir)
+  const sealed = seed.seal('synthetic-legacy-secret')
+  writeFileSync(join(dir, 'provider.json'), JSON.stringify({
+    kind: 'ollama',
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    key: sealed,
+    models: ['legacy-model'],
+    selectedModel: 'legacy-model',
+    verified: { 'legacy-model': '2026-10-01T00:00:00.000Z' },
+    revision: 7,
+  }))
+  const migrated = new OnlineStore(dir)
+  assert.equal(migrated.schema, STORE_SCHEMA)
+  assert.equal(migrated.kind(), 'ollama')
+  assert.equal(migrated.config().baseUrl, 'http://127.0.0.1:11434/v1')
+  assert.equal(migrated.config().apiKey, 'synthetic-legacy-secret')
+  assert.deepEqual(migrated.state.models, ['legacy-model'])
+  assert.equal(migrated.state.revision, 7)
+  // And the migrated file is schema 2 on disk, so the inference happens once.
+  const onDisk = JSON.parse(readFileSync(join(dir, 'provider.json'), 'utf8'))
+  assert.equal(onDisk.schema, STORE_SCHEMA)
+  rmSync(dir, { recursive: true, force: true })
+})
+
+test('the migration is pure and refuses a record that is neither schema', () => {
+  const fresh = migrateState(null)
+  assert.deepEqual(fresh, { schema: STORE_SCHEMA, revision: 0, active: null, connections: {} })
+  const legacy = migrateState({ kind: 'litellm', baseUrl: 'https://g.example/v1', key: null, revision: 2 })
+  assert.equal(legacy.active, 'litellm')
+  assert.equal(legacy.revision, 2)
+  assert.equal(legacy.connections.litellm.baseUrl, 'https://g.example/v1')
+
+  // A schema this build does not know is refused, not read as schema 1. Reading it as one
+  // connection would drop every key in the file at the first restart.
+  assert.throws(() => migrateState({ schema: STORE_SCHEMA + 1, connections: {} }),
+    (e) => e.code === 'store_schema_unsupported')
+
+  // Ids the store could not have written are dropped, and the active id falls back to a real one.
+  // `__proto__` is the case that matters: assigned into a plain object it would set a prototype.
+  // Parsed with JSON.parse because an object literal treats a `__proto__` key as a prototype
+  // assignment instead of an own property — it would not exercise the loader at all.
+  const dirty = migrateState(JSON.parse(JSON.stringify({
+    schema: STORE_SCHEMA, revision: 4, active: '__proto__',
+    connections: {
+      litellm: { baseUrl: 'https://g.example/v1' },
+      '__proto__': { baseUrl: 'https://evil.example/v1' },
+      'Bad Id': { baseUrl: 'https://bad.example/v1' },
+    },
+  })))
+  assert.deepEqual(Object.keys(dirty.connections), ['litellm'])
+  assert.equal(dirty.active, 'litellm')
+  assert.equal(Object.getPrototypeOf(dirty.connections).baseUrl, undefined, 'the prototype was not polluted')
+})
+
+test('a saved connection this build cannot resolve is listed as unsupported, and can still be removed', () => {
+  // Reached when the catalogue changes under a stored id (an adapter withdrawn, a status moved to
+  // pending). Throwing here would take the whole settings page down and leave the user no way to
+  // delete the record that caused it.
+  const dir = mkdtempSync(join(tmpdir(), 'ragam-store-unsupported-'))
+  writeFileSync(join(dir, 'provider.json'), JSON.stringify({
+    schema: STORE_SCHEMA, revision: 5, active: 'ollama',
+    connections: {
+      ollama: { baseUrl: 'http://127.0.0.1:11434/v1', key: null },
+      ghost: { baseUrl: 'https://ghost.example/v1', key: null },
+    },
+  }))
+  const store = new OnlineStore(dir)
+  const view = store.public()
+  assert.equal(view.active, 'ollama')
+  const ghost = view.connections.find((connection) => connection.id === 'ghost')
+  assert.equal(ghost.unsupported, 'invalid_runtime')
+  assert.equal(ghost.configured, false)
+  assert.equal(ghost.keyRequired, true, 'an unknown adapter is assumed to need a key')
+  store.removeConnection('ghost')
+  assert.deepEqual(store.connections.map((connection) => connection.id), ['ollama'])
+  rmSync(dir, { recursive: true, force: true })
+})
+
+test('a second provider connection is stored beside the first, with its own key', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  // The first connection is the fixture's local gateway.
+  const first = await f.request('PUT', '/api/providers/litellm', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })
+  assert.equal(first.status, 200)
+
+  // A second, of a different provider, is added without touching the first.
+  const second = await f.request('PUT', '/api/providers/openai', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-second-secret' })
+  assert.equal(second.status, 200, JSON.stringify(second.data))
+  assert.equal(second.data.active, 'openai')
+  assert.equal(second.data.connections.length, 2)
+  assert.equal(second.data.connections.find((c) => c.id === 'litellm').keyConfigured, true)
+  assert.equal(second.data.connections.find((c) => c.id === 'openai').keyConfigured, true)
+
+  // Each connection decrypts to its own key; activating one does not rewrite the other.
+  assert.equal(f.app.store.config('litellm').apiKey, 'synthetic-gateway-secret')
+  assert.equal(f.app.store.config('openai').apiKey, 'synthetic-second-secret')
+
+  const switched = await f.request('PUT', '/api/providers/active', { id: 'litellm' })
+  assert.equal(switched.status, 200)
+  assert.equal(switched.data.active, 'litellm')
+  assert.equal(f.app.store.config().apiKey, 'synthetic-gateway-secret')
+
+  // Removing one leaves the other intact — the whole point of separate records.
+  const removed = await f.request('DELETE', '/api/providers/openai', {})
+  assert.equal(removed.status, 200)
+  assert.equal(removed.data.connections.length, 1)
+  assert.equal(removed.data.connections[0].id, 'litellm')
+  assert.equal(f.app.store.config().apiKey, 'synthetic-gateway-secret')
+})
+
+test('a connection is refused when the catalogue says there is no adapter', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  const anthropic = await f.request('PUT', '/api/providers/anthropic', { baseUrl: 'https://api.anthropic.com', apiKey: 'x' })
+  assert.equal(anthropic.status, 400)
+  assert.equal(anthropic.data.error, 'adapter_pending')
+  // A pending connection is not stored as a side effect of being refused.
+  assert.equal(f.app.store.connections.length, 0)
+
+  const unknown = await f.request('PUT', '/api/providers/not-a-real-provider', { baseUrl: 'https://example.test', apiKey: 'x' })
+  assert.equal(unknown.status, 400)
+  assert.equal(unknown.data.error, 'invalid_runtime')
+})
+
+test('a named custom OpenAI-compatible endpoint is a first-class connection', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  const saved = await f.request('PUT', '/api/providers/custom-work', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-custom-secret' })
+  assert.equal(saved.status, 200)
+  assert.equal(saved.data.active, 'custom-work')
+  assert.equal(saved.data.name, 'Custom OpenAI-compatible endpoint')
+  // Its models can be probed like any other connection, and the probe uses this endpoint.
+  const tested = await f.request('POST', '/api/providers/custom-work/test', {})
+  assert.equal(tested.status, 200)
+  assert.deepEqual(tested.data.models, ['model-a', 'model-b'])
+  assert.ok(f.calls.some((call) => call.path === '/v1/models' && call.authorization === 'Bearer synthetic-custom-secret'))
+})
+
+test('testing one connection does not write another connection\'s model list', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  await f.request('PUT', '/api/providers/litellm', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })
+  await f.request('PUT', '/api/providers/ollama', { baseUrl: `${f.gatewayUrl}/v1` })
+  // Both have empty model lists; probe only the active one.
+  await f.request('POST', '/api/providers/ollama/test', {})
+  const records = f.app.store.public().connections
+  assert.deepEqual(records.find((c) => c.id === 'ollama').models, ['model-a', 'model-b'])
+  assert.deepEqual(records.find((c) => c.id === 'litellm').models, [], 'the other connection must be untouched')
+})
+
+test('the public shape never contains a sealed credential, with any number of connections', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  await f.request('PUT', '/api/providers/litellm', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })
+  await f.request('PUT', '/api/providers/openai', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-second-secret' })
+  const text = JSON.stringify((await f.request('GET', '/api/providers')).data)
+  for (const secret of ['synthetic-gateway-secret', 'synthetic-second-secret', '"iv"', '"tag"', '"data"']) {
+    assert.ok(!text.includes(secret), `the public shape leaked ${secret}`)
+  }
+  assert.ok(text.includes('keyConfigured'))
 })

@@ -717,17 +717,17 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**831 / 831**'), 'core total must be stated')
+  assert.ok(status.includes('**839 / 839**'), 'core total must be stated')
   assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
-  assert.ok(status.includes('**93 / 93**'), 'web total must be stated')
-  assert.ok(status.includes('1738 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('**95 / 95**'), 'web total must be stated')
+  assert.ok(status.includes('1748 passing'), 'the grand total must equal the sum of the suites')
   // README and docs/03 must state the *same* total. They disagreed for two phases: README said
   // 709/1615 in its setup snippet while its own component table said 738, and this assertion
   // pinned the stale form, so the contradiction passed every check. A total is stated in both
   // documents or it is stated in neither.
-  assert.ok(squash(doc.readme()).includes('1738 tests: core 831, web 93, fabric 814'),
+  assert.ok(squash(doc.readme()).includes('1748 tests: core 839, web 95, fabric 814'),
     'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1738 run in CI'),
+  assert.ok(squash(doc.readme()).includes('All 1748 run in CI'),
     'README must state the same totals where it describes CI')
   assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
 
@@ -740,13 +740,13 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(831), `core heading must say 831, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(839), `core heading must say 839, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(93), `web heading must say 93, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(95), `web heading must say 95, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1738,
+    1748,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })

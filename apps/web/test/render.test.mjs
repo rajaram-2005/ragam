@@ -557,6 +557,48 @@ test('the provider catalogue shows status, never a control, and nothing when unl
   assert.equal(renderToStaticMarkup(React.createElement(components.ProviderCatalogue, { catalog: { providers: [] } })), '')
 })
 
+test('a saved catalogue connection keeps its own label instead of being displayed as LiteLLM', () => {
+  // The dialog used to look the id up in a three-entry table and fall back to the first entry, so
+  // an OpenAI or custom connection was labelled "LiteLLM gateway" and told a key was required.
+  const provider = {
+    kind: 'openai', active: 'openai', name: 'OpenAI', keyConfigured: true, configured: true,
+    baseUrl: 'https://api.openai.com/v1', models: [], selectedModel: '', revision: 2,
+    connections: [
+      { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', keyRequired: true, keyConfigured: true, configured: true, models: [], selectedModel: '' },
+    ],
+  }
+  const markup = render('ProviderSettings (catalogue connection)', React.createElement(components.ProviderSettings, {
+    account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop, provider,
+  }))
+  assert.match(markup, /OpenAI API base URL/)
+  assert.doesNotMatch(markup, /LiteLLM gateway API base URL/)
+  assert.match(markup, /<option value="openai" selected="">OpenAI<\/option>/)
+})
+
+test('saved connections are listed with a switch, and adding one offers no pending adapter', () => {
+  const provider = {
+    kind: 'litellm', active: 'litellm', name: 'LiteLLM', keyConfigured: true, configured: true,
+    baseUrl: 'https://gateway.example/v1', models: ['model-a'], selectedModel: 'model-a', revision: 4,
+    connections: [
+      { id: 'litellm', label: 'LiteLLM', baseUrl: 'https://gateway.example/v1', configured: true, keyConfigured: true, models: ['model-a'], selectedModel: 'model-a' },
+      { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', configured: true, keyConfigured: true, models: [], selectedModel: '' },
+    ],
+  }
+  const markup = render('ProviderSettings (connections)', React.createElement(components.ProviderSettings, {
+    account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop, provider,
+  }))
+  assert.match(markup, /Saved connections \(2\)/)
+  assert.match(markup, /· active/)
+  assert.match(markup, />Use</)
+  assert.match(markup, /Remove/)
+  // Adding a connection offers catalogue entries, not pending adapters.
+  assert.match(markup, /Add a connection/)
+  assert.match(markup, /Custom OpenAI-compatible endpoint/)
+  assert.doesNotMatch(markup, /Anthropic Claude/)
+  // The list shows no credential material.
+  assert.doesNotMatch(markup, /sk-|synthetic|"iv"|"tag"/)
+})
+
 test('Provider Settings uses a password input and separates save from connection testing', () => {
   const markup=render('ProviderSettings',React.createElement(components.ProviderSettings,{onClose:noop}))
   assert.match(markup,/Provider Settings/)

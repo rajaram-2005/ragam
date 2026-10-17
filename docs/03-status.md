@@ -11,14 +11,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1738 passing, 0 failing.**
+**Test totals: 1748 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **831 / 831** (48 files, ~50 s) |
+| `services/core` | `node --test test/*.test.mjs` | **839 / 839** (48 files, ~50 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
-| `apps/web` | `node --test test/*.test.mjs` | **93 / 93** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 200.08 kB → **61.78 kB gzip**, single chunk, no warnings |
+| `apps/web` | `node --test test/*.test.mjs` | **95 / 95** (4 files, ~1 s) |
+| `apps/web` build | `vite build` | 206.68 kB → **63.62 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as five jobs split so a
@@ -108,7 +108,7 @@ instead.
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
 | 3 | Unified app, five areas | **Complete** | `apps/web`; 92 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
 | 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,616-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 11, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 28 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
-| 5 | Online provider integration | **Partially met** | The online entry reaches a LiteLLM gateway, an Ollama server or a llama.cpp server through one OpenAI-compatible transport, with the same destination checks, consent, deadline and size limits for each. Verified only against synthetic loopback fixtures; no real gateway or runtime has been qualified in this sandbox. Provider-native protocols are not used online, and Image and Video have no adapter |
+| 5 | Online provider integration | **Partially met** | The online entry reaches a LiteLLM gateway, an Ollama server, a llama.cpp server, or a saved OpenAI-compatible vendor endpoint through one OpenAI-compatible transport, with the same destination checks, consent, deadline and size limits for each. Verified only against synthetic loopback fixtures; no real gateway or runtime has been qualified in this sandbox. Provider-native protocols are not used online, and Image and Video have no adapter |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
 | 7 | Tool / agent execution | **Complete** | Plugin and MCP permission enforcement; God Core lifecycle |
 | 8 | Multimodal pipelines | **Complete** | Job queue, validation, video genuineness check |
@@ -126,7 +126,7 @@ instead.
 | — | Remote training: free-first LoRA smoke run (Kaggle, Colab fallback) | **Built; smoke run not executed** | [`21-remote-training.md`](./21-remote-training.md): pinned base (Qwen2.5-0.5B-Instruct at a commit, licence checked at that commit), synthetic starter data with pinned hashes, a stage ledger that reports PASSED, FAILED or NOT RUN per stage, and persistence only after a read-back. Tested with a fake backend and a torch-free Hub gate; the Transformers + PEFT backend and the notebook have never run. No Pro or Max model is trained. A 2026-10-15 audit re-ran both suites, re-derived the dataset hashes, checked every package pin against PyPI, re-read the backend's calls against those exact wheels, corrected three widened Sparsiz numbers in §7, and stopped the notebook cloning a session branch |
 | — | Klyvaron family: the stance, the two differentiators and the modalities | **Specified and enforced; the differentiators have no artifact yet** | [`22-klyvaron-differentiation.md`](./22-klyvaron-differentiation.md): the non-competitive stance and the four new plan gates are values in `klyvaron/tiers.mjs` and `klyvaron/plan.mjs`, so a tier that names a competitor is invalid and a relabelled text model cannot back an image capability. Trend awareness and understanding the user's expressed history are defined on every tier with acceptance criteria and are **`unavailable` everywhere**: the dated-source ledger (`klyvaron/trends.mjs`) and the consent-gated, evidence-cited reader (`klyvaron/affect.mjs`) are implemented and tested, and a mechanism is not a model artifact. Pro and Max remain **unbuilt**; no image or video artifact exists at any tier |
 | — | Klyvaron: the family's own models | **Two artifacts released, two presets unbuilt** | `aetheris-core-v1` — four presets, the parameter and memory arithmetic and the seven-step recipe, all in `klyvaron/architecture.mjs` ([24](./24-own-models.md)). `aetheris-lite-lm@0.1.1` is the released Lite artifact. **`klyvaron-mini-lm@0.1.0`** is the second: 1,421,952 parameters trained from random initialisation on a corpus assembled from seven licence-checked sources, evaluated with the split held out **by source** — perplexity **4.7342** against a bigram baseline of **15.8644**, 0 hard failures and **one soft failure recorded rather than waived** (8,456 s against a 3,600 s wall-clock target; the threshold was not relaxed to pass it). `klyvaron-pro-lm` and `klyvaron-max-lm` have no weights: for them `corpus`, `tokenizer`, `backend`, `train`, `evaluate` and `release` are open |
-| — | Universal provider framework | **Partially implemented** | [`27`](./27-provider-framework.md): a 33-entry catalogue with per-capability evidence, capability selection with explainable refusals, error normalisation with redaction, `GET /api/providers/catalog` and a read-only matrix in Provider Settings. Three providers are `ready` (the three runtimes this build tests); 14 are reachable only through an OpenAI-compatible endpoint and 16 are pending adapters refused by name. No live vendor call has been made |
+| — | Universal provider framework (unreleased, on this branch) | **Partially implemented** | [`27`](./27-provider-framework.md): a 33-entry catalogue with per-capability evidence, capability selection with explainable refusals, error normalisation with redaction, `GET /api/providers/catalog` and a capability matrix in Provider Settings. Three providers are `ready` (the three runtimes this build tests); 14 are reachable only through an OpenAI-compatible endpoint and 16 are pending adapters refused by name. The store now holds **several connections** (schema 2), each with its own encrypted key, models and verification record, one active; `custom` and `custom-<name>` endpoints are first-class and a schema-1 file migrates with its key preserved. No live vendor call has been made |
 | — | Aetheris Lite release gate | **Complete** | `fabric/lm/card.py` drives the existing `ModelReleaseManager`. Hard requirements: beat the bigram baseline, unknown-rate ≤ 2%, loss must fall. The rejection path is tested more than the acceptance path |
 
 ### Phase 4 in detail — the most important limitation
@@ -234,7 +234,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (831 tests)
+### `services/core` — Implemented and tested (839 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -362,7 +362,7 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (93 tests)
+### `apps/web` — Implemented and tested (95 tests)
 
 | Area | Status |
 |---|---|
@@ -503,7 +503,7 @@ Measured release verification on this host:
 
 | Check | Result |
 |---|---|
-| `node services/core/scripts/release-check.mjs --core 831 --web 93 --fabric 814` | `release 0.2.0 verified against 831 + 93 + 814 = 1738 tests` |
+| `node services/core/scripts/release-check.mjs --core 839 --web 95 --fabric 814` | `release 0.2.0 verified against 839 + 95 + 814 = 1748 tests` |
 | `node services/core/scripts/benchmark-adaptive.mjs` | 7/7 benchmarks, 0 failed, artefact at `docs/experiments/phase10-benchmark.json` |
 | `VERSION` / three `package.json` / `package-lock.json` | all `0.2.0` |
 
