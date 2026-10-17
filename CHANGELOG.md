@@ -6,6 +6,12 @@ no entry here cannot be released, and an entry is not a substitute for the tests
 
 ## Unreleased — universal provider framework (phases 1–2)
 
+**Direction (2026-10-17): online-first.** The product requires connectivity for its AI
+functionality. Offline operation and OS-level network isolation are not requirements; local
+runtimes remain optional self-hosted integrations. Security controls (SSRF filtering, redirect
+refusal, origin allowlists, deadlines, encrypted credentials) remain because they make online
+requests safe.
+
 Not in 0.2.0. On this branch only.
 
 - A 33-entry provider catalogue with a status per entry and **evidence per capability**: `ready`

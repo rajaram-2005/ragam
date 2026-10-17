@@ -216,10 +216,10 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Criterion | Status | Evidence |
 |---|---|---|
 | Five areas work in one app | **Met** | `apps/web`; `structure.test.mjs` fails if a sixth appears |
-| Local chat inference with an actually installed model | **Not met — requires weights** | Adapter tested against a real loopback server; no LM installed here. Reported as `degraded`, never faked |
-| Strict offline mode verifiably blocks network | **Met** | Recording-`fetch` spy: 4 external hosts rejected, call log empty, no socket, no DNS. Guard also installed over `globalThis.fetch` |
+| Local chat inference with an installed model | **Not a requirement (online-first)** | Retained legacy path is tested against a loopback server; the active product performs no local inference. The 2026-10-17 override makes cloud inference the default |
+| Strict offline mode verifiably blocks network | **Superseded — not a completion criterion** | The 2026-10-17 online-first override removes offline operation as a product requirement; the recording-`fetch` measurement is kept as history of the legacy path, not as a gate |
 | Hybrid sends only authorized requests externally | **Met** | Exact-host allowlist + classification ceiling; `confidential`/`restricted` need explicit authorization |
-| An external provider, when one is configured, uses supported endpoints and handles provider failure | **Not applicable — no external provider is configured** | The provider adapter was removed with the rest of the external integration. The router still supports `online` descriptors, so the gate this criterion describes would be re-established by a new adapter rather than assumed |
+| An external provider, when one is configured, uses supported endpoints and handles provider failure | **Met against fixtures; no live provider called** | The online entry saves provider connections, requires explicit consent per revision, refuses a mismatched route, and normalises auth/quota/outage failures. OpenAI-compatible, Anthropic and Gemini wires are contract-tested; a valid key and quota remain unverified |
 | Private knowledge indexed / retrieved / cited / managed locally | **Met** | Ingest, content-hash dedupe, chunk, BM25, cited grounding, ACL, purge, audit |
 | Plugin + MCP enforce capability permissions | **Met** | Scope allowlist, elevated-scope approvals, forbidden scopes, risk-tier gates, schema validation of arguments and output |
 | God Mode tasks observable / pausable / resumable / cancellable / verifiable | **Met** | All five exercised by tests; pause→resume checkpoints at `phaseIndex=1` (2 → 9 steps) |

@@ -17,13 +17,14 @@ Current release: **0.2.0** — [release note](docs/26-release.md), [changelog](C
 The following documents the earlier research foundation. Its local/offline capabilities are not part of the active product.
 
 
-A local-first AI platform built by integrating two repositories into one system:
+An **online-first** AI platform built by integrating two repositories into one system:
 [`Aetheris-`](https://github.com/rajaram-2005/Aetheris-) (application and
 orchestration) and [`sparsiz`](https://github.com/rajaram-2005/sparsiz) (research and
-compute optimisation). Inference remains local-first. The updated directive authorizes
-development of a replaceable LiteLLM gateway; online inference is not implemented
-yet. Optional catalog metadata refresh is separate from inference consent and is
-blocked for external sources in Strict Offline.
+compute optimisation). The active product is online-only: chat, image and video requests go to
+the provider connection you configure, and an internet connection is required for AI
+functionality. Local runtimes (Ollama, llama.cpp, vLLM, LocalAI) remain optional developer and
+self-hosted integrations and do not dictate the architecture. Optional catalog metadata refresh
+is separate from inference consent.
 
 This is **not** a concatenation of the two. Each was audited first
 ([`docs/01-audit.md`](docs/01-audit.md)), responsibilities were assigned by
@@ -243,11 +244,13 @@ Model card: [`docs/model-cards/klyvaron-mini-lm-0.1.0.md`](docs/model-cards/klyv
 
 ### Hardware-based execution
 
-Klyvaron **Lite / Pro / Max** use the user's own device by default. Lite is
-CPU-first; GPU tiers require model-specific measured compatibility, not a GPU name.
-Chat, Image and Video offer Local, Hybrid and Online task modes; Strict Offline
-blocks remote services (including LAN inference). The hardware API reports the
-Core host, not the hardware of a remote browser.
+Klyvaron **Lite / Pro / Max** are online deployment profiles: cost-conscious hosted inference for
+Lite, higher-capability hosted models for Pro, and benchmarked high-performance or distributed
+inference for Max. The hardware and local-runtime machinery described below belongs to the retained
+legacy service and optional self-hosted use; it is not a requirement of the active product, which
+performs **no local inference and downloads no models**. Where a Klyvaron-branded feature uses a
+third-party hosted model, its metadata names the actual model and provider rather than claiming
+first-party weights.
 
 The admission framework, CPU memory safeguards, and [evaluated weight-only int8
 inference](docs/14-cpu-int8-inference.md) are implemented. A useful

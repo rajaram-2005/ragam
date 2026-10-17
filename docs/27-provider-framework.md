@@ -2,9 +2,16 @@
 
 The master directive of 2026-10-17 asks for a universal provider architecture, a real Image and
 Video pipeline, first-party Klyvaron integrations, memory and skills, adaptation, emotional
-intelligence, Plugins/MCP, and verified offline operation — twelve phases, each independently
-testable. This page records the audit that preceded the work, the provider framework built in this
-increment, and the honest status of every other part.
+intelligence and Plugins/MCP — twelve phases, each independently testable. This page records the
+audit that preceded the work, the provider framework built in this increment, and the honest status
+of every other part.
+
+> **Architecture override (2026-10-17): online-first.** RAGAM requires connectivity for its primary
+> AI functionality. Offline operation, strict-offline mode and OS-level network isolation are **not**
+> product requirements or completion criteria, and no longer appear in the remaining-work list.
+> Local runtimes stay as optional self-hosted integrations. The security controls that remain —
+> egress filtering, redirect refusal, exact-origin allowlists, timeouts and credential encryption —
+> exist to make online requests safe, not to make the product offline.
 
 **Status vocabulary.** Every claim below is exactly one of: *implemented and tested*, *implemented,
 awaiting live credentials*, *hardware-dependent*, *partially implemented*, *planned*, *unsupported*.
@@ -73,7 +80,7 @@ What exists, read rather than assumed:
 | Experience-driven adaptation, regression gates | implemented and tested (library) | `adaptive/loop.mjs`, `adaptive/episodes.mjs` |
 | Emotional interaction states | implemented and tested (library) | `adaptive/wording.mjs` |
 | Plugins and MCP least privilege | implemented and tested (library) | `plugins/*`, `mcp/*` |
-| Strict offline enforcement | partially implemented | policy guard and fabric refuse; no OS-level network-isolation test |
+| Safe egress (SSRF, private addresses, redirects, origins) | **implemented and tested** | `online/gateway.mjs`, `policy/egress.mjs`; security controls, **not** an offline product mode |
 | Live-provider verification | not possible here | no credentials, vendor hosts unreachable |
 
 The library rows are not a dismissal: those modules have acceptance tests and records in
@@ -103,9 +110,10 @@ fails, which is also how a credential is kept out of a descriptor (there is no f
 
 **`providers/select.mjs` — a decision, with reasons.** Requirements (capabilities, minimum context,
 whether the request leaves the machine) are checked against the catalogue. Every candidate that does
-not qualify is returned with a code and a sentence; there is no "best available". Strict offline
-policy refuses a remote request before any candidate is considered. An unrecorded context limit does
-not satisfy a stated minimum.
+not qualify is returned with a code and a sentence; there is no "best available". A caller-supplied
+offline policy still refuses a remote request before any candidate is considered — that is a library
+guarantee for embedders, not a product mode. An unrecorded context limit does not satisfy a stated
+minimum.
 
 **`providers/errors.mjs` — one failure shape that cannot leak.** Status codes map to stable codes,
 retryability is decided by code rather than by optimism, `Retry-After` is honoured and bounded, and
@@ -207,17 +215,18 @@ measures what arrives. It is not a generation claim, and this increment does not
 
 ---
 
-## 7. Offline and security posture
+## 7. Security posture for an online-first product
 
-What is proven by tests: the egress guard's policy matrix, the fabric's refusal to probe or route an
-external adapter under `strict_offline`, the gateway's DNS/IP filtering and redirect refusal, CSRF
-and origin checks on mutations, credential encryption at rest, and that the catalogue cannot carry a
-secret.
+Online-first does not mean unrestricted network access. What is proven by tests: the gateway's
+DNS/IP filtering and redirect refusal, the exact-origin allowlist for private or plain-HTTP
+destinations, per-request deadlines and size bounds, CSRF and origin checks on mutations, credential
+encryption at rest, and that no catalogue descriptor can carry a secret. These controls exist to make
+an outbound request to a chosen provider safe; they are not an offline mode.
 
-What is **not** proven: OS-level network isolation. No test in this repository asserts that the
-process cannot open a socket under strict offline; the guarantee is at the policy layer, and the
-directive asks for an enforceable network policy. That gap is recorded rather than papered over, and
-it is the first item in §9.
+The legacy egress guard and its `strict_offline` policy remain in the repository for the retained
+local service and for embedders that request them, and its tests still pass. They are no longer a
+product requirement, a completion criterion, or a gate on any phase (the 2026-10-17 override above).
+No OS-level network isolation is claimed, and none is needed: the product is expected to be online.
 
 ---
 
@@ -285,8 +294,7 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
    another compatibility shim.
 3. Image generation through one verified provider, reusing `media/workflow.mjs` and the job queue.
 4. Video generation, async lifecycle, cancellation and restart recovery.
-5. An OS-level offline test (network namespace or a hooked DNS resolver), then strict offline can be
-   called *verified* rather than *policy-enforced*.
+5. Provider health checks and usage accounting surfaced in the five areas.
 6. Product routes for the adaptive core, which remains a library.
 
 ## 11. Tests
