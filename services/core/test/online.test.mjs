@@ -60,6 +60,26 @@ test('provider, context, model and tool routes require owner authentication', as
  const f = await fixture(t)
  for (const path of ['/api/providers','/api/models','/api/sessions','/api/memory','/api/knowledge/documents','/api/plugins','/api/mcp/tools']) assert.equal((await f.request('GET',path)).status,401,path)
 })
+test('the provider catalogue is authenticated, read-only and carries no secrets', async (t) => {
+  const f = await fixture(t)
+  assert.equal((await f.request('GET', '/api/providers/catalog')).status, 401)
+  await f.login()
+  const r = await f.request('GET', '/api/providers/catalog')
+  assert.equal(r.status, 200)
+  assert.equal(r.data.valid, true)
+  assert.equal(r.data.counts.ready, 3, 'three runtimes have a tested path')
+  assert.ok(r.data.counts.pending > 0, 'the unimplemented adapters must be stated, not hidden')
+  assert.match(r.data.summary, /^3 ready/)
+  for (const provider of r.data.providers) {
+    assert.ok(provider.docsUrl.startsWith('https://'), `${provider.id} must cite documentation`)
+    // A descriptor has no credential field, so there is nothing to redact — but assert it anyway,
+    // because "there is nothing to redact" is exactly the property that silently regresses.
+    for (const field of ['apiKey', 'key', 'token', 'secret', 'credential']) assert.equal(field in provider, false)
+  }
+  const text = JSON.stringify(r.data)
+  assert.ok(!/sk-[A-Za-z0-9]|bearer\s+[a-z0-9]/i.test(text), 'the catalogue leaked a credential shape')
+})
+
 test('owner login uses an HttpOnly secure cookie; wrong passwords and cross-origin mutations fail', async (t) => {
  const f = await fixture(t); assert.equal((await f.request('POST','/api/auth/login',{email:f.account.email,password:'a-long-wrong-password'})).status,401)
  const r = await f.login(); assert.match(r.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/); assert.match(r.headers.get('set-cookie'),/Secure/)

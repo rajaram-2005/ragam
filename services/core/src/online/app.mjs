@@ -14,6 +14,7 @@ import { classifyText, redactDeep } from '../policy/classify.mjs'
 import { mostSensitiveDataClass } from '../policy/egress.mjs'
 import { PluginRegistry } from '../plugins/registry.mjs'
 import { McpRegistry, RISK, SERVER_KINDS } from '../mcp/layer.mjs'
+import { PROVIDERS, catalogueReport, describeProvider } from '../providers/catalog.mjs'
 
 /**
  * Session bounds.
@@ -132,6 +133,23 @@ export class OnlineApp {
     }
     if (adopted.length) this.ledger.record({ category: 'auth', action: 'adopt_legacy_stores', outcome: 'success', subject: account.id, detail: { adopted } })
     return adopted
+  }
+  /**
+   * The provider catalogue, as the product may show it.
+   *
+   * Read-only and session-gated: it describes vendors and what this build can prove about them.
+   * It holds no credentials — descriptors have no credential field at all — and no model list,
+   * because a model list is a fact about a connection this installation may not have.
+   */
+  providerCatalogue() {
+    const report = catalogueReport()
+    return {
+      policy: 'online_only',
+      valid: report.valid,
+      summary: report.summary,
+      counts: report.counts,
+      providers: PROVIDERS.map((provider) => describeProvider(provider.id)),
+    }
   }
   readiness() {
     const s = this.store.public()
@@ -355,6 +373,8 @@ export class OnlineApp {
         if (req.method === 'GET' && path === '/api/config') return sendJson(res, 200, { policy: 'online_only', offlineEnforced: false, auth: { mode: 'accounts', account: { email: session.email, role: session.role } } })
         if (req.method === 'GET' && path === '/api/ready') return sendJson(res, 200, this.readiness())
         if (req.method === 'GET' && path === '/api/providers') return sendJson(res, 200, this.store.public())
+        // Read-only meta-information about providers, separate from the installation's connection.
+        if (req.method === 'GET' && path === '/api/providers/catalog') return sendJson(res, 200, this.providerCatalogue())
         // The gateway connection and its key belong to the installation, so they belong
         // to the account that owns it. An open sign-up page cannot be an open door to
         // re-pointing somebody else's provider credentials or spending their key.

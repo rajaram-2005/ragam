@@ -4,6 +4,21 @@ Every entry below is a claim about what the repository contains, and each one is
 `services/core/src/release/manifest.mjs` against the files and the measured suites — a version with
 no entry here cannot be released, and an entry is not a substitute for the tests.
 
+## Unreleased — universal provider framework (phase 1)
+
+Not in 0.2.0. On this branch only.
+
+- A 33-entry provider catalogue with a status per entry and **evidence per capability**: `ready`
+  means a tested code path, `gateway_only` means the wire format is implemented and the vendor is
+  not verified, `pending` means an adapter does not exist and selection refuses it by name.
+- Capability selection with explainable refusals: strict offline refuses a remote request before any
+  candidate is considered, and an unrecorded context limit does not satisfy a stated minimum.
+- Error normalisation with retry classification and redaction of six credential shapes.
+- `GET /api/providers/catalog` (session-gated, secret-free) and a read-only capability matrix in
+  Provider Settings.
+- No live provider call was made, and no direct per-vendor adapter exists beyond the tested
+  OpenAI-compatible transport. See `docs/27-provider-framework.md` for the audited status.
+
 ## [0.2.0] — 2026-10-17
 
 The adaptive intelligence work, phases 1–10 of the directive: capability profiles over one shared

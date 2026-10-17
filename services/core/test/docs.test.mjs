@@ -26,6 +26,7 @@ import { DEFAULT_ROUTING_WEIGHTS } from '../src/router/registry.mjs'
 import { COMPETITOR_MARKERS, FAMILY_STANCE, KLYVARON, TIERS, familyReport, ownedArtifacts, tierClaimFor, tierClaimForArtifact } from '../src/klyvaron/tiers.mjs'
 import { ACCELERATORS, ACCELERATOR_IDS } from '../src/hardware/accelerators.mjs'
 import { MODALITY_MODELS, presetReport } from '../src/klyvaron/architecture.mjs'
+import { PROVIDERS, PROVIDER_STATUS, catalogueReport } from '../src/providers/catalog.mjs'
 
 const idMapOf = (plan) => Object.fromEntries(plan.tiers.map((t) => [t.id, t]))
 const gateIn = (tier, id) => tier.gates.find((g) => g.id === id)
@@ -447,6 +448,13 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.setup, 'all three suites (1681 tests)'], [doc.setup, 'npm run test:core         # 775'],
     [doc.setup, '| **Core service** | 775 tests pass'],
     [doc.readme, '1681 tests: core 775, web 92, fabric 814'], [doc.readme, 'All 1681 run in CI'],
+    // The 0.2.0 release total, superseded by the provider framework.
+    [doc.status, '**809 / 809**'], [doc.status, 'Implemented and tested (809 tests)'],
+    [doc.status, '**Test totals: 1715 passing'], [doc.status, 'Implemented and tested (92 tests)'],
+    [doc.setup, 'all three suites (1715 tests)'], [doc.setup, 'npm run test:core         # 809'],
+    [doc.setup, '| **Core service** | 809 tests pass'], [doc.setup, '`npm ci`, 92 tests'],
+    [doc.readme, '1715 tests: core 809, web 92, fabric 814'], [doc.readme, 'All 1715 run in CI'],
+    [doc.readme, '| `apps/web` | React 18 + Vite | 2,691 | 1,818 | react, react-dom | 92 |'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -704,22 +712,22 @@ test('the status doc reports the real test totals', () => {
   // media workflow, the industry packs, the benchmark harness and the release verifier.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 47)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 48)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**809 / 809**'), 'core total must be stated')
+  assert.ok(status.includes('**831 / 831**'), 'core total must be stated')
   assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
-  assert.ok(status.includes('**92 / 92**'), 'web total must be stated')
-  assert.ok(status.includes('1715 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('**93 / 93**'), 'web total must be stated')
+  assert.ok(status.includes('1738 passing'), 'the grand total must equal the sum of the suites')
   // README and docs/03 must state the *same* total. They disagreed for two phases: README said
   // 709/1615 in its setup snippet while its own component table said 738, and this assertion
   // pinned the stale form, so the contradiction passed every check. A total is stated in both
   // documents or it is stated in neither.
-  assert.ok(squash(doc.readme()).includes('1715 tests: core 809, web 92, fabric 814'),
+  assert.ok(squash(doc.readme()).includes('1738 tests: core 831, web 93, fabric 814'),
     'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1715 run in CI'),
+  assert.ok(squash(doc.readme()).includes('All 1738 run in CI'),
     'README must state the same totals where it describes CI')
   assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
 
@@ -732,13 +740,13 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(809), `core heading must say 809, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(831), `core heading must say 831, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(92), `web heading must say 92, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(93), `web heading must say 93, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1715,
+    1738,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })
@@ -2142,4 +2150,33 @@ test('the release note quotes the committed benchmark, not a remembered one', ()
   const version = read('VERSION').trim()
   assert.ok(squash(read('docs/26-release.md')).includes(`Release ${version}`), 'docs/26 must be the release note for VERSION')
   assert.match(read('CHANGELOG.md'), new RegExp(`^## \\[${version.replace(/\./g, '\\.')}\\] — \\d{4}-\\d{2}-\\d{2}$`, 'm'))
+})
+
+test('the provider matrix in docs/27 is the catalogue, not a retyped copy', () => {
+  // A capability matrix is the document most likely to drift: it is long, it changes when an
+  // adapter lands, and nothing about reading it reveals a stale row. Every provider in the code
+  // must appear once, with the status the code gives it, and no provider may appear that the code
+  // does not have — which is also how a "supported" vendor would sneak in.
+  const text = read('docs/27-provider-framework.md')
+  const rows = [...text.matchAll(/^\| `([\w-]+)` — [^|]+ \| (ready|gateway_only|pending) \|/gm)]
+  assert.equal(rows.length, PROVIDERS.length, `docs/27 lists ${rows.length} providers; the catalogue has ${PROVIDERS.length}`)
+  const documented = new Map(rows.map(([, id, status]) => [id, status]))
+  for (const provider of PROVIDERS) {
+    assert.equal(documented.get(provider.id), provider.status, `${provider.id} is '${provider.status}' in code and '${documented.get(provider.id)}' in docs/27`)
+  }
+  // The counts sentence must be the report's, and the excluded aggregator must stay excluded.
+  assert.ok(text.includes(catalogueReport().summary), 'docs/27 must state the catalogue report verbatim')
+  assert.equal(rows.some(([, id]) => /freellm/i.test(id)), false, 'the excluded aggregator must not appear in the matrix')
+  assert.match(text, /FreeLLMAPI remains excluded/, 'the exclusion must be stated, not merely true')
+  assert.ok(text.includes('No live provider call was made'), 'the absence of live verification must be stated')
+})
+
+test('the catalogue cannot outgrow the status vocabulary the docs define', () => {
+  // docs/27 defines three statuses in a table; the code has three. A new status added to the
+  // catalogue without a sentence saying what it means would be an unexplained claim.
+  const text = read('docs/27-provider-framework.md')
+  for (const status of Object.values(PROVIDER_STATUS)) {
+    assert.ok(text.includes(`\`${status}\``), `docs/27 must explain the '${status}' status`)
+  }
+  assert.equal(Object.values(PROVIDER_STATUS).length, 3)
 })

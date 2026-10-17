@@ -90,6 +90,7 @@ async function loadComponents() {
     "export { default as PluginsArea } from '../../src/areas/PluginsArea.jsx'",
     "export { default as McpArea } from '../../src/areas/McpArea.jsx'",
     "export { default as ProviderSettings } from '../../src/components/ProviderSettings.jsx'",
+    "export { default as ProviderCatalogue } from '../../src/components/ProviderCatalogue.jsx'",
     "export { default as App } from '../../src/App.jsx'",
     "export { default as SignInPage } from '../../src/pages/SignInPage.jsx'",
     "export { default as SignUpPage } from '../../src/pages/SignUpPage.jsx'",
@@ -530,6 +531,31 @@ test('Chat renders the saved exact model and identifies the online recipient', (
 
 })
 
+
+test('the provider catalogue shows status, never a control, and nothing when unloaded', () => {
+  const catalog = {
+    valid: true,
+    summary: '3 ready, 14 reachable via an OpenAI-compatible endpoint, 16 pending',
+    counts: { ready: 3, gateway_only: 14, pending: 16 },
+    providers: [
+      { id: 'litellm', label: 'LiteLLM gateway', status: 'ready', capabilities: [{ id: 'streaming', source: 'test', ref: 'test/online.test.mjs' }] },
+      { id: 'openai', label: 'OpenAI', status: 'gateway_only', capabilities: [] },
+      { id: 'anthropic', label: 'Anthropic Claude', status: 'pending', capabilities: [] },
+    ],
+  }
+  const markup = render('ProviderCatalogue', React.createElement(components.ProviderCatalogue, { catalog }))
+  assert.match(markup, /ready in this build/)
+  assert.match(markup, /tested: streaming/)
+  assert.match(markup, /not verified here/)
+  assert.match(markup, /1 pending adapters/)
+  assert.match(markup, /adapter pending; not selectable/)
+  // No button, input or select: the catalogue is information, and a control that cannot work
+  // would be a claim that it can.
+  assert.doesNotMatch(markup, /<(button|input|select)\b/)
+  // Unloaded or malformed: render nothing rather than an empty shell.
+  assert.equal(renderToStaticMarkup(React.createElement(components.ProviderCatalogue, { catalog: null })), '')
+  assert.equal(renderToStaticMarkup(React.createElement(components.ProviderCatalogue, { catalog: { providers: [] } })), '')
+})
 
 test('Provider Settings uses a password input and separates save from connection testing', () => {
   const markup=render('ProviderSettings',React.createElement(components.ProviderSettings,{onClose:noop}))

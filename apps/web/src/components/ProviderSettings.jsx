@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 import { Banner, Button, Field } from './ui.jsx'
+import ProviderCatalogue from './ProviderCatalogue.jsx'
 // `account` decides what this dialog offers. The gateway connection and its key belong to
 // the installation, so only the owner account may change them: with an open sign-up page,
 // letting any member re-point the connection or delete the stored key would hand a
@@ -22,12 +23,16 @@ export default function ProviderSettings({ account, onClose, onChanged }) {
   const dialog = useRef(null)
   const [provider, setProvider] = useState(null), [kind, setKind] = useState('litellm'), [url, setUrl] = useState(''), [key, setKey] = useState('')
   const [busy, setBusy] = useState(false), [error, setError] = useState(null), [notice, setNotice] = useState('')
+  // Non-fatal: the catalogue is information, and failing to load it must not stop somebody from
+  // configuring or testing their connection.
+  const [catalog, setCatalog] = useState(null)
   const runtime = runtimeOf(kind)
   // The saved connection, when it is for the runtime on screen. Test and remove act on that.
   const saved = provider && provider.kind === kind ? provider : null
   useEffect(() => {
     dialog.current?.showModal()
     api.provider().then((s) => { setProvider(s); setKind(s.kind ?? 'litellm'); setUrl(s.baseUrl) }).catch(setError)
+    api.catalog().then(setCatalog).catch(() => setCatalog(null))
     return () => { dialog.current?.close() }
   }, [])
   const act = async (action) => {
@@ -63,5 +68,6 @@ export default function ProviderSettings({ account, onClose, onChanged }) {
       <Button variant="danger" disabled={busy || !owner || !saved} onClick={async () => { if (window.confirm('Remove the connection and any stored key? Your conversations are kept.')) { if (await act(() => api.removeProvider(kind))) setNotice('Connection and stored credential removed.') } }}>Remove connection</Button>
     </div>
     <p className="small">Model selection lives in Chat. No automatic fallback. Requests may incur provider charges; gateway budgets and quotas still apply. Image and Video require separate qualified adapters.</p>
+    <ProviderCatalogue catalog={catalog} />
   </dialog>
 }

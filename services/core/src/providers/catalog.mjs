@@ -1,0 +1,296 @@
+// The provider catalogue: what the world offers, and how little of it this build can prove.
+//
+// This module exists because the two failure modes a provider list has are opposite and both
+// common. One is a short list that pretends the rest of the market does not exist. The other is a
+// long list that pretends every entry works. The second is worse: a matrix of twenty logos reads as
+// twenty integrations, and the first time a user pastes a key into one of them they discover the
+// truth in the least useful way.
+//
+// So every provider here carries a **status** and every capability carries **evidence**:
+//
+//   ready         this build has a tested code path to it (the transports in online/gateway.mjs).
+//                 Requires `source: 'test'` on every capability.
+//   gateway_only  it speaks a wire format the tested transport already speaks (OpenAI-compatible
+//                 `/chat/completions`), so an operator *can* reach it by pointing a compatible
+//                 endpoint at it. Not independently verified here, and the status says so.
+//   pending       it needs a wire adapter this build does not have. It cannot be selected, and
+//                 `selectProvider` refuses it by name even if it advertises the capability.
+//
+// A provider cannot promote itself. Validation refuses an entry that claims `ready` without a test
+// behind each capability, and refuses a capability with no evidence at all. Adding a real adapter
+// means adding a test, which is the point.
+//
+// What is deliberately absent: no credential values, no "supports everything" flags, and no
+// provider without a documentation URL. A catalogue entry is a claim about somebody else's API,
+// and a claim needs a source.
+
+/** How a provider authenticates. A catalogue entry never carries the credential itself. */
+export const AUTH_KINDS = Object.freeze({
+  BEARER: 'bearer',
+  X_API_KEY: 'x_api_key',
+  OAUTH2: 'oauth2',
+  AWS_SIGV4: 'aws_sigv4',
+  GCP_ADC: 'gcp_adc',
+  NONE: 'none',
+})
+
+/** The wire protocols. Only one is implemented by this build's transport. */
+export const WIRE_FORMATS = Object.freeze({
+  OPENAI_CHAT: 'openai_chat',
+  ANTHROPIC_MESSAGES: 'anthropic_messages',
+  GEMINI_GENERATE: 'gemini_generate',
+  COHERE_CHAT: 'cohere_chat',
+  AWS_BEDROCK: 'aws_bedrock',
+  GCP_VERTEX: 'gcp_vertex',
+})
+
+/** Wires the online gateway's transport can speak today. */
+export const IMPLEMENTED_WIRES = Object.freeze([WIRE_FORMATS.OPENAI_CHAT])
+
+export const PROVIDER_STATUS = Object.freeze({
+  READY: 'ready',
+  GATEWAY_ONLY: 'gateway_only',
+  PENDING: 'pending',
+})
+
+/** A capability is only claimed with a source. `test` means this repository exercises it. */
+export const EVIDENCE_SOURCES = Object.freeze(['test', 'vendor-doc'])
+
+export const CAPABILITIES = Object.freeze({
+  STREAMING: 'streaming',
+  TOOLS: 'tools',
+  STRUCTURED_OUTPUT: 'structured_output',
+  IMAGE_INPUT: 'image_input',
+  FILE_INPUT: 'file_input',
+  REASONING: 'reasoning',
+  CANCELLATION: 'cancellation',
+  ASYNC_JOBS: 'async_jobs',
+})
+
+export class ProviderError extends Error {
+  constructor(message, code, problems = []) {
+    super(message)
+    this.name = 'ProviderError'
+    this.code = code
+    this.problems = problems
+  }
+}
+
+const cap = (id, source, ref) => Object.freeze({ id, source, ref: ref ?? null })
+
+const ready = (id, label, doc, capabilities, extra = {}) => Object.freeze({
+  id, label,
+  category: 'gateway',
+  wire: WIRE_FORMATS.OPENAI_CHAT,
+  auth: AUTH_KINDS.BEARER,
+  status: PROVIDER_STATUS.READY,
+  docsUrl: doc,
+  // The tested transport: `GET {base}/models`, `POST {base}/chat/completions`, SSE streaming,
+  // no redirects, deadline and size bounds. The tests are in test/online.test.mjs.
+  capabilities,
+  egress: Object.freeze({ https: true, operatorConfigured: true }),
+  notes: 'Reached through the tested OpenAI-compatible transport. Local runtimes may use http on an operator-trusted origin.',
+  ...extra,
+})
+
+// The three runtimes the product actually offers. Their capabilities are the ones the transport's
+// tests exercise: streaming with a real sentinel, cancellation, and model listing. Tools are not
+// claimed for them here because the online chat path does not send a tool schema.
+const GATEWAY_TESTS = 'test/online.test.mjs'
+const streaming = cap(CAPABILITIES.STREAMING, 'test', GATEWAY_TESTS)
+const cancellation = cap(CAPABILITIES.CANCELLATION, 'test', GATEWAY_TESTS)
+
+export const PROVIDERS = Object.freeze([
+  ready('litellm', 'LiteLLM gateway', 'https://docs.litellm.ai/docs/providers', [streaming, cancellation]),
+  ready('ollama', 'Ollama (OpenAI-compatible)', 'https://github.com/ollama/ollama/blob/main/docs/openai.md', [streaming, cancellation]),
+  ready('llamacpp', 'llama.cpp server', 'https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md', [streaming, cancellation]),
+
+  // OpenAI-compatible vendors. `gateway_only` is a statement about the wire format, not a tested
+  // integration: an operator can point a compatible endpoint at them, and nothing here has done so.
+  ...[
+    ['openai', 'OpenAI', 'https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create', 'https://developers.openai.com/api/reference'],
+    ['openrouter', 'OpenRouter', 'https://openrouter.ai/docs/quickstart', 'https://openrouter.ai/docs'],
+    ['mistral', 'Mistral AI', 'https://docs.mistral.ai/api/', 'https://docs.mistral.ai'],
+    ['deepseek', 'DeepSeek', 'https://api-docs.deepseek.com/', 'https://api-docs.deepseek.com'],
+    ['groq', 'Groq', 'https://console.groq.com/docs/openai', 'https://console.groq.com/docs'],
+    ['together', 'Together AI', 'https://docs.together.ai/docs/openai-api-compatibility', 'https://docs.together.ai'],
+    ['fireworks', 'Fireworks AI', 'https://docs.fireworks.ai/api-reference/introduction', 'https://docs.fireworks.ai'],
+    ['xai', 'xAI', 'https://docs.x.ai/docs/api-reference', 'https://docs.x.ai'],
+    ['perplexity', 'Perplexity', 'https://docs.perplexity.ai/api-reference/chat-completions', 'https://docs.perplexity.ai'],
+    ['novita', 'Novita AI', 'https://novita.ai/docs/api-reference/model-apis-llm-create-chat-completion', 'https://novita.ai/docs'],
+    ['sambanova', 'SambaNova', 'https://docs.sambanova.ai/cloud/docs/get-started/api-reference', 'https://docs.sambanova.ai'],
+    ['huggingface', 'Hugging Face Inference Providers', 'https://huggingface.co/docs/inference-providers/index', 'https://huggingface.co/docs/inference-providers'],
+    ['vllm', 'vLLM (OpenAI-compatible server)', 'https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html', 'https://docs.vllm.ai'],
+    ['localai', 'LocalAI', 'https://localai.io/features/openai-functions/', 'https://localai.io'],
+  ].map(([id, label, docsUrl, docsRoot]) => Object.freeze({
+    id,
+    label,
+    category: 'openai-compatible',
+    wire: WIRE_FORMATS.OPENAI_CHAT,
+    auth: AUTH_KINDS.BEARER,
+    status: PROVIDER_STATUS.GATEWAY_ONLY,
+    docsUrl,
+    // Deliberately empty: nothing in this repository has called this vendor, so no capability is
+    // evidenced. The status says "this wire format is implemented", not "this vendor is verified".
+    capabilities: Object.freeze([]),
+    egress: Object.freeze({ https: true, operatorConfigured: true }),
+    notes: `OpenAI-compatible. Reachable by pointing a compatible endpoint at ${docsRoot.replace('https://', '')}; not independently verified in this build.`,
+  })),
+
+  // Vendors whose wire format this build does not implement. No capability list: there is nothing
+  // honest to put in it.
+  ...[
+    ['anthropic', 'Anthropic Claude', 'https://docs.anthropic.com/en/api/messages', WIRE_FORMATS.ANTHROPIC_MESSAGES, AUTH_KINDS.X_API_KEY],
+    ['gemini', 'Google Gemini', 'https://ai.google.dev/api/generate-content', WIRE_FORMATS.GEMINI_GENERATE, AUTH_KINDS.BEARER],
+    ['vertex', 'Google Vertex AI', 'https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference', WIRE_FORMATS.GCP_VERTEX, AUTH_KINDS.GCP_ADC],
+    ['cohere', 'Cohere', 'https://docs.cohere.com/reference/chat', WIRE_FORMATS.COHERE_CHAT, AUTH_KINDS.BEARER],
+    ['azure-openai', 'Azure OpenAI', 'https://learn.microsoft.com/en-us/azure/ai-services/openai/reference', WIRE_FORMATS.OPENAI_CHAT, AUTH_KINDS.X_API_KEY],
+    ['bedrock', 'Amazon Bedrock', 'https://docs.aws.amazon.com/bedrock/latest/APIReference/welcome.html', WIRE_FORMATS.AWS_BEDROCK, AUTH_KINDS.AWS_SIGV4],
+  ].map(([id, label, docsUrl, wire, auth]) => Object.freeze({
+    id,
+    label,
+    category: 'vendor',
+    wire,
+    auth,
+    status: PROVIDER_STATUS.PENDING,
+    docsUrl,
+    capabilities: Object.freeze([]),
+    // Azure OpenAI speaks the OpenAI chat wire but not the OpenAI endpoint or auth shape; it is
+    // pending rather than gateway_only precisely because "same wire" is not "same request".
+    notes: 'Adapter pending. It is refused by name, not mapped onto a compatible-looking transport.',
+    egress: Object.freeze({ https: true, operatorConfigured: false }),
+  })),
+
+  // Media vendors. The product's Image and Video areas have no adapter; these entries exist so the
+  // matrix is complete, and every one is `pending`.
+  ...[
+    ['openai-images', 'OpenAI Images', 'https://platform.openai.com/docs/api-reference/images'],
+    ['stability', 'Stability AI', 'https://platform.stability.ai/docs/api-reference'],
+    ['fal', 'fal.ai', 'https://docs.fal.ai/'],
+    ['replicate', 'Replicate', 'https://replicate.com/docs/reference/http'],
+    ['recraft', 'Recraft', 'https://www.recraft.ai/docs'],
+    ['ideogram', 'Ideogram', 'https://developer.ideogram.ai/api-reference'],
+    ['black-forest-labs', 'Black Forest Labs (FLUX)', 'https://docs.bfl.ml/'],
+    ['firefly', 'Adobe Firefly', 'https://developer.adobe.com/firefly-services/docs/firefly-api/'],
+    ['comfyui', 'ComfyUI (local)', 'https://github.com/comfyanonymous/ComfyUI'],
+    ['diffusers', 'Diffusers (local)', 'https://huggingface.co/docs/diffusers/index'],
+  ].map(([id, label, docsUrl]) => Object.freeze({
+    id,
+    label,
+    category: 'media',
+    wire: null,
+    auth: AUTH_KINDS.BEARER,
+    status: PROVIDER_STATUS.PENDING,
+    docsUrl,
+    capabilities: Object.freeze([]),
+    notes: 'No image or video adapter exists in this build. See docs/26, "What it does not claim".',
+    egress: Object.freeze({ https: true, operatorConfigured: false }),
+  })),
+])
+
+const byId = new Map(PROVIDERS.map((provider) => [provider.id, provider]))
+
+/** Look one up. Unknown is refused rather than defaulted — there is no "closest provider". */
+export function providerById(id) {
+  const provider = byId.get(id)
+  if (!provider) throw new ProviderError(`unknown provider '${id}'`, 'unknown_provider')
+  return provider
+}
+
+export function providersByStatus(status) {
+  return PROVIDERS.filter((provider) => provider.status === status).map((provider) => provider.id)
+}
+
+/**
+ * Validate the catalogue. This is run by the tests and by `catalogueReport`, so a malformed entry
+ * fails a build rather than a user's first request.
+ */
+export function validateProvider(provider) {
+  const problems = []
+  const fail = (message) => problems.push(message)
+  const allowed = new Set(['id', 'label', 'category', 'wire', 'auth', 'status', 'docsUrl', 'capabilities', 'egress', 'notes'])
+  for (const key of Object.keys(provider ?? {})) if (!allowed.has(key)) fail(`${key}: unknown field`)
+
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(provider?.id ?? '')) fail(`id '${provider?.id}' is not kebab-case`)
+  if (typeof provider?.label !== 'string' || provider.label.length < 2) fail('label is required')
+  if (!Object.values(AUTH_KINDS).includes(provider?.auth)) fail(`auth '${provider?.auth}' is not a known kind`)
+  if (!Object.values(PROVIDER_STATUS).includes(provider?.status)) fail(`status '${provider?.status}' is not a known status`)
+  if (typeof provider?.docsUrl !== 'string' || !provider.docsUrl.startsWith('https://')) fail('docsUrl must be an https URL')
+
+  // The only evidence a capability has is what a test exercises or what the vendor documents. A
+  // capability with neither is an advertisement.
+  for (const capability of provider?.capabilities ?? []) {
+    if (!Object.values(CAPABILITIES).includes(capability.id)) fail(`capability '${capability.id}' is unknown`)
+    if (!EVIDENCE_SOURCES.includes(capability.source)) fail(`capability '${capability.id}' has no recognised evidence source`)
+    if (capability.source === 'test' && !String(capability.ref ?? '').startsWith('test/')) {
+      fail(`capability '${capability.id}' claims a test, so it must name a test file`)
+    }
+    if (capability.source === 'vendor-doc' && !String(capability.ref ?? '').startsWith('https://')) {
+      fail(`capability '${capability.id}' cites a vendor doc, so it must cite a URL`)
+    }
+  }
+
+  if (provider?.status === PROVIDER_STATUS.READY) {
+    if (!IMPLEMENTED_WIRES.includes(provider.wire)) fail(`'${provider.id}' is ready on a wire this build does not implement`)
+    if ((provider.capabilities ?? []).length === 0) fail(`'${provider.id}' is ready with no tested capability`)
+    for (const capability of provider.capabilities ?? []) {
+      if (capability.source !== 'test') fail(`'${provider.id}' is ready but '${capability.id}' is not backed by a test`)
+    }
+  }
+  if (provider?.status === PROVIDER_STATUS.GATEWAY_ONLY && provider.wire !== WIRE_FORMATS.OPENAI_CHAT) {
+    fail(`'${provider.id}' is gateway_only on a wire the gateway does not speak`)
+  }
+  if (provider?.status === PROVIDER_STATUS.PENDING && (provider.capabilities ?? []).length > 0) {
+    fail(`'${provider.id}' is pending and cannot advertise capabilities`)
+  }
+  if (provider?.wire !== null && !Object.values(WIRE_FORMATS).includes(provider?.wire)) fail(`wire '${provider?.wire}' is unknown`)
+  if (!provider?.egress || typeof provider.egress.https !== 'boolean') fail('egress policy is required')
+
+  return Object.freeze({ valid: problems.length === 0, problems: Object.freeze(problems) })
+}
+
+export function validateCatalogue(providers = PROVIDERS) {
+  const problems = []
+  const seen = new Set()
+  for (const provider of providers) {
+    if (seen.has(provider.id)) problems.push(`duplicate provider id '${provider.id}'`)
+    seen.add(provider.id)
+    const verdict = validateProvider(provider)
+    for (const problem of verdict.problems) problems.push(`${provider.id}: ${problem}`)
+  }
+  return Object.freeze({ valid: problems.length === 0, problems: Object.freeze(problems) })
+}
+
+/**
+ * What can be shown to a user. No credential fields exist on a descriptor at all, so there is
+ * nothing to redact here — the guarantee is structural, not a filter.
+ */
+export function describeProvider(id) {
+  const provider = providerById(id)
+  return Object.freeze({
+    id: provider.id,
+    label: provider.label,
+    category: provider.category,
+    status: provider.status,
+    wire: provider.wire,
+    auth: provider.auth,
+    docsUrl: provider.docsUrl,
+    capabilities: provider.capabilities,
+    notes: provider.notes,
+    egress: provider.egress,
+  })
+}
+
+/** Counts for the docs and for the API's summary line. */
+export function catalogueReport() {
+  const verdict = validateCatalogue()
+  const counts = Object.fromEntries(Object.values(PROVIDER_STATUS).map((status) => [status, providersByStatus(status).length]))
+  return Object.freeze({
+    valid: verdict.valid,
+    problems: verdict.problems,
+    total: PROVIDERS.length,
+    counts: Object.freeze(counts),
+    // Stated with every report, because a count of zero is the interesting number here.
+    summary: `${counts.ready} ready, ${counts.gateway_only} reachable via an OpenAI-compatible endpoint, ${counts.pending} pending`,
+  })
+}

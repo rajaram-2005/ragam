@@ -83,6 +83,8 @@ export const api = {
   confirmPasswordReset: ({ email, code, password }) => request('POST', '/api/auth/password-reset/confirm', { email, code, password }),
 
   provider: () => request('GET', '/api/providers'),
+  // The capability catalogue is metadata about providers in general, not about this connection.
+  catalog: () => request('GET', '/api/providers/catalog'),
   // One route per runtime, mirrored from PROVIDER_ROUTES in services/core/src/online/app.mjs.
   // The literals are spelled out in each method so the route is visible where it is called.
   saveProvider: (kind, body) => request('PUT', { litellm: '/api/providers/litellm', ollama: '/api/providers/ollama', llamacpp: '/api/providers/llamacpp' }[kind], body),
