@@ -23,7 +23,14 @@ import { DEFAULT_CONFIG, loadConfig } from '../src/config.mjs'
 import { ELEVATED_SCOPES, FORBIDDEN_SCOPES } from '../src/plugins/manifest.mjs'
 import { LIFECYCLE, DEFAULT_BUDGET } from '../src/godcore/lifecycle.mjs'
 import { DEFAULT_ROUTING_WEIGHTS } from '../src/router/registry.mjs'
-import { KLYVARON, TIERS, familyReport, tierClaimForArtifact } from '../src/klyvaron/tiers.mjs'
+import { COMPETITOR_MARKERS, FAMILY_STANCE, KLYVARON, TIERS, familyReport, ownedArtifacts, tierClaimFor, tierClaimForArtifact } from '../src/klyvaron/tiers.mjs'
+import { ACCELERATORS, ACCELERATOR_IDS } from '../src/hardware/accelerators.mjs'
+import { MODALITY_MODELS, presetReport } from '../src/klyvaron/architecture.mjs'
+import { PROVIDERS, PROVIDER_STATUS, catalogueReport } from '../src/providers/catalog.mjs'
+
+const idMapOf = (plan) => Object.fromEntries(plan.tiers.map((t) => [t.id, t]))
+const gateIn = (tier, id) => tier.gates.find((g) => g.id === id)
+import { developmentPlan, GATES, GATE_STATES } from '../src/klyvaron/plan.mjs'
 
 // HERE is services/core/test, so the repo root is three levels up. Getting this
 // wrong made every doc lookup fail at once — which is the argument for comparing
@@ -58,6 +65,10 @@ const doc = {
   cycle: () => read('docs/07-improvement-cycle.md'),
   hermes: () => read('docs/10-hermes-audit.md'),
   klyvaron: () => read('docs/11-klyvaron-family.md'),
+  differentiation: () => read('docs/22-klyvaron-differentiation.md'),
+  trainingFree: () => read('docs/23-training-free-tiers.md'),
+  ownModels: () => read('docs/24-own-models.md'),
+  adaptive: () => read('docs/25-adaptive-intelligence.md'),
   matrix: () => read('docs/12-feature-matrix.md'),
   distillation: () => read('docs/09-distillation.md'),
   distillVerdict: () => read('docs/experiments/distillation-logit-vs-baseline.json'),
@@ -358,6 +369,11 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.setup, '| **Fabric** | 562 tests pass'], [doc.security, '562 Fabric tests'],
     [doc.setup, '| **Core service** | 445 tests pass'],
     [doc.setup, 'all three suites (1179 tests)'], [doc.status, '**528 / 528**'],
+    // The Phase 2 total, kept so a document restating 722 in any of its forms fails here.
+    [doc.status, '**722 / 722**'], [doc.status, 'Implemented and tested (722 tests)'],
+    [doc.setup, 'npm run test:core         # 722'], [doc.setup, '| **Core service** | 722 tests pass'],
+    [doc.readme, '1628 tests: core 722, web 92, fabric 814'], [doc.readme, 'All 1628 run in CI'],
+    [doc.status, '**Test totals: 1628 passing'],
     [doc.status, '**76 / 76**'], [doc.setup, 'npm run test:core         # 528'],
     [doc.setup, '| **Web app** | `npm ci`, 76 tests'],
     [doc.status, '**84 / 84**'], [doc.status, '**Test totals: 1204 passing'],
@@ -386,6 +402,59 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.readme, '1213 tests: core 547, web 91, fabric 575'], [doc.readme, 'All 1213 run in CI'],
     [doc.phase2, '547 Core + 91 Web + 575 Fabric = 1,213 tests'], [doc.phase2, '19 Core and 15 Web tests'],
     [doc.accounts, 'its 19 tests pass'], [doc.setup, '38-test documentation-accuracy suite'],
+    [doc.status, '**617 / 617**'], [doc.status, 'Implemented and tested (617 tests)'],
+    [doc.status, '**644 / 644**'], [doc.status, 'Implemented and tested (644 tests)'],
+    [doc.status, '**647 / 647**'], [doc.status, 'Implemented and tested (647 tests)'],
+    [doc.status, '**684 / 684**'], [doc.status, 'Implemented and tested (684 tests)'],
+    [doc.setup, 'npm run test:core         # 684'], [doc.setup, '| **Core service** | 684 tests pass'],
+    [doc.readme, '1590 tests: core 684, web 92, fabric 814'], [doc.readme, 'All 1590 run in CI'],
+    [doc.status, '**Test totals: 1590 passing'],
+    [doc.setup, 'npm run test:core         # 647'], [doc.setup, '| **Core service** | 647 tests pass'],
+    [doc.readme, '1553 tests: core 647, web 92, fabric 814'], [doc.readme, 'All 1553 run in CI'],
+    [doc.status, '**Test totals: 1553 passing'],
+    [doc.setup, 'npm run test:core         # 644'], [doc.setup, '| **Core service** | 644 tests pass'],
+    [doc.setup, 'npm run test:core         # 617'], [doc.setup, '| **Core service** | 617 tests pass'],
+    [doc.readme, '1523 tests: core 617, web 92, fabric 814'], [doc.readme, 'All 1523 run in CI'],
+    [doc.status, '**Test totals: 1523 passing'],
+    // The Phase 5 total, and the README forms it was stated in while the component table had
+    // already moved on: both documents are checked for each superseded shape.
+    [doc.status, '**738 / 738**'], [doc.status, 'Implemented and tested (738 tests)'],
+    [doc.status, '**Test totals: 1644 passing'],
+    [doc.setup, 'all three suites (1644 tests)'], [doc.setup, 'npm run test:core         # 738'],
+    [doc.setup, '| **Core service** | 738 tests pass'],
+    [doc.readme, '1615 tests: core 709, web 92, fabric 814'], [doc.readme, 'All 1615 run in CI'],
+    [doc.readme, '1644 tests: core 738, web 92, fabric 814'], [doc.readme, 'All 1644 run in CI'],
+    // The Phase 6 total.
+    [doc.status, '**753 / 753**'], [doc.status, 'Implemented and tested (753 tests)'],
+    [doc.status, '**Test totals: 1659 passing'],
+    [doc.setup, 'all three suites (1659 tests)'], [doc.setup, 'npm run test:core         # 753'],
+    [doc.setup, '| **Core service** | 753 tests pass'],
+    [doc.readme, '1659 tests: core 753, web 92, fabric 814'], [doc.readme, 'All 1659 run in CI'],
+    // The Phase 7 total, superseded when the two regression tests above were added.
+    [doc.status, '**762 / 762**'], [doc.status, 'Implemented and tested (762 tests)'],
+    [doc.status, '**Test totals: 1668 passing'],
+    [doc.setup, 'all three suites (1668 tests)'], [doc.setup, 'npm run test:core         # 762'],
+    [doc.setup, '| **Core service** | 762 tests pass'],
+    [doc.readme, '1668 tests: core 762, web 92, fabric 814'], [doc.readme, 'All 1668 run in CI'],
+    // The Phase 7 total.
+    [doc.status, '**764 / 764**'], [doc.status, 'Implemented and tested (764 tests)'],
+    [doc.status, '**Test totals: 1670 passing'],
+    [doc.setup, 'all three suites (1670 tests)'], [doc.setup, 'npm run test:core         # 764'],
+    [doc.setup, '| **Core service** | 764 tests pass'],
+    [doc.readme, '1670 tests: core 764, web 92, fabric 814'], [doc.readme, 'All 1670 run in CI'],
+    // The Phase 8 total, superseded by the packs, benchmark and release suites.
+    [doc.status, '**775 / 775**'], [doc.status, 'Implemented and tested (775 tests)'],
+    [doc.status, '**Test totals: 1681 passing'],
+    [doc.setup, 'all three suites (1681 tests)'], [doc.setup, 'npm run test:core         # 775'],
+    [doc.setup, '| **Core service** | 775 tests pass'],
+    [doc.readme, '1681 tests: core 775, web 92, fabric 814'], [doc.readme, 'All 1681 run in CI'],
+    // The 0.2.0 release total, superseded by the provider framework.
+    [doc.status, '**809 / 809**'], [doc.status, 'Implemented and tested (809 tests)'],
+    [doc.status, '**Test totals: 1715 passing'], [doc.status, 'Implemented and tested (92 tests)'],
+    [doc.setup, 'all three suites (1715 tests)'], [doc.setup, 'npm run test:core         # 809'],
+    [doc.setup, '| **Core service** | 809 tests pass'], [doc.setup, '`npm ci`, 92 tests'],
+    [doc.readme, '1715 tests: core 809, web 92, fabric 814'], [doc.readme, 'All 1715 run in CI'],
+    [doc.readme, '| `apps/web` | React 18 + Vite | 2,691 | 1,818 | react, react-dom | 92 |'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -633,22 +702,34 @@ test('the docs record limitations instead of implying completeness', () => {
 test('the status doc reports the real test totals', () => {
   // Recomputed from the filesystem: one test file per suite.
   const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
-  // 28 includes the accounts suite (traditional sign-in), the online runtimes suite
-  // (Ollama and llama.cpp on the online entry) and the Klyvaron plan suite. If a suite
-  // file is added or removed, the counts in docs/03-status.md and README.md have to move
-  // with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 28)
+  // 35 includes the accounts suite (traditional sign-in), the online runtimes suite
+  // (Ollama and llama.cpp on the online entry), the Klyvaron plan suite, the suites added
+  // with the family's differentiation (tier stance and modality rules, the dated-source
+  // ledger, the evidence-linked affect reader, the composition path with its accelerator
+  // arithmetic), the suite covering the family's own architecture, and the adaptive
+  // suites: routing/refusals, the loop that carries the first milestone, the skills
+  // evaluation and permission suites, the emotional-states suite, the provider fabric, the
+  // media workflow, the industry packs, the benchmark harness and the release verifier.
+  // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
+  // to move with it.
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 56)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
-  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 36)
+  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**567 / 567**'), 'core total must be stated')
-  assert.ok(status.includes('**763 / 763**'), 'fabric total must be stated')
-  assert.ok(status.includes('**92 / 92**'), 'web total must be stated')
-  assert.ok(status.includes('1422 passing'), 'the grand total must equal the sum of the suites')
-  assert.ok(squash(doc.readme()).includes('1422 tests: core 567, web 92, fabric 763'),
-    'README must state the same totals')
-  assert.ok(status.includes('(36 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('**908 / 908**'), 'core total must be stated')
+  assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
+  assert.ok(status.includes('**95 / 95**'), 'web total must be stated')
+  assert.ok(status.includes('1817 passing'), 'the grand total must equal the sum of the suites')
+  // README and docs/03 must state the *same* total. They disagreed for two phases: README said
+  // 709/1615 in its setup snippet while its own component table said 738, and this assertion
+  // pinned the stale form, so the contradiction passed every check. A total is stated in both
+  // documents or it is stated in neither.
+  assert.ok(squash(doc.readme()).includes('1817 tests: core 908, web 95, fabric 814'),
+    'README must state the same totals as docs/03')
+  assert.ok(squash(doc.readme()).includes('All 1817 run in CI'),
+    'README must state the same totals where it describes CI')
+  assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
 
   // The component headings each state a count too, and they drifted from the table
   // in the same document without this: fabric's heading read 256 while the table
@@ -659,13 +740,13 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(567), `core heading must say 567, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(763), `fabric heading must say 763, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(92), `web heading must say 92, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(908), `core heading must say 908, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(95), `web heading must say 95, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1422,
+    1817,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })
@@ -1480,14 +1561,15 @@ test('the CI workflow is valid YAML with the structure it claims', () => {
   assert.equal(cron[1].split(/\s+/).length, 5, `cron must have five fields, got ${cron[1]}`)
 
   // Scope to the jobs: block. The on: trigger block is indented the same way, so an
-  // unscoped /^  ([a-z]+):$/ also matched 'push:' and reported five jobs.
+  // unscoped /^  ([a-z]+):$/ also matched 'push:' and reported five jobs. The list is
+  // written out rather than counted so a job cannot be added without this noticing.
   const jobsBlock = workflow.slice(workflow.indexOf('\njobs:'))
   const jobs = [...jobsBlock.matchAll(/^  ([a-z]+):$/gm)].map((m) => m[1])
-  assert.deepEqual(jobs, ['core', 'fabric', 'web', 'docs'], `unexpected job list: ${jobs.join(', ')}`)
+  assert.deepEqual(jobs, ['core', 'fabric', 'web', 'release', 'docs'], `unexpected job list: ${jobs.join(', ')}`)
 
   // Every job must check the code out before doing anything with it.
   const perJob = jobsBlock.split(/^  [a-z]+:$/m).slice(1)
-  assert.equal(perJob.length, 4)
+  assert.equal(perJob.length, 5)
   for (const [index, body] of perJob.entries()) {
     assert.ok(body.includes('actions/checkout@'), `job ${jobs[index]} must check out the repository`)
     assert.ok(body.includes('run:'), `job ${jobs[index]} must actually run something`)
@@ -1736,9 +1818,16 @@ test('the memory interface the documents describe is the one in the app', () => 
 
   // The rows that make claims about this surface must still say what is true of it.
   assert.match(matrix, /L2 user-approved memory \| \*\*Implemented and tested\*\*/, 'the L2 row must stay honest about what it is')
+  // Learned procedures are still archived: automatic curation is not a product surface. What the
+  // panel adds is reviewed procedures, and the two rows must stay distinct so "skills are back"
+  // cannot silently mean "the agent is learning procedures again".
   assert.match(matrix, /Learned procedures visible and controllable \| \*\*Archived\*\*/,
-    'the skills surface is in the same panel area and must be stated in the matrix')
-  assert.doesNotMatch(chat, /SkillsPanel/, 'research skills are not in the active online product')
+    'learned procedures remain archived and the matrix must say so')
+  assert.match(matrix, /Reviewed procedures \(installed, versioned, selected for one message\) \| \*\*Implemented and tested\*\*/,
+    'the reviewed-procedure row must state what was built')
+  assert.match(chat, /SkillsPanel/)
+  assert.match(chat, /A procedure is reference text, not code/,
+    'the panel must say that a procedure is not executed')
 
   // And the history row: the note says the search is lexical rather than semantic, which
   // is a claim about the implementation, so the implementation is what is checked.
@@ -1815,4 +1904,286 @@ test('the L4 transfer numbers quoted in the documents are the recorded ones', ()
   assert.ok(protocol.includes('MIN_SEEDS = 3'), 'the registered seed floor must be in the module')
   assert.ok(exists(resolve(REPO, 'services/fabric/scripts/l4_transfer.py')),
     'the documents claim a runner; the runner must exist')
+})
+
+// ---------------------------------------------------------------------------
+// The family's purpose: the stance, the two differentiators, and the modalities
+// ---------------------------------------------------------------------------
+
+test('docs/22 states the stance and the two differentiators the family record defines', () => {
+  const text = squash(doc.differentiation())
+  const report = familyReport()
+
+  // The stance is stated as a refusal, not as an aspiration.
+  assert.ok(text.includes('this family does not compete'), 'the stance must be stated')
+  assert.equal(FAMILY_STANCE.competitive, false)
+  for (const phrase of ['No benchmark win over a named or unnamed competitor is claimed',
+                        'No feeling or diagnosis the user did not express']) {
+    assert.ok(text.includes(phrase), `docs/22 must carry the forbidden claim: ${phrase}`)
+  }
+  // And the document never names a competitor, which is the rule it is describing.
+  for (const marker of COMPETITOR_MARKERS) {
+    assert.ok(!text.toLowerCase().includes(marker), `docs/22 names ${marker}, which its own stance forbids`)
+  }
+
+  // Both differentiators are named, and described as unbacked rather than as delivered.
+  for (const name of FAMILY_STANCE.differentiators) {
+    assert.ok(text.includes(`\`${name}\``), `docs/22 must name ${name}`)
+  }
+  assert.ok(text.includes('A mechanism is not a model'), 'the mechanism-versus-artifact distinction must be stated')
+  assert.ok(text.includes('stale-source answer counts as wrong'), 'the trend acceptance rule must be stated')
+  assert.ok(text.includes('abstention'), 'the affect acceptance rule must include abstention')
+
+  // The tier table in docs/22 agrees with the module, cell by cell, exactly as docs/11 does.
+  for (const tier of report.tiers) {
+    const row = new RegExp(`\\| \\*\\*${tier.displayName}\\*\\* \\|[^|]+\\|[^|]+\\| ${tier.availableCapabilities.length} of ${tier.capabilityCount} \\|`).exec(text)
+    assert.ok(row, `docs/22 must table ${tier.displayName} with ${tier.availableCapabilities.length} of ${tier.capabilityCount}`)
+  }
+  // The gates the plan derives are the gates the document lists.
+  const plan = developmentPlan()
+  for (const gate of plan.tiers[0].gates) {
+    if (![GATES.DIFFERENTIATION, GATES.TREND_AWARENESS, GATES.AFFECT_HISTORY, GATES.MODALITY_SEPARATION].includes(gate.id)) continue
+    assert.equal(gate.status, gate.id === GATES.DIFFERENTIATION ? GATE_STATES.MET : GATE_STATES.OPEN,
+      `${gate.id} status changed; docs/22 describes it as ${gate.status}`)
+  }
+})
+
+test('docs/22 keeps image and video as separate models, with no artifact claimed anywhere', () => {
+  const text = squash(doc.differentiation())
+  assert.ok(text.includes('Image and video are different models, not different prompts'))
+  assert.ok(text.includes('refuses rather than substituting a text answer'),
+    'the refusal that stands in for an image model must be stated')
+
+  // No tier has an image or video artifact, and the document says so in those words.
+  for (const tier of familyReport().tiers) {
+    for (const modality of ['image', 'video']) {
+      const role = tier.modalityArtifacts[modality]
+      if (role) assert.equal(role.artifact, null, `${tier.id}.${modality} must have no artifact`)
+    }
+  }
+  const noArtifact = (text.match(/no artifact/g) ?? []).length
+  assert.ok(noArtifact >= 4, `docs/22 must say "no artifact" for each empty cell, found ${noArtifact}`)
+  assert.ok(!/image generation is (?:available|released)/i.test(text))
+})
+
+test('docs/23 keeps the composed path as a technique this family refused, and says why', () => {
+  const text = squash(doc.trainingFree())
+
+  // The page is honest about its own status first: implemented, and not taken by any tier.
+  assert.ok(text.includes('No tier of this family takes it'), 'the status must be stated first')
+  assert.ok(text.includes('rejected'), 'the decision must be recorded, not implied')
+  for (const phrase of ['A candidate is not a placement', 'Unknown memory is a refusal, not a zero',
+                        'CPU is not a GPU tier', 'a plan is not a measurement']) {
+    assert.ok(text.includes(phrase), `docs/23 must state: ${phrase}`)
+  }
+
+  // The rule it was refused by is the rule the plan derives, and no tier is composed.
+  for (const tier of familyReport().tiers) {
+    assert.equal(tier.backingPath.path, 'trained_from_scratch', `${tier.id} must not be composed`)
+    assert.equal(tier.backingPath.bases.length, 0)
+  }
+  const plan = idMapOf(developmentPlan())
+  for (const id of ['pro', 'max']) {
+    assert.equal(gateIn(plan[id], 'own_weights').status, 'open')
+    assert.equal(gateIn(plan[id], 'accelerated_runtime').status, 'open')
+  }
+  assert.ok(text.includes('own_weights'), 'the checked form of the refusal must be named')
+  assert.ok(text.includes('composed tier can never satisfy it') || text.includes('can never satisfy it'),
+    'the page must state that a composed tier cannot satisfy it')
+
+  // The accelerator table names the accelerators the registry implements, and no others.
+  for (const id of ACCELERATOR_IDS) {
+    if (id === 'cpu') continue
+    assert.ok(text.toLowerCase().includes(ACCELERATORS[id].vendor.toLowerCase().split(' ')[0]),
+      `docs/23 must describe ${id}`)
+  }
+  assert.ok(text.includes('OpenVINO NPU'), 'the NPU path is the "any other" answer and must be named')
+  // And it names no competitor to compare against. `llama.cpp` is an inference runtime this
+  // repository would drive, not a model it measures itself against, so the runtime is masked
+  // before the scan rather than added to the allowlist of vendor names.
+  const withoutRuntime = text.toLowerCase().replaceAll('llama.cpp', 'the runtime')
+  for (const marker of COMPETITOR_MARKERS) {
+    assert.ok(!withoutRuntime.includes(marker), `docs/23 names ${marker}`)
+  }
+  // The composed base still cannot wear a tier label: the lookup is the enforcement.
+  assert.equal(tierClaimFor('third-party/small-instruct'), null)
+})
+
+test('docs/24 states what the own models of this family are, and quotes the prototype it measured', () => {
+  const text = squash(doc.ownModels())
+  const report = familyReport()
+
+  // Whose models these are, and the consequence stated rather than softened.
+  assert.ok(text.includes('`aetheris-core-v1`'), 'the architecture must be named')
+  assert.ok(text.includes('trained from random initialisation'))
+  assert.ok(text.includes('there is no technique that avoids it'), 'the honest consequence must be stated')
+  assert.ok(text.includes('no base checkpoint'), 'the rule that makes it ours must be stated')
+  assert.ok(text.includes('own_weights'), 'the derived gate must be named')
+
+  // The parameters the page states are the parameters the module computes.
+  for (const id of ['pro', 'max']) {
+    const parameters = presetReport(id).parameters.toLocaleString('en-US')
+    assert.ok(text.includes(parameters), `docs/24 must state ${id}'s ${parameters} parameters`)
+  }
+  assert.equal(presetReport('pro').parameters, 27_559_946)
+  assert.equal(presetReport('max').parameters, 92_077_066)
+  assert.ok(text.includes('assumptions, not measurements'), 'the training arithmetic must be labelled')
+
+  // The parts are named as parts of the model, and the prototype numbers in the page are the
+  // numbers in the record it points at.
+  for (const part of ['age_buckets', 'verdict_head', 'state_emb', 'state_head']) {
+    assert.ok(text.includes(part), `docs/24 must name the ${part} part`)
+  }
+  const prototype = JSON.parse(read('docs/experiments/differentiator-prototype.json'))
+  assert.equal(prototype.isArtifact, false)
+  const heldOut = prototype.metrics.heldOut
+  for (const score of [heldOut.verdict.accuracy, heldOut.state.accuracy,
+                       heldOut.verdict.majorityClassBaseline, heldOut.state.majorityClassBaseline]) {
+    assert.ok(text.includes(score.toFixed(4)), `docs/24 must quote the measured ${score.toFixed(4)}`)
+  }
+  assert.ok(text.includes('mechanism prototype'), 'the prototype must be labelled as one')
+  assert.ok(text.includes('not a model artifact'))
+
+  // Image and video are separate designs, and no tier has one.
+  for (const modality of ['image', 'video']) {
+    assert.ok(text.includes(MODALITY_MODELS[modality].modelId), `docs/24 must name the ${modality} model`)
+    assert.equal(MODALITY_MODELS[modality].implemented, false)
+  }
+  for (const tier of report.tiers) assert.equal(tier.availability, undefined, 'no phantom field')
+  for (const marker of COMPETITOR_MARKERS) {
+    assert.ok(!text.toLowerCase().replaceAll('llama.cpp', 'the runtime').includes(marker), `docs/24 names ${marker}`)
+  }
+})
+
+test('the direction change is recorded, and the Sparsiz audit keeps its findings', () => {
+  const text = squash(doc.adaptive())
+
+  // The withdrawn requirement, and the one that is NOT reinstated by withdrawing it. A page that
+  // dropped either half would leave the family's rule ambiguous, which is how a refused path gets
+  // quietly re-used.
+  assert.ok(text.includes('withdrawn for the product tiers'),
+    'docs/25 must state which requirement was withdrawn')
+  assert.ok(text.includes('capability profiles over one shared adaptive core'))
+  assert.ok(text.includes('not') && text.includes('the composed path that `23` records as refused'),
+    'docs/25 must say the change does not reinstate the composed path')
+  assert.ok(squash(doc.ownModels()).includes('25-adaptive-intelligence.md'),
+    'docs/24, which the change affects, must point at docs/25')
+
+  // The phase-1 inspection: pinned commit, and the four findings that decided what may be inherited.
+  // These are the load-bearing sentences -- a later edit that deletes one while keeping the reuse
+  // decision would be inheriting a module on the strength of its name, which is what the audit exists
+  // to prevent.
+  assert.ok(text.includes('76ec6f0f0f501ea9fbf99f0769ef224d3dbc0d69'), 'the exact commit must be named')
+  assert.ok(text.includes('passed = random.random() > 0.2'), 'the coin-flip validation must be quoted')
+  assert.ok(text.includes('# Baselines simulated'), 'the invented baselines must be quoted')
+  assert.ok(text.includes('# Mock scoring'), 'the random quality score must be quoted')
+  assert.ok(text.includes('assert non-emptiness, not correctness'), 'the test weakness must be stated')
+  assert.ok(text.includes('Unlicense'), 'the licence that makes reuse possible must be recorded')
+
+  // And the boundary. Phase 2 demonstrated one capability, so the page may not claim general
+  // competence, and it may not claim a phase is done without its tests -- the sentence this
+  // assertion used to require ("does not claim that any adaptive capability works") became false
+  // the moment the milestone test passed, and updating the assertion is the point: a page whose
+  // disclaimers outlive their truth is a page nobody can trust.
+  assert.ok(/one capability, demonstrated end to end/i.test(text), 'the page must scope what was demonstrated')
+  assert.ok(/does not claim general task competence/i.test(text), 'the page must state what it does not claim')
+  assert.ok(text.includes('no phase is complete before its acceptance tests pass'), 'the page must state what it does not claim')
+  assert.ok(text.includes('consciousness, sentience or human-equivalent'))
+
+  // A "see the Phase N record above" that points at nothing is how a sixty-line record vanished
+  // without a single check failing: a scripted edit replaced the backlog line with a summary that
+  // referenced a record it had not inserted, and every existing assertion still passed. The
+  // reference is now checked against the document it lives in.
+  const raw = doc.adaptive()
+  const records = new Map()
+  for (const line of raw.split('\n')) {
+    const record = /^\*\*Phase (\d+)(?:, second half)? — /.exec(line)
+    // A backlog line is a pointer, not a record: it says "see above" and must not count itself.
+    if (record && !/record above/.test(line)) records.set(record[1], (records.get(record[1]) ?? 0) + 1)
+    const pointer = /See the Phase (\d+) record above/.exec(line)
+    if (pointer) {
+      assert.ok((records.get(pointer[1]) ?? 0) > 0,
+        `docs/25 says "see the Phase ${pointer[1]} record above" and no Phase ${pointer[1]} record is above it`)
+    }
+  }
+  assert.ok(records.size >= 5, `expected records for the delivered phases, found ${[...records.keys()].join(', ')}`)
+
+  // The durability lesson is a fact about this project, not a mood: state it with the evidence.
+  assert.ok(text.includes('Only what is committed to Git survives'))
+  assert.ok(text.includes('parked, not abandoned'), 'the training run must be recorded, not dropped')
+})
+
+test('no third-party base ever wears a tier label, and no tier claims an artifact it does not have', () => {
+  // The enforcement is a lookup, not a paragraph: a label is only assigned by finding an artifact
+  // in the backings of *available* capabilities, and the family has no artifact for Pro or Max.
+  assert.ok(squash(doc.trainingFree()).includes('tierClaimForArtifact()'),
+    'the enforcement must be named in docs/23, where the composed base is described')
+  assert.equal(tierClaimFor('third-party/small-instruct'), null)
+  assert.equal(tierClaimForArtifact('third-party/small-instruct', '7ae5576'), null)
+  for (const id of [TIERS.PRO, TIERS.MAX]) {
+    assert.deepEqual(ownedArtifacts(id), [], `${id} owns no artifact yet`)
+    assert.deepEqual(KLYVARON[id].backingPath.bases, [], 'a from-scratch tier records no base')
+    assert.equal(KLYVARON[id].backingPath.verified, false)
+  }
+  // And the released Lite artifact keeps its label: the rule is not "no labels at all".
+  assert.equal(tierClaimFor('aetheris-lite-lm-0.1.1'), TIERS.LITE)
+})
+
+test('the release note quotes the committed benchmark, not a remembered one', () => {
+  // The risk this closes: a benchmark is run once, its numbers are typed into prose, and the
+  // artefact is never touched again. Then a regression lands and the prose stays confident.
+  // Every figure in the docs/25 table has to equal the committed artefact, to the digit shown.
+  const artefact = JSON.parse(read('docs/experiments/phase10-benchmark.json'))
+  assert.equal(artefact.schema, 'aetheris-benchmark/1')
+  assert.equal(artefact.ok, true, 'the committed artefact must be a run in which nothing failed')
+  assert.ok(artefact.benchmarks.length >= 7)
+
+  const quoted = new Map()
+  for (const match of read('docs/25-adaptive-intelligence.md').matchAll(
+    /^\| `([\w.-]+)` \| ([\d,.]+) \| ([\d.]+) \| ([\d.]+) \|$/gm,
+  )) {
+    // A rate can itself be fractional (`116.08 ops/s`), so the rate column admits a decimal
+    // point; commas are thousands separators. Both were wrong once and the row silently vanished.
+    quoted.set(match[1], [Number(match[2].replace(/,/g, '')), Number(match[3]), Number(match[4])])
+  }
+  assert.ok(quoted.size >= 7, `docs/25 must quote the benchmark table, found ${quoted.size} rows`)
+  for (const entry of artefact.benchmarks) {
+    const row = quoted.get(entry.id)
+    assert.ok(row, `${entry.id} is in the artefact but not quoted in docs/25`)
+    assert.deepEqual(row, [entry.opsPerSecond, entry.p50Ms, entry.p95Ms], `${entry.id} is quoted differently from the artefact`)
+  }
+
+  // And the release note names the version the repository is actually at, with its changelog entry.
+  const version = read('VERSION').trim()
+  assert.ok(squash(read('docs/26-release.md')).includes(`Release ${version}`), 'docs/26 must be the release note for VERSION')
+  assert.match(read('CHANGELOG.md'), new RegExp(`^## \\[${version.replace(/\./g, '\\.')}\\] — \\d{4}-\\d{2}-\\d{2}$`, 'm'))
+})
+
+test('the provider matrix in docs/27 is the catalogue, not a retyped copy', () => {
+  // A capability matrix is the document most likely to drift: it is long, it changes when an
+  // adapter lands, and nothing about reading it reveals a stale row. Every provider in the code
+  // must appear once, with the status the code gives it, and no provider may appear that the code
+  // does not have — which is also how a "supported" vendor would sneak in.
+  const text = read('docs/27-provider-framework.md')
+  const rows = [...text.matchAll(/^\| `([\w-]+)` — [^|]+ \| (ready|gateway_only|pending) \|/gm)]
+  assert.equal(rows.length, PROVIDERS.length, `docs/27 lists ${rows.length} providers; the catalogue has ${PROVIDERS.length}`)
+  const documented = new Map(rows.map(([, id, status]) => [id, status]))
+  for (const provider of PROVIDERS) {
+    assert.equal(documented.get(provider.id), provider.status, `${provider.id} is '${provider.status}' in code and '${documented.get(provider.id)}' in docs/27`)
+  }
+  // The counts sentence must be the report's, and the excluded aggregator must stay excluded.
+  assert.ok(text.includes(catalogueReport().summary), 'docs/27 must state the catalogue report verbatim')
+  assert.equal(rows.some(([, id]) => /freellm/i.test(id)), false, 'the excluded aggregator must not appear in the matrix')
+  assert.match(text, /FreeLLMAPI remains excluded/, 'the exclusion must be stated, not merely true')
+  assert.ok(text.includes('No live provider call was made'), 'the absence of live verification must be stated')
+})
+
+test('the catalogue cannot outgrow the status vocabulary the docs define', () => {
+  // docs/27 defines three statuses in a table; the code has three. A new status added to the
+  // catalogue without a sentence saying what it means would be an unexplained claim.
+  const text = read('docs/27-provider-framework.md')
+  for (const status of Object.values(PROVIDER_STATUS)) {
+    assert.ok(text.includes(`\`${status}\``), `docs/27 must explain the '${status}' status`)
+  }
+  assert.equal(Object.values(PROVIDER_STATUS).length, 3)
 })

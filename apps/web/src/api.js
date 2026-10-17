@@ -83,11 +83,14 @@ export const api = {
   confirmPasswordReset: ({ email, code, password }) => request('POST', '/api/auth/password-reset/confirm', { email, code, password }),
 
   provider: () => request('GET', '/api/providers'),
-  // One route per runtime, mirrored from PROVIDER_ROUTES in services/core/src/online/app.mjs.
-  // The literals are spelled out in each method so the route is visible where it is called.
-  saveProvider: (kind, body) => request('PUT', { litellm: '/api/providers/litellm', ollama: '/api/providers/ollama', llamacpp: '/api/providers/llamacpp' }[kind], body),
-  testProvider: (kind) => request('POST', `${{ litellm: '/api/providers/litellm', ollama: '/api/providers/ollama', llamacpp: '/api/providers/llamacpp' }[kind]}/test`, {}),
-  removeProvider: (kind) => request('DELETE', { litellm: '/api/providers/litellm', ollama: '/api/providers/ollama', llamacpp: '/api/providers/llamacpp' }[kind], {}),
+  // The capability catalogue is metadata about providers in general, not about this connection.
+  catalog: () => request('GET', '/api/providers/catalog'),
+  // One route per connection id. The id is validated again on the server against the catalogue,
+  // so a name this client invents is refused there rather than trusted here.
+  saveProvider: (kind, body) => request('PUT', `/api/providers/${encodeURIComponent(kind)}`, body),
+  testProvider: (kind) => request('POST', `/api/providers/${encodeURIComponent(kind)}/test`, {}),
+  removeProvider: (kind) => request('DELETE', `/api/providers/${encodeURIComponent(kind)}`, {}),
+  activateProvider: (id) => request('PUT', '/api/providers/active', { id }),
   selectModel: (model) => request('PUT', '/api/models/selection', { model }),
   modelCatalog: (q = '') => request('GET', `/api/models/catalog?q=${encodeURIComponent(q)}`),
   refreshCatalog: (sourceId, authorizeNetwork = false) => request('POST', '/api/models/catalog/refresh', { sourceId, authorizeNetwork }),
@@ -168,16 +171,40 @@ export const api = {
   approveTask: (id, body) => request('POST', `/api/tasks/${encodeURIComponent(id)}/approve`, body),
 
   // --- image / video ------------------------------------------------------
-  generateImage: (body, options) => request('POST', '/api/image/generate', body, options),
-  imageJobs: (limit = 25) => request('GET', `/api/image/jobs?limit=${limit}`),
-  generateVideo: (body, options) => request('POST', '/api/video/generate', body, options),
-  videoJobs: (limit = 25) => request('GET', `/api/video/jobs?limit=${limit}`),
-  // Direct URL for an <img>/<video> tag. Only valid for a succeeded job.
-  artifactUrl: (jobId) => `/api/media/artifact/${encodeURIComponent(jobId)}`,
-  // Unfiltered job list. /api/media/jobs does not filter by kind server-side, so no
-  // kind parameter is sent; use imageJobs/videoJobs for a filtered view.
-  mediaJobs: (limit = 25) => request('GET', `/api/media/jobs?limit=${limit}`),
+  // Generation is a job: the POST returns a record (202) and the area polls it. The bytes are
+  // fetched from the job the Core validated, never from a provider-supplied URL.
+  generateImage: (body) => request('POST', '/api/image/generate', body),
+  imageJobs: () => request('GET', '/api/image/jobs'),
+  imageJob: (id) => request('GET', `/api/image/jobs/${encodeURIComponent(id)}`),
+  deleteImageJob: (id) => request('DELETE', `/api/image/jobs/${encodeURIComponent(id)}`, {}),
+  generateVideo: (body) => request('POST', '/api/video/generate', body),
+  videoJobs: () => request('GET', '/api/video/jobs'),
+  videoJob: (id) => request('GET', `/api/video/jobs/${encodeURIComponent(id)}`),
+  deleteVideoJob: (id) => request('DELETE', `/api/video/jobs/${encodeURIComponent(id)}`, {}),
   cancelMediaJob: (jobId) => request('POST', `/api/media/jobs/${encodeURIComponent(jobId)}/cancel`, {}),
+  cancelVideoJob: (jobId) => request('POST', `/api/video/jobs/${encodeURIComponent(jobId)}/cancel`, {}),
+  // Direct URLs for an <img>/<video> tag. Only valid for a succeeded job. Each is a literal
+  // route so the client-path check can see the endpoint it names.
+  artifactUrl: (jobId) => `/api/image/jobs/${encodeURIComponent(jobId)}/content`,
+  imageArtifactUrl: (jobId) => `/api/image/jobs/${encodeURIComponent(jobId)}/content`,
+  videoArtifactUrl: (jobId) => `/api/video/jobs/${encodeURIComponent(jobId)}/content`,
+  // Unfiltered job list. /api/media/jobs does not filter by kind server-side; use
+  // imageJobs/videoJobs for a filtered view.
+  mediaJobs: (limit = 25) => request('GET', `/api/media/jobs?limit=${limit}`),
+
+  // --- response styles -----------------------------------------------------
+  styles: () => request('GET', '/api/styles'),
+  setStyle: (style) => request('PUT', '/api/styles', { style }),
+
+  // --- skills -------------------------------------------------------------
+  skills: () => request('GET', '/api/skills'),
+  skill: (name) => request('GET', `/api/skills/${encodeURIComponent(name)}`),
+  installSkill: (body) => request('POST', '/api/skills', body),
+  validateSkill: (name) => request('POST', `/api/skills/${encodeURIComponent(name)}/validate`, {}),
+  setSkill: (name, body) => request('PATCH', `/api/skills/${encodeURIComponent(name)}`, body),
+  rollbackSkill: (name, version) => request('POST', `/api/skills/${encodeURIComponent(name)}/rollback`, { version }),
+  deleteSkill: (name) => request('DELETE', `/api/skills/${encodeURIComponent(name)}`, {}),
+  measureSkill: (name, body) => request('POST', `/api/skills/${encodeURIComponent(name)}/measure`, body),
 
   // --- plugins ------------------------------------------------------------
   plugins: (state) => request('GET', `/api/plugins${state ? `?state=${encodeURIComponent(state)}` : ''}`),

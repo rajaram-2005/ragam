@@ -1,6 +1,6 @@
 {
   "name": "aetheris-omni",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Aetheris Omni \u2014 a local-first AI platform with exactly five product areas: Chat, Image, Video, Plugins, MCP",
   "license": "MIT",

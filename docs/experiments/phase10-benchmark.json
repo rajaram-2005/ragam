@@ -1,0 +1,100 @@
+{
+  "schema": "aetheris-benchmark/1",
+  "startedAt": "2026-10-17T10:22:32.941Z",
+  "durationMs": 142.95,
+  "environment": {
+    "node": "v22.22.3",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 2,
+    "scope": "adaptive core modules on this host; not a product throughput claim"
+  },
+  "ok": true,
+  "benchmarks": [
+    {
+      "id": "authority.decide",
+      "what": "refuse a consequential action whose only reason is tool output",
+      "unit": "decisions",
+      "iterations": 500,
+      "completed": 500,
+      "totalMs": 8.536,
+      "opsPerSecond": 58576,
+      "p50Ms": 0.013,
+      "p95Ms": 0.025,
+      "failed": false
+    },
+    {
+      "id": "authority.scan",
+      "what": "classify a hostile paragraph as instruction-shaped",
+      "unit": "scans",
+      "iterations": 500,
+      "completed": 500,
+      "totalMs": 8.428,
+      "opsPerSecond": 59327,
+      "p50Ms": 0.015,
+      "p95Ms": 0.022,
+      "failed": false
+    },
+    {
+      "id": "media.measure-image",
+      "what": "read dimensions from a PNG header",
+      "unit": "parses",
+      "iterations": 500,
+      "completed": 500,
+      "totalMs": 1.394,
+      "opsPerSecond": 358766,
+      "p50Ms": 0.001,
+      "p95Ms": 0.005,
+      "failed": false
+    },
+    {
+      "id": "media.measure-video",
+      "what": "read duration from an MP4 mvhd box",
+      "unit": "parses",
+      "iterations": 500,
+      "completed": 500,
+      "totalMs": 5.138,
+      "opsPerSecond": 97310,
+      "p50Ms": 0.002,
+      "p95Ms": 0.004,
+      "failed": false
+    },
+    {
+      "id": "fabric.route",
+      "what": "choose a provider for a two-tag request",
+      "unit": "routes",
+      "iterations": 500,
+      "completed": 500,
+      "totalMs": 3.627,
+      "opsPerSecond": 137846,
+      "p50Ms": 0.005,
+      "p95Ms": 0.009,
+      "failed": false
+    },
+    {
+      "id": "packs.profile",
+      "what": "apply the engineering pack to a task",
+      "unit": "profiles",
+      "iterations": 500,
+      "completed": 500,
+      "totalMs": 6.996,
+      "opsPerSecond": 71474,
+      "p50Ms": 0.009,
+      "p95Ms": 0.023,
+      "failed": false
+    },
+    {
+      "id": "adaptive.line-count",
+      "what": "count newlines across 24 files on disk",
+      "unit": "trees",
+      "iterations": 10,
+      "completed": 10,
+      "totalMs": 83.702,
+      "opsPerSecond": 119,
+      "p50Ms": 6.827,
+      "p95Ms": 22.397,
+      "failed": false
+    }
+  ],
+  "failed": []
+}

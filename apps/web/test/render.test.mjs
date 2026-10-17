@@ -90,6 +90,7 @@ async function loadComponents() {
     "export { default as PluginsArea } from '../../src/areas/PluginsArea.jsx'",
     "export { default as McpArea } from '../../src/areas/McpArea.jsx'",
     "export { default as ProviderSettings } from '../../src/components/ProviderSettings.jsx'",
+    "export { default as ProviderCatalogue } from '../../src/components/ProviderCatalogue.jsx'",
     "export { default as App } from '../../src/App.jsx'",
     "export { default as SignInPage } from '../../src/pages/SignInPage.jsx'",
     "export { default as SignUpPage } from '../../src/pages/SignUpPage.jsx'",
@@ -374,7 +375,7 @@ test('online status removes device tiers and shows zero models honestly', () => 
 test('Plugins does not offer executable unreviewed sample installations', () => {
   const markup=render('PluginsArea',React.createElement(components.PluginsArea))
   assert.match(markup,/Arbitrary extension installation and execution are disabled/)
-  assert.match(markup,/No reviewed plugins loaded yet/)
+  assert.match(markup,/No reviewed plugin is loaded/)
   assert.doesNotMatch(markup,/Demo Text Tools|Install plugin/)
 
 })
@@ -395,8 +396,8 @@ test('the policy is displayed but never rendered as a control', () => {
 
 test('MCP renders honestly before any server is loaded', () => {
   const markup=render('McpArea',React.createElement(components.McpArea))
-  assert.match(markup,/No tools loaded yet/)
-  assert.match(markup,/Remote MCP connections are not configured/)
+  assert.match(markup,/No tool matches/)
+  assert.match(markup,/No remote MCP connection is configured/)
   assert.match(markup,/enforced server-side/)
 
 })
@@ -530,6 +531,73 @@ test('Chat renders the saved exact model and identifies the online recipient', (
 
 })
 
+
+test('the provider catalogue shows status, never a control, and nothing when unloaded', () => {
+  const catalog = {
+    valid: true,
+    summary: '5 ready, 14 reachable via an OpenAI-compatible endpoint, 14 pending',
+    counts: { ready: 5, gateway_only: 14, pending: 14 },
+    providers: [
+      { id: 'litellm', label: 'LiteLLM gateway', status: 'ready', capabilities: [{ id: 'streaming', source: 'test', ref: 'test/online.test.mjs' }] },
+      { id: 'openai', label: 'OpenAI', status: 'gateway_only', capabilities: [] },
+      { id: 'anthropic', label: 'Anthropic Claude', status: 'pending', capabilities: [] },
+    ],
+  }
+  const markup = render('ProviderCatalogue', React.createElement(components.ProviderCatalogue, { catalog }))
+  assert.match(markup, /ready in this build/)
+  assert.match(markup, /tested: streaming/)
+  assert.match(markup, /not verified here/)
+  assert.match(markup, /1 pending adapters/)
+  assert.match(markup, /adapter pending; not selectable/)
+  // No button, input or select: the catalogue is information, and a control that cannot work
+  // would be a claim that it can.
+  assert.doesNotMatch(markup, /<(button|input|select)\b/)
+  // Unloaded or malformed: render nothing rather than an empty shell.
+  assert.equal(renderToStaticMarkup(React.createElement(components.ProviderCatalogue, { catalog: null })), '')
+  assert.equal(renderToStaticMarkup(React.createElement(components.ProviderCatalogue, { catalog: { providers: [] } })), '')
+})
+
+test('a saved catalogue connection keeps its own label instead of being displayed as LiteLLM', () => {
+  // The dialog used to look the id up in a three-entry table and fall back to the first entry, so
+  // an OpenAI or custom connection was labelled "LiteLLM gateway" and told a key was required.
+  const provider = {
+    kind: 'openai', active: 'openai', name: 'OpenAI', keyConfigured: true, configured: true,
+    baseUrl: 'https://api.openai.com/v1', models: [], selectedModel: '', revision: 2,
+    connections: [
+      { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', keyRequired: true, keyConfigured: true, configured: true, models: [], selectedModel: '' },
+    ],
+  }
+  const markup = render('ProviderSettings (catalogue connection)', React.createElement(components.ProviderSettings, {
+    account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop, provider,
+  }))
+  assert.match(markup, /OpenAI API base URL/)
+  assert.doesNotMatch(markup, /LiteLLM gateway API base URL/)
+  assert.match(markup, /<option value="openai" selected="">OpenAI<\/option>/)
+})
+
+test('saved connections are listed with a switch, and adding one offers no pending adapter', () => {
+  const provider = {
+    kind: 'litellm', active: 'litellm', name: 'LiteLLM', keyConfigured: true, configured: true,
+    baseUrl: 'https://gateway.example/v1', models: ['model-a'], selectedModel: 'model-a', revision: 4,
+    connections: [
+      { id: 'litellm', label: 'LiteLLM', baseUrl: 'https://gateway.example/v1', configured: true, keyConfigured: true, models: ['model-a'], selectedModel: 'model-a' },
+      { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', configured: true, keyConfigured: true, models: [], selectedModel: '' },
+    ],
+  }
+  const markup = render('ProviderSettings (connections)', React.createElement(components.ProviderSettings, {
+    account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop, provider,
+  }))
+  assert.match(markup, /Saved connections \(2\)/)
+  assert.match(markup, /· active/)
+  assert.match(markup, />Use</)
+  assert.match(markup, /Remove/)
+  // Adding a connection offers catalogue entries, not pending adapters.
+  assert.match(markup, /Add a connection/)
+  assert.match(markup, /Custom OpenAI-compatible endpoint/)
+  assert.doesNotMatch(markup, /Anthropic Claude/)
+  // The list shows no credential material.
+  assert.doesNotMatch(markup, /sk-|synthetic|"iv"|"tag"/)
+})
 
 test('Provider Settings uses a password input and separates save from connection testing', () => {
   const markup=render('ProviderSettings',React.createElement(components.ProviderSettings,{onClose:noop}))

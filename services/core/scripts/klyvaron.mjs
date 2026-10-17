@@ -12,6 +12,8 @@
 //   node services/core/scripts/klyvaron.mjs verify [<artifact-id>]
 //   node services/core/scripts/klyvaron.mjs status
 //   node services/core/scripts/klyvaron.mjs plan
+//   node services/core/scripts/klyvaron.mjs arch [lite|mini|pro|max] [--tokens <n>]
+//   node services/core/scripts/klyvaron.mjs compose [lite|mini|pro|max]
 //   node services/core/scripts/klyvaron.mjs remove <artifact-id> --yes
 //
 // `--data-dir <dir>` overrides AETHERIS_DATA_DIR for one command; without either, the
@@ -25,6 +27,9 @@ import { KlyvaronStore } from '../src/klyvaron/store.mjs'
 import { AetherisOmniApp, publicModel } from '../src/app.mjs'
 import { RUNTIME_POLICIES } from '../src/policy/egress.mjs'
 import { developmentPlan, formatPlan } from '../src/klyvaron/plan.mjs'
+import { compositionPlan, formatComposition, BACKING_PATHS } from '../src/klyvaron/composition.mjs'
+import { SIZE_IDS, formatArchitecture } from '../src/klyvaron/architecture.mjs'
+import { KLYVARON } from '../src/klyvaron/tiers.mjs'
 
 const USAGE = `usage: node services/core/scripts/klyvaron.mjs <command> [options]
 
@@ -34,13 +39,25 @@ const USAGE = `usage: node services/core/scripts/klyvaron.mjs <command> [options
   remove <id> --yes             delete an artifact the user asked to delete
   status                        what the app reports for the library it opened
   plan                          the development gates for Lite, Pro and Max, and why each open gate is open
+  arch [lite|mini|pro|max|all]  the family's own model architecture: config, digest, parameter split,
+                                memory arithmetic, and which recipe steps are done. --tokens <n> adds
+                                the 6ND training arithmetic at assumed rates, labelled as assumptions
+  compose [lite|mini|pro|max]   the training-free path a tier would take if it were composed at run
+                                time from a third-party base: every step, and what each one waits for.
+                                No tier of this family is composed today, and this prints why
 
 options: --data-dir <dir>   the managed root (default: the configured data dir)`
 
 function parse(argv) {
-  const options = { dataDir: null, replace: false, yes: false, positional: [] }
+  const options = { dataDir: null, replace: false, yes: false, tokens: null, positional: [] }
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index]
+    if (argument === '--tokens') {
+      options.tokens = Number(argv[index + 1])
+      if (!Number.isFinite(options.tokens) || options.tokens <= 0) throw new Error('--tokens must be a positive number')
+      index += 1
+      continue
+    }
     if (argument === '--data-dir') {
       options.dataDir = argv[index + 1]
       if (!options.dataDir) throw new Error('--data-dir needs a directory')
@@ -168,6 +185,48 @@ function commandStatus(options) {
 const COMMANDS = {
   // The plan is read from the family record, not from the store, so it runs without a data dir.
   plan: () => { console.log(formatPlan(developmentPlan())); return 0 },
+  // The family's own model: one architecture, four presets (three tiers and `mini`). Everything here is arithmetic and
+  // digests, so it runs without a data dir and without an accelerator, and it prints no rate
+  // unless --tokens asked for the arithmetic -- and then the rates are labelled as assumptions.
+  arch: (options) => {
+    const requested = options.positional[0] ?? 'all'
+    if (requested !== 'all' && !SIZE_IDS.includes(requested)) {
+      console.error(`unknown size: ${requested}; known sizes are ${SIZE_IDS.join(', ')}`)
+      return 2
+    }
+    const sizes = requested === 'all' ? SIZE_IDS : [requested]
+    for (const size of sizes) {
+      console.log(formatArchitecture(size, { tokens: options.tokens }), '')
+    }
+    if (options.tokens === null && sizes.length > 1) {
+      console.log('No token budget was given, so no training arithmetic is printed: --tokens <n> adds it.')
+    }
+    return 0
+  },
+  // The training-free path, kept as a checked alternative rather than an improvised one. No base
+  // and no device are supplied here on purpose: this command shows the honest starting state,
+  // which is that nothing has been chosen, fetched or measured, and that no tier is composed.
+  compose: (options) => {
+    const requested = options.positional[0] ?? null
+    if (requested && !KLYVARON[requested]) {
+      console.error(`unknown tier: ${requested}; known tiers are ${Object.keys(KLYVARON).join(', ')}`)
+      return 2
+    }
+    for (const tier of Object.values(KLYVARON)) {
+      if (requested && tier.id !== requested) continue
+      const backing = tier.backingPath
+      console.log(`${tier.id}: backs on ${backing.path}${backing.architecture ? ` (${backing.modelId}, ${backing.architecture})` : ''}`)
+      if (backing.path !== BACKING_PATHS.COMPOSED) {
+        console.log(backing.verified
+          ? `  verified: ${backing.evidence}`
+          : '  not composed: this tier is this family\'s own model, so the composed path does not apply to it.')
+        console.log(`  recipe: ${backing.steps.length} steps; the open ones are listed by \`klyvaron.mjs arch ${tier.id}\``, '\n')
+        continue
+      }
+      console.log(formatComposition(compositionPlan(tier.id)), '\n')
+    }
+    return 0
+  },
   list: commandList,
   install: commandInstall,
   verify: commandVerify,

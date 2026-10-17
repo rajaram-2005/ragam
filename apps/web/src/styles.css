@@ -458,3 +458,13 @@ summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
 
 .online-chat .thread { max-height: min(52vh, 620px); overflow-y: auto; }
 .online-chat .message small { color: var(--text-muted); font-size: 11px; }
+
+/* Generated media keeps its provenance beside the bytes, never in a caption far away. */
+.image-jobs { display: grid; gap: 14px; margin-top: 16px; }
+.image-job { display: grid; gap: 8px; }
+.image-job .generated-image { max-width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); background: #0b0f14; }
+
+/* Video jobs: the clip is the artifact, and its measured duration and digest sit beside it. */
+.video-jobs { display: grid; gap: 14px; margin-top: 16px; }
+.video-job { display: grid; gap: 8px; }
+.video-job .generated-video { width: 100%; max-height: 62vh; border-radius: 10px; border: 1px solid var(--line); background: #0b0f14; }

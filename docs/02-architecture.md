@@ -1,6 +1,6 @@
 # 02 — Architecture
 
-> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
+> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research **service** code remains for reference and regression tests; it is not loaded by `npm run core`. Superseded UI components were deleted on 2026-10-17, not retained. Suite totals include retained legacy coverage.
 
 How the three upstream repositories became one system, what each component owns,
 and where the enforcement points are.
@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 14,786 source lines, 12,222 test lines
+### `services/core` — 28,145 source lines, 21,456 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -79,21 +79,24 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
 | `online/accounts.mjs` | 387 | Accounts, scrypt password hashes, lockouts, throttling and host-delivered reset codes |
-| `online/app.mjs` | 408 | Authenticated online application, per-account context, exact-model inference, and one provider route per runtime (LiteLLM, Ollama, llama.cpp) |
-| `online/context-routes.mjs` | 175 | Authenticated context and reviewed read-only tool routes |
-| `online/gateway.mjs` | 133 | Bounded OpenAI-compatible transport for LiteLLM, Ollama and llama.cpp: destination validation, SSE, no redirects, runtime table |
+| `online/app.mjs` | 779 | Authenticated online application, per-account context, exact-model inference, and a provider-connection family: a route per saved connection, an active-connection switch, and a probe that reads only the connection it names |
+| `online/context-routes.mjs` | 260 | Authenticated context and reviewed read-only tool routes |
+| `online/gateway.mjs` | 195 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
+| `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
 | `online/http.mjs` | 32 | Bounded JSON requests and no-store responses |
-| `online/store.mjs` | 55 | Encrypted credential, runtime kind and persistent model-selection store |
+| `online/store.mjs` | 246 | Multi-connection encrypted store (schema 2): one sealed credential per connection, an active id, a store-wide revision, and a migration that preserves the key of a schema-1 file |
 | `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `klyvaron/format.mjs` | 622 | The Klyvaron artifact format: manifest validation, the shared vocabulary digest, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
-| `media/jobs.mjs` | 360 | Job queue, progress, cancellation, timeouts, artifact storage |
+| `media/jobs.mjs` | 440 | Job queue, progress, cancellation, timeouts, artifact storage |
 | `klyvaron/runtime.mjs` | 405 | Klyvaron Lite inference in plain JavaScript: the forward pass, seeded sampling, greedy decode, token budgets and cancellation |
 | `providers/local.mjs` | 329 | Ollama and OpenAI-compatible local providers |
 | `router/registry.mjs` | 356 | Model descriptors, capability matching, candidate scoring, tag exclusions |
-| `plugins/registry.mjs` | 617 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation, signature checks |
-| `mcp/layer.mjs` | 611 | Servers, tools, risk tiers, approval gates, allowlist, output neutralisation |
+| `plugins/registry.mjs` | 613 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation, signature checks |
+| `mcp/layer.mjs` | 624 | Servers, tools, risk tiers, approval gates, allowlist, output neutralisation |
+| `mcp/authority.mjs` | 537 | The data/instruction boundary: provenance on every tool, plugin, resource and prompt output, an authority that only a user turn can mint, and a consequential action refused when its only reason is data — with the classifier kept as audit evidence precisely so the refusal does not depend on it |
+| `shared/timeout.mjs` | 46 | The one timeout-and-cancellation race, shared by the MCP layer and the plugin registry: a thunk so the clock starts where the work does, a `{ once: true }` abort listener so a signal cannot reject a promise nobody is waiting for, and the timer cleared on every path — with each caller supplying its own error type, because the failure's type is contract and the mechanism is not |
 | `knowledge/pipeline.mjs` | 470 | Ingest, dedupe, chunk, index, search, grounded context, purge |
 | `knowledge/store.mjs` | 385 | SQLite metadata, chunks, ACL rows, deletion records |
 | `mcp/schema.mjs` | 246 | JSON Schema subset: validation of schemas *and* of arguments/output |
@@ -110,30 +113,79 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/klyvaron.mjs` | 220 | The first-party provider adapter: a local model behind the same contract, with its limitations carried into every response |
 | `server.mjs` | 48 | Entry point, startup banner, graceful shutdown |
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
-| `media/validate.mjs` | 143 | Magic-byte sniffing, video genuineness check |
+| `media/validate.mjs` | 199 | Magic-byte sniffing, video genuineness check |
+| `media/workflow.mjs` | 487 | Image and video generation as a workflow rather than an attempt: routed through the provider fabric so an unservable request is refused by name, authorised through the broker when the provider is external, measured from the artifact's own header (PNG/GIF/JPEG dimensions, MP4 `mvhd` duration) before it is described, and a still image returned for a video request refused as a substitution rather than delivered |
 | `klyvaron/footprint.mjs` | 137 | The footprint report a user sees: categorized bytes plus unmanaged files, against the 5 GB budget |
 | `providers/base.mjs` | 136 | Provider contract, timeout and retry helpers |
 | `policy/classify.mjs` | 143 | Secret and sensitivity classification, redaction |
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
 | `memory/store.mjs` | 702 | User-approved memory, candidates that need approval before use, and session recall with citations |
+| `memory/fabric.mjs` | 790 | Seven layers, each entry carrying assertion and verification as separate records, required provenance rows, a confidence with a required basis, scope and readers enforced on read, and deletion that takes the provenance with it |
+| `memory/bridge.mjs` | 138 | Approved memory entering the fabric as a claim (never a fact), and fabric entries leaving as candidates a person must approve; one direction, because the schema refuses the other |
+| `skills/permissions.mjs` | 272 | The permission block of a SKILL.md: parsed, refused when malformed or wildcarded, bounded against the runtime grant, and used as the scope the procedure runs with — a caller cannot widen it |
+| `skills/evaluation.mjs` | 274 | EVALUATE and DIAGNOSE: an append-only digest-chained verdict log, the incumbent's passing checks as the regression set, and a closed set of diagnoses (regression, regression_not_run, new_failure) so a rejection says which kind it was |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
-| `klyvaron/tiers.mjs` | 485 | The three-tier model family, backing records, and the validator that refuses a capability with no artifact behind it |
-| `klyvaron/plan.mjs` | 120 | The development plan: per-tier gates derived from the tier records, each open gate with its reason |
-| `skills/registry.mjs` | 397 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
-| `skills/manifest.mjs` | 319 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
-| `skills/lifecycle.mjs` | 276 | The curator walk and the five invariants that make "never delete a skill" structural |
+| `klyvaron/tiers.mjs` | 724 | The three-tier model family, the non-competitive stance, the two differentiating capabilities with their acceptance criteria, the modality roles, and the validator that refuses a capability with no artifact behind it, a from-scratch tier that names a base, or an image capability backed by the text artifact |
+| `klyvaron/plan.mjs` | 187 | The development plan: thirteen per-tier gates derived from the tier records, including the stance, the two differentiators, modality separation and `own_weights`, each open gate with its reason |
+| `klyvaron/trends.mjs` | 186 | Dated, sourced observations that expire and abstain; the mechanism `trend.awareness` is defined against, with no model behind it |
+| `klyvaron/affect.mjs` | 181 | Consent-gated, evidence-cited states from the user's own messages, with abstention and no diagnosis; the mechanism `affect.history` is defined against |
+| `klyvaron/architecture.mjs` | 615 | The family's own model: the `aetheris-core-v1` design, the Lite/Pro/Max presets, the two differentiators as parts of the model, the parameter and memory arithmetic, the modality models, and the recipe with its per-size open steps |
+| `klyvaron/composition.mjs` | 259 | The training-free path this family refused: the eight composition steps, the licence allowlist, and the rules that keep a composed tier from claiming a trained one or from wearing a tier label |
+| `hardware/accelerators.mjs` | 194 | The accelerator registry (CUDA, ROCm, Metal, Vulkan, OpenVINO GPU/NPU, CPU) and the weight plus KV-cache arithmetic that decides whether a model fits |
+| `skills/registry.mjs` | 425 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
+| `skills/manifest.mjs` | 327 | The SKILL.md document format: frontmatter, sections, platform gating, description limits |
+| `skills/lifecycle.mjs` | 286 | The curator walk and the five invariants that make "never delete a skill" structural |
 | `skills/store.mjs` | 246 | Skills on disk: document + state split, version files for rollback, deletion tombstones |
+| `skills/product.mjs` | 337 | Reviewed procedures as a product surface: structured install, a structural review that promotes a candidate, versions and rollback, per-account selection for one message, and deletion with a tombstone. No executor, so a procedure that declares access is refused in chat |
+| `skills/measure.mjs` | 158 | Deterministic scoring and comparison for two versions of a procedure on the same cases; a regression rule before aggregation, and a no-difference verdict that refuses to call equal scores an improvement |
+| `online/styles.mjs` | 87 | Seven user-controlled response styles over one fixed instruction, a per-account durable preference, and a store that reports an unreadable preference instead of guessing one. No inference from message content |
+| `adaptive/capability.mjs` | 194 | The capability descriptor every route is described by: kind, dotted `provides` tags, declared cost with no `measured` escape, fs/network/permission scope, and the `implementation` tag verification independence is decided on |
+| `adaptive/router.mjs` | 230 | `routeTask`: gates, refusals that name their reason, measured cost outranking an unmeasured claim, and a pin that is honoured only when it passes every gate |
+| `adaptive/providers.mjs` | 535 | The model and provider fabric: adapters that declare the capability tags they serve, an eligibility rule shared by routing *and* probing so a provider the policy forbids is never contacted, and a request no single adapter covers refused by name rather than split across two or trimmed to fit |
+| `adaptive/executors.mjs` | 199 | Two line counters over a tree — a materialising baseline and a 64 KiB streaming one — used as the milestone's genuinely independent pair |
+| `adaptive/verify.mjs` | 139 | Verification by recomputation against a counterpart implementation, plus a stride-sampled `wc -l` check that is honest about being a sample |
+| `adaptive/episodes.mjs` | 296 | Outcome computed rather than asserted, labelled failure hypotheses, acceptance evaluation, and an append-only JSONL episode log with a digest chain that reports where it broke |
+| `adaptive/wording.mjs` | 673 | Seven interaction states over one verbatim facts block, settings that report when they changed nothing, and a render-time §4 audit that throws instead of emitting |
+| `adaptive/loop.mjs` | 593 | The loop itself: measure, run, verify through a named counterpart, propose a skill from a verified success only, test it, promote it, reuse it, roll back by appending a version |
+| `adaptive/intent.mjs` | 183 | Capability requirements read from a request with the phrase that produced each; an unmatched request gets a question rather than a default, and emotional signals are read and used for nothing |
+| `adaptive/registry.mjs` | 157 | Which implementations exist for a capability tag and which tags a plan needs that nothing provides; one id with two meanings is refused |
+| `adaptive/plan.mjs` | 171 | Dependency-ordered plans with a digest; a plan longer than its budget or needing an uninstalled capability is refused by name rather than truncated |
+| `adaptive/budget.mjs` | 202 | Steps, calls, wall time and tokens; a gate that refuses to *start* work its measurement cannot cover, and unreported token counts kept as unreported rather than counted as zero |
+| `adaptive/checkpoint.mjs` | 248 | Atomic, digest-chained checkpoints; newest intact record read, torn writes skipped and reported, and a resume against a different plan refused |
+| `adaptive/runner.mjs` | 428 | A plan executed step by step with a checkpoint after each, resumable by inheriting only steps that completed *and* verified; deadlines gated before a synchronous step and reported after it |
+| `packs/manifest.mjs` | 249 | The pack document: vocabulary, refusals, review requirements and restriction *floors* — unknown keys refused and the data-class floor only ever raised, so a pack cannot be used to widen a policy |
+| `packs/registry.mjs` | 277 | Installed, enabled and disabled packs; readiness measured against the provider fabric (a capability this installation cannot serve is reported by name, never substituted), application that refuses an unavailable pack unless the caller acknowledges it, and no method that grants, authorises or executes |
+| `packs/builtin.mjs` | 131 | Three shipped packs — engineering repo maintenance, legal document review (confidential, human review, "reading support, not legal advice"), grounded tutoring — each narrow, and each capability either evidenced by a file in this repository or marked unimplemented |
+| `benchmark/harness.mjs` | 254 | The measured benchmark of the adaptive core: every entry calls the real module, a failed entry is kept in the table with its error and fails the run, and a benchmark that measures nothing is refused rather than reported as zero |
+| `release/manifest.mjs` | 268 | Release verification: one version across `VERSION` and the three packages, a dated changelog entry, documented totals compared against supplied measurements (not against each other), required artefacts present, and every shipped pack capability evidenced |
+| `providers/catalog.mjs` | 379 | The vendor catalogue: wire format, auth kind, documentation URL and a status per provider. A `ready` entry may only claim capabilities backed by a test in this repository; `gateway_only` may claim none; `pending` is refused by name. Validation is what keeps a credential field unrepresentable |
+| `providers/select.mjs` | 173 | Capability selection with reasons: strict offline refuses a remote request before candidates are considered, an unrecorded context limit does not satisfy a stated minimum, and every rejected candidate is returned with a code rather than silently dropped |
+| `providers/errors.mjs` | 228 | One failure shape for every provider: status→code mapping, retryability decided by code, bounded `Retry-After`, and messages redacted against six credential patterns before they can reach a log |
+| `providers/wires/index.mjs` | 66 | The wire registry: `IMPLEMENTED_WIRES` is derived from it, so a provider cannot be promoted onto a wire nothing implements |
+| `providers/wires/openai.mjs` | 43 | OpenAI-compatible chat: `{base}/models`, `{base}/chat/completions`, SSE with a `[DONE]` sentinel |
+| `providers/wires/common.mjs` | 70 | Conversation shaping shared by the native wires: system hoisting, same-role merging, user-first refusal, token counts |
+| `providers/wires/anthropic.mjs` | 93 | Anthropic Messages: `x-api-key`, `anthropic-version`, top-level `system`, content blocks, `message_stop` as the completion signal |
+| `providers/wires/gemini.mjs` | 102 | Gemini generateContent: model in the path, `x-goog-api-key`, `contents`/`systemInstruction`, `alt=sse`, blocked-prompt refusal |
+| `providers/wires/cohere.mjs` | 112 | Cohere Chat v2: Bearer auth, `/v2/chat` with a `system` message, typed SSE ending at `message-end`, and paginated `/v1/models` |
+| `providers/wires/azure.mjs` | 74 | Azure OpenAI v1: `api-key` header, `/openai/v1/chat/completions`, the deployment name in `model`, and OpenAI SSE |
+| `providers/wires/sigv4.mjs` | 107 | AWS Signature Version 4 for Bedrock: canonical request, credential scope and derived signing key, checked against AWS's published worked example |
+| `providers/wires/vertex.mjs` | 192 | Vertex AI: a service-account JWT assertion exchanged for an OAuth token, the regional `generateContent` path, and v1beta1 publisher-model discovery |
+| `providers/wires/bedrock.mjs` | 158 | Bedrock Converse: SigV4-signed requests, an IAM credential document, model-metadata filtering, and non-streaming by contract |
+| `providers/wires/gemini-images.mjs` | 105 | Gemini image generation over `generateContent`: inline `inlineData` bytes, size-to-aspect-ratio mapping, and the same refusal of a returned URL |
+| `providers/wires/images.mjs` | 82 | OpenAI Images: `{base}/images/generations`, inline base64 decoded and re-encoded before it is accepted, a 4,000-character product prompt cap, four sizes, and a refusal rather than a fetch when a response carries only a URL |
+| `providers/wires/veo.mjs` | 172 | Veo through the Gemini API: `predictLongRunning`, bounded cancellable polling, a file download that sends the key only to the API origin, and MP4 duration measured from `moov/mvhd` |
 
-### `services/fabric` — 11,760 source lines, 9,025 test lines
+### `services/fabric` — 12,655 source lines, 9,995 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible
 `Pipeline`. Plus the experiment ledger, the failure-memory recurrence, the model
-release manager, and a hand-written dual encoder whose **five parameter gradients
-all match central finite differences to ~3e-10**. See its own
+release manager, a hand-written dual encoder whose **five parameter gradients all match
+central finite differences to ~3e-10**, and a prototype that trains the two differentiator parts
+in the same loss as the language objective. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 2,691 source lines, 1,818 test lines
+### `apps/web` — 3,504 source lines, 1,894 test lines
 
 Five area components, three sign-in pages (sign in, create account, reset
 password) and the account card in the sidebar, a shell, shared primitives, an API

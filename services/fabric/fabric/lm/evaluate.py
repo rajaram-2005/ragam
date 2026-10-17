@@ -37,7 +37,10 @@ class Baseline:
         return float(math.exp(self.nll_nats_per_token))
 
     @property
-    def bits_per_character(self) -> float:
+    def bits_per_token(self) -> float:
+        """Bits each predicted token costs. Was called "per character" while the only tokenizer
+        was the character one and the two coincided; with a subword vocabulary they do not, and a
+        baseline carries no character count to convert with."""
         return self.nll_nats_per_token / math.log(2.0)
 
     def to_dict(self) -> dict:
@@ -46,7 +49,7 @@ class Baseline:
             "description": self.description,
             "nllNatsPerToken": self.nll_nats_per_token,
             "perplexity": self.perplexity,
-            "bitsPerCharacter": self.bits_per_character,
+            "bitsPerToken": self.bits_per_token,
         }
 
 
@@ -103,6 +106,10 @@ class EvaluationResult:
     tokens_evaluated: int
     baselines: list[Baseline] = field(default_factory=list)
     unknown_rate: float = 0.0
+    #: Characters the evaluated tokens stand for. Optional because a caller that only has ids
+    #: cannot supply it -- and because without it there is no honest bits-per-character figure,
+    #: only bits per token.
+    characters_evaluated: int | None = None
     extra: dict = field(default_factory=dict)
 
     @property
@@ -110,8 +117,20 @@ class EvaluationResult:
         return float(math.exp(self.nll_nats_per_token))
 
     @property
-    def bits_per_character(self) -> float:
+    def bits_per_token(self) -> float:
         return self.nll_nats_per_token / math.log(2.0)
+
+    @property
+    def bits_per_character(self) -> float | None:
+        """Total cost divided by characters, or None when the character count is unknown.
+
+        This is *not* `nll / ln 2` generalised: with tokens shorter or longer than a character
+        that quotient changes meaning, and averaging per-token costs per character is only the
+        same number when the two counts agree.
+        """
+        if not self.characters_evaluated:
+            return None
+        return (self.nll_nats_per_token * self.tokens_evaluated / math.log(2.0)) / self.characters_evaluated
 
     @property
     def best_baseline(self) -> Baseline | None:
@@ -127,8 +146,10 @@ class EvaluationResult:
         return {
             "nllNatsPerToken": self.nll_nats_per_token,
             "perplexity": self.perplexity,
+            "bitsPerToken": self.bits_per_token,
             "bitsPerCharacter": self.bits_per_character,
             "tokensEvaluated": self.tokens_evaluated,
+            "charactersEvaluated": self.characters_evaluated,
             "unknownRate": self.unknown_rate,
             "baselines": [b.to_dict() for b in self.baselines],
             "bestBaseline": best.name if best else None,
@@ -149,6 +170,7 @@ def evaluate_model(
     seq_len: int,
     batch_size: int = 8,
     unknown_rate: float = 0.0,
+    characters_evaluated: int | None = None,
     with_baselines: bool = True,
 ) -> EvaluationResult:
     """Mean negative log-likelihood over the held-out stream, plus baselines.
@@ -183,6 +205,7 @@ def evaluate_model(
         nll_nats_per_token=total_nll / total_tokens,
         tokens_evaluated=total_tokens,
         unknown_rate=unknown_rate,
+        characters_evaluated=characters_evaluated,
     )
     if with_baselines:
         if train_ids is None:

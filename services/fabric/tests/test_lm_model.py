@@ -56,20 +56,24 @@ FD_RTOL = 1e-5
 FD_ATOL = 1e-9
 
 
-def numeric_gradient(model, inputs, targets, name, *, samples=12, eps=1e-5, seed=0):
-    """Central finite differences over a spread of entries of one parameter."""
+def numeric_gradient(model, inputs, targets, name, *, samples=12, eps=1e-5, seed=0, **conditions):
+    """Central finite differences over a spread of entries of one parameter.
+
+    `conditions` are passed through to `loss` and `loss_and_grads`: the differentiator inputs and
+    targets, so the same check covers the conditioning tables and the two heads.
+    """
     rng = np.random.default_rng(seed)
     array = model.params[name]
     indices = rng.choice(array.size, size=min(samples, array.size), replace=False)
     numeric = np.zeros(indices.size)
     flat = array.reshape(-1)
-    analytic_flat = model.loss_and_grads(inputs, targets)[1][name].reshape(-1)
+    analytic_flat = model.loss_and_grads(inputs, targets, **conditions)[1][name].reshape(-1)
     for k, index in enumerate(indices):
         original = flat[index]
         flat[index] = original + eps
-        plus = model.loss(inputs, targets)
+        plus = model.loss(inputs, targets, **conditions)
         flat[index] = original - eps
-        minus = model.loss(inputs, targets)
+        minus = model.loss(inputs, targets, **conditions)
         flat[index] = original
         numeric[k] = (plus - minus) / (2 * eps)
     return numeric, analytic_flat[indices], indices
@@ -309,3 +313,127 @@ def test_loading_a_checkpoint_for_a_different_architecture_is_refused(tmp_path):
     other = TransformerConfig(**{**SMALL, "n_layers": 3})
     with pytest.raises(KeyError):
         TransformerLM.load(path, other)
+
+
+# ---------------------------------------------------------------------------
+# The two differentiators, as parts of the model
+# ---------------------------------------------------------------------------
+
+
+#: A model small enough to difference-check by hand, with both differentiators switched on:
+#: four age buckets ("how old is the evidence behind this token"), three state classes ("what did
+#: the user express"), and both heads.
+DIFFERENTIATED = dict(SMALL, age_buckets=4, state_classes=3, verdict_head=True, state_head=True)
+
+
+#: The same ids the `batch` fixture uses, at module level so the tests below can pass the
+#: differentiator conditions alongside them without a second fixture.
+_rng = np.random.default_rng(11)
+DIFFERENTIATOR_BATCH = (_rng.integers(0, 17, (2, 8)), _rng.integers(0, 17, (2, 8)))
+
+
+@pytest.fixture(scope="module")
+def differentiated():
+    config = TransformerConfig(**DIFFERENTIATED)
+    model = TransformerLM(config, seed=5, dtype=np.float64)
+    rng = np.random.default_rng(23)
+    conditions = {
+        "ages": rng.integers(0, 4, (2, 8)),
+        "states": rng.integers(0, 3, (2,)),
+        "verdict_targets": np.array([0, 1]),
+        "state_targets": np.array([1, 2]),
+    }
+    return config, model, conditions
+
+
+def test_the_differentiator_gradients_match_a_finite_difference(differentiated):
+    """The conditioning tables and the two heads are held to the same check as everything else.
+
+    These parts are the reason Pro and Max are different models rather than a language model with
+    a wrapper, so a gradient that is merely plausible is not enough: every one of them is compared
+    against a central finite difference, exactly like the attention weights.
+    """
+    config, model, conditions = differentiated
+    checked = 0
+    for name in ("age_emb", "state_emb", "verdict_w", "verdict_b", "state_head_w", "state_head_b"):
+        assert name in model.params, f"{name} is missing from a model configured with the parts"
+        numeric, analytic, indices = numeric_gradient(model, *DIFFERENTIATOR_BATCH, name, seed=7, **conditions)
+        assert np.all(np.isfinite(numeric)) and np.all(np.isfinite(analytic))
+        violation = gradient_violation(numeric, analytic)
+        assert violation <= 0, (
+            f"{name}: finite differences disagree with the backward pass by {violation:.3e} "
+            f"at index {indices[int(np.argmax(np.abs(numeric - analytic)))]}"
+        )
+        checked += numeric.size
+    assert checked >= 30, f"only {checked} entries were checked"
+
+
+def test_a_config_without_the_parts_is_unchanged_by_them():
+    """The released artifact must keep the parameter set it recorded.
+
+    The differentiators are additive and off by default: a config that does not ask for them
+    produces exactly the arrays the Lite run recorded, which is what lets its weights digest stay
+    comparable.
+    """
+    config = TransformerConfig(vocab_size=148, d_model=96, n_layers=3, n_heads=4, d_ff=384, seq_len=128)
+    assert config.differentiator_parameters == 0
+    assert config.parameter_count() == 359_616
+    model = TransformerLM(config, seed=0, dtype=np.float64)
+    assert "age_emb" not in model.params and "verdict_w" not in model.params
+    assert model.parameter_count == config.parameter_count()
+
+    # ...and switching each part on adds exactly the parameters the arithmetic says it does.
+    with_parts = TransformerConfig(**{**config.to_dict(), "age_buckets": 8, "state_classes": 5,
+                                      "verdict_head": True, "state_head": True})
+    expected = 8 * 96 + 5 * 96 + (2 * 96 + 2) + (5 * 96 + 5)
+    assert with_parts.differentiator_parameters == expected
+    assert with_parts.parameter_count() == config.parameter_count() + expected
+
+
+def test_the_differentiator_inputs_are_required_rather_than_optional(differentiated):
+    """A model with the parts refuses to run without them.
+
+    Silently training without ages would mean training as if every source were equally fresh,
+    which is the exact failure the `trend.awareness` gate is about.
+    """
+    config, model, conditions = differentiated
+    inputs, targets = DIFFERENTIATOR_BATCH
+    with pytest.raises(ValueError, match="needs `ages`"):
+        model.forward(inputs)
+    with pytest.raises(ValueError, match="needs `states`"):
+        model.forward(inputs, ages=conditions["ages"])
+    with pytest.raises(ValueError, match="same shape as inputs"):
+        model.forward(inputs, ages=conditions["ages"][:, :4], states=conditions["states"])
+    # A negative id would silently wrap around in NumPy indexing, so it is refused explicitly.
+    bad = conditions["ages"].copy()
+    bad[0, 0] = -1
+    with pytest.raises(ValueError, match="bucket ids"):
+        model.forward(inputs, ages=bad, states=conditions["states"])
+    too_new = conditions["ages"].copy()
+    too_new[0, 0] = 4
+    with pytest.raises(ValueError, match="bucket ids"):
+        model.forward(inputs, ages=too_new, states=conditions["states"])
+    with pytest.raises(ValueError, match="class ids"):
+        model.forward(inputs, ages=conditions["ages"], states=np.array([0, 5]))
+    with pytest.raises(ValueError, match="needs state_classes"):
+        TransformerConfig(**{**SMALL, "state_head": True})
+
+
+def test_the_heads_are_part_of_one_loss(differentiated):
+    """The verdict and state terms are in the same number the language term is in."""
+    config, model, conditions = differentiated
+    inputs, targets = DIFFERENTIATOR_BATCH
+    logits, cache = model.forward(inputs, cache=True, ages=conditions["ages"], states=conditions["states"])
+    heads = model.task_logits(cache["hf"])
+    assert heads["verdict"].shape == (2, 2)
+    assert heads["state"].shape == (2, 3)
+
+    plain = model.loss(inputs, targets, **conditions)
+    language_only = model.loss_and_grads(inputs, targets, ages=conditions["ages"], states=conditions["states"])[0]
+    assert plain != pytest.approx(language_only), "the head terms must change the loss"
+    # A zero weight is the control: it must land exactly on the language-only loss, which proves
+    # the difference above comes from the heads and not from anything else in the forward pass.
+    zeroed = model.loss(inputs, targets, verdict_weight=0.0, state_weight=0.0, **conditions)
+    assert zeroed == pytest.approx(language_only, rel=1e-12)
+    # And the gradient the heads send into the trunk is real: a longer sequence changes it.
+    assert model.loss_and_grads(inputs, targets, **conditions)[1]["verdict_w"].shape == (16, 2)

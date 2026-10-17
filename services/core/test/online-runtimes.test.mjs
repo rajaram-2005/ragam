@@ -60,13 +60,40 @@ async function fixture(t, { trustedOrigins = [] } = {}) {
 
 const chat = (f, extra = {}) => ({ prompt: 'ordinary question', model: 'local-a', authorization: { confirmed: true, providerRevision: f.app.store.state.revision }, ...extra })
 
-test('the runtime table is closed: unknown kinds are refused, not defaulted', () => {
+test('the runtime family is closed: unknown ids and pending adapters are refused, not defaulted', () => {
+  // The three built-in runtimes are unchanged, and keep their key requirements.
   assert.deepEqual(Object.keys(RUNTIMES).sort(), ['litellm', 'llamacpp', 'ollama'])
   assert.equal(runtimeFor('litellm').keyRequired, true)
   assert.equal(runtimeFor('ollama').keyRequired, false)
   assert.equal(runtimeFor('llamacpp').keyRequired, false)
-  assert.throws(() => runtimeFor('vllm'), (e) => e.code === 'invalid_runtime')
+
+  // A catalogue provider whose wire this transport speaks is a connection, with the vendor's key
+  // requirement.
+  assert.equal(runtimeFor('openai').keyRequired, true)
+  assert.equal(runtimeFor('vllm').keyRequired, false)
+  assert.equal(runtimeFor('vllm').wire, 'openai_chat')
+  assert.equal(runtimeFor('custom-work').label, 'Custom OpenAI-compatible endpoint')
+
+  // Native wires are connections too, and the wire travels with the runtime record.
+  assert.equal(runtimeFor('anthropic').wire, 'anthropic_messages')
+  assert.equal(runtimeFor('gemini').wire, 'gemini_generate')
+  assert.equal(runtimeFor('anthropic').keyRequired, true)
+  // The newer native wires travel with their credential kind, so the settings form and the
+  // connector agree on what must be pasted.
+  assert.equal(runtimeFor('cohere').wire, 'cohere_chat')
+  assert.equal(runtimeFor('azure-openai').wire, 'azure_openai')
+  assert.equal(runtimeFor('azure-openai').credential, 'api_key')
+  assert.equal(runtimeFor('vertex').wire, 'gcp_vertex')
+  assert.equal(runtimeFor('vertex').credential, 'service_account')
+  assert.equal(runtimeFor('bedrock').wire, 'aws_bedrock')
+  assert.equal(runtimeFor('bedrock').credential, 'aws_credentials')
+
+  // A provider the catalogue marks pending is refused with the reason, not treated as unknown.
+  assert.throws(() => runtimeFor('stability'), (e) => e.code === 'adapter_pending')
+  // And anything the catalogue does not know is still refused rather than defaulted.
+  assert.throws(() => runtimeFor('not-a-provider'), (e) => e.code === 'invalid_runtime')
   assert.throws(() => runtimeFor('__proto__'), (e) => e.code === 'invalid_runtime')
+  assert.throws(() => runtimeFor('Bad Id'), (e) => e.code === 'invalid_runtime')
 })
 
 test('an Ollama connection is saved with no key, lists its models and chats without sending credentials', async (t) => {
@@ -144,17 +171,22 @@ test('LiteLLM still requires a key, and a runtime route cannot act on a differen
   assert.equal(noKey.status, 400); assert.equal(noKey.data.error, 'key_required')
 
   await f.request('PUT', '/api/providers/ollama', { baseUrl: up.v1 })
-  const mismatch = await f.request('POST', '/api/providers/litellm/test', {})
-  assert.equal(mismatch.status, 409); assert.equal(mismatch.data.error, 'provider_mismatch')
-  assert.equal(up.calls.filter((c) => c.path.endsWith('/models')).length, 0, 'a mismatched test contacts nothing')
-  const removeMismatch = await f.request('DELETE', '/api/providers/llamacpp', {})
-  assert.equal(removeMismatch.status, 409); assert.equal(f.app.store.state.baseUrl, up.v1)
+  // A route for a connection that was never saved is not a route to the saved one: it is a 404,
+  // and it contacts nothing.
+  const missing = await f.request('POST', '/api/providers/litellm/test', {})
+  assert.equal(missing.status, 404); assert.equal(missing.data.error, 'provider_not_found')
+  assert.equal(up.calls.filter((c) => c.path.endsWith('/models')).length, 0, 'an unsaved connection contacts nothing')
+  const removeMissing = await f.request('DELETE', '/api/providers/llamacpp', {})
+  assert.equal(removeMissing.status, 404); assert.equal(f.app.store.state.baseUrl, up.v1)
 })
 
 test('an unknown runtime path is not a route, and members cannot change the connection', async (t) => {
   const up = await runtime(t)
   const f = await fixture(t, { trustedOrigins: [up.base] }); await f.login()
-  assert.equal((await f.request('PUT', '/api/providers/vllm', { baseUrl: up.v1 })).status, 404)
+  // A catalogue id is a route; an invented one is not, and says which rule it broke.
+  const invented = await f.request('PUT', '/api/providers/not-a-provider', { baseUrl: up.v1 })
+  assert.equal(invented.status, 400); assert.equal(invented.data.error, 'invalid_runtime')
+  assert.equal(f.app.store.connections.length, 0)
   await f.request('PUT', '/api/providers/ollama', { baseUrl: up.v1 })
   await f.request('POST', '/api/auth/logout', {})
   await f.login('member@example.test')
@@ -170,12 +202,13 @@ test('the active runtime and endpoint survive a restart; a pre-runtime record st
   f.restart()
   assert.equal(f.app.store.public().kind, 'ollama'); assert.equal(f.app.store.public().configured, true)
 
-  // A record written before runtimes existed has no `kind` field and always meant LiteLLM.
-  const legacy = JSON.parse(readFileSync(join(f.dir, 'provider.json'), 'utf8'))
-  delete legacy.kind
-  legacy.key = null
+  // A record written before runtimes existed was a bare single-connection object with no `kind`
+  // and no schema, and it always meant LiteLLM. Written in that shape rather than by deleting
+  // fields from the current one, because deleting fields is not what an old file looks like.
   const { writeFileSync } = await import('node:fs')
-  writeFileSync(join(f.dir, 'provider.json'), JSON.stringify(legacy))
+  writeFileSync(join(f.dir, 'provider.json'), JSON.stringify({
+    baseUrl: '', key: null, models: [], selectedModel: '', verified: {}, revision: 3,
+  }))
   f.restart()
   assert.equal(f.app.store.kind(), 'litellm'); assert.equal(f.app.store.public().configured, false)
   assert.throws(() => f.app.store.config(), (e) => e.code === 'provider_not_configured')

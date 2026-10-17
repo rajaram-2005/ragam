@@ -30,6 +30,7 @@
 
 import { createHash } from 'node:crypto'
 import { SkillDocumentError, loadSkillDocument, parseSections, parseFrontmatter } from './manifest.mjs'
+import { declarationFrom, permissionsFromDocument } from './permissions.mjs'
 import { Bm25Index } from '../knowledge/bm25.mjs'
 
 export const SKILL_STATES = Object.freeze({
@@ -82,6 +83,11 @@ export class SkillRegistry {
     }
 
     const version = String(report.frontmatter.version)
+    // The declaration is parsed here, at install time, so a malformed one is refused while a
+    // human is looking at it rather than when a task tries to run the procedure. It is stored
+    // on the version, because a later version may declare a different scope and the executor
+    // must use the scope of the version it is running.
+    const permissions = declarationFrom(report.frontmatter, { source: `'${name}'` })
     const entry = {
       version,
       text,
@@ -89,6 +95,7 @@ export class SkillRegistry {
       installedAt: this.now(),
       sections: [...report.sections.keys()],
       procedureSteps: report.procedureSteps,
+      permissions,
     }
 
     const existing = this.#skills.get(name)
@@ -158,7 +165,28 @@ export class SkillRegistry {
       // client an empty object where a list was promised.
       sections: skill.versions.at(-1).sections ?? [],
       digest: skill.versions.at(-1).digest,
+      // What the stored document is allowed to touch. A reader can see this without
+      // running anything, which is the point of declaring it in the document at all.
+      permissions: skill.versions.at(-1).permissions ?? permissionsFromDocument(skill.versions.at(-1).text),
     }
+  }
+
+  /**
+   * The permission declaration of one version, re-read from the stored document.
+   *
+   * Re-read rather than remembered: an executor rebuilt in a later process must enforce what
+   * the document says now, and a cached object from the process that installed it would let
+   * the two disagree without anybody noticing.
+   */
+  permissionsFor(name, version = null) {
+    const skill = this.#require(name)
+    const entry = version
+      ? skill.versions.find((each) => each.version === version)
+      : skill.versions.at(-1)
+    if (!entry) {
+      throw new SkillRegistryError(`skill '${name}' has no version ${version}`, 'unknown_version')
+    }
+    return { version: entry.version, permissions: permissionsFromDocument(entry.text), createdBy: skill.createdBy }
   }
 
   list({ state = null, createdBy = null, loadableOnly = false, tag = null } = {}) {

@@ -26,19 +26,25 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--report", required=True, help="a report JSON written by scripts/train_lm.py")
     parser.add_argument("--version", required=True, help="version to register, e.g. 0.1.0")
+    parser.add_argument("--name", default=None, help="model name to register (default: aetheris-lite-lm)")
+    parser.add_argument("--family", default=None, help="family the card names (default: aetheris-lite)")
     parser.add_argument("--out", default=None, help="write the card JSON here")
     parser.add_argument("--json", dest="json_out", default=None, help="write a machine-readable verdict here")
     args = parser.parse_args(argv)
 
     report = json.loads(Path(args.report).read_text(encoding="utf-8"))
     manager = ModelReleaseManager()
-    card, released = candidate_from_report(report, manager, version=args.version)
+    # The name and family are arguments with the released Lite model as their defaults, so a
+    # second artifact of the same architecture is registered under its own name rather than
+    # under the name of another set of weights.
+    overrides = {key: value for key, value in (("name", args.name), ("family", args.family)) if value}
+    card, released = candidate_from_report(report, manager, version=args.version, **overrides)
 
     payload = card.to_dict()
     if args.out:
         Path(args.out).write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
-    print(f"aetheris-lite release gate: {card.identifier}")
+    print(f"{card.name} release gate: {card.identifier}")
     print(f"  status        {card.status}")
     print(f"  weightsDigest {card.weights_digest[:16]}…")
     print(f"  parameters    {card.parameter_count:,}")

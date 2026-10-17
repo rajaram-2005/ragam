@@ -9,7 +9,8 @@
 // Nothing is ever reported as complete until its bytes pass validateMedia().
 
 import { mkdir, writeFile, readFile, stat, unlink } from 'node:fs/promises'
-import { join, resolve, sep } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve, sep } from 'node:path'
 import { randomUUID, createHash } from 'node:crypto'
 import { validateMedia, assertGenuineVideo, MEDIA_KINDS, extractImageBytes } from './validate.mjs'
 
@@ -33,19 +34,61 @@ export class MediaJobQueue {
    * @param {number} [options.concurrency] max simultaneous jobs (video is heavy: default 1)
    * @param {(e:object)=>void} [options.onEvent]
    * @param {object} [options.ledger]      audit ledger
+   * @param {string} [options.statePath]   JSON file for durable job records (optional)
    */
-  constructor({ storageDir, concurrency = 1, onEvent = () => {}, ledger = null }) {
+  constructor({ storageDir, concurrency = 1, onEvent = () => {}, ledger = null, statePath = null }) {
     if (!storageDir) throw new TypeError('MediaJobQueue requires a storageDir')
     this.storageDir = resolve(storageDir)
     this.concurrency = Math.max(1, concurrency)
     this.onEvent = onEvent
     this.ledger = ledger
+    this.statePath = statePath ? resolve(statePath) : null
     /** @type {Map<string, object>} */
     this.jobs = new Map()
     /** @type {Map<string, AbortController>} kept off the serialisable job record */
     this.controllers = new Map()
     this.pending = []
     this.active = 0
+    if (this.statePath) this.#load()
+  }
+
+  /**
+   * Restore records from disk. A job that was queued or running when the process stopped cannot be
+   * resumed — its `run` closure did not survive — so it is recorded as interrupted instead of
+   * being shown as running forever. Succeeded and failed jobs are history and keep their shape.
+   */
+  #load() {
+    if (!existsSync(this.statePath)) return
+    let records
+    try { records = JSON.parse(readFileSync(this.statePath, 'utf8')) } catch { records = null }
+    if (!Array.isArray(records)) return
+    for (const record of records) {
+      if (!record || typeof record.id !== 'string' || !VALID_KINDS.has(record.kind)) continue
+      if (this.jobs.has(record.id)) continue
+      const job = { ...record, history: Array.isArray(record.history) ? record.history : [] }
+      if (!TERMINAL.has(job.state)) {
+        job.state = JOB_STATES.FAILED
+        job.stage = 'failed'
+        job.error = 'interrupted by a Core restart; the provider work was not resumed'
+        job.errorCode = 'interrupted'
+        job.finishedAt = Date.now()
+        job.history.push({ at: Date.now(), state: JOB_STATES.FAILED, stage: 'failed', progress: job.progress ?? 0 })
+      }
+      this.jobs.set(job.id, job)
+    }
+  }
+
+  /** Write the records atomically. A failure to persist is reported, never swallowed silently. */
+  #persist() {
+    if (!this.statePath) return
+    try {
+      mkdirSync(dirname(this.statePath), { recursive: true, mode: 0o700 })
+      const temp = `${this.statePath}.tmp-${process.pid}`
+      writeFileSync(temp, `${JSON.stringify([...this.jobs.values()], null, 2)}\n`, { mode: 0o600 })
+      renameSync(temp, this.statePath)
+    } catch (error) {
+      this.onEvent({ type: 'job_persist_failed', error: error?.message ?? String(error) })
+    }
   }
 
   /**
@@ -85,6 +128,7 @@ export class MediaJobQueue {
     this.controllers.set(id, controller)
     this.jobs.set(id, job)
     this.pending.push({ id, run, filenameHint })
+    this.#persist()
     this.#audit(`enqueue:${kind}`, 'info', { jobId: id }, subject)
     this.onEvent({ type: 'job_queued', jobId: id, kind })
     this.#pump()
@@ -145,6 +189,22 @@ export class MediaJobQueue {
     return { bytes: new Uint8Array(await readFile(full)), artifact: this.publicView(job).artifact }
   }
 
+  /**
+   * Remove a job and its artifact. Used when the user deletes a generated image: the record is
+   * user data too, so it does not linger after the bytes are gone.
+   */
+  async remove(id) {
+    const job = this.jobs.get(id)
+    if (!job) throw new Error(`unknown media job '${id}'`)
+    if (!TERMINAL.has(job.state)) this.cancel(id, 'deleted by user')
+    await this.deleteArtifact(id)
+    this.controllers.delete(id)
+    this.jobs.delete(id)
+    this.#persist()
+    this.#audit(`remove:${job.kind}`, 'success', { jobId: id }, job.subject)
+    return { removed: true, id }
+  }
+
   async deleteArtifact(id) {
     const job = this.jobs.get(id)
     if (!job?.artifact?.path) return { deleted: false }
@@ -152,6 +212,7 @@ export class MediaJobQueue {
     await unlink(full).catch(() => {})
     const removed = job.artifact.path
     job.artifact = null
+    this.#persist()
     this.#audit('delete_artifact', 'success', { jobId: id, removed }, job.subject)
     return { deleted: true, removed }
   }
@@ -249,7 +310,23 @@ export class MediaJobQueue {
     }
 
     const artifact = await this.#store(job, bytes, validation, filenameHint)
-    this.#transition(job, JOB_STATES.SUCCEEDED, { stage: 'complete', progress: 100, artifact, validation, finishedAt: Date.now() })
+    // Provenance the provider reported, kept beside the artifact rather than folded into it.
+    // A bounded set of primitive provenance fields. Nothing provider-shaped is copied wholesale:
+    // a provider response is untrusted input, and this record is rendered in the UI.
+    const text = (value) => (typeof value === 'string' && value.length <= 200 ? value : null)
+    const number = (value) => (Number.isFinite(value) && value >= 0 ? value : null)
+    const resultMeta = result && typeof result === 'object'
+      ? {
+          model: text(result.model),
+          revisedPrompt: text(result.revisedPrompt),
+          usage: result.usage && typeof result.usage === 'object' ? result.usage : null,
+          durationSeconds: number(result.durationSeconds),
+          aspectRatio: text(result.aspectRatio),
+          resolution: text(result.resolution),
+          platform: text(result.platform),
+        }
+      : null
+    this.#transition(job, JOB_STATES.SUCCEEDED, { stage: 'complete', progress: 100, artifact, validation, result: resultMeta, finishedAt: Date.now() })
     this.#audit(
       `succeed:${job.kind}`,
       'success',
@@ -312,6 +389,8 @@ export class MediaJobQueue {
     job.state = state
     Object.assign(job, extra)
     job.history.push({ at: Date.now(), state, stage: job.stage, progress: job.progress })
+    // Durability is per state change, not per progress tick: the states are what a restart needs.
+    if (TERMINAL.has(state)) this.#persist()
     this.onEvent({ type: 'job_state', jobId: job.id, state, stage: job.stage, progress: job.progress })
   }
 
@@ -338,6 +417,7 @@ export class MediaJobQueue {
       retryAfterMs: job.retryAfterMs,
       validation: job.validation,
       artifact: job.artifact,
+      result: job.result ?? null,
       terminal: TERMINAL.has(job.state),
       history: job.history.slice(-25),
     }

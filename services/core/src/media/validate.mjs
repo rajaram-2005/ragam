@@ -134,6 +134,62 @@ export function extractImageBytes(entry) {
   return null // 'url' entries must be fetched by the caller through the egress guard
 }
 
+/**
+ * Measure an MP4/MOV's duration from its own `moov/mvhd` box.
+ *
+ * A provider's duration in a JSON response is a claim; the file is the artifact. This walks the
+ * ISO-BMFF box tree, bounds every read by the box it is reading, and returns `null` when the
+ * duration is absent rather than guessing zero. It is deliberately not a full media probe.
+ */
+export function probeMp4(bytes) {
+  const view = toBytes(bytes)
+  if (!view.length || !asciiAt(view, 4, 'ftyp')) return null
+  const buf = Buffer.from(view.buffer, view.byteOffset, view.byteLength)
+  const boxes = (start, end) => {
+    const found = []
+    let offset = start
+    while (offset + 8 <= end) {
+      let size = buf.readUInt32BE(offset)
+      const type = buf.toString('latin1', offset + 4, offset + 8)
+      let header = 8
+      if (size === 1) {
+        if (offset + 16 > end) break
+        const large = buf.readBigUInt64BE(offset + 8)
+        if (large > BigInt(end - offset)) break
+        size = Number(large)
+        header = 16
+      } else if (size === 0) {
+        size = end - offset
+      }
+      if (size < header || offset + size > end) break
+      found.push({ type, start: offset, end: offset + size, header })
+      offset += size
+    }
+    return found
+  }
+  const moov = boxes(0, buf.length).find((box) => box.type === 'moov')
+  if (!moov) return null
+  const mvhd = boxes(moov.start + moov.header, moov.end).find((box) => box.type === 'mvhd')
+  if (!mvhd) return null
+  const payload = mvhd.start + mvhd.header
+  if (payload + 4 > mvhd.end) return null
+  const version = buf[payload]
+  let timescale
+  let duration
+  if (version === 0 && payload + 20 <= mvhd.end) {
+    timescale = buf.readUInt32BE(payload + 12)
+    duration = buf.readUInt32BE(payload + 16)
+  } else if (version === 1 && payload + 32 <= mvhd.end) {
+    timescale = buf.readUInt32BE(payload + 20)
+    const raw = buf.readBigUInt64BE(payload + 24)
+    duration = raw > BigInt(Number.MAX_SAFE_INTEGER) ? null : Number(raw)
+  } else {
+    return null
+  }
+  if (!timescale || duration === null || duration === 0) return { durationSeconds: null, timescale: timescale || null }
+  return { durationSeconds: Math.round((duration / timescale) * 1000) / 1000, timescale }
+}
+
 function toBytes(value) {
   if (!value) return new Uint8Array(0)
   if (value instanceof Uint8Array) return value

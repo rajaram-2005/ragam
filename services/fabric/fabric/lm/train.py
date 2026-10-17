@@ -32,9 +32,10 @@ from pathlib import Path
 
 import numpy as np
 
-from .data import build_manifest, make_batches, read_corpus
+from .data import DEFAULT_EXTENSIONS, build_manifest, make_batches, read_corpus
 from .evaluate import evaluate_model
 from .model import TransformerConfig, TransformerLM, weights_digest
+from .bpe import ByteBPETokenizer
 from .tokenizer import CharacterTokenizer
 
 
@@ -64,8 +65,30 @@ class TrainConfig:
     split_seed: int = 20251012
     corpus_root: str = "."
     dtype: str = "float32"
+    #: Sources held out whole, by their first path component under the corpus root. With these
+    #: set, the validation text comes from repositories the model was never trained on -- the
+    #: stronger claim, and the one a released card should quote. Empty means the by-document
+    #: split, which no single source decides.
+    validation_sources: tuple[str, ...] = ()
+    #: Which text files count as corpus. The default is the repository's own mix
+    #: (data.DEFAULT_EXTENSIONS); an assembled corpus of public sources may hold other
+    #: languages, and renaming a .ts file to .md to get it read would be a lie about the
+    #: corpus. An empty tuple means "use the module default".
+    extensions: tuple[str, ...] = ()
+    #: Which tokenizer to fit on the training split. `character` is the default and is what the
+    #: released artifacts were trained with; `byte-bpe` learns subword merges. The two produce
+    #: different vocabularies, so this is part of the config digest rather than a run flag.
+    tokenizer_kind: str = "character"
+    #: Vocabulary size asked of the byte-BPE trainer. Unused by the character tokenizer, whose
+    #: size is the alphabet it finds in the training text and cannot be chosen.
+    vocab_size: int = 8192
+    #: How much text the byte-BPE trainer samples. Merges converge long before the last byte:
+    #: pairs worth a token are frequent by definition. Recorded, because it is a choice.
+    tokenizer_sample_chars: int = 4_000_000
 
     def __post_init__(self) -> None:
+        if self.tokenizer_kind not in ("character", "byte-bpe"):
+            raise ValueError(f"unknown tokenizer_kind {self.tokenizer_kind!r}; expected 'character' or 'byte-bpe'")
         if self.steps < 1:
             raise ValueError("steps must be at least 1")
         if self.warmup_steps >= self.steps:
@@ -158,6 +181,10 @@ class TrainingReport:
     evaluation: dict = field(default_factory=dict)
     samples: dict = field(default_factory=dict)
     artifact: dict = field(default_factory=dict)
+    #: What checkpointing did, or None when the run did not checkpoint. A run that never wrote
+    #: one and a run that wrote fourteen and finished look the same in the weights and not the
+    #: same in the record, so the record says which it was.
+    checkpoints: dict | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -198,6 +225,72 @@ def peak_memory_mb() -> float:
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
 
 
+def config_digest(config: TrainConfig) -> str:
+    """A digest of everything that decides what the model is.
+
+    Used to refuse a resume across configurations: weights from a d256 run loaded into a d320
+    one are a shape error at best, and at worst -- same shapes, different layer count, different
+    data -- a model that keeps training and produces a reported loss for a configuration it was
+    never trained under.
+    """
+    return hashlib.sha256(
+        json.dumps(config.to_dict(), sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+
+
+def _checkpoint_path(output_dir, run_name: str, digest: str):
+    return output_dir / f"{run_name}-{digest[:12]}.ckpt.npz"
+
+
+def write_checkpoint(path, *, step, losses, total_wall, training_wall, config_digest_value, model,
+                     optimizer) -> str:
+    """Write the whole training state, so an interrupted run is not a lost run.
+
+    Weights alone are not enough to continue: Adam's two moment estimates carry the state that
+    makes step 9,000 behave differently from step 1, and loading weights without them restarts
+    the optimiser -- a different model wearing the same numbers. The loss curve travels too, so
+    a resumed run's report covers every step it actually took.
+    """
+    arrays = {f"w::{name}": np.asarray(array) for name, array in model.params.items()}
+    arrays.update({f"m::{name}": value for name, value in optimizer.m.items()})
+    arrays.update({f"v::{name}": value for name, value in optimizer.v.items()})
+    meta = {
+        "format": "aetheris-checkpoint/v1",
+        "step": step,
+        "optimizerSteps": optimizer.t,
+        "losses": losses,
+        # Two clocks, because a resumed run has two honest answers to "how long did this take":
+        # the wall time of every process that worked on it, and the time actually spent stepping.
+        "totalWallSeconds": total_wall,
+        "trainingSeconds": training_wall,
+        "configDigest": config_digest_value,
+    }
+    arrays["meta"] = np.frombuffer(json.dumps(meta).encode("utf-8"), dtype=np.uint8)
+    # Written beside the real name and moved into place, so a crash in the middle of a checkpoint
+    # cannot destroy the last good one -- the window it could be destroyed in is the exact window
+    # a checkpoint exists for.
+    staging = path.with_name(path.name + ".partial")
+    # A file object, not a path: numpy appends `.npz` to a name that does not end in it, so
+    # `savez_compressed("x.npz.partial")` writes `x.npz.partial.npz` and the move below then
+    # fails with the checkpoint already written to a name nobody looks at.
+    with open(staging, "wb") as handle:
+        np.savez_compressed(handle, **arrays)
+    staging.replace(path)
+    return _file_digest(path)
+
+
+def read_checkpoint(path) -> tuple[dict, dict]:
+    """Read a checkpoint back as (meta, arrays-of-weights)."""
+    with np.load(path, allow_pickle=False) as payload:
+        meta = json.loads(bytes(payload["meta"].tolist()).decode("utf-8"))
+        weights = {
+            key[len("w::"):]: payload[key].copy() for key in payload.files if key.startswith("w::")
+        }
+    if meta.get("format") != "aetheris-checkpoint/v1":
+        raise ValueError(f"{path} is not an aetheris training checkpoint")
+    return meta, weights
+
+
 def _file_digest(path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as handle:
@@ -216,6 +309,17 @@ def load_corpus_snapshot(path) -> tuple[str, str, dict]:
     against a teacher's own data even after the repository has moved on.
     """
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if payload.get("format") == "aetheris-corpus-manifest/v1":
+        # Written for a corpus too large to copy. The text is identified -- every file's sha256
+        # is here, and the sources are pinned -- but it is not carried, so this function, which
+        # hands back text, cannot serve it. Saying so is the point: returning an empty string
+        # would look like a corpus of zero bytes.
+        raise ValueError(
+            f"{path} records the corpus by digest, not by copy: it names every training and "
+            f"validation file with its sha256 and carries no text. Re-assemble the corpus from "
+            f"its sources and check it against that manifest, or use a run that wrote a full "
+            f"snapshot (train.py --snapshot-text full)."
+        )
     if payload.get("format") != "aetheris-corpus-snapshot/v1":
         raise ValueError(f"{path} is not an aetheris corpus snapshot")
     manifest = dict(payload["manifest"])
@@ -225,8 +329,26 @@ def load_corpus_snapshot(path) -> tuple[str, str, dict]:
 
 def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = "aetheris-lite-lm",
           overwrite: bool = False, expect_manifest_digest: str | None = None,
-          progress=None) -> TrainingReport:
+          progress=None, log=None, snapshot_text: bool = True,
+          checkpoint_every: int = 0, resume_from=None,
+          keep_checkpoint: bool = False) -> TrainingReport:
     """Run the pipeline and write the artifact, its report and a corpus snapshot.
+
+    `progress(step, total, loss)` is called once per training step. `log(message)` receives
+    free-form lines -- currently the vocabulary fit, which happens before step 1 -- and is
+    separate because a tokenizer that merges for a minute with a silent log looks like a hang.
+
+    `snapshot_text=True` writes the corpus into the run's record, which is what makes a run
+    replayable with no network and is the right default for this repository's own text. With
+    `snapshot_text=False` the record keeps the manifest -- every file, its size and its sha256 --
+    and no text, which is the only sane option for an assembled corpus of hundreds of megabytes:
+    a 168 MB copy in the run directory is not a record anyone keeps, and pretending to keep it
+    would put a field in the report naming a file that was thrown away.
+
+    `checkpoint_every > 0` writes the full training state every N steps, and `resume_from`
+    continues from such a file. Both exist because a long run on one machine is a run whose
+    interruption is a matter of when: without them an eighteen-hour run that dies at hour
+    seventeen has produced nothing, not even evidence of how far it got.
 
     `expect_manifest_digest` turns silent drift into a refusal. The model is trained on
     this repository's own text, so any added file changes the corpus and therefore the
@@ -250,8 +372,10 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
     # 1. Data validation: hash the corpus, split it so no document is on both sides.
     manifest = build_manifest(
         root,
+        extensions=config.extensions or DEFAULT_EXTENSIONS,
         validation_fraction=config.validation_fraction,
         split_seed=config.split_seed,
+        validation_sources=config.validation_sources,
     )
     if manifest.overlap():
         raise RuntimeError(f"the corpus split leaked files across both sides: {sorted(manifest.overlap())}")
@@ -267,9 +391,21 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
     train_text = read_corpus(root, manifest.train)
     validation_text = read_corpus(root, manifest.validation)
 
-    # 2. Tokenizer fitted on TRAINING text only, so validation characters cannot
-    #    influence the model's alphabet. The cost is measured, not assumed.
-    tokenizer = CharacterTokenizer.fit([train_text])
+    # 2. Tokenizer fitted on TRAINING text only, so validation text cannot influence the
+    #    model's vocabulary. The cost is measured, not assumed: for the character tokenizer
+    #    that measurement is an unknown-token rate, and for byte-level BPE it is zero by
+    #    construction because every byte is in the base alphabet.
+    if config.tokenizer_kind == "byte-bpe":
+        # `log` is free-form narration, not the per-step training callback: fitting a vocabulary
+        # happens once, before there is a step counter to report against.
+        tokenizer = ByteBPETokenizer.fit(
+            [train_text],
+            vocab_size=config.vocab_size,
+            sample_chars=config.tokenizer_sample_chars,
+            progress=log,
+        )
+    else:
+        tokenizer = CharacterTokenizer.fit([train_text])
     unknown_rate = tokenizer.unknown_rate(validation_text)
 
     train_ids = tokenizer.encode(train_text)
@@ -288,22 +424,79 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
     model = TransformerLM(model_config, seed=config.model_seed, dtype=dtype)
     optimizer = AdamW(config, {name: array.shape for name, array in model.params.items()})
 
+    resumed = None
     losses = []
-    for step, batch in enumerate(
-        make_batches(train_ids, batch_size=config.batch_size, seq_len=config.seq_len,
-                     seed=config.data_seed, steps=config.steps)
-    ):
+    prior_wall = 0.0          # wall time of the processes before this one, in seconds
+    training_accum = 0.0      # stepping time accumulated before this process
+    if resume_from is not None:
+        meta, weights = read_checkpoint(resume_from)
+        if meta["configDigest"] != config_digest(config):
+            raise RuntimeError(
+                f"the checkpoint at {resume_from} was written for a different configuration "
+                f"({meta['configDigest'][:12]} against {config_digest(config)[:12]}). Resuming it "
+                f"would train the model this command describes with the state of another one."
+            )
+        missing = set(model.params) ^ set(weights)
+        if missing:
+            raise RuntimeError(f"the checkpoint does not match the model's parameters: {sorted(missing)}")
+        for name, array in weights.items():
+            if array.shape != model.params[name].shape:
+                raise RuntimeError(f"checkpoint parameter {name} has shape {array.shape}, model has {model.params[name].shape}")
+            model.params[name] = array.astype(model.params[name].dtype)
+        with np.load(resume_from, allow_pickle=False) as payload:
+            optimizer.m = {key[len("m::"):]: payload[key].copy() for key in payload.files if key.startswith("m::")}
+            optimizer.v = {key[len("v::"):]: payload[key].copy() for key in payload.files if key.startswith("v::")}
+        optimizer.t = int(meta["optimizerSteps"])
+        losses = list(meta["losses"])
+        prior_wall = float(meta["totalWallSeconds"])
+        training_accum = float(meta["trainingSeconds"])
+        resumed = {"checkpoint": Path(resume_from).name, "step": int(meta["step"])}
+        if log is not None:
+            log(f"  resumed from {Path(resume_from).name} at step {meta['step']:,}; "
+                f"{config.steps - meta['step']:,} steps remain")
+        if meta["step"] >= config.steps:
+            raise RuntimeError(
+                f"the checkpoint is at step {meta['step']} and this run stops at {config.steps}; "
+                f"there is nothing to continue"
+            )
+
+    checkpoint_path = (
+        _checkpoint_path(output_dir, run_name, config_digest(config)) if checkpoint_every > 0 else None
+    )
+    checkpoint_dir = output_dir
+    checkpoint_meta = {"every": checkpoint_every, "writtenSteps": [], "retained": False} if checkpoint_path else None
+    segment_started = time.time()
+
+    stream = make_batches(train_ids, batch_size=config.batch_size, seq_len=config.seq_len,
+                          seed=config.data_seed, steps=config.steps)
+    start_step = resumed["step"] if resumed else 0
+    # The data stream is a seeded sequence of windows, so step k is reproducible by consuming the
+    # k batches before it rather than by guessing where in the corpus the run had reached.
+    for step, batch in enumerate(stream):
+        if step < start_step:
+            continue
         loss, grads = model.loss_and_grads(batch.inputs, batch.targets)
         clip_norm = optimizer.step(model.params, grads, config.learning_rate_at(step))
         losses.append({"step": step, "loss": loss, "lr": config.learning_rate_at(step), "gradNorm": clip_norm})
         if progress is not None and (step % max(1, config.steps // 10) == 0 or step == config.steps - 1):
             progress(step, config.steps, loss)
+        if checkpoint_path is not None and ((step + 1) % checkpoint_every == 0 or step == config.steps - 1):
+            write_checkpoint(
+                checkpoint_path, step=step + 1, losses=losses,
+                total_wall=prior_wall + (time.time() - started),
+                training_wall=training_accum + (time.time() - segment_started),
+                config_digest_value=config_digest(config), model=model, optimizer=optimizer,
+            )
+            checkpoint_meta["writtenSteps"].append(step + 1)
 
     evaluation = evaluate_model(
         model, validation_ids,
         vocab_size=tokenizer.size, train_ids=train_ids,
         seq_len=config.seq_len, batch_size=config.eval_batch_size,
         unknown_rate=unknown_rate,
+        # The validation text is in hand, so the character count comes from the text itself
+        # rather than from a per-token figure with `/ ln 2` quietly standing in for it.
+        characters_evaluated=len(validation_text),
     )
 
     from .evaluate import generate
@@ -333,9 +526,9 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
     # manifest digest alone does not help -- it proves the corpus changed, not what it
     # was. Storing the exact text makes a release reproducible indefinitely, and costs
     # about a megabyte in a directory that is already gitignored.
-    snapshot_path = output_dir / f"{run_name}-{in_memory_digest[:12]}.corpus.json"
-    snapshot_path.write_text(
-        json.dumps({
+    if snapshot_text:
+        snapshot_path = output_dir / f"{run_name}-{in_memory_digest[:12]}.corpus.json"
+        snapshot_payload = {
             "format": "aetheris-corpus-snapshot/v1",
             "manifest": manifest.to_dict(),
             # The digest is computed from the manifest rather than stored in it, so it
@@ -343,10 +536,35 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
             "manifestDigest": manifest.digest,
             "train": train_text,
             "validation": validation_text,
-        }),
+        }
+    else:
+        snapshot_path = output_dir / f"{run_name}-{in_memory_digest[:12]}.manifest.json"
+        snapshot_payload = {
+            "format": "aetheris-corpus-manifest/v1",
+            "manifest": manifest.to_dict(),
+            "manifestDigest": manifest.digest,
+            "note": (
+                "The corpus is identified here, not copied: every file is listed with its size and "
+                "its sha256, and each source is pinned to the commit it was fetched at. That is "
+                "enough to re-assemble the text and prove it is the same text. It is not enough to "
+                "train from this file alone, which is why the report says which of the two records "
+                "this run wrote."
+            ),
+        }
+    snapshot_path.write_text(json.dumps(snapshot_payload), encoding="utf-8")
+    snapshot_digest = _file_digest(snapshot_path)
+
+    # The vocabulary is written next to the weights. For the character tokenizer this file is
+    # a convenience -- the alphabet is derivable from the corpus snapshot -- but for a learned
+    # one it is load-bearing: the merge list is what turns ids back into text, and weights
+    # without it are a matrix of numbers with no meaning. Both kinds are written, so the loader
+    # has one shape to handle rather than two.
+    tokenizer_path = output_dir / f"{run_name}-{in_memory_digest[:12]}.tokenizer.json"
+    tokenizer_path.write_text(
+        json.dumps({"format": "aetheris-tokenizer/v1", **tokenizer.to_dict()}, sort_keys=True),
         encoding="utf-8",
     )
-    snapshot_digest = _file_digest(snapshot_path)
+    tokenizer_digest = _file_digest(tokenizer_path)
 
     report = TrainingReport(
         config=config.to_dict(),
@@ -361,11 +579,18 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
             "validationTokens": int(validation_ids.size),
         },
         tokenizer={
-            "kind": "character",
+            "kind": tokenizer.kind,
             "size": tokenizer.size,
             "vocabularyDigest": tokenizer.digest,
-            "characters": len(tokenizer.characters),
             "validationUnknownRate": unknown_rate,
+            # Which fields describe the vocabulary depends on the kind, and the report says
+            # which rather than filling both with zeros.
+            **({"characters": len(tokenizer.characters)} if tokenizer.kind == "character" else {
+                "merges": len(tokenizer.merges),
+                "sampleChars": config.tokenizer_sample_chars,
+            }),
+            "tokenizerFile": tokenizer_path.name,
+            "tokenizerFileDigest": tokenizer_digest,
         },
         provenance={
             "codeRevision": revision,
@@ -379,9 +604,23 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
                 "split": config.split_seed,
             },
             "parameterCount": model.parameter_count,
+            # Null for a run that trained in one sitting. Named with its step otherwise, so a
+            # card can say "trained in one process" or "resumed once at step 6,000" and be
+            # repeating the record rather than remembering.
+            "resumedFrom": resumed,
         },
+        checkpoints=(
+            {**checkpoint_meta, "path": checkpoint_path.name, "configDigest": config_digest(config)}
+            if checkpoint_meta is not None else None
+        ),
         resource={
-            "wallSeconds": round(time.time() - started, 3),
+            # `wallSeconds` is what the release gate measures and it means what it says: every
+            # second of every process that worked on this artifact. `trainingSeconds` is the part
+            # spent stepping, and the difference is the pipeline -- hashing the corpus,
+            # tokenising it, evaluating, sampling. A resumed run reports the sum of its segments
+            # rather than the age of the last one.
+            "wallSeconds": round(prior_wall + (time.time() - started), 3),
+            "trainingSeconds": round(training_accum + (time.time() - segment_started), 3),
             "peakMemoryMb": round(peak_memory_mb(), 1),
             "steps": config.steps,
             "tokensPerStep": config.batch_size * config.seq_len,
@@ -401,8 +640,22 @@ def train(config: TrainConfig, *, output_dir, corpus_root=None, run_name: str = 
             # after the repository has moved on.
             "corpusSnapshot": snapshot_path.name,
             "corpusSnapshotDigest": snapshot_digest,
+            "corpusSnapshotFormat": snapshot_payload["format"],
         },
     )
+    if checkpoint_path is not None and checkpoint_path.exists() and not keep_checkpoint:
+        # The checkpoint has done its job once the artifact and the report exist: it is the same
+        # weights plus optimizer state, and leaving it beside the release invites the mistake of
+        # loading it as the release. The report says it is gone rather than naming it.
+        #
+        # `keep_checkpoint=True` is for a run that intends to continue later -- continuing needs
+        # the Adam moments, which the artifact does not carry -- and for the test that has to
+        # stand in for a process that was killed, since a kill leaves this file and nothing else.
+        checkpoint_path.unlink()
+        checkpoint_meta["retained"] = False
+    elif checkpoint_path is not None:
+        checkpoint_meta["retained"] = True
+
     report_path = output_dir / f"{run_name}-{in_memory_digest[:12]}.report.json"
     report_path.write_text(json.dumps(report.to_dict(), indent=2, default=str), encoding="utf-8")
     return report

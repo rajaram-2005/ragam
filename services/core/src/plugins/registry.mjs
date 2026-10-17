@@ -17,6 +17,8 @@ import { randomUUID } from 'node:crypto'
 import { validateManifest, compareSemver, ELEVATED_SCOPES, SCOPES, PROTOCOLS, ManifestError } from './manifest.mjs'
 import { validateAgainstSchema } from '../mcp/schema.mjs'
 import { PluginSignatureError, SIGNATURE_STATE, canonicalJson, verifyManifest } from './signing.mjs'
+import { TRUST, provenanceOf } from '../mcp/authority.mjs'
+import { withTimeout } from '../shared/timeout.mjs'
 
 export const PLUGIN_STATES = Object.freeze({
   DISCOVERED: 'discovered',
@@ -472,7 +474,24 @@ export class PluginRegistry {
 
     try {
       const raw = handler
-        ? await withTimeout(handler(schemaResult.value, sandbox), capability.timeoutMs, `${pluginId}:${capabilityName}`, signal)
+        ? await withTimeout(
+          () => handler(schemaResult.value, sandbox),
+          {
+            timeoutMs: capability.timeoutMs,
+            label: `${pluginId}:${capabilityName}`,
+            signal,
+            onTimeout: () => {
+              const error = new Error(`plugin '${pluginId}:${capabilityName}' exceeded its ${capability.timeoutMs}ms timeout`)
+              error.code = 'plugin_timeout'
+              return error
+            },
+            onCancelled: () => {
+              const error = new Error(`plugin '${pluginId}:${capabilityName}' was cancelled`)
+              error.code = 'plugin_cancelled'
+              return error
+            },
+          },
+        )
         : await this.#protocolInvoke(record, capability, schemaResult.value, sandbox)
 
       // Output is untrusted until schema-checked (§10).
@@ -489,6 +508,10 @@ export class PluginRegistry {
 
       record.invocations += 1
       record.lastInvokedAt = Date.now()
+      // A plugin's output is data for the same reason a tool's is, and it gets the same label
+      // from the same function, so the authority boundary cannot be bypassed by calling a
+      // plugin instead of a tool.
+      const provenance = provenanceOf(outputCheck.value, { kind: TRUST.TOOL_OUTPUT, origin: `plugin:${pluginId}:${capabilityName}` })
       const result = {
         ok: true,
         invocationId,
@@ -497,12 +520,16 @@ export class PluginRegistry {
         version: record.version,
         protocol: record.manifest.protocol,
         // Consumers must treat this as untrusted data, not as instructions.
-        untrusted: true,
+        untrusted: provenance.untrusted,
+        provenance,
         output: outputCheck.value,
         scopesUsed: capability.requiredScopes,
         durationMs: Date.now() - startedAt,
       }
-      this.#audit(`invoke:${capabilityName}`, 'success', { pluginId, invocationId, durationMs: result.durationMs, scopes: capability.requiredScopes }, subject ?? pluginId)
+      this.#audit(`invoke:${capabilityName}`, 'success', {
+        pluginId, invocationId, durationMs: result.durationMs, scopes: capability.requiredScopes,
+        instructionShaped: provenance.instruction.instructionShaped,
+      }, subject ?? pluginId)
       this.onEvent({ type: 'plugin_invoked', ...result, output: undefined })
       return result
     } catch (error) {
@@ -568,37 +595,6 @@ export class PluginRegistry {
       lastInvokedAt: record.lastInvokedAt,
       history: record.history.slice(-20),
     }
-  }
-}
-
-async function withTimeout(promise, timeoutMs, label, signal) {
-  let timer
-  try {
-    return await Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        timer = setTimeout(() => {
-          const error = new Error(`plugin '${label}' exceeded its ${timeoutMs}ms timeout`)
-          error.code = 'plugin_timeout'
-          reject(error)
-        }, timeoutMs)
-      }),
-      new Promise((_, reject) => {
-        if (!signal) return
-        if (signal.aborted) return reject(new Error(`plugin '${label}' was cancelled`))
-        signal.addEventListener(
-          'abort',
-          () => {
-            const error = new Error(`plugin '${label}' was cancelled`)
-            error.code = 'plugin_cancelled'
-            reject(error)
-          },
-          { once: true },
-        )
-      }),
-    ])
-  } finally {
-    clearTimeout(timer)
   }
 }
 

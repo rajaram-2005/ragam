@@ -1,0 +1,159 @@
+{
+  "corpusExtensions": [
+    ".py",
+    ".pyi",
+    ".md",
+    ".rst",
+    ".txt",
+    ".js",
+    ".json"
+  ],
+  "format": "klyvaron-corpus-sources/v1",
+  "licencesAllowed": [
+    "Apache-2.0",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "CC-BY-4.0"
+  ],
+  "note": "Each source is pinned to the commit whose licence was read, and the licence was read from that commit rather than from the default branch. A refused source contributed no bytes. The repository's own text is added to the corpus separately, by revision, and its manifest digest is recorded with the run.",
+  "purpose": "The licence-checked public sources an assembled corpus is built from.",
+  "refused": [
+    {
+      "error": "numpy/numpy@8bc1008e18a7 carries NOASSERTION, which is not on the allowlist; nothing was written",
+      "repo": "numpy/numpy"
+    }
+  ],
+  "sources": [
+    {
+      "bytes": 3018919,
+      "capBytes": 3000000,
+      "capped": true,
+      "commit": "e616bdc9863fa92588b389f7ff5ba0dc3a5dda6e",
+      "expectedLicence": "first-party",
+      "extensions": [
+        ".md",
+        ".mjs",
+        ".js",
+        ".jsx",
+        ".py",
+        ".json",
+        ".css",
+        ".html",
+        ".sh",
+        ".yml"
+      ],
+      "files": 193,
+      "licence": "first-party",
+      "repo": "rajaram-2005/ragam",
+      "why": "This repository's own text: the one corpus source whose right to be trained on is not in question."
+    },
+    {
+      "bytes": 1122261,
+      "capBytes": 2000000,
+      "capped": false,
+      "commit": "d086db856be187255b8ec61ef409357393020f32",
+      "expectedLicence": "BSD-3-Clause",
+      "extensions": [
+        ".py",
+        ".md",
+        ".rst",
+        ".txt"
+      ],
+      "files": 175,
+      "licence": "BSD-3-Clause",
+      "licencePath": "LICENSE.txt",
+      "repo": "pallets/flask",
+      "why": "A small, readable application framework: BSD-3-Clause, and small enough to be read in full."
+    },
+    {
+      "bytes": 685068,
+      "capBytes": 2000000,
+      "capped": false,
+      "commit": "a419aa7350389a275ab45fde2e849ed1f02449ef",
+      "expectedLicence": "MIT",
+      "extensions": [
+        ".js",
+        ".md",
+        ".json"
+      ],
+      "files": 146,
+      "licence": "MIT",
+      "licencePath": "LICENSE",
+      "repo": "expressjs/express",
+      "why": "A second language and a second licence shape (MIT), so the corpus is not one project's idiom."
+    },
+    {
+      "bytes": 592727,
+      "capBytes": 1500000,
+      "capped": false,
+      "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+      "expectedLicence": "Apache-2.0",
+      "extensions": [
+        ".py",
+        ".md",
+        ".rst",
+        ".txt"
+      ],
+      "files": 67,
+      "licence": "Apache-2.0",
+      "licencePath": "LICENSE",
+      "repo": "psf/requests",
+      "why": "Apache-2.0 is the licence the composed path would have allowed; the corpus allowlist is the same list, so the two paths agree about what may be used."
+    },
+    {
+      "bytes": 4042569,
+      "capBytes": 4000000,
+      "capped": true,
+      "commit": "257e87406c6a8be277cb8cd5ef8d7b458a650390",
+      "expectedLicence": "Apache-2.0",
+      "extensions": [
+        ".ts",
+        ".md"
+      ],
+      "files": 230,
+      "licence": "Apache-2.0",
+      "licencePath": "LICENSE.txt",
+      "repo": "microsoft/TypeScript",
+      "why": "A second language at real scale, capped: TypeScript is large, and a corpus that swallows a repository whole stops being a decision."
+    },
+    {
+      "bytes": 2885129,
+      "capBytes": 2000000,
+      "capped": true,
+      "commit": "c9c19f8e62c12834ad83193a1869cc82fe9c700e",
+      "expectedLicence": "MIT",
+      "extensions": [
+        ".py",
+        ".md",
+        ".rst",
+        ".txt"
+      ],
+      "files": 390,
+      "licence": "MIT",
+      "licencePath": "LICENSE",
+      "repo": "pytest-dev/pytest",
+      "why": "MIT again, and test code: a different register from library code, which is most of what the other sources contribute."
+    },
+    {
+      "bytes": 1304946,
+      "capBytes": 1500000,
+      "capped": false,
+      "commit": "2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+      "expectedLicence": "BSD-3-Clause",
+      "extensions": [
+        ".py",
+        ".md",
+        ".rst",
+        ".txt"
+      ],
+      "files": 129,
+      "licence": "BSD-3-Clause",
+      "licencePath": "LICENSE.txt",
+      "repo": "pallets/click",
+      "why": "Documentation-heavy Python: mostly prose, which balances source code in the corpus."
+    }
+  ],
+  "totalBytes": 13651619
+}

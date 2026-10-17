@@ -1,17 +1,21 @@
 // Online gateway transport. No redirect, retry or alternate-model fallback.
 //
-// Every runtime here speaks the same OpenAI-compatible wire protocol, `GET {base}/models`
-// and `POST {base}/chat/completions` (with SSE when streaming). LiteLLM was the first
-// gateway the online entry supported. Ollama and llama.cpp's `llama-server` both expose the same
-// `/v1` routes, so they reach the online entry through this one transport. That keeps
-// their traffic under the same deadline, size limits, cancellation, redirect refusal and
-// destination checks, instead of a second network path with weaker guarantees.
+// The transport owns the properties every provider must have: the deadline, size bounds, DNS and
+// private-address filtering, redirect refusal, cancellation, and one request per call. The *shape*
+// of a request belongs to a wire adapter (`providers/wires/*.mjs`): OpenAI-compatible
+// `/chat/completions`, Anthropic `/messages`, Gemini `:generateContent`. Adding a wire must not add
+// a second network path with weaker guarantees, so all three go through `request()` below.
 import http from 'node:http'
 import https from 'node:https'
 import { lookup } from 'node:dns'
 import { isIP, BlockList } from 'node:net'
+import { IMPLEMENTED_WIRES, PROVIDER_STATUS, providerById } from '../providers/catalog.mjs'
+import { wireFor } from '../providers/wires/index.mjs'
+import { failure } from './failure.mjs'
 
-export function failure(code, message, status = 400) { return Object.assign(new Error(message), { code, status }) }
+// Re-exported because every existing caller imports it from here; the definition moved so the wire
+// adapters can throw a coded failure without importing this module (and this module imports them).
+export { failure }
 
 /**
  * The runtimes Provider Settings can point at.
@@ -23,16 +27,51 @@ export function failure(code, message, status = 400) { return Object.assign(new 
  * configured endpoint, and the UI and ledger say so.
  */
 export const RUNTIMES = Object.freeze({
-  litellm: Object.freeze({ id: 'litellm', label: 'LiteLLM', keyRequired: true }),
-  ollama: Object.freeze({ id: 'ollama', label: 'Ollama', keyRequired: false }),
-  llamacpp: Object.freeze({ id: 'llamacpp', label: 'llama.cpp server', keyRequired: false }),
+  litellm: Object.freeze({ id: 'litellm', label: 'LiteLLM', keyRequired: true, credential: 'api_key' }),
+  ollama: Object.freeze({ id: 'ollama', label: 'Ollama', keyRequired: false, credential: 'api_key' }),
+  llamacpp: Object.freeze({ id: 'llamacpp', label: 'llama.cpp server', keyRequired: false, credential: 'api_key' }),
 })
 
-/** The runtime record for a kind. Unknown kinds are refused, never mapped to a default. */
+/**
+ * The runtime record for a connection id.
+ *
+ * Three sources, in order: the three runtimes this build has always shipped, the catalogue (a
+ * vendor whose wire format this transport speaks), and a named custom endpoint. Everything else is
+ * refused — and a catalogue entry that is `pending`, or whose wire this transport cannot speak, is
+ * refused with the code that says why rather than being treated as unknown.
+ *
+ * `keyRequired` is the only behavioural difference. Cloud vendors need a key; local servers
+ * usually do not, and a key is sent only if one was stored.
+ */
+const KEYLESS = Object.freeze(new Set(['ollama', 'llamacpp', 'vllm', 'localai', 'custom']))
 export function runtimeFor(kind = 'litellm') {
-  const runtime = Object.hasOwn(RUNTIMES, kind) ? RUNTIMES[kind] : null
-  if (!runtime) throw failure('invalid_runtime', 'Choose LiteLLM, Ollama or llama.cpp server.', 400)
-  return runtime
+  if (typeof kind !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(kind)) {
+    throw failure('invalid_runtime', 'Connection ids are lower-case words separated by single hyphens.', 400)
+  }
+  if (Object.hasOwn(RUNTIMES, kind)) {
+    const runtime = RUNTIMES[kind]
+    return { ...runtime, wire: 'openai_chat' }
+  }
+  if (keylessCustom(kind)) {
+    return { id: kind, label: 'Custom OpenAI-compatible endpoint', keyRequired: false, wire: 'openai_chat', credential: 'api_key' }
+  }
+  let provider
+  try {
+    provider = providerById(kind)
+  } catch {
+    throw failure('invalid_runtime', 'Choose a provider from the catalogue or a custom endpoint.', 400)
+  }
+  if (provider.status === PROVIDER_STATUS.PENDING) {
+    throw failure('adapter_pending', `${provider.label} has no adapter in this build.`, 400)
+  }
+  if (!IMPLEMENTED_WIRES.includes(provider.wire)) {
+    throw failure('wire_not_implemented', `${provider.label} needs a wire format this build does not implement.`, 400)
+  }
+  return { id: provider.id, label: provider.label, keyRequired: !KEYLESS.has(kind), wire: provider.wire, credential: provider.credential }
+}
+/** `custom` or `custom-<name>`: a user-named OpenAI-compatible endpoint. */
+function keylessCustom(kind) {
+  return kind === 'custom' || /^custom-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(kind)
 }
 const blocked = new BlockList(), blocked6 = new BlockList()
 for (const [address, prefix] of [['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],['172.16.0.0',12],['192.0.0.0',24],['192.168.0.0',16],['198.18.0.0',15],['224.0.0.0',4],['240.0.0.0',4]]) blocked.addSubnet(address, prefix, 'ipv4')
@@ -53,12 +92,18 @@ export function gatewayUrl(value, trustedOrigins = []) {
 
 export class OnlineGateway {
   constructor({ trustedOrigins = [], timeoutMs = 120_000, maxBytes = 2 * 1024 * 1024 } = {}) { Object.assign(this, { trustedOrigins, timeoutMs, maxBytes }) }
-  async request(config, path, { body, signal, onFrame } = {}) {
-    const runtime = runtimeFor(config.kind ?? 'litellm'), label = runtime.label
+  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, binary = false } = {}) {
+    const runtime = runtimeFor(config.kind ?? config.id ?? 'litellm'), label = runtime.label
     const base = gatewayUrl(config.baseUrl, this.trustedOrigins)
     const url = new URL(`${base}${path}`)
     const trusted = this.trustedOrigins.includes(url.origin)
-    const payload = body === undefined ? null : JSON.stringify(body)
+    // A wire that signs its request must sign the exact bytes that are sent, so a body may be
+    // supplied already serialised. The default stays JSON, and `contentType` exists because a
+    // token exchange is form-encoded; neither changes what existing callers send.
+    const payload = body === undefined ? null : typeof body === 'string' ? body : JSON.stringify(body)
+    // A text completion and a generated image do not have the same sensible ceiling. The default
+    // stays for chat; a media wire may raise it for one call, and the media decoder bounds again.
+    const responseLimit = Math.max(this.maxBytes, Number(maxResponseBytes) || 0)
     if (payload && Buffer.byteLength(payload) > this.maxBytes) throw failure('payload_too_large', 'Assembled request is too large.', 413)
     if (runtime.keyRequired && !config.apiKey) throw failure('provider_not_configured', `Configure a ${label} key in Provider Settings.`, 503)
     if (signal?.aborted) throw failure('cancelled', 'Request cancelled.', 499)
@@ -79,7 +124,13 @@ export class OnlineGateway {
       })
       req = (url.protocol === 'https:' ? https : http).request(url, {
         method: payload ? 'POST' : 'GET', lookup: safeLookup,
-        headers: { ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}), accept: onFrame ? 'text/event-stream' : 'application/json', ...(payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {}) },
+        headers: {
+          // A wire adapter supplies its own credential header. The default is the OpenAI shape,
+          // kept for callers that predate the adapters; an adapter never mixes the two.
+          ...(headers ?? (config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {})),
+          accept: binary ? '*/*' : onFrame ? 'text/event-stream' : 'application/json',
+          ...(payload ? { 'content-type': contentType ?? 'application/json', 'content-length': Buffer.byteLength(payload) } : {}),
+        },
       }, (res) => {
         response = res
         if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -88,11 +139,16 @@ export class OnlineGateway {
         }
         if (onFrame && !String(res.headers['content-type']).includes('text/event-stream')) return done(failure('invalid_stream', 'Gateway did not return a streaming response.', 502))
         let text = '', size = 0, streamDone = false
-        res.setEncoding('utf8')
+        // A generated video is bytes, not a JSON document. Decoding it as UTF-8 and parsing it
+        // would corrupt the artifact, so binary responses are accumulated as Buffers and the
+        // caller validates the container itself.
+        const chunks = []
+        if (!binary) res.setEncoding('utf8')
         res.on('data', (chunk) => {
           if (finished) return
-          size += Buffer.byteLength(chunk)
-          if (size > this.maxBytes) return done(failure('provider_response_too_large', 'Gateway response exceeds the configured limit.', 502))
+          size += binary ? chunk.length : Buffer.byteLength(chunk)
+          if (size > responseLimit) return done(failure('provider_response_too_large', 'Gateway response exceeds the configured limit.', 502))
+          if (binary) { chunks.push(chunk); return }
           text += chunk
           if (!onFrame) return
           // Handle CRLF even when a CR and LF arrive in separate chunks.
@@ -106,7 +162,9 @@ export class OnlineGateway {
             if (streamDone) return done(failure('invalid_stream', 'Unexpected content after stream completion.', 502))
             try {
               const parsed = JSON.parse(data)
-              if (parsed.error) throw Error('upstream error')
+              // Anthropic reports a mid-stream failure as an `error` event with a type field;
+              // OpenAI reports `{ error }`. Either is a failed stream, never a short answer.
+              if (parsed.error || parsed.type === 'error') throw Error('upstream error')
               onFrame(parsed)
             } catch { return done(failure('invalid_stream', 'Gateway returned an invalid or failed stream.', 502)) }
           }
@@ -114,7 +172,11 @@ export class OnlineGateway {
         res.on('aborted', () => done(failure('provider_interrupted', 'Gateway response was interrupted.', 502)))
         res.on('error', () => done(failure('provider_interrupted', 'Gateway response failed.', 502)))
         res.on('end', () => {
-          if (onFrame) return streamDone ? done(null, null) : done(failure('provider_interrupted', 'Gateway stream ended without completion.', 502))
+          // Only the OpenAI wire has a `[DONE]` sentinel. A wire without one ends when the body
+          // ends, and its adapter is responsible for asserting that the protocol's own completion
+          // event arrived (Anthropic's `message_stop`, Gemini's final candidate).
+          if (onFrame) return streamDone || doneOnEnd ? done(null, null) : done(failure('provider_interrupted', 'Gateway stream ended without completion.', 502))
+          if (binary) return done(null, { bytes: Buffer.concat(chunks), contentType: String(res.headers['content-type'] ?? '') })
           try { done(null, JSON.parse(text)) } catch { done(failure('invalid_response', 'Gateway returned invalid JSON.', 502)) }
         })
       })
@@ -125,9 +187,9 @@ export class OnlineGateway {
       req.end(payload)
     })
   }
+  /** Model listing is a property of the wire, not of the transport: each adapter parses its own. */
   async models(config) {
-    const data = await this.request(config, '/models')
-    if (!Array.isArray(data.data) || data.data.length > 500) throw failure('invalid_model_list', 'Gateway must return at most 500 model records.', 502)
-    return [...new Set(data.data.map((entry) => entry?.id).filter((id) => typeof id === 'string' && id.length > 0 && id.length <= 240 && !/[\x00-\x1f\x7f]/.test(id)))].sort()
+    const wire = config.wire ?? runtimeFor(config.kind ?? config.id ?? 'litellm').wire
+    return wireFor(wire).models(this.request.bind(this), config)
   }
 }

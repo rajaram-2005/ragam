@@ -24,9 +24,11 @@ is not automatically granted a family release label.
 
 | Tier | Hardware | Status | Capabilities available | Backing artifact |
 |---|---|---|---|---|
-| **Klyvaron Lite** | CPU-only computers and supported phones | **Partial** | 2 of 11 | `aetheris-lite-lm-0.1.0` |
-| **Klyvaron Pro** | GPU-qualified laptops and desktops | **Unbuilt** | 0 of 11 | none |
-| **Klyvaron Max** | Qualified high-performance GPU computers | **Unbuilt** | 0 of 9 | none |
+| **Klyvaron Lite** | CPU-only computers and supported phones | **Partial** | 2 of 13 | `aetheris-lite-lm-0.1.1` |
+| **Klyvaron Pro** | GPU-qualified laptops and desktops | **Unbuilt** | 0 of 13 | none |
+| **Klyvaron Max** | Qualified high-performance GPU computers | **Unbuilt** | 0 of 11 | none |
+
+The two capabilities that were added to each tier are the ones this family exists for: knowing what is current (`trend.awareness`) and understanding what the user expressed across a session (`affect.history`). They are defined, refused and gated — see [22 — The family's purpose](22-klyvaron-differentiation.md) — and they are `unavailable` on every tier, because a mechanism is not a model artifact. They are also **parts of the model** now: `age_buckets` and the `verdict_head` for the present, `state_emb` and the `state_head` for the person, trained in the same loss as next-token prediction ([24 §6](24-own-models.md)), with a measured prototype and no artifact yet.
 
 The status column is a value in `services/core/src/klyvaron/tiers.mjs`, not prose. Pro
 and Max are recorded as **unbuilt** rather than omitted, because an omitted capability
@@ -200,6 +202,12 @@ each tier from its record in `tiers.mjs`. It asks the same seven questions of ev
 | Capability coverage | every capability the directive names is available |
 | Storage target | the primary artifact fits the 1.5 GB mobile budget (mobile tiers only) |
 | Hardware qualification | the record shows qualification on the target hardware class |
+| Differentiation stance | the family records that it does not compete, and what comparisons it allows instead |
+| Trend awareness | an artifact backs `trend.awareness`, with dated-and-sourced held-out scores |
+| Affect history | an artifact backs `affect.history`, evaluated on abstention and consent as well as accuracy |
+| Modality separation | image and video each have an artifact of their own; a text artifact is never relabelled |
+| Own weights | an artifact of this family was trained from random initialisation here and released with a model card; a composed tier can never satisfy it |
+| Accelerated runtime | a confirmed accelerator has been measured running the tier |
 
 A gate is derived, never declared. A capability counts only when it is `available` **and** backed,
 so a bare `available` label leaves the gates open, exactly as the validator refuses it.
@@ -211,12 +219,33 @@ silently open.
 node services/core/scripts/klyvaron.mjs plan
 ```
 
-At this commit Lite meets four of seven gates: it has an artifact, provenance and measurements, and
-it fits the storage target. It stays open on chat, on coverage (2 of 11 capabilities) and on
-hardware. Pro and Max meet none. Nothing here trains a model. Building Pro or Max needs base weights
-and a GPU-qualified host that this sandbox does not have. Lite chat needs an instruction-tuned
-model, which is a training task with its own measured release gate. The plan is the list of what
-must be true first.
+At this commit Lite meets six of thirteen gates: it has an artifact, provenance and measurements,
+it fits the storage target, the stance is recorded, and its weights are this family's own — trained
+from random initialisation and released with a card. It stays open on chat, on coverage (2 of 13
+capabilities), on hardware, on both differentiators and on modality separation. Pro and Max meet
+only the stance gate, which needs no artifact because it is a recorded decision rather than a
+capability. Both are **this family's own models**, presets of `aetheris-core-v1` trained from random
+initialisation, and `own_weights` stays open until weights exist and are released
+([24](24-own-models.md)). The composed path — a pinned third-party base under the tier's name — was
+considered and refused, and the refusal is a checked rule rather than a paragraph
+([23](23-training-free-tiers.md)).
+
+A **second artifact of this family exists**: `klyvaron-mini-lm@0.1.0`, the `mini` preset of the same
+`aetheris-core-v1` architecture — **1,421,952 parameters**, trained from random initialisation on
+this host on the assembled corpus (this repository's own text plus the licence-checked public sources
+in [24 §4](24-own-models.md)), with the evaluation held out **by source** rather than by document:
+two whole Python projects, 1,907,072 characters the model never trained on, **perplexity 4.7342
+against a bigram baseline of 15.8644**. It took 8,456 s on two cores, and the release gate recorded
+**one soft failure — the wall-clock target of 3,600 s — rather than waiving it**. `mini` carries no
+tier label: it is the size this machine can train in a single sitting of a few hours, and what it is
+for is making the pipeline real — corpus, tokenizer, trainer, release gate and card — rather than
+described. It does not move Pro or Max, which stay unbuilt with the steps that need compute
+this host does not have. Its differentiator parts are off, because labelling a general corpus with
+evidence ages and expressed states is a mechanism that does not exist yet; the parts are
+implemented and separately measured ([24 §7](24-own-models.md)). Nothing here trains a model: building Pro or Max needs the corpus,
+the accelerated trainer backend and the compute that [24](24-own-models.md) lists as open. Lite chat
+needs an instruction-tuned model, which is a training task with its own measured release gate. The
+plan is the list of what must be true first.
 
 The path to a Pro or Max training run is written down in [21 — Remote training](21-remote-training.md):
 remote compute only, a pinned third-party base, checkpoints on persistent storage and an acceptance gate.

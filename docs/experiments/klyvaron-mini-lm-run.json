@@ -1,0 +1,99 @@
+{
+  "format": "klyvaron-run-record/v1",
+  "run": "klyvaron-mini-lm",
+  "modelId": "klyvaron-mini-lm@0.1.0",
+  "why": "The second artifact of the aetheris-core-v1 architecture, and the first trained on an assembled corpus rather than on this repository's text alone. Recorded here so the preset in services/core/src/klyvaron/architecture.mjs can be checked against the run instead of asserted.",
+  "command": "python3 -u services/fabric/scripts/train_lm.py --corpus-root artifacts/corpus --extensions .py,.pyi,.md,.rst,.txt,.js,.json,.ts --validation-sources pallets__click,psf__requests --run-name klyvaron-mini-lm --d-model 192 --n-layers 3 --n-heads 4 --d-ff 768 --seq-len 128 --batch-size 16 --steps 4000 --warmup-steps 200 --output-dir artifacts --json artifacts/klyvaron-mini-lm.report.json",
+  "corpus": {
+    "root": "artifacts/corpus",
+    "manifestDigest": "f8dfef6fc61458cffd7a5c3e0db526a6212366de68a3f7ade95dfa0e70eb3ed7",
+    "trainBytes": 9867102,
+    "trainFiles": 1010,
+    "validationBytes": 1897673,
+    "validationFiles": 196,
+    "heldOutSources": [
+      "pallets__click",
+      "psf__requests"
+    ],
+    "sourcesRecord": "docs/experiments/corpus-sources.json"
+  },
+  "tokenizer": {
+    "kind": "character",
+    "size": 352,
+    "vocabularyDigest": "a8c0642bc24412a9bc3b93c13973c5ced462c2d44883d1949471f36cb393b24a",
+    "fittedOn": "the training split only"
+  },
+  "modelConfig": {
+    "vocab_size": 352,
+    "d_model": 192,
+    "n_layers": 3,
+    "n_heads": 4,
+    "d_ff": 768,
+    "seq_len": 128,
+    "dropout": 0.0,
+    "tie_embeddings": true,
+    "init_scale": 0.02,
+    "layernorm_eps": 1e-05,
+    "age_buckets": 0,
+    "state_classes": 0,
+    "verdict_head": false,
+    "state_head": false
+  },
+  "outcome": {
+    "status": "released",
+    "verdict": "RELEASED by the family's own gate: 0 hard failures, 1 soft failure (wallSeconds 8456.326 against a 3600 s soft target, recorded on the card rather than waived)",
+    "report": "artifacts/klyvaron-mini-lm.report.json",
+    "card": "docs/model-cards/klyvaron-mini-lm-0.1.0.json",
+    "steps": 4000,
+    "loss": {
+      "first": 5.755072116851807,
+      "final": 0.8157141804695129,
+      "improvement": 4.939357936382294
+    },
+    "evaluation": {
+      "perplexity": 4.734185493904311,
+      "nllNatsPerToken": 1.5548096936583895,
+      "bitsPerCharacter": 2.243116234567047,
+      "tokensEvaluated": 1907072,
+      "unknownRate": 7.026069338915039e-05,
+      "bestBaseline": "bigram",
+      "bestBaselinePerplexity": 15.864375458445664,
+      "perplexityVsBigram": 0.2984161277766525,
+      "beatsAllBaselines": true
+    },
+    "artifact": {
+      "filename": "klyvaron-mini-lm-eaca87db5700.npz",
+      "bytes": 5696206,
+      "weightsDigest": "eaca87db5700b9ee99d162e650b23478bd9a57715e349dee0fb18a4dc3fda116",
+      "fileDigest": "c0acb52b3efb64593360288997b3929c2a332810faa6de6c316e99097cee8237",
+      "corpusSnapshot": "klyvaron-mini-lm-eaca87db5700.corpus.json",
+      "corpusSnapshotDigest": "8867227977aba3cc49f90eb6ef2a887d73c114fd71fe97d259ffe5bcfdc0538f"
+    },
+    "resource": {
+      "wallSeconds": 8456.326,
+      "peakMemoryMb": 419.2,
+      "steps": 4000,
+      "tokensPerStep": 2048,
+      "tokensSeen": 8192000
+    },
+    "revision": "e616bdc9863fa92588b389f7ff5ba0dc3a5dda6e-dirty",
+    "note": "Every number here was read out of the run's own report; none of them was typed before the run finished. The report is gitignored (it embeds the weights digest and the full per-file corpus manifest) and is reproduced by the command above."
+  },
+  "parameterCount": 1421952,
+  "sizing": {
+    "measuredSecondsPerStep": 1.89,
+    "measuredAt": "2026-10-15, this host, 2 CPU cores, measured from the run's own log rather than from a scaled estimate. Step 1 printed at 16:55:36, step 401 at 17:22:27 (1,611 s for 400 steps, 4.03 s/step -- this interval had this repository's test suites and some profiling running beside it), step 801 at 17:35:04 (757 s for the next 400 steps, 1.89 s/step, which is what the run does when it has the machine mostly to itself). An earlier 0.70 s/step figure here was scaled from a 20-step measurement at d160 and was wrong by a factor of three.",
+    "projected": "3,200 steps remaining at about 1.9 s/step is about 1.7 h, plus about 270 s of fixed cost (tokenizer, baselines, full held-out evaluation): the run finishes around 19:20 on the day it started.",
+    "why": "The size is what a single sitting on this machine can train to a demonstrated loss, and it is small enough that the whole recipe -- corpus, tokenizer, config, training, evaluation, release -- completes in one go rather than being planned."
+  },
+  "retention": {
+    "artifactBytesRetained": false,
+    "observed": "The run wrote its weights, report and corpus snapshot into artifacts/ and hashed them there -- the filename, byte count and digests in `outcome.artifact` were read off the files that existed at 19:16 on 2026-10-15. That directory is gitignored by policy (weights are referenced by digest, never redistributed through Git), and it is not carried by this workspace's snapshots either: on 2026-10-16 `artifacts/` is absent, and `find / -name 'klyvaron-mini-lm*'` returns only the three records in docs/.",
+    "consequence": "The digests are therefore the whole of what remains of the run's output. The command above rebuilds an artifact of this kind in about 2.4 h; it does not rebuild these bytes, and after the fix described in `provenanceNote` it would not even rebuild this corpus -- see below."
+  },
+  "provenanceNote": {
+    "corpusIsNotReplayable": true,
+    "why": "`scripts/assemble_corpus.py` copies this repository's own text off the working tree while recording only `git rev-parse HEAD`, and truncates each source at a byte cap in sorted-path order. The tree it read on 2026-10-15 had 45 uncommitted paths in it, so the revision it recorded (`e616bdc9863fa92588b389f7ff5ba0dc3a5dda6e`) does not describe the bytes that were copied, and the cap makes the file set depend on the tree's shape at that moment. The manifest digest f8dfef6f is a record of what was read, not a recipe.",
+    "fixed": "The assembler now records `clean` and a `treeDigest` over the path and content of every file copied, and marks the revision `-dirty` when the tree does not match it -- the same suffix `train.code_revision()` has always written for the code revision. `services/fabric/tests/test_corpus_assembly.py` covers both, including that the two definitions agree. This record's own `corpus.sourcesRecord` predates the fix, so its first-party entry names the commit without that suffix."
+  }
+}

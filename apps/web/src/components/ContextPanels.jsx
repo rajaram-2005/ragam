@@ -614,3 +614,121 @@ export function HistoryPanel({ sessionId }) {
     </Panel>
   )
 }
+
+/**
+ * Reviewed procedures, selected for one message.
+ *
+ * A skill is text, not a tool: the server sends the procedure as reference material and refuses
+ * one that declares file or network access, because this product has no executor to grant it.
+ * Validation here is structural review; the panel says so rather than implying a measured gain.
+ */
+export function SkillsPanel({ value, onChange, account, model, provider }) {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState('')
+  const [form, setForm] = useState({ name: '', description: '', whenToUse: '', steps: '', verification: '' })
+  const [detail, setDetail] = useState(null)
+  const [measureForm, setMeasureForm] = useState({ baselineVersion: '', candidateVersion: '', prompt: '', mustInclude: '' })
+  const [measureResult, setMeasureResult] = useState(null)
+
+  const load = useCallback(async () => {
+    try { setData(await api.skills()); setError(null) } catch (e) { setError(e) }
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const usable = (data?.skills ?? []).filter((skill) => skill.loadable && skill.state === 'validated'
+    && (skill.permissions?.fsRead ?? []).length === 0 && (skill.permissions?.fsWrite ?? []).length === 0 && skill.permissions?.network !== true)
+
+  const act = async (label, work) => {
+    setBusy(label); setError(null)
+    try { await work(); await load() } catch (e) { setError(e) } finally { setBusy('') }
+  }
+
+  const install = async (event) => {
+    event.preventDefault()
+    await act('install', async () => {
+      await api.installSkill({
+        name: form.name.trim(),
+        description: form.description.trim(),
+        whenToUse: form.whenToUse.trim(),
+        steps: form.steps.split('\n').map((line) => line.trim()).filter(Boolean),
+        verification: form.verification.trim(),
+      })
+      setForm({ name: '', description: '', whenToUse: '', steps: '', verification: '' })
+    })
+  }
+
+  return <div className="stack">
+    <Banner tone="info" title="A procedure is reference text, not code">
+      <p>Selecting one adds its reviewed steps to this message as reference material. Nothing in it runs, no permission is granted, and using it is not training. Validation is a structural review of the document and its scope, not a measured improvement.</p>
+    </Banner>
+    {error ? <ErrorNote error={error} /> : null}
+    {!data ? <p className="small">Loading procedures…</p> : null}
+    {data && !usable.length ? <EmptyState title="No validated procedure is available"><span className="small">An owner can install one below. A candidate cannot be selected until it passes its review.</span></EmptyState> : null}
+    {usable.length ? <div className="stack">
+      <label className="checkbox"><input type="radio" name="skill" checked={!value} onChange={() => onChange('')} />No procedure</label>
+      {usable.map((skill) => <label className="checkbox" key={skill.name}>
+        <input type="radio" name="skill" checked={value === skill.name} onChange={() => onChange(skill.name)} />
+        <span><strong>{skill.name}</strong> v{skill.version} — {skill.description} <span className="muted small">({skill.procedureSteps} steps, structural review)</span></span>
+      </label>)}
+    </div> : null}
+
+    {account?.role === 'owner' ? <details>
+      <summary>Install or review procedures</summary>
+      <form onSubmit={install} className="stack">
+        <Field label="Name" hint="Lowercase words separated by hyphens."><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={63} /></Field>
+        <Field label="One-sentence description"><input className="input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required maxLength={200} /></Field>
+        <Field label="When to use it"><textarea className="textarea" rows={2} value={form.whenToUse} onChange={(e) => setForm({ ...form, whenToUse: e.target.value })} required maxLength={2000} /></Field>
+        <Field label="Procedure steps" hint="One step per line. Two to twenty steps."><textarea className="textarea" rows={4} value={form.steps} onChange={(e) => setForm({ ...form, steps: e.target.value })} required /></Field>
+        <Field label="How a reader verifies it was followed"><textarea className="textarea" rows={2} value={form.verification} onChange={(e) => setForm({ ...form, verification: e.target.value })} required maxLength={1000} /></Field>
+        <Button type="submit" variant="primary" busy={busy === 'install'} disabled={!form.name.trim() || !form.description.trim() || !form.whenToUse.trim() || !form.steps.trim() || !form.verification.trim()}>Install as candidate</Button>
+      </form>
+      <div className="stack" style={{ marginTop: 12 }}>
+        {(data?.skills ?? []).map((skill) => <div className="row between" key={skill.name}>
+          <span className="small"><strong>{skill.name}</strong> v{skill.version} · {skill.state}{skill.enabled ? '' : ' · disabled'}</span>
+          <span className="row">
+            {skill.state === 'candidate' ? <Button busy={busy === `validate-${skill.name}`} onClick={() => act(`validate-${skill.name}`, () => api.validateSkill(skill.name))}>Validate</Button> : null}
+            {skill.versionCount > 1 ? <Button onClick={async () => {
+              setMeasureResult(null)
+              try {
+                const described = await api.skill(skill.name)
+                setDetail({ name: skill.name, versions: described.versions })
+                setMeasureForm({ baselineVersion: described.versions.at(-2)?.version ?? '', candidateVersion: described.versions.at(-1)?.version ?? '', prompt: '', mustInclude: '' })
+              } catch (e) { setError(e) }
+            }}>Measure</Button> : null}
+            <Button onClick={() => act(`toggle-${skill.name}`, () => api.setSkill(skill.name, { enabled: !skill.enabled }))}>{skill.enabled ? 'Disable' : 'Enable'}</Button>
+            <Button variant="danger" busy={busy === `delete-${skill.name}`} onClick={() => act(`delete-${skill.name}`, () => api.deleteSkill(skill.name))}>Delete</Button>
+          </span>
+        </div>)}
+      </div>
+      {detail ? <div className="stack" style={{ marginTop: 12 }}>
+        <h4>Measure {detail.name} on one case</h4>
+        <p className="small">Both versions answer the same question and the reply is scored by what it must contain. This spends provider calls and records the result; it does not promote the candidate.</p>
+        <div className="row">
+          <Field label="Baseline"><select className="select" value={measureForm.baselineVersion} onChange={(e) => setMeasureForm({ ...measureForm, baselineVersion: e.target.value })}>{detail.versions.map((v) => <option key={v.version} value={v.version}>{v.version}</option>)}</select></Field>
+          <Field label="Candidate"><select className="select" value={measureForm.candidateVersion} onChange={(e) => setMeasureForm({ ...measureForm, candidateVersion: e.target.value })}>{detail.versions.map((v) => <option key={v.version} value={v.version}>{v.version}</option>)}</select></Field>
+        </div>
+        <Field label="Test question"><textarea className="textarea" rows={2} value={measureForm.prompt} onChange={(e) => setMeasureForm({ ...measureForm, prompt: e.target.value })} maxLength={2000} /></Field>
+        <Field label="The answer must contain" hint="Comma-separated phrases. At least one is required; the check is not a judgement."><input className="input" value={measureForm.mustInclude} onChange={(e) => setMeasureForm({ ...measureForm, mustInclude: e.target.value })} /></Field>
+        <Button variant="primary" busy={busy === 'measure'} disabled={!model || !measureForm.prompt.trim() || !measureForm.mustInclude.trim() || measureForm.baselineVersion === measureForm.candidateVersion} onClick={async () => {
+          setBusy('measure'); setError(null); setMeasureResult(null)
+          try {
+            setMeasureResult(await api.measureSkill(detail.name, {
+              baselineVersion: measureForm.baselineVersion,
+              candidateVersion: measureForm.candidateVersion,
+              cases: [{ prompt: measureForm.prompt.trim(), mustInclude: measureForm.mustInclude.split(',').map((s) => s.trim()).filter(Boolean) }],
+              model,
+              authorization: { confirmed: true, providerRevision: provider?.revision },
+            }))
+            await load()
+          } catch (e) { setError(e) } finally { setBusy('') }
+        }}>Measure (2 provider calls)</Button>
+        {measureResult ? <div className="small">
+          <p><strong>{measureResult.verdict.replaceAll('_', ' ')}</strong> — {measureResult.reason}</p>
+          <p>Baseline v{measureResult.baselineVersion}: {measureResult.baseline.passed}/{measureResult.baseline.total} · candidate v{measureResult.candidateVersion}: {measureResult.candidate.passed}/{measureResult.candidate.total}. Mean latency {measureResult.baseline.meanLatencyMs ?? '?'} ms vs {measureResult.candidate.meanLatencyMs ?? '?'} ms.</p>
+          <p className="muted">{measureResult.disclosure}</p>
+        </div> : null}
+      </div> : null}
+    </details> : null}
+  </div>
+}

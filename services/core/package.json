@@ -1,6 +1,6 @@
 {
   "name": "@aetheris-omni/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Aetheris Omni core service: runtime policy, model router, provider adapters, God Core orchestration, knowledge retrieval, media jobs, plugins and MCP.",

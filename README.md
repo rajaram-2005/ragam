@@ -1,27 +1,30 @@
 # Aetheris — online AI workspace
 
-> **Active product: online-only (Phase 2).** [Current setup, features and limitations](docs/19-online-only-phase-2.md) and [accounts and sign-in](docs/20-accounts-and-sign-in.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
+> **Active product: online-only (Phase 2).** [Current setup, features and limitations](docs/19-online-only-phase-2.md) and [accounts and sign-in](docs/20-accounts-and-sign-in.md) supersede the offline-first product instructions below. Legacy local/research **service** code remains for reference and regression tests; it is not loaded by `npm run core`. Superseded UI components were deleted on 2026-10-17, not retained. Suite totals include retained legacy coverage.
 
 ## Current product
 
-Exactly **Chat, Image, Video, Plugins, MCP**, with LiteLLM Provider Settings in a dialog and an explicit persistent model picker. Inference is online-only; there are no active local-runtime, hardware-tier, training or task-diagnostic panels. Optional history, approved memory and text-file knowledge remain.
+Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog and an explicit persistent model picker. Inference is online-only; there are no active local-runtime, hardware-tier, training or task-diagnostic panels. Optional history, approved memory, text-file knowledge and reviewed procedures remain.
 
 Run `npm run core` and `npm run web`, then **create an account** at `#/signup` and sign in with it at `#/signin`. Sign-in is traditional — an email address and a password, on three pages (sign in, create account, reset password) — and it is the only way in: the operator access-token file and its login route have been removed. The first account created owns the installation and is the only one that can change the gateway connection; later accounts are members with their own history, memory and knowledge. Then open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. On HTTP-only local development, start Core with `AETHERIS_COOKIE_SECURE=false`; keep secure cookies enabled for HTTPS deployments. If the web app is served inside another site's iframe, also start Core with `AETHERIS_COOKIE_SAMESITE=none` — a strict session cookie is never sent cross-site, so sign-in would appear to work and every request after it would be a `401`. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md).
 
-**Current limits:** online Image/Video adapters and remote MCP are not connected, and universal provider support is not delivered — LiteLLM is the only gateway. No real provider credentials or remote inference have been tested in this restricted sandbox. The product needs a reachable, authorized LiteLLM gateway; synthetic fixtures are used only in tests. Accounts have no email delivery, no second factor and no self-service deletion. See the [Phase 2 guide](docs/19-online-only-phase-2.md) for security boundaries and setup, and [accounts and sign-in](docs/20-accounts-and-sign-in.md) for the account model.
+Current release: **0.2.0** — [release note](docs/26-release.md), [changelog](CHANGELOG.md), version in [`VERSION`](VERSION). Provider Settings shows a read-only [capability matrix](docs/27-provider-framework.md): it says which providers have a tested path (twelve: the three runtimes, six native chat adapters, OpenAI Images, Gemini Images and Veo), which speak a compatible wire format without being verified here, and which have no adapter at all. The release carries the adaptive core (ten phases, code and tests) as a library; the product surface described above is unchanged by it.
+
+**Current limits:** image generation is connected for OpenAI Images only, and video generation for Google Veo only; other media vendors and remote MCP are not connected. The provider catalogue is in place, but only eleven entries have a tested path — the three runtimes, six native chat adapters, OpenAI Images and Veo — and no real credential, deployment or model has been called live. Synthetic fixtures are used only in tests. Accounts have no email delivery, no second factor and no self-service deletion. See the [Phase 2 guide](docs/19-online-only-phase-2.md) for security boundaries and setup, and [accounts and sign-in](docs/20-accounts-and-sign-in.md) for the account model.
 
 ## Retained legacy architecture and verification history
 
 The following documents the earlier research foundation. Its local/offline capabilities are not part of the active product.
 
 
-A local-first AI platform built by integrating two repositories into one system:
+An **online-first** AI platform built by integrating two repositories into one system:
 [`Aetheris-`](https://github.com/rajaram-2005/Aetheris-) (application and
 orchestration) and [`sparsiz`](https://github.com/rajaram-2005/sparsiz) (research and
-compute optimisation). Inference remains local-first. The updated directive authorizes
-development of a replaceable LiteLLM gateway; online inference is not implemented
-yet. Optional catalog metadata refresh is separate from inference consent and is
-blocked for external sources in Strict Offline.
+compute optimisation). The active product is online-only: chat, image and video requests go to
+the provider connection you configure, and an internet connection is required for AI
+functionality. Local runtimes (Ollama, llama.cpp, vLLM, LocalAI) remain optional developer and
+self-hosted integrations and do not dictate the architecture. Optional catalog metadata refresh
+is separate from inference consent.
 
 This is **not** a concatenation of the two. Each was audited first
 ([`docs/01-audit.md`](docs/01-audit.md)), responsibilities were assigned by
@@ -69,7 +72,7 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 1422 tests: core 567, web 92, fabric 763
+npm test          # 1817 tests: core 908, web 95, fabric 814
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -84,9 +87,10 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1422 run in CI on every push and pull request
-([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as four jobs — one per
-component, plus one that fails if this documentation stops matching the code. The
+All 1817 run in CI on every push and pull request
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as five jobs — one per
+component, plus one that fails if this documentation stops matching the code, plus one
+that counts what the suites reported and verifies the release against those counts. The
 Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
 
@@ -145,9 +149,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 14,786 | 12,222 | **zero npm packages** | 567 |
-| `services/fabric` | Python 3.11 | 11,760 | 9,025 | NumPy only | 763 |
-| `apps/web` | React 18 + Vite | 2,691 | 1,818 | react, react-dom | 92 |
+| `services/core` | Node 22 ESM | 28,145 | 21,456 | **zero npm packages** | 908 |
+| `services/fabric` | Python 3.11 | 12,655 | 9,995 | NumPy only | 814 |
+| `apps/web` | React 18 + Vite | 3,504 | 1,894 | react, react-dom | 95 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web
@@ -161,7 +165,7 @@ Architecture, component responsibilities and enforcement points:
 
 ## Aetheris Lite
 
-Two first-party models exist, and both are real.
+Three first-party artifacts exist, and all three are real.
 
 ### A language model, trained from nothing
 
@@ -194,13 +198,59 @@ The model never answers as if it were an assistant. See
 [`docs/08-aetheris-lite.md`](docs/08-aetheris-lite.md) and
 [`docs/11-klyvaron-family.md`](docs/11-klyvaron-family.md).
 
+The family does not compete. It is built for two things instead — knowing what is
+current, with a date and a source, and understanding what the user expressed across a
+session, quoted from their own words — and it refuses benchmark-superiority claims in
+code rather than in a disclaimer. Pro and Max are **unbuilt** and **this family's own
+models**: presets of `aetheris-core-v1` trained from random initialisation, with the two
+differentiators as parts of the model rather than wrappers around it, on the user's own
+accelerator (CUDA, ROCm, Metal, Vulkan, an OpenVINO GPU or NPU). No third-party weights are
+involved anywhere in the plan — and no weights exist yet. See
+[`docs/22-klyvaron-differentiation.md`](docs/22-klyvaron-differentiation.md) and
+[`docs/23-training-free-tiers.md`](docs/23-training-free-tiers.md) — and
+[`docs/24-own-models.md`](docs/24-own-models.md), which records the decision that Pro and Max are
+trained models of this family's own architecture rather than someone else's weights behind a tier label.
+
+### A second language model, on a corpus that was assembled and licensed
+
+**`klyvaron-mini-lm@0.1.0`** — a **1,421,952-parameter character-level transformer**, the `mini`
+preset of the same `aetheris-core-v1` architecture, trained from random initialisation on **9.87 MB
+of text assembled from seven licence-checked sources**: this repository's own text plus
+`pallets/flask`, `expressjs/express`, `psf/requests`, `microsoft/TypeScript`, `pytest-dev/pytest` and
+`pallets/click`. Every source is pinned to a commit SHA and its licence is read **at that commit**.
+`numpy/numpy` was **refused** — GitHub reports its licence as `NOASSERTION` — so it contributed zero
+bytes rather than a note that someone thought it looked permissive.
+
+The evaluation split is **held out by source**: `pallets__click` and `psf__requests` are validation
+in their entirety and supply **not one byte** of training text. On those 1,907,072 held-out
+characters it reaches **perplexity 4.7342** against a bigram baseline of **15.8644** — 29.8 % of the
+baseline, 3.35× better than the best non-neural one. That is a harder test than the Lite model's
+file-disjoint split, and the two perplexities are not comparable with each other.
+
+It took **8,456 s (2 h 21 min) on two CPU cores**, and the release gate recorded **one soft failure
+rather than waiving it**: the wall-clock target is 3,600 s. The miss is on the card and in its
+limitation list. The run's command, config, digests and outcome are in
+[`docs/experiments/klyvaron-mini-lm-run.json`](docs/experiments/klyvaron-mini-lm-run.json), which
+carried `status: running` until the run exited and was not written ahead of it.
+
+> **Its output is no better in kind than the Lite model's**: character-level text shaped like source
+> code and mostly meaningless. `mini` is **not a tier** and it moves nothing — Pro and Max stay
+> unbuilt. What it is for is making the whole recipe real: corpus assembly, licence checking, a
+> tokenizer fitted on the training split only, training, evaluation and a release gate that refuses.
+> It has **not** been exported to the runtime's artifact format or verified there; that path exists
+> and has not been run for these weights.
+
+Model card: [`docs/model-cards/klyvaron-mini-lm-0.1.0.md`](docs/model-cards/klyvaron-mini-lm-0.1.0.md).
+
 ### Hardware-based execution
 
-Klyvaron **Lite / Pro / Max** use the user's own device by default. Lite is
-CPU-first; GPU tiers require model-specific measured compatibility, not a GPU name.
-Chat, Image and Video offer Local, Hybrid and Online task modes; Strict Offline
-blocks remote services (including LAN inference). The hardware API reports the
-Core host, not the hardware of a remote browser.
+Klyvaron **Lite / Pro / Max** are online deployment profiles: cost-conscious hosted inference for
+Lite, higher-capability hosted models for Pro, and benchmarked high-performance or distributed
+inference for Max. The hardware and local-runtime machinery described below belongs to the retained
+legacy service and optional self-hosted use; it is not a requirement of the active product, which
+performs **no local inference and downloads no models**. Where a Klyvaron-branded feature uses a
+third-party hosted model, its metadata names the actual model and provider rather than claiming
+first-party weights.
 
 The admission framework, CPU memory safeguards, and [evaluated weight-only int8
 inference](docs/14-cpu-int8-inference.md) are implemented. A useful
@@ -282,6 +332,9 @@ Details, including seven open items stated plainly:
 | [`docs/09-distillation.md`](docs/09-distillation.md) | Distillation: the logit path that runs here, the credentialed path that does not |
 | [`docs/10-hermes-audit.md`](docs/10-hermes-audit.md) | Hermes Agent audit: what was adopted, what was rejected, and why |
 | [`docs/11-klyvaron-family.md`](docs/11-klyvaron-family.md) | The Klyvaron family, the six learning levels, and what is not built |
+| [`docs/22-klyvaron-differentiation.md`](docs/22-klyvaron-differentiation.md) | What the family is for: the present, the person, and the comparisons it refuses |
+| [`docs/23-training-free-tiers.md`](docs/23-training-free-tiers.md) | The composed path this family considered and refused, kept because the refusal is a checked rule |
+| [`docs/24-own-models.md`](docs/24-own-models.md) | Pro and Max as this family's own models: the `aetheris-core-v1` architecture, the two differentiators as parts of it, and what training them costs |
 | [`docs/12-feature-matrix.md`](docs/12-feature-matrix.md) | Every capability marked completed / partial / planned / unsupported |
 | [`docs/model-cards/`](docs/model-cards/) | Versioned model cards (Markdown + machine-readable JSON) |
 | [`third-party/NOTICES.md`](third-party/NOTICES.md) | Provenance, what was adopted vs replaced, licence compatibility |

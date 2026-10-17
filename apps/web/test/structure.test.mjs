@@ -231,7 +231,16 @@ test('online areas remove offline and research surfaces without removing optiona
   assert.match(chat, /KnowledgePanel/)
   assert.match(chat, /MemoryPanel/)
   assert.match(chat, /HistoryPanel/)
-  assert.doesNotMatch(chat, /TaskPanel|SkillsPanel|ModelCatalog|ExecutionMode/)
+  // A reviewed procedure selected for one message is a product surface, not the removed
+  // offline skills/task machinery. The panel must say that it is reference text and not code.
+  assert.match(chat, /SkillsPanel/)
+  const panels = read('components/ContextPanels.jsx')
+  assert.match(panels, /A procedure is reference text, not code/)
+  // A style is a user-set preference for phrasing, not the removed adaptive-state estimator.
+  assert.match(chat, /api\.setStyle/)
+  assert.match(chat, /changes how an answer is phrased, not the facts or the result/)
+  assert.match(panels, /A procedure is reference text, not code/)
+  assert.doesNotMatch(chat, /TaskPanel|ModelCatalog|ExecutionMode/)
   for (const area of ['Image','Video']) assert.match(read(`areas/${area}Area.jsx`), /no simulated output/i)
 
 })

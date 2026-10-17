@@ -41,7 +41,41 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--split-seed", type=int, default=20251012)
     parser.add_argument("--validation-fraction", type=float, default=0.10)
     parser.add_argument("--dtype", default="float32", choices=("float32", "float64"))
+    parser.add_argument(
+        "--extensions",
+        default=None,
+        help=(
+            "comma-separated text extensions to read as corpus, e.g. '.py,.md,.ts'. Required for a "
+            "corpus whose languages the repository default does not cover; an assembled corpus of "
+            "public sources must say which files it means rather than have them renamed."
+        ),
+    )
+    parser.add_argument(
+        "--tokenizer",
+        default="character",
+        choices=("character", "byte-bpe"),
+        help=(
+            "which tokenizer to fit on the training split. 'character' is what the released "
+            "artifacts used: one token per character, vocabulary derived from the text. 'byte-bpe' "
+            "learns subword merges, which is what lets a fixed context window hold a useful amount "
+            "of text -- and its merge list is stored with the weights, because unlike an alphabet it "
+            "cannot be re-derived from the corpus."
+        ),
+    )
+    parser.add_argument("--vocab-size", type=int, default=8192,
+                        help="vocabulary size to ask the byte-BPE trainer for (ignored by the character tokenizer)")
+    parser.add_argument("--tokenizer-sample-chars", type=int, default=4_000_000,
+                        help="how much training text the byte-BPE trainer samples for its merges")
     parser.add_argument("--overwrite", action="store_true", help="replace an existing artifact with the same hash")
+    parser.add_argument(
+        "--validation-sources",
+        default=None,
+        help=(
+            "comma-separated corpus sources (first path component under the corpus root) held out "
+            "whole. With these, every validation document comes from a repository the model was "
+            "never trained on, which is a stronger claim than the by-document split."
+        ),
+    )
     parser.add_argument(
         "--expect-manifest-digest",
         default=None,
@@ -49,6 +83,45 @@ def build_parser() -> argparse.ArgumentParser:
             "refuse to train unless the corpus manifest matches this digest. The model trains on "
             "this repository's own text, so it changes whenever the repository does; pass the digest "
             "recorded in a previous run's report to reproduce that run or fail loudly."
+        ),
+    )
+    parser.add_argument(
+        "--snapshot-text",
+        choices=("full", "manifest"),
+        default="full",
+        help=(
+            "'full' writes the corpus text into the run's record, which makes the run replayable "
+            "offline. 'manifest' records every file with its sha256 and no text, for a corpus too "
+            "large to copy -- the text is then re-assembled from the pinned sources and checked "
+            "against the manifest."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=0,
+        help=(
+            "write the full training state (weights, Adam moments, loss curve, step) every N "
+            "steps. 0 disables it. An eighteen-hour run with no checkpoint is a run whose "
+            "interruption produces nothing, not even evidence of how far it got."
+        ),
+    )
+    parser.add_argument(
+        "--resume-from",
+        default=None,
+        help=(
+            "continue from a checkpoint written by --checkpoint-every. The configuration must "
+            "match the one the checkpoint was written under; a mismatch is refused rather than "
+            "trained through. The data stream is seeded, so step k is reproduced exactly."
+        ),
+    )
+    parser.add_argument(
+        "--keep-checkpoint",
+        action="store_true",
+        help=(
+            "keep the final checkpoint instead of deleting it when the artifact lands. A "
+            "checkpoint carries Adam's moment estimates, which the artifact does not, so keeping "
+            "one is what allows a later run to continue this one rather than start over."
         ),
     )
     parser.add_argument("--json", dest="json_out", default=None, help="write the report JSON here as well")
@@ -69,11 +142,19 @@ def main(argv=None) -> int:
         model_seed=args.model_seed, data_seed=args.data_seed, split_seed=args.split_seed,
         validation_fraction=args.validation_fraction, dtype=args.dtype,
         corpus_root=str(corpus_root),
+        tokenizer_kind=args.tokenizer, vocab_size=args.vocab_size,
+        tokenizer_sample_chars=args.tokenizer_sample_chars,
+        extensions=tuple(e.strip() for e in args.extensions.split(",") if e.strip()) if args.extensions else (),
+        validation_sources=tuple(s.strip() for s in args.validation_sources.split(",") if s.strip()) if args.validation_sources else (),
     )
 
     def progress(step, total, loss):
         if not args.quiet:
             print(f"  step {step + 1:>5}/{total}  loss {loss:7.4f}", flush=True)
+
+    def log(message):
+        if not args.quiet:
+            print(message, flush=True)
 
     print(f"aetheris-lite: training {args.run_name}")
     print(f"  corpus   {corpus_root}")
@@ -82,7 +163,10 @@ def main(argv=None) -> int:
     try:
         report = train(config, output_dir=output_dir, corpus_root=corpus_root,
                        run_name=args.run_name, overwrite=args.overwrite,
-                       expect_manifest_digest=args.expect_manifest_digest, progress=progress)
+                       expect_manifest_digest=args.expect_manifest_digest, progress=progress, log=log,
+                       snapshot_text=args.snapshot_text == "full",
+                       checkpoint_every=args.checkpoint_every, resume_from=args.resume_from,
+                       keep_checkpoint=args.keep_checkpoint)
     except RuntimeError as error:
         print(f"\naetheris-lite: refusing to train\n  {error}", file=sys.stderr)
         return 2
@@ -94,8 +178,17 @@ def main(argv=None) -> int:
     ev = payload["evaluation"]
     print()
     print(f"  parameters   {payload['provenance']['parameterCount']:,}")
-    print(f"  vocab        {payload['tokenizer']['size']} characters "
-          f"(validation unknown rate {payload['tokenizer']['validationUnknownRate']:.6f})")
+    # What the vocabulary is made of depends on the tokenizer: a character vocabulary is the
+    # alphabet the training text uses, a byte-BPE one is the 256 byte values plus learned merges.
+    # Printing "characters" for both would describe the second one wrongly in its own log.
+    tokenizer_payload = payload["tokenizer"]
+    if tokenizer_payload["kind"] == "byte-bpe":
+        print(f"  vocab        {tokenizer_payload['size']} tokens "
+              f"(256 bytes + {tokenizer_payload['merges']} merges, validation unknown rate "
+              f"{tokenizer_payload['validationUnknownRate']:.6f} by construction)")
+    else:
+        print(f"  vocab        {tokenizer_payload['size']} characters "
+              f"(validation unknown rate {tokenizer_payload['validationUnknownRate']:.6f})")
     print(f"  corpus       {payload['corpus']['trainFiles']} train / "
           f"{payload['corpus']['validationFiles']} validation files, no overlap")
     print(f"  loss         {payload['loss_curve'][0]['loss']:.4f} -> {payload['final_loss']:.4f}")

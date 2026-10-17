@@ -1,0 +1,168 @@
+{
+  "name": "klyvaron-mini-lm",
+  "version": "0.1.0",
+  "identifier": "klyvaron-mini-lm@0.1.0",
+  "family": "klyvaron-mini",
+  "licence": "MIT",
+  "weightsDigest": "eaca87db5700b9ee99d162e650b23478bd9a57715e349dee0fb18a4dc3fda116",
+  "baseCheckpoint": null,
+  "configDigest": "19f11a49e5ec53769c3d67f9dbc60b96a9dcb706d5033808e553e876dc033dc7",
+  "datasetDigest": "f8dfef6fc61458cffd7a5c3e0db526a6212366de68a3f7ade95dfa0e70eb3ed7",
+  "parameterCount": 1421952,
+  "status": "released",
+  "metrics": {
+    "validationPerplexity": 4.734185493904311,
+    "bitsPerCharacter": 2.243116234567047,
+    "perplexityVsBigram": 0.2984161277766525,
+    "bestBaselinePerplexity": 15.864375458445664,
+    "validationUnknownRate": 7.026069338915039e-05,
+    "validationTokens": 1907072.0,
+    "lossImprovement": 4.939357936382294,
+    "finalLoss": 0.8157141804695129,
+    "parameterCount": 1421952.0,
+    "wallSeconds": 8456.326
+  },
+  "provenance": {
+    "subject": "klyvaron-mini-lm (from-scratch, pure NumPy)",
+    "comparator": "bigram baseline on identical held-out tokens",
+    "hardware": {
+      "machine": "x86_64",
+      "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+      "accelerator": "none (CPU only)",
+      "peakMemoryMb": 419.2
+    },
+    "decoding": {
+      "temperature": 0.0,
+      "topK": 0,
+      "note": "perplexity is teacher-forced; no sampling involved in the gate metric"
+    },
+    "context": {
+      "seqLen": 128,
+      "window": "sliding, non-overlapping, stride = seqLen"
+    },
+    "quantization": null,
+    "prompts": [],
+    "datasetDigest": "f8dfef6fc61458cffd7a5c3e0db526a6212366de68a3f7ade95dfa0e70eb3ed7",
+    "corpusSize": 9867102,
+    "queries": null,
+    "codeRevision": "e616bdc9863fa92588b389f7ff5ba0dc3a5dda6e-dirty",
+    "seed": 0,
+    "limitations": [
+      "Character-level, not subword: sequences are long for the parameter count.",
+      "Trained from scratch on 9,867,102 bytes assembled from 7 licence-checked sources, 2 of them held out whole for validation (pallets__click, psf__requests). It has no world knowledge, no instruction-following and no safety behaviour.",
+      "Output quality is low by design of the experiment: 1,421,952 parameters trained for 4000 steps. This proves the pipeline, not the model.",
+      "Evaluated only against bigram/uniform/unigram baselines on in-distribution held-out text; no comparison against any pretrained model was performed and none is claimed.",
+      "Not instruction-tuned and has no tokenizer beyond ASCII-and-source-code characters; it cannot be exposed as a chat assistant in this state.",
+      "0.000070 of held-out characters are outside the training vocabulary and scored as <unk>; perplexity is slightly pessimistic because of it."
+    ],
+    "status": "completed",
+    "measuredAt": 1792091876.4427795
+  },
+  "limitations": [
+    "trained from random initialisation; not derived from any pretrained base model",
+    "character-level base model: it predicts the next character of the text it was trained on and follows no instructions (1,421,952 parameters, vocabulary of 352)",
+    "output quality is low: this demonstrates the pipeline, not a usable assistant",
+    "not instruction-tuned: a runtime that serves it reports instructionTuned false, and /api/chat refuses an unpinned request with model_not_instruction_tuned (501), because it continues text and does not answer questions, and presenting it as an assistant would misrepresent it",
+    "no comparison against any pretrained model was performed, and none is claimed",
+    "'wallSeconds' 8456.3260 exceeds the allowed maximum 3600.0000"
+  ],
+  "requirements": [
+    {
+      "metric": "perplexityVsBigram",
+      "minimum": null,
+      "maximum": 1.0,
+      "category": null,
+      "hard": true
+    },
+    {
+      "metric": "validationUnknownRate",
+      "minimum": null,
+      "maximum": 0.02,
+      "category": null,
+      "hard": true
+    },
+    {
+      "metric": "lossImprovement",
+      "minimum": 1.0,
+      "maximum": null,
+      "category": null,
+      "hard": true
+    },
+    {
+      "metric": "parameterCount",
+      "minimum": null,
+      "maximum": 5000000,
+      "category": null,
+      "hard": false
+    },
+    {
+      "metric": "wallSeconds",
+      "minimum": null,
+      "maximum": 3600.0,
+      "category": null,
+      "hard": false
+    }
+  ],
+  "validation": {
+    "passed": [
+      "'perplexityVsBigram' 0.2984 meets the requirement",
+      "'validationUnknownRate' 0.0001 meets the requirement",
+      "'lossImprovement' 4.9394 meets the requirement",
+      "'parameterCount' 1421952.0000 meets the requirement"
+    ],
+    "hardFailures": [],
+    "softFailures": [
+      "'wallSeconds' 8456.3260 exceeds the allowed maximum 3600.0000"
+    ],
+    "validatedAt": 1792091876.4428198,
+    "metrics": {
+      "validationPerplexity": 4.734185493904311,
+      "bitsPerCharacter": 2.243116234567047,
+      "perplexityVsBigram": 0.2984161277766525,
+      "bestBaselinePerplexity": 15.864375458445664,
+      "validationUnknownRate": 7.026069338915039e-05,
+      "validationTokens": 1907072.0,
+      "lossImprovement": 4.939357936382294,
+      "finalLoss": 0.8157141804695129,
+      "parameterCount": 1421952.0,
+      "wallSeconds": 8456.326
+    }
+  },
+  "artifacts": {
+    "filename": "klyvaron-mini-lm-eaca87db5700.npz",
+    "strongestBaseline": "bigram",
+    "fileDigest": "c0acb52b3efb64593360288997b3929c2a332810faa6de6c316e99097cee8237",
+    "bytes": 5696206,
+    "vocabularyDigest": "a8c0642bc24412a9bc3b93c13973c5ced462c2d44883d1949471f36cb393b24a",
+    "corpusManifest": "f8dfef6fc61458cffd7a5c3e0db526a6212366de68a3f7ade95dfa0e70eb3ed7",
+    "trainer": "services/fabric/fabric/lm/train.py"
+  },
+  "parentVersion": null,
+  "createdAt": 1792091876.442788,
+  "releasedAt": 1792091876.4428294,
+  "supersededAt": null,
+  "retiredAt": null,
+  "history": [
+    {
+      "at": 1792091876.442788,
+      "event": "registered",
+      "status": "candidate"
+    },
+    {
+      "at": 1792091876.4428217,
+      "event": "validated",
+      "passed": [
+        "'perplexityVsBigram' 0.2984 meets the requirement",
+        "'validationUnknownRate' 0.0001 meets the requirement",
+        "'lossImprovement' 4.9394 meets the requirement",
+        "'parameterCount' 1421952.0000 meets the requirement"
+      ]
+    },
+    {
+      "at": 1792091876.4428294,
+      "event": "released",
+      "notes": "from-scratch NumPy training run",
+      "superseded": null
+    }
+  ]
+}

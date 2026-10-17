@@ -194,8 +194,8 @@ test('a tier label needs a backing record for the exact version, not a declarati
   assert.equal(tierClaimForArtifact('Qwen2.5-7B-Instruct', '0.1.0'), null, 'a renamed third-party model')
   assert.equal(tierClaimForArtifact('aetheris-lite-lm-pro', '0.1.0'), null)
   // Pro and Max have nothing behind them, so no version of anything is theirs yet.
-  assert.equal(tierClaimForArtifact('aetheris-pro-lm', '0.1.0'), null)
-  assert.equal(tierClaimForArtifact('aetheris-max-lm', '0.1.0'), null)
+  assert.equal(tierClaimForArtifact('klyvaron-pro-lm', '0.1.0'), null)
+  assert.equal(tierClaimForArtifact('klyvaron-max-lm', '0.1.0'), null)
 })
 
 test('the superseded artifact is recorded, not deleted, and is not the release', () => {

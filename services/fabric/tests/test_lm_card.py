@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 
 import pytest
 
@@ -20,6 +21,7 @@ from fabric.lm.card import (
     LM_NAME,
     best_baseline_name,
     build_provenance,
+    corpus_description,
     candidate_from_report,
     limitations_from_report,
     model_limitations,
@@ -155,6 +157,58 @@ def test_a_model_that_beats_the_bigram_is_released():
     assert manager.current().identifier == f"{LM_NAME}@0.1.0"
 
 
+def test_the_training_text_is_described_from_the_manifest_not_from_memory():
+    """The released Lite card says "this repository's own text", and that is true of Lite.
+
+    It is not true of a run over an assembled corpus, so the sentence is built from the
+    manifest: a card that described the wrong corpus would be a false provenance, which is
+    the one part of a card a reader has no way to check for themselves.
+    """
+    assembled = make_report()
+    assembled["corpus"]["sources"] = {
+        "rajaram-2005__ragam": {"bytes": 1_000, "files": 10, "splits": ["train"]},
+        "psf__requests": {"bytes": 500, "files": 5, "splits": ["validation"]},
+    }
+    assembled["corpus"]["heldOutSources"] = ["psf__requests"]
+    described = corpus_description(assembled)
+    assert "licence-checked sources" in described
+    assert "psf__requests" in described, "the held-out sources are the claim a reader checks"
+    assert "this repository's own text" not in described
+
+    lite_shaped = make_report()
+    assert corpus_description(lite_shaped) == "1,381,436 bytes of this repository's own text"
+    assert "this repository's own text" in limitations_from_report(lite_shaped)[1]
+
+
+def test_the_provenance_subject_is_the_artifact_that_was_evaluated():
+    named = build_provenance(make_report(), name="klyvaron-mini-lm")
+    assert named.subject.startswith("klyvaron-mini-lm ")
+    assert build_provenance(make_report()).subject.startswith(f"{LM_NAME} ")
+
+
+def test_a_second_artifact_of_the_same_architecture_is_registered_under_its_own_name():
+    """One architecture, several artifacts: the second preset passes its own name.
+
+    The defaults stay Lite's, because the released card belongs to a different set of
+    weights -- registering a new run over that name would replace a card that is already
+    published. So this checks both halves: the override lands, and not passing one still
+    means Lite.
+    """
+    manager = ModelReleaseManager()
+    card, released = candidate_from_report(
+        make_report(), manager, version="0.1.0", name="klyvaron-mini-lm", family="klyvaron-mini",
+    )
+    assert released is True
+    assert card.identifier == "klyvaron-mini-lm@0.1.0"
+    assert card.family == "klyvaron-mini"
+    assert card.base_checkpoint is None, "this family trains from random initialisation"
+
+    default = ModelReleaseManager()
+    lite, _ = candidate_from_report(make_report(), default, version="0.1.0")
+    assert lite.identifier == f"{LM_NAME}@0.1.0"
+    assert lite.family != card.family, "two artifacts must not share a family label"
+
+
 def test_a_model_that_loses_to_the_bigram_is_rejected_and_not_released():
     """The gate must be observed to refuse something, or there is no evidence it is
     a gate rather than a formality."""
@@ -266,10 +320,13 @@ def test_the_card_itself_lists_limitations_not_only_the_provenance():
     assert "not derived from any pretrained base model" in joined
     assert "/api/chat" in joined
     # The wording moved once already, from "deliberately not wired into /api/chat" to the
-    # refusal that actually happens. A limitation describing a behaviour the app does not
-    # have would be quoted as the reason the real behaviour is safe, so the direction is
-    # pinned: the route exists and refuses.
-    assert "refused" in joined and "not_instruction_tuned" in joined, joined
+    # refusal that actually happens, and then from "reachable from /api/chat" to the rule that
+    # follows from the artifact's own flag -- because a limitation that asserts a per-file
+    # export and runtime verification run, for an artifact that has been through neither, is
+    # exactly the kind of claim this repository does not allow on a card. The direction is
+    # pinned rather than the tense: the refusal is stated, and "not wired" must not come back.
+    assert re.search(r"refus(es|ed)", joined) and "not_instruction_tuned" in joined, joined
+    assert "instructiontuned false" in joined, "the refusal must follow from the artifact's own flag, not from a model list"
     assert "not wired" not in joined
     assert card.provenance.limitations, "the provenance must still carry its own list"
     assert not set(card.limitations) & set(card.provenance.limitations), "the two lists overlap"

@@ -66,6 +66,7 @@ def metrics_from_report(report) -> dict:
     # beaten is context, not a metric, and lives on the card's artifacts instead.
     return {
         "validationPerplexity": float(evaluation["perplexity"]),
+        "bitsPerToken": float(evaluation.get("bitsPerToken", evaluation["nllNatsPerToken"] / 0.6931471805599453)),
         "bitsPerCharacter": float(evaluation["bitsPerCharacter"]),
         "perplexityVsBigram": float(ratio),
         "bestBaselinePerplexity": float(best["perplexity"]),
@@ -100,20 +101,61 @@ def model_limitations(report) -> list[str]:
     payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
     return [
         "trained from random initialisation; not derived from any pretrained base model",
-        f"character-level base model: it predicts the next character of repository text and "
-        f"follows no instructions "
-        f"({payload['provenance']['parameterCount']:,} parameters, vocabulary of "
-        f"{payload['tokenizer']['size']})",
+        # What the model emits is not a property of this project, it is a property of the
+        # artifact's tokenizer: a byte-BPE model produces subword pieces, and a card that called
+        # it character-level would misdescribe every prediction it makes.
+        (
+            f"byte-level BPE subword model: it predicts the next token of the text it was trained "
+            f"on and follows no instructions "
+            f"({payload['provenance']['parameterCount']:,} parameters, vocabulary of "
+            f"{payload['tokenizer']['size']})"
+            if payload["tokenizer"].get("kind") == "byte-bpe"
+            else f"character-level base model: it predicts the next character of the text it was trained "
+            f"on and follows no instructions "
+            f"({payload['provenance']['parameterCount']:,} parameters, vocabulary of "
+            f"{payload['tokenizer']['size']})"
+        ),
         "output quality is low: this demonstrates the pipeline, not a usable assistant",
         # This sentence used to say the model is "deliberately not wired into /api/chat",
         # which stopped being true when the artifact became installable and routable: the
         # route exists and refuses. A limitation that describes the wrong behaviour is
         # worse than no limitation, because it is quoted as the reason the behaviour is safe.
-        "reachable from /api/chat, where an unpinned request is refused with "
-        "model_not_instruction_tuned (501): it continues text and does not answer questions, and "
-        "presenting it as an assistant would misrepresent it",
+        #
+        # It is now stated as the rule that follows from the flag rather than as a claim that
+        # this particular file has been through an export and a runtime verification run. The
+        # refusal is a property of the router plus `instructionTuned: false` in the manifest,
+        # and `instructionTuned` comes from the manifest rather than from a list of model ids,
+        # so the rule holds for every artifact this trainer can produce -- including the ones
+        # that have not been exported yet, which is exactly when a card must not imply they
+        # have been.
+        "not instruction-tuned: a runtime that serves it reports instructionTuned false, and "
+        "/api/chat refuses an unpinned request with model_not_instruction_tuned (501), because it "
+        "continues text and does not answer questions, and presenting it as an assistant would "
+        "misrepresent it",
         "no comparison against any pretrained model was performed, and none is claimed",
     ]
+
+
+def corpus_description(payload: dict) -> str:
+    """How the training text is described, read out of the manifest rather than remembered.
+
+    The released Lite run trained on this repository's own text, and its card says exactly
+    that. A run over an assembled corpus is a different claim -- several sources, each
+    licence-checked, with an evaluation split held out by source -- so a sentence about
+    "this repository's own text" would be describing text the model did not train on.
+    """
+    corpus = payload["corpus"]
+    sources = corpus.get("sources") or {}
+    held_out = corpus.get("heldOutSources") or []
+    if not sources:
+        return f"{corpus['trainBytes']:,} bytes of this repository's own text"
+    described = f"{corpus['trainBytes']:,} bytes assembled from {len(sources)} licence-checked sources"
+    if held_out:
+        described += (
+            f", {len(held_out)} of them held out whole for validation "
+            f"({', '.join(held_out)})"
+        )
+    return described
 
 
 def limitations_from_report(report) -> list[str]:
@@ -121,18 +163,29 @@ def limitations_from_report(report) -> list[str]:
     payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
     parameters = payload["provenance"]["parameterCount"]
     baseline = payload["evaluation"]["bestBaseline"]
+    bpe = payload["tokenizer"].get("kind") == "byte-bpe"
     limitations = [
-        "Character-level, not subword: sequences are long for the parameter count.",
-        f"Trained from scratch on {payload['corpus']['trainBytes']:,} bytes of this repository's own "
-        "text. It has no world knowledge, no instruction-following and no safety behaviour.",
+        (
+            "Byte-level BPE: the vocabulary is learned, and the merge list is stored with the "
+            "weights because it cannot be re-derived from the corpus."
+            if bpe else
+            "Character-level, not subword: sequences are long for the parameter count."
+        ),
+        f"Trained from scratch on {corpus_description(payload)}. It has no world knowledge, "
+        "no instruction-following and no safety behaviour.",
         f"Output quality is low by design of the experiment: {parameters:,} parameters trained for "
         f"{payload['resource']['steps']} steps. This proves the pipeline, not the model.",
         f"Evaluated only against {baseline}/uniform/unigram baselines on in-distribution held-out "
         "text; no comparison against any pretrained model was performed and none is claimed.",
-        "Not instruction-tuned and has no tokenizer beyond ASCII-and-source-code characters; it "
-        "cannot be exposed as a chat assistant in this state.",
+        (
+            "Not instruction-tuned: it continues text and cannot be exposed as a chat assistant in "
+            "this state."
+            if bpe else
+            "Not instruction-tuned and has no tokenizer beyond ASCII-and-source-code characters; it "
+            "cannot be exposed as a chat assistant in this state."
+        ),
     ]
-    if payload["tokenizer"]["validationUnknownRate"] > 0:
+    if payload["tokenizer"]["validationUnknownRate"] > 0 and not bpe:
         limitations.append(
             f"{payload['tokenizer']['validationUnknownRate']:.6f} of held-out characters are outside "
             "the training vocabulary and scored as <unk>; perplexity is slightly pessimistic because "
@@ -141,12 +194,12 @@ def limitations_from_report(report) -> list[str]:
     return limitations
 
 
-def build_provenance(report, *, hardware: dict | None = None) -> EvaluationProvenance:
+def build_provenance(report, *, hardware: dict | None = None, name: str = LM_NAME) -> EvaluationProvenance:
     payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
     provenance = payload["provenance"]
     model = payload["model_config"]
     return EvaluationProvenance(
-        subject=f"{LM_NAME} (from-scratch, pure NumPy)",
+        subject=f"{name} (from-scratch, pure NumPy)",
         comparator=f"{payload['evaluation']['bestBaseline']} baseline on identical held-out tokens",
         hardware=hardware or {
             "machine": provenance.get("machine"),
@@ -171,14 +224,29 @@ def build_provenance(report, *, hardware: dict | None = None) -> EvaluationProve
     )
 
 
-def register_from_report(report, manager: ModelReleaseManager, *, version: str, hardware: dict | None = None):
-    """Register a training report as a candidate version. Not released."""
+def register_from_report(
+    report,
+    manager: ModelReleaseManager,
+    *,
+    version: str,
+    hardware: dict | None = None,
+    name: str = LM_NAME,
+    family: str = LM_FAMILY,
+    licence: str = LM_LICENCE,
+):
+    """Register a training report as a candidate version. Not released.
+
+    `name`/`family` default to the released Lite model, so every existing call and card is
+    unchanged; a second artifact of the same family (a different preset of the same
+    architecture, trained the same way) passes its own name rather than being registered
+    under a name that belongs to another set of weights.
+    """
     payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
     return manager.register(
-        name=LM_NAME,
+        name=name,
         version=version,
-        family=LM_FAMILY,
-        licence=LM_LICENCE,
+        family=family,
+        licence=licence,
         weights_digest=payload["artifact"]["weightsDigest"],
         base_checkpoint=None,  # trained from random initialisation; there is no base
         config_digest=_config_digest(payload),
@@ -186,7 +254,7 @@ def register_from_report(report, manager: ModelReleaseManager, *, version: str, 
         parameter_count=int(payload["provenance"]["parameterCount"]),
         requirements=requirements_for_language_model(),
         limitations=model_limitations(payload),
-        provenance=build_provenance(payload, hardware=hardware),
+        provenance=build_provenance(payload, hardware=hardware, name=name),
         artifacts={
             "filename": payload["artifact"]["filename"],
             "strongestBaseline": best_baseline_name(payload),
@@ -208,15 +276,29 @@ def _config_digest(payload: dict) -> str:
     ).hexdigest()
 
 
-def candidate_from_report(report, manager: ModelReleaseManager, *, version: str, hardware: dict | None = None):
+def candidate_from_report(
+    report,
+    manager: ModelReleaseManager,
+    *,
+    version: str,
+    hardware: dict | None = None,
+    name: str = LM_NAME,
+    family: str = LM_FAMILY,
+    licence: str = LM_LICENCE,
+):
     """Register, validate against the declared requirements, and release only if it passes.
 
     Returns `(card, released)`. A rejected candidate is left in the manager as
     REJECTED with its reasons, which is the record that the attempt happened and why
     it did not ship.
+
+    `name`/`family` are forwarded rather than fixed, so a second artifact of the same
+    architecture can be registered under its own name. The defaults are the released
+    Lite model, which is what every existing caller passes by not passing anything.
     """
     payload = report.to_dict() if hasattr(report, "to_dict") else dict(report)
-    card = register_from_report(payload, manager, version=version, hardware=hardware)
+    card = register_from_report(payload, manager, version=version, hardware=hardware,
+                                name=name, family=family, licence=licence)
     manager.validate(card.identifier, metrics_from_report(payload), provenance=card.provenance)
 
     card = manager.card(card.identifier)

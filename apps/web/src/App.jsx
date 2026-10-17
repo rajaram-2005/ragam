@@ -83,7 +83,7 @@ export default function App() {
   }
 
   const area = AREAS.find((a) => a.id === active) ?? AREAS[0]
-  const shared = { provider, readiness, refreshReadiness: refresh, onSettings: () => setSettings(true) }
+  const shared = { provider, readiness, refreshReadiness: refresh, onSettings: () => setSettings(true), account }
   return <Shell
     active={area.id}
     onSelect={(id) => { setActive(id); goTo(`#/${id}`) }}

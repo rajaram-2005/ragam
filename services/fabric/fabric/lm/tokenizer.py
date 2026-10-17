@@ -82,6 +82,16 @@ class CharacterTokenizer:
         """Vocabulary size including `<unk>`."""
         return len(self.characters) + 1
 
+    @property
+    def kind(self) -> str:
+        """Which tokenizer this is. The report and the card read it rather than assume.
+
+        A card that says "character-level" about a byte-BPE model misdescribes every prediction
+        the model makes, so the kind travels with the vocabulary instead of being remembered by
+        whoever writes the prose.
+        """
+        return "character"
+
     def encode(self, text: str) -> np.ndarray:
         index = self._index
         return np.fromiter(

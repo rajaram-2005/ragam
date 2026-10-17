@@ -38,6 +38,9 @@
 //           absent model is recorded as absent.
 //   Max  — no artifact, same.
 
+import { BACKING_PATHS, backingPathViolations } from './composition.mjs'
+import { ARCHITECTURE, RECIPE_STEP_IDS, SIZE_PRESETS } from './architecture.mjs'
+
 export const TIERS = Object.freeze({ LITE: 'lite', PRO: 'pro', MAX: 'max' })
 
 /**
@@ -97,6 +100,102 @@ export const MOBILE_TARGETS = Object.freeze({
   reserveBytes: 500 * 1000 ** 2,
 })
 
+/**
+ * The family's stance: what it is for, and what it refuses to claim.
+ *
+ * The point of the family is to understand the present and the person, not to win a
+ * leaderboard. "Not competitive" is therefore a record with checks rather than a posture:
+ * `validateFamily()` scans every tier's own text for comparison language, and the two
+ * things this family does measure are named here rather than implied.
+ */
+export const FAMILY_STANCE = Object.freeze({
+  competitive: false,
+  objective: 'Understand the present and the person. A tier is judged on whether its answers '
+    + 'are still true today and on whether it tracks what the user actually expressed -- not on '
+    + 'beating another vendor.',
+  // The capabilities this stance is about. They live on every tier, and they are the reason
+  // this family exists rather than the reason it is bigger.
+  differentiators: Object.freeze(['trend.awareness', 'affect.history']),
+  measures: Object.freeze([
+    'Whether an answer states the observation date and the source, and abstains when the '
+      + 'observation is older than the window it was asked about.',
+    'Whether a change in the user\'s expressed state is quoted from their own message, with the '
+      + 'message cited, and abstains when they said nothing about how they feel.',
+  ]),
+  forbiddenClaims: Object.freeze([
+    'A benchmark win over a named or unnamed competitor.',
+    'A quality improvement inferred from a tier label, a version number or a parameter count.',
+    'A feeling, mood or diagnosis the user did not express.',
+  ]),
+  allowedComparisons: Object.freeze([
+    'A baseline computed on the same data by this repository (uniform, unigram, bigram, dense-only).',
+    'An earlier artifact of this family, on the same metric and the same workload.',
+  ]),
+})
+
+/**
+ * Names this family never measures itself against. Lower-case substrings, deliberately
+ * narrow: the list exists to make the stance enforceable, not to enumerate the market.
+ */
+export const COMPETITOR_MARKERS = Object.freeze([
+  'openai', 'chatgpt', 'gpt-4', 'gpt-5', 'claude', 'anthropic', 'gemini', 'deepseek',
+  'mistral', 'llama', 'grok', 'qwen', 'phi-', 'command r',
+])
+
+/**
+ * Comparison language a tier's own text may not carry. Returns violations rather than
+ * throwing, so a report can list every problem at once.
+ */
+export function stanceViolations(text, where) {
+  if (typeof text !== 'string' || !text) return []
+  const lowered = text.toLowerCase()
+  const found = COMPETITOR_MARKERS.filter((marker) => lowered.includes(marker))
+  return found.length
+    ? [`${where}: names ${found.join(', ')}, which the stance forbids comparing against. `
+       + 'Allowed comparisons are computed baselines and this family\'s own earlier artifacts.']
+    : []
+}
+
+/**
+ * Which modality a capability belongs to, so one artifact can never silently serve two.
+ * A text artifact relabelled as an image or video model is the same defect as a tier label
+ * implying a capability: a name doing the work an artifact should do.
+ */
+export const MODALITY_ROLES = Object.freeze({
+  'text.completion': 'text',
+  'text.extract': 'text',
+  'text.summarize': 'text',
+  'text.translate': 'text',
+  'text.rewrite': 'text',
+  chat: 'text',
+  'reasoning.light': 'text',
+  'reasoning.complex': 'text',
+  'coding.assist': 'text',
+  'coding.repository': 'text',
+  'research.synthesis': 'text',
+  'documents.analyze': 'text',
+  'data.analyze': 'text',
+  structured_output: 'text',
+  'agent.coordination': 'text',
+  'trend.awareness': 'text',
+  'affect.history': 'text',
+  'vision.understand': 'image',
+  'image.generate': 'image',
+  'image.edit': 'image',
+  'video.generate': 'video',
+  'video.understand': 'video',
+  'speech.transcribe': 'audio',
+  'multimodal.understanding': 'multimodal',
+})
+
+/** The modality of a named capability. Unknown names are their own modality and never merge. */
+export function modalityOf(capability) {
+  return MODALITY_ROLES[capability] ?? `unknown:${capability}`
+}
+
+/** Modalities whose artifacts must be distinct from the text artifact. */
+export const SEPARATE_MODALITIES = Object.freeze(['image', 'video'])
+
 export class ModelFamilyError extends Error {
   constructor(message, violations = []) {
     super(message)
@@ -105,6 +204,44 @@ export class ModelFamilyError extends Error {
     this.violations = violations
   }
 }
+
+/**
+ * The two capabilities that make this family itself, on every tier.
+ *
+ * Both are `unavailable` everywhere and the reason names what is missing rather than what is
+ * coming. A tested mechanism behind them exists in this repository
+ * (`klyvaron/trends.mjs`, `klyvaron/affect.mjs`), but a mechanism is not a model artifact,
+ * and an artifact is the only thing that moves these states. `acceptance` is a definition of
+ * done, not progress: nothing here is scored until it is scored.
+ */
+const differentiatorCapabilities = () => ({
+  'trend.awareness': {
+    state: CAPABILITY_STATES.UNAVAILABLE,
+    backing: null,
+    reason: 'No artifact is trained for this, and no dated source ledger is wired into a model. '
+      + 'The date-and-source mechanism in klyvaron/trends.mjs exists and is tested; a mechanism is '
+      + 'not a model capability.',
+    acceptance: [
+      'Every answer that rests on a current fact states the observation date and its source.',
+      'An observation older than the requested window is reported as stale and the model abstains '
+        + 'instead of asserting it.',
+      'A held-out set of dated questions is scored, and a stale-source answer counts as wrong.',
+    ],
+  },
+  'affect.history': {
+    state: CAPABILITY_STATES.UNAVAILABLE,
+    backing: null,
+    reason: 'No artifact is trained for this. The evidence-linked signal reader in '
+      + 'klyvaron/affect.mjs exists and is tested, and it is a mechanism, not a model capability.',
+    acceptance: [
+      'A state is reported only when the user expressed it, and the message it came from is cited.',
+      'With nothing expressed in the window the result is an abstention, never a guess.',
+      'Nothing is reported as a diagnosis and no state is inferred from writing style.',
+      'Signals are scoped to one user, kept only with that user\'s consent, and removed together '
+        + 'with the message they came from.',
+    ],
+  },
+})
 
 /**
  * The artifact this tier is backed by, and the artifact it replaced.
@@ -214,6 +351,21 @@ const LITE = Object.freeze({
   id: TIERS.LITE,
   displayName: 'Klyvaron Lite',
   status: 'partial',
+  // Lite is the tier that *is* a trained Klyvaron model: one artifact, trained from random
+  // initialisation on this repository's text, measured and released. It is the smallest preset
+  // of the same architecture Pro and Max are presets of -- there is one design, three sizes.
+  backingPath: Object.freeze({
+    path: BACKING_PATHS.TRAINED,
+    trainingRequired: true,
+    architecture: ARCHITECTURE.id,
+    modelId: SIZE_PRESETS.lite.modelId,
+    requires: 'CPU only. No accelerator, no download beyond the artifact itself',
+    steps: RECIPE_STEP_IDS,
+    bases: Object.freeze([]),
+    verified: true,
+    accelerator: Object.freeze({ id: null, measured: false }),
+    evidence: 'aetheris-lite-lm-0.1.1: from_scratch, trained and evaluated on this host',
+  }),
   statusNote: 'One small released artifact backs two capabilities, and the artifact it '
     + 'superseded is kept as a record. Conversation, summarisation, translation, vision and '
     + 'speech do not exist at this tier.',
@@ -252,18 +404,44 @@ const LITE = Object.freeze({
     'structured_output': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires a model trained to emit a schema.' },
     'vision.understand': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'No vision adapter is installed; advertising it locally would be false.' },
     'speech.transcribe': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'No speech model is installed.' },
+    ...differentiatorCapabilities(),
   },
 })
 
-/** A tier with no artifact. Recorded as absent rather than omitted. */
-const absentTier = (id, displayName, targetHardware, description, required) => Object.freeze({
+/**
+ * A tier with no artifact yet, and the family's own architecture behind it.
+ *
+ * Pro and Max are **trained, not composed**: weights from random initialisation on
+ * `aetheris-core-v1` (this repository's own architecture, `klyvaron/architecture.mjs`), trained
+ * and run on the user's own accelerator. Nothing third-party is underneath them -- `bases` is
+ * empty by rule, not by omission, and `backingPathViolations` refuses an entry there.
+ *
+ * `trainingRequired: true` is the honest value, and the consequence is stated rather than
+ * softened: the weights do not exist yet, so the tier is unbuilt and `recipeReport()` lists what
+ * is missing. An architecture is not an artifact.
+ */
+const absentTier = (id, displayName, targetHardware, description, required, preset) => Object.freeze({
+  backingPath: Object.freeze({
+    path: BACKING_PATHS.TRAINED,
+    trainingRequired: true,
+    architecture: preset.architecture,
+    modelId: preset.modelId,
+    requires: 'a GPU or another accelerator that a runtime probe confirms: CUDA, ROCm, Metal, Vulkan, or an OpenVINO GPU or NPU. The same machine builds the weights and runs them; nothing is downloaded but this repository.',
+    steps: RECIPE_STEP_IDS,
+    bases: Object.freeze([]),
+    verified: false,
+    accelerator: Object.freeze({ id: null, measured: false }),
+    note: 'No weights exist yet. The architecture and the exact config are recorded and digested, and every step after that needs compute on the machine this tier targets.',
+  }),
   id,
   displayName,
   targetHardware,
   description,
   status: 'unbuilt',
   statusNote: "No model artifact exists for this tier. Its description states the tier's "
-    + 'intended purpose, which is not a claim that anything has been built.',
+    + 'intended purpose, which is not a claim that anything has been built. The two '
+    + 'differentiating capabilities are defined here and backed by nothing, so they read as '
+    + 'unavailable.',
   storageProfile: {
     primaryArtifactBytes: null,
     managedStorageTargetBytes: null,
@@ -271,26 +449,32 @@ const absentTier = (id, displayName, targetHardware, description, required) => O
     appPackageTargetBytes: null,
     primaryModelTargetBytes: null,
   },
-  capabilities: Object.freeze(Object.fromEntries(
-    required.map((capability) => [capability, {
-      state: CAPABILITY_STATES.UNAVAILABLE,
-      backing: null,
-      reason: 'No model artifact has been produced at this tier. This host cannot obtain base '
-        + 'weights (no route to a model registry) and has no GPU, so the tier is unbuilt rather '
-        + 'than pending.',
-    }]),
-  )),
+  capabilities: Object.freeze({
+    ...Object.fromEntries(
+      required.map((capability) => [capability, {
+        state: CAPABILITY_STATES.UNAVAILABLE,
+        backing: null,
+        reason: 'No model artifact has been produced at this tier. This host cannot obtain base '
+          + 'weights (no route to a model registry) and has no GPU, so the tier is unbuilt rather '
+          + 'than pending.',
+      }]),
+    ),
+    // Uniform across tiers: the same two differentiating capabilities, in the same state.
+    ...differentiatorCapabilities(),
+  }),
 })
 
 const PRO = absentTier(TIERS.PRO, 'Klyvaron Pro', HARDWARE_CLASS.LAPTOP,
   'Stronger local intelligence on GPU-qualified laptops and desktops.',
   ['chat', 'reasoning.complex', 'coding.repository', 'research.synthesis', 'documents.analyze',
-    'data.analyze', 'vision.understand', 'image.generate', 'image.edit', 'video.generate', 'video.understand'])
+    'data.analyze', 'vision.understand', 'image.generate', 'image.edit', 'video.generate', 'video.understand'],
+  { architecture: ARCHITECTURE.id, modelId: SIZE_PRESETS.pro.modelId })
 
 const MAX = absentTier(TIERS.MAX, 'Klyvaron Max', HARDWARE_CLASS.WORKSTATION,
   'The highest practical quality on qualified high-performance local GPU computers.',
   ['chat', 'reasoning.complex', 'coding.repository', 'agent.coordination', 'multimodal.understanding',
-    'image.generate', 'image.edit', 'video.generate', 'video.understand'])
+    'image.generate', 'image.edit', 'video.generate', 'video.understand'],
+  { architecture: ARCHITECTURE.id, modelId: SIZE_PRESETS.max.modelId })
 
 export const KLYVARON = Object.freeze({ [TIERS.LITE]: LITE, [TIERS.PRO]: PRO, [TIERS.MAX]: MAX })
 
@@ -373,6 +557,27 @@ export function validateFamily(family = KLYVARON) {
     if (!Object.values(HARDWARE_CLASS).includes(tier.targetHardware)) {
       violations.push(`${id}: unknown hardware class '${tier.targetHardware}'`)
     }
+    // The stance, enforced on the tier's own words. A tier that names a competitor to
+    // measure itself against is making the comparison the family refuses to make, and a
+    // reader cannot tell a description of purpose from a claim of delivery.
+    violations.push(...backingPathViolations(tier.backingPath, `${id}.backingPath`))
+    violations.push(...stanceViolations(tier.description, `${id}.description`))
+    violations.push(...stanceViolations(tier.statusNote, `${id}.statusNote`))
+    const artifactsByModality = modalityArtifacts(tier)
+    const textArtifact = artifactsByModality.text?.artifact ?? null
+    for (const modality of SEPARATE_MODALITIES) {
+      const role = artifactsByModality[modality]
+      if (!role?.artifact) continue
+      // One artifact cannot be the text model and an image or video model at once. This is
+      // the check that refuses "the same checkpoint, relabelled per modality".
+      if (textArtifact && role.artifact === textArtifact) {
+        violations.push(
+          `${id}.${modality}: artifact '${role.artifact}' also backs the text capabilities. The `
+          + 'image and video modalities need their own artifact, identified as such; a text model '
+          + 'is not an image or video model under another name.',
+        )
+      }
+    }
     for (const [name, claim] of Object.entries(tier.capabilities)) {
       if (!Object.values(CAPABILITY_STATES).includes(claim.state)) {
         violations.push(`${id}.${name}: unknown state '${claim.state}'`)
@@ -444,6 +649,28 @@ export function validateFamily(family = KLYVARON) {
   return { valid: violations.length === 0, violations }
 }
 
+/**
+ * Where each modality's artifact comes from, for one tier.
+ *
+ * `artifact` is the artifact id that actually backs an available capability of that modality,
+ * and null when nothing does. The image and video rows of a tier are empty for as long as no
+ * image or video artifact exists -- which is the point: a listing cannot show a text model
+ * wearing an image label, because there is no row for it to be listed in.
+ */
+export function modalityArtifacts(tier) {
+  const roles = {}
+  for (const [name, claim] of Object.entries(tier.capabilities)) {
+    const modality = modalityOf(name)
+    roles[modality] ??= { capabilities: [], artifact: null, available: [] }
+    roles[modality].capabilities.push(name)
+    if (claim.state === CAPABILITY_STATES.AVAILABLE && claim.backing?.artifact) {
+      roles[modality].artifact ??= claim.backing.artifact
+      roles[modality].available.push(name)
+    }
+  }
+  return roles
+}
+
 export function getTier(id) {
   const tier = KLYVARON[id]
   if (!tier) throw new ModelFamilyError(`unknown tier '${id}'; known tiers are ${Object.keys(KLYVARON).join(', ')}`)
@@ -461,6 +688,9 @@ export function familyReport() {
   return {
     valid,
     violations,
+    // The stance travels with the report, so any interface built from it shows the same
+    // refusal to claim a comparison the family does not make.
+    stance: FAMILY_STANCE,
     tiers: Object.values(KLYVARON).map((tier) => ({
       id: tier.id,
       displayName: tier.displayName,
@@ -469,9 +699,18 @@ export function familyReport() {
       status: tier.status,
       statusNote: tier.statusNote ?? null,
       storage: tier.storageProfile,
+      backingPath: tier.backingPath,
       capabilityCount: Object.keys(tier.capabilities).length,
       availableCapabilities: Object.entries(tier.capabilities)
         .filter(([, c]) => c.state === CAPABILITY_STATES.AVAILABLE).map(([name]) => name),
+      // Which artifact, if any, serves each modality. Empty for image and video until they
+      // have their own: the listing has no slot for a relabelled text model.
+      modalityArtifacts: modalityArtifacts(tier),
+      differentiators: FAMILY_STANCE.differentiators.map((name) => ({
+        name,
+        state: tier.capabilities[name]?.state ?? CAPABILITY_STATES.UNAVAILABLE,
+        acceptance: tier.capabilities[name]?.acceptance ?? [],
+      })),
       capabilities: tier.capabilities,
     })),
   }
