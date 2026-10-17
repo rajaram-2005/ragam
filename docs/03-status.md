@@ -1,6 +1,6 @@
 # 03 — Implementation status
 
-> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
+> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research **service** code remains for reference and regression tests; it is not loaded by `npm run core`. Superseded UI components were deleted on 2026-10-17, not retained. Suite totals include retained legacy coverage.
 
 Every claim below is tied to a test, a measurement or a named limitation. Where
 something does not work, it says so and says why.
@@ -431,6 +431,42 @@ which is how the same figure was right in one file and wrong in the other. The t
 README and `docs/03` to state the same total, requires the "run in CI" line to carry it too, and
 refuses every superseded form in both documents. A number stated twice with one test guarding one copy
 is a number nobody is guarding.
+
+### 4.3 Repository hygiene: what was deleted, what was merged, and what was kept
+
+A full inventory of the 322 tracked files, done 2026-10-17. The test for "unwanted" was evidence,
+not taste: a file is dead if nothing imports it, nothing tests it, and no documented procedure runs
+it. Three things qualified.
+
+**Deleted: `apps/web/legacy/` (8 files, ~230 KB).** Eight superseded React components — a second
+`ChatArea`, `Shell`, `ImageArea` and so on — that no module imported, no test loaded, and the Vite
+build never reached. Every one has a current replacement in `apps/web/src/areas/` and
+`apps/web/src/components/`. They were kept in the Phase 2 change as "prior UI references"; a
+reference nothing reads is not a reference, it is a copy that will drift. `docs/19` said they were
+preserved, so `docs/19` was corrected rather than the deletion being left to contradict it.
+
+**Merged: `withTimeout`, from two files into one.** `mcp/layer.mjs` and `plugins/registry.mjs` each
+had their own copy of the same race — a timer, an abort listener and a cleared timeout — differing
+only in which error class they rejected with. It now lives in `src/shared/timeout.mjs` and each
+caller passes the errors it needs, because the *type* of a failure is part of a caller's contract
+and the *mechanism* is not. Two copies of a timeout are two places for a cancellation to be lost.
+The shared version also fixes what the copies had in common: the work is a thunk (an already-running
+promise cannot be cancelled, and the clock now starts where the work does) and the caller's timer is
+cleared on every path.
+
+**Kept, and why:**
+
+| File | Verdict |
+|---|---|
+| `services/core/src/legacy-server.mjs` (153) | Nothing imports it, but it is a documented entry point (`docs/02`, `docs/04`) over `app.mjs`, which `builtins.test.mjs` does exercise. Removing an entry point is a product decision, not hygiene |
+| `third-party/licenses/aetheris-MIT.txt` | Byte-identical to `LICENSE`, but it is the record of the *upstream* repository's licence and is asserted by `docs.test.mjs` and by CI. The duplicate is the point: a licence record has to travel with the code it covers |
+| `docs/experiments/*.json` (15) | Measurement records with dates and machine details. Deleting one deletes the evidence for a claim in the docs |
+| `services/fabric/remote/*` | The notebook, its job spec and the local runner are exercised by `test_training_notebook.py` and `test_training_local_runner.py` |
+| `apps/web/src/components/ContextPanels.jsx` | One direct importer, but that importer is the Chat panel that renders it, and two web tests assert its contents |
+
+No untracked or ignored artefacts were found in the tree beyond the empty, gitignored
+`.aetheris-data/`. The suite after the change: **764 / 764** core, 45/45 docs, 92/92 web (run with
+`npm ci`), 814 fabric.
 
 ---
 

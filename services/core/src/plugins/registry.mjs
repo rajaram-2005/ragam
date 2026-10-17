@@ -18,6 +18,7 @@ import { validateManifest, compareSemver, ELEVATED_SCOPES, SCOPES, PROTOCOLS, Ma
 import { validateAgainstSchema } from '../mcp/schema.mjs'
 import { PluginSignatureError, SIGNATURE_STATE, canonicalJson, verifyManifest } from './signing.mjs'
 import { TRUST, provenanceOf } from '../mcp/authority.mjs'
+import { withTimeout } from '../shared/timeout.mjs'
 
 export const PLUGIN_STATES = Object.freeze({
   DISCOVERED: 'discovered',
@@ -473,7 +474,24 @@ export class PluginRegistry {
 
     try {
       const raw = handler
-        ? await withTimeout(handler(schemaResult.value, sandbox), capability.timeoutMs, `${pluginId}:${capabilityName}`, signal)
+        ? await withTimeout(
+          () => handler(schemaResult.value, sandbox),
+          {
+            timeoutMs: capability.timeoutMs,
+            label: `${pluginId}:${capabilityName}`,
+            signal,
+            onTimeout: () => {
+              const error = new Error(`plugin '${pluginId}:${capabilityName}' exceeded its ${capability.timeoutMs}ms timeout`)
+              error.code = 'plugin_timeout'
+              return error
+            },
+            onCancelled: () => {
+              const error = new Error(`plugin '${pluginId}:${capabilityName}' was cancelled`)
+              error.code = 'plugin_cancelled'
+              return error
+            },
+          },
+        )
         : await this.#protocolInvoke(record, capability, schemaResult.value, sandbox)
 
       // Output is untrusted until schema-checked (§10).
@@ -577,37 +595,6 @@ export class PluginRegistry {
       lastInvokedAt: record.lastInvokedAt,
       history: record.history.slice(-20),
     }
-  }
-}
-
-async function withTimeout(promise, timeoutMs, label, signal) {
-  let timer
-  try {
-    return await Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        timer = setTimeout(() => {
-          const error = new Error(`plugin '${label}' exceeded its ${timeoutMs}ms timeout`)
-          error.code = 'plugin_timeout'
-          reject(error)
-        }, timeoutMs)
-      }),
-      new Promise((_, reject) => {
-        if (!signal) return
-        if (signal.aborted) return reject(new Error(`plugin '${label}' was cancelled`))
-        signal.addEventListener(
-          'abort',
-          () => {
-            const error = new Error(`plugin '${label}' was cancelled`)
-            error.code = 'plugin_cancelled'
-            reject(error)
-          },
-          { once: true },
-        )
-      }),
-    ])
-  } finally {
-    clearTimeout(timer)
   }
 }
 

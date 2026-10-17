@@ -20,6 +20,7 @@ import { randomUUID } from 'node:crypto'
 import { assertValidSchema, validateAgainstSchema } from './schema.mjs'
 import { ELEVATED_SCOPES } from '../plugins/manifest.mjs'
 import { TRUST, provenanceOf } from './authority.mjs'
+import { withTimeout } from '../shared/timeout.mjs'
 
 export const SERVER_KINDS = Object.freeze({ IN_PROCESS: 'in_process', TRANSPORT: 'transport' })
 
@@ -398,12 +399,16 @@ export class McpRegistry {
 
     try {
       const raw = await withTimeout(
-        server.kind === SERVER_KINDS.TRANSPORT
+        () => (server.kind === SERVER_KINDS.TRANSPORT
           ? server.transport({ method: 'tools/call', params: { name: toolName, arguments: inputCheck.value }, serverId, callId })
-          : tool.handler(inputCheck.value, { serverId, callId, signal, risk: tool.risk, scopes: tool.scopes }),
-        budget,
-        `${serverId}:${toolName}`,
-        signal,
+          : tool.handler(inputCheck.value, { serverId, callId, signal, risk: tool.risk, scopes: tool.scopes })),
+        {
+          timeoutMs: budget,
+          label: `${serverId}:${toolName}`,
+          signal,
+          onTimeout: () => new McpError(`tool '${serverId}:${toolName}' exceeded its ${budget}ms timeout`, { code: 'timeout' }),
+          onCancelled: () => new McpError(`tool '${serverId}:${toolName}' was cancelled`, { code: 'cancelled' }),
+        },
       )
 
       // Output is untrusted. Validate against the declared schema when there is one,
@@ -479,7 +484,16 @@ export class McpRegistry {
       throw new McpError(`resource '${uri}' has no handler bound`, { code: 'not_implemented', server: serverId })
     }
     const startedAt = Date.now()
-    const raw = await withTimeout(resource.handler({ uri, signal }), 30_000, `${serverId}:resource:${uri}`, signal)
+    const raw = await withTimeout(
+      () => resource.handler({ uri, signal }),
+      {
+        timeoutMs: 30_000,
+        label: `${serverId}:resource:${uri}`,
+        signal,
+        onTimeout: () => new McpError(`resource '${serverId}:${uri}' exceeded its 30000ms timeout`, { code: 'timeout' }),
+        onCancelled: () => new McpError(`resource '${serverId}:${uri}' was cancelled`, { code: 'cancelled' }),
+      },
+    )
     const sanitised = sanitizeUntrusted(raw, this.maxOutputBytes)
     const provenance = provenanceOf(sanitised.value, { kind: TRUST.DOCUMENT, origin: `${serverId}:resource:${uri}` })
     this.#audit('resource_read', 'success', {
@@ -608,24 +622,3 @@ export function sanitizeUntrusted(value, maxBytes = 256 * 1024) {
   return { value: { _truncated: true, originalBytes: serialized.length, preview: clipped }, truncated: true, bytes: maxBytes }
 }
 
-async function withTimeout(promise, timeoutMs, label, signal) {
-  let timer
-  try {
-    return await Promise.race([
-      Promise.resolve().then(() => promise),
-      new Promise((_, reject) => {
-        timer = setTimeout(() => {
-          const error = new McpError(`tool '${label}' exceeded its ${timeoutMs}ms timeout`, { code: 'timeout' })
-          reject(error)
-        }, timeoutMs)
-      }),
-      new Promise((_, reject) => {
-        if (!signal) return
-        if (signal.aborted) return reject(new McpError(`tool '${label}' was cancelled`, { code: 'cancelled' }))
-        signal.addEventListener('abort', () => reject(new McpError(`tool '${label}' was cancelled`, { code: 'cancelled' })), { once: true })
-      }),
-    ])
-  } finally {
-    clearTimeout(timer)
-  }
-}
