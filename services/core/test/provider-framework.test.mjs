@@ -69,7 +69,7 @@ test('acceptance: a provider cannot claim a capability this build does not imple
   // And a ready entry on a wire with no adapter is refused too.
   const wrongWire = validateProvider({
     ...valid,
-    wire: WIRE_FORMATS.ANTHROPIC_MESSAGES,
+    wire: WIRE_FORMATS.COHERE_CHAT,
     status: PROVIDER_STATUS.READY,
     capabilities: [{ id: CAPABILITIES.STREAMING, source: 'test', ref: 'test/example.test.mjs' }],
   })
@@ -178,13 +178,13 @@ test('the catalogue refuses the excluded aggregator by name', () => {
 test('the report states the three counts and the honest headline', () => {
   const report = catalogueReport()
   assert.equal(report.valid, true)
-  assert.equal(report.counts.ready, 3)
+  assert.equal(report.counts.ready, 5)
   assert.ok(report.counts.gateway_only >= 10)
   assert.ok(report.counts.pending >= 10)
-  assert.match(report.summary, /^3 ready/)
+  assert.match(report.summary, /^5 ready/)
   const matrix = capabilityMatrix()
   assert.equal(matrix.valid, true)
-  assert.deepEqual(matrix.tested, ['litellm', 'ollama', 'llamacpp'])
+  assert.deepEqual(matrix.tested, ['litellm', 'ollama', 'llamacpp', 'anthropic', 'gemini'])
   assert.ok(matrix.rows.every((row) => row.status !== PROVIDER_STATUS.READY || row.tested.length > 0))
 })
 

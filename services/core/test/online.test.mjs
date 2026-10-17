@@ -68,9 +68,9 @@ test('the provider catalogue is authenticated, read-only and carries no secrets'
   const r = await f.request('GET', '/api/providers/catalog')
   assert.equal(r.status, 200)
   assert.equal(r.data.valid, true)
-  assert.equal(r.data.counts.ready, 3, 'three runtimes have a tested path')
+  assert.equal(r.data.counts.ready, 5, 'three runtimes and two native wires have a tested path')
   assert.ok(r.data.counts.pending > 0, 'the unimplemented adapters must be stated, not hidden')
-  assert.match(r.data.summary, /^3 ready/)
+  assert.match(r.data.summary, /^5 ready/)
   for (const provider of r.data.providers) {
     assert.ok(provider.docsUrl.startsWith('https://'), `${provider.id} must cite documentation`)
     // A descriptor has no credential field, so there is nothing to redact — but assert it anyway,
@@ -333,9 +333,11 @@ test('a second provider connection is stored beside the first, with its own key'
 test('a connection is refused when the catalogue says there is no adapter', async (t) => {
   const f = await fixture(t)
   await f.login()
-  const anthropic = await f.request('PUT', '/api/providers/anthropic', { baseUrl: 'https://api.anthropic.com', apiKey: 'x' })
-  assert.equal(anthropic.status, 400)
-  assert.equal(anthropic.data.error, 'adapter_pending')
+  // Cohere is still `pending`: its wire has no adapter. Anthropic is not used here any more
+  // because it now has one, and a test that kept asserting the refusal would pin a falsehood.
+  const cohere = await f.request('PUT', '/api/providers/cohere', { baseUrl: 'https://api.cohere.com', apiKey: 'x' })
+  assert.equal(cohere.status, 400)
+  assert.equal(cohere.data.error, 'adapter_pending')
   // A pending connection is not stored as a side effect of being refused.
   assert.equal(f.app.store.connections.length, 0)
 

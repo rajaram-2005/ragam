@@ -140,6 +140,7 @@ export function selectProvider(request = {}, policy = {}, health = {}, providers
 
   // Stable, explainable choice among equals: `ready` providers are the only ones here, and the
   // order is the catalogue's (which is the maintained order), not alphabetical or random.
+  // Nothing is chosen when nothing is eligible — a caller gets the refusals, not the first entry.
   const chosen = eligible[0]
   return Object.freeze({
     chosen: Object.freeze({

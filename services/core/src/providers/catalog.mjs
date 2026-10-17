@@ -1,3 +1,5 @@
+import { IMPLEMENTED } from './wires/index.mjs'
+
 // The provider catalogue: what the world offers, and how little of it this build can prove.
 //
 // This module exists because the two failure modes a provider list has are opposite and both
@@ -44,8 +46,11 @@ export const WIRE_FORMATS = Object.freeze({
   GCP_VERTEX: 'gcp_vertex',
 })
 
-/** Wires the online gateway's transport can speak today. */
-export const IMPLEMENTED_WIRES = Object.freeze([WIRE_FORMATS.OPENAI_CHAT])
+/**
+ * Wires the online gateway's transport can speak today. Derived from the adapter registry, so a
+ * provider cannot be promoted onto a wire that nothing implements.
+ */
+export const IMPLEMENTED_WIRES = IMPLEMENTED
 
 export const PROVIDER_STATUS = Object.freeze({
   READY: 'ready',
@@ -99,11 +104,35 @@ const ready = (id, label, doc, capabilities, extra = {}) => Object.freeze({
 const GATEWAY_TESTS = 'test/online.test.mjs'
 const streaming = cap(CAPABILITIES.STREAMING, 'test', GATEWAY_TESTS)
 const cancellation = cap(CAPABILITIES.CANCELLATION, 'test', GATEWAY_TESTS)
+const WIRE_TESTS = 'test/online-wires.test.mjs'
+const wireStreaming = cap(CAPABILITIES.STREAMING, 'test', WIRE_TESTS)
+
+// A native adapter: a published wire this build speaks, contract-tested against a local fixture.
+// `ready` here means exactly what it means for the three runtimes — a tested code path — and not
+// that the vendor has been called. The note says the second part.
+const native = (id, label, doc, wire, auth) => Object.freeze({
+  id, label,
+  category: 'vendor',
+  wire,
+  auth,
+  status: PROVIDER_STATUS.READY,
+  docsUrl: doc,
+  // Streaming is claimed because a test exercises it. Cancellation is not claimed for these
+  // wires yet: the transport supports it, but no test in this repository has aborted one.
+  capabilities: Object.freeze([wireStreaming]),
+  egress: Object.freeze({ https: true, operatorConfigured: false }),
+  notes: 'Native adapter, contract-tested against a local fixture. No live call has been made in this build; the key you save is sent only to the endpoint you configure.',
+})
 
 export const PROVIDERS = Object.freeze([
   ready('litellm', 'LiteLLM gateway', 'https://docs.litellm.ai/docs/providers', [streaming, cancellation]),
   ready('ollama', 'Ollama (OpenAI-compatible)', 'https://github.com/ollama/ollama/blob/main/docs/openai.md', [streaming, cancellation]),
   ready('llamacpp', 'llama.cpp server', 'https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md', [streaming, cancellation]),
+
+  // Native wires. Their request shapes differ from OpenAI's in ways a compatibility layer would
+  // paper over: auth header, system-prompt placement, role names and the completion signal.
+  native('anthropic', 'Anthropic Claude', 'https://docs.anthropic.com/en/api/messages', WIRE_FORMATS.ANTHROPIC_MESSAGES, AUTH_KINDS.X_API_KEY),
+  native('gemini', 'Google Gemini', 'https://ai.google.dev/api/generate-content', WIRE_FORMATS.GEMINI_GENERATE, AUTH_KINDS.X_API_KEY),
 
   // OpenAI-compatible vendors. `gateway_only` is a statement about the wire format, not a tested
   // integration: an operator can point a compatible endpoint at them, and nothing here has done so.
@@ -140,8 +169,6 @@ export const PROVIDERS = Object.freeze([
   // Vendors whose wire format this build does not implement. No capability list: there is nothing
   // honest to put in it.
   ...[
-    ['anthropic', 'Anthropic Claude', 'https://docs.anthropic.com/en/api/messages', WIRE_FORMATS.ANTHROPIC_MESSAGES, AUTH_KINDS.X_API_KEY],
-    ['gemini', 'Google Gemini', 'https://ai.google.dev/api/generate-content', WIRE_FORMATS.GEMINI_GENERATE, AUTH_KINDS.BEARER],
     ['vertex', 'Google Vertex AI', 'https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference', WIRE_FORMATS.GCP_VERTEX, AUTH_KINDS.GCP_ADC],
     ['cohere', 'Cohere', 'https://docs.cohere.com/reference/chat', WIRE_FORMATS.COHERE_CHAT, AUTH_KINDS.BEARER],
     ['azure-openai', 'Azure OpenAI', 'https://learn.microsoft.com/en-us/azure/ai-services/openai/reference', WIRE_FORMATS.OPENAI_CHAT, AUTH_KINDS.X_API_KEY],

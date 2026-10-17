@@ -231,8 +231,8 @@ limitations.
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1748 tests)
-npm run test:core         # 839
+npm test                  # all three suites (1753 tests)
+npm run test:core         # 844
 npm run test:web          # 92
 npm run test:fabric       # 814 — needs numpy + pytest on the interpreter
 ```
@@ -287,7 +287,7 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 839 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Core service** | 844 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
 | **Fabric** | 814 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 95 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 48-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
@@ -442,12 +442,12 @@ controls described in §7 — set the runtime in Provider Settings, not in `.env
 
 ## 8. External providers and metadata catalogs
 
-**The active build has one online transport and three runtimes it can point at:
-LiteLLM, Ollama and llama.cpp server** (§7). There is still no provider chooser, no
-direct OpenAI/Anthropic/OpenRouter path and no native Ollama or llama.cpp protocol in the
-online entry; both local runtimes are reached over their OpenAI-compatible routes. Universal provider support is planned, not shipped, and it is
-listed as not delivered in [docs/19](19-online-only-phase-2.md) and
-[docs/20](20-accounts-and-sign-in.md). FreeLLMAPI remains excluded.
+**The active build ships one online transport with three wire adapters:** OpenAI-compatible
+chat, Anthropic Messages and Gemini generateContent. LiteLLM, Ollama and llama.cpp server are
+reached over their OpenAI-compatible routes; no vendor is contacted unless you save its endpoint
+and key in Provider Settings (unreleased on this branch), and every request goes only to the
+active connection. Bedrock, Vertex, Cohere and Azure remain planned. The unreleased provider work
+is described in [docs/27](27-provider-framework.md); FreeLLMAPI remains excluded.
 
 Optional **metadata-only** sources are now configured using
 `AETHERIS_MODEL_CATALOG_FILE`; see [17 — Model catalog](./17-model-catalog.md).

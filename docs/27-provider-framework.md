@@ -59,10 +59,10 @@ What exists, read rather than assumed:
 | Provider registry with capability metadata | **implemented and tested** | `providers/catalog.mjs`, `test/provider-framework.test.mjs` |
 | Capability-based routing with explainable refusals | **implemented and tested** | `providers/select.mjs` |
 | Error normalisation, retry classification, redaction | **implemented and tested** | `providers/errors.mjs` |
-| Provider setup UI (credentials, test, model list) | implemented for the three runtimes | `ProviderSettings.jsx`, `test/online.test.mjs` |
+| Provider setup UI (credentials, test, model list) | implemented for the three runtimes, Anthropic, Gemini and custom endpoints | `ProviderSettings.jsx`, `test/online.test.mjs`, `test/online-wires.test.mjs` |
 | Capability matrix in the UI | **implemented and tested (read-only)** | `ProviderCatalogue.jsx`, `test/render.test.mjs` |
 | Catalog API | **implemented and tested** | `GET /api/providers/catalog` |
-| Direct per-vendor chat adapters (Anthropic, Gemini, Bedrock, Vertex, Cohere, Azure) | planned | §4 — `pending`, refused by name |
+| Direct per-vendor chat adapters | **implemented and tested for Anthropic and Gemini**; Bedrock, Vertex, Cohere and Azure planned | `providers/wires/*.mjs`, `test/online-wires.test.mjs`; the rest stay `pending` and are refused by name |
 | Other OpenAI-compatible vendors | implemented, awaiting live credentials | §4 — `gateway_only`; no vendor called |
 | Image generation, editing, history | planned | product routes still refuse `not_implemented` |
 | Video generation, async jobs, cancellation | planned | idem |
@@ -84,7 +84,8 @@ note says so.
 
 ## 3. The provider framework
 
-Three modules, no sockets.
+Three catalogue modules and one adapter per implemented wire; no vendor socket in any of them
+(the transport lives in `online/gateway.mjs`).
 
 **`providers/catalog.mjs` — what exists, and what this build can prove.** Each descriptor carries an
 id, label, category, wire format, auth kind, a documentation URL, a free-text note, an egress policy,
@@ -92,7 +93,7 @@ and a status:
 
 | Status | Meaning | What it may claim |
 |---|---|---|
-| `ready` | a tested code path reaches it | capabilities whose evidence is a test in this repository |
+| `ready` | a tested code path reaches it (the three runtimes against a local server; Anthropic and Gemini against a contract fixture) | capabilities whose evidence is a test in this repository |
 | `gateway_only` | it speaks the OpenAI-compatible wire the transport implements | **nothing** — the capability list is empty by rule |
 | `pending` | it needs a wire adapter this build does not have | nothing; it is refused by selection |
 
@@ -119,7 +120,7 @@ read-only matrix with three sentences and no controls.
 
 ## 4. Provider matrix
 
-**33 entries — 3 ready, 14 reachable via an OpenAI-compatible endpoint, 16 pending.**
+**33 entries — 5 ready, 14 reachable via an OpenAI-compatible endpoint, 14 pending.**
 
 | Provider | Status | Wire | Auth | Capabilities evidenced | Documentation |
 |---|---|---|---|---|---|
@@ -140,8 +141,8 @@ read-only matrix with three sentences and no controls.
 | `huggingface` — Hugging Face Inference Providers | gateway_only | openai_chat | bearer | — | [docs](https://huggingface.co/docs/inference-providers/index) |
 | `vllm` — vLLM (OpenAI-compatible server) | gateway_only | openai_chat | bearer | — | [docs](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html) |
 | `localai` — LocalAI | gateway_only | openai_chat | bearer | — | [docs](https://localai.io/features/openai-functions/) |
-| `anthropic` — Anthropic Claude | pending | anthropic_messages | x_api_key | — | [docs](https://docs.anthropic.com/en/api/messages) |
-| `gemini` — Google Gemini | pending | gemini_generate | bearer | — | [docs](https://ai.google.dev/api/generate-content) |
+| `anthropic` — Anthropic Claude | ready | anthropic_messages | x_api_key | streaming:test | [docs](https://docs.anthropic.com/en/api/messages) |
+| `gemini` — Google Gemini | ready | gemini_generate | x_api_key | streaming:test | [docs](https://ai.google.dev/api/generate-content) |
 | `vertex` — Google Vertex AI | pending | gcp_vertex | gcp_adc | — | [docs](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference) |
 | `cohere` — Cohere | pending | cohere_chat | bearer | — | [docs](https://docs.cohere.com/reference/chat) |
 | `azure-openai` — Azure OpenAI | pending | openai_chat | x_api_key | — | [docs](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference) |
@@ -158,8 +159,25 @@ read-only matrix with three sentences and no controls.
 | `diffusers` — Diffusers (local) | pending | — | bearer | — | [docs](https://huggingface.co/docs/diffusers/index) |
 
 `gateway_only` is a statement about a wire format, not an integration: an operator can point a
-compatible endpoint at these vendors, and nothing in this repository has done so. `pending` adapters
-are refused by name — `adapter_pending` — even if a vendor documents the capability.
+compatible endpoint at these vendors, and nothing in this repository has done so.
+
+`ready` for `anthropic` and `gemini` means the same thing it means for the three runtimes: a code
+path this repository exercises against a fixture. It does **not** mean the vendor was called. Their
+request shapes are not OpenAI's — auth header, system-prompt placement, role names and the
+completion signal all differ — so each has its own adapter rather than a compatibility shim:
+
+| Difference | Anthropic Messages | Gemini generateContent |
+|---|---|---|
+| Auth | `x-api-key` | `x-goog-api-key` |
+| Version header | `anthropic-version: 2023-06-01` (required) | none |
+| Model location | body | path (`models/{model}:generateContent`) |
+| System prompt | top-level `system` string | `systemInstruction.parts` |
+| Assistant role | `assistant` | `model` |
+| Stream completion | `message_stop` event | end of body (no sentinel) |
+| Token fields | `input_tokens` / `output_tokens` | `promptTokenCount` / `candidatesTokenCount` |
+
+`pending` adapters are refused by name — `adapter_pending` — even if a vendor documents the
+capability.
 
 ---
 
@@ -246,9 +264,13 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 
 - **No live provider call was made.** "Implemented, awaiting live credentials" is the ceiling for
   every vendor outside the three tested runtimes.
-- **No direct per-vendor adapter exists** beyond the OpenAI-compatible transport. Anthropic, Gemini,
-  Bedrock, Vertex, Cohere and Azure need their own request builders; they are `pending`, and adding
-  a connection for one is refused with `adapter_pending` rather than accepted and quietly broken.
+- **Two native adapters exist, and neither has been called live.** Anthropic Messages and Gemini
+  generateContent are contract-tested against local fixtures that return the published response
+  shapes. A key that is valid, a model that exists and a quota that allows the request are all still
+  unverified; the matrix and `docs/03` say so.
+- **Bedrock, Vertex, Cohere and Azure remain `pending`.** Each needs its own request builder (and,
+  for Bedrock and Vertex, its own signing and credential chain). Adding a connection for one is
+  refused with `adapter_pending` rather than accepted and quietly broken.
 - **A catalogue id is usable only when its `wire` is `openai_chat`.** The fourteen `gateway_only`
   entries that speak that wire can be saved against the implemented transport; the rest cannot.
 - **The UI cannot configure a pending provider.** That is deliberate: a control that cannot work is
@@ -256,14 +278,16 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 
 ## 10. Remaining work, ranked
 
-1. Anthropic Messages and Gemini `generateContent` adapters, each with contract tests and a
-   `ready` promotion that validation will only accept with a test behind it. This needs a raw
-   request transport first: the current gateway only speaks the OpenAI chat wire.
-2. Image generation through one verified provider, reusing `media/workflow.mjs` and the job queue.
-3. Video generation, async lifecycle, cancellation and restart recovery.
-4. An OS-level offline test (network namespace or a hooked DNS resolver), then strict offline can be
+1. A live verification run for Anthropic and Gemini: one real request each, recorded with date,
+   model and response digest. Until then their status means "tested code path", not "verified
+   vendor".
+2. Bedrock, Vertex, Cohere and Azure adapters — each needs its own signing and credential chain, not
+   another compatibility shim.
+3. Image generation through one verified provider, reusing `media/workflow.mjs` and the job queue.
+4. Video generation, async lifecycle, cancellation and restart recovery.
+5. An OS-level offline test (network namespace or a hooked DNS resolver), then strict offline can be
    called *verified* rather than *policy-enforced*.
-5. Product routes for the adaptive core, which remains a library.
+6. Product routes for the adaptive core, which remains a library.
 
 ## 11. Tests
 
@@ -271,6 +295,7 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 npm run test:core                      # includes test/provider-framework.test.mjs
 node --test services/core/test/online.test.mjs          # 29 tests, including schema 2
 node --test services/core/test/online-runtimes.test.mjs # 10 tests
+node --test services/core/test/online-wires.test.mjs    # 5 contract tests, two native wires
 node --test services/core/test/provider-framework.test.mjs
 npm run test:web                       # includes the catalogue and saved-connection renders
 ```

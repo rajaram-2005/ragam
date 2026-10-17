@@ -1,18 +1,21 @@
 // Online gateway transport. No redirect, retry or alternate-model fallback.
 //
-// Every runtime here speaks the same OpenAI-compatible wire protocol, `GET {base}/models`
-// and `POST {base}/chat/completions` (with SSE when streaming). LiteLLM was the first
-// gateway the online entry supported. Ollama and llama.cpp's `llama-server` both expose the same
-// `/v1` routes, so they reach the online entry through this one transport. That keeps
-// their traffic under the same deadline, size limits, cancellation, redirect refusal and
-// destination checks, instead of a second network path with weaker guarantees.
+// The transport owns the properties every provider must have: the deadline, size bounds, DNS and
+// private-address filtering, redirect refusal, cancellation, and one request per call. The *shape*
+// of a request belongs to a wire adapter (`providers/wires/*.mjs`): OpenAI-compatible
+// `/chat/completions`, Anthropic `/messages`, Gemini `:generateContent`. Adding a wire must not add
+// a second network path with weaker guarantees, so all three go through `request()` below.
 import http from 'node:http'
 import https from 'node:https'
 import { lookup } from 'node:dns'
 import { isIP, BlockList } from 'node:net'
 import { IMPLEMENTED_WIRES, PROVIDER_STATUS, providerById } from '../providers/catalog.mjs'
+import { wireFor } from '../providers/wires/index.mjs'
+import { failure } from './failure.mjs'
 
-export function failure(code, message, status = 400) { return Object.assign(new Error(message), { code, status }) }
+// Re-exported because every existing caller imports it from here; the definition moved so the wire
+// adapters can throw a coded failure without importing this module (and this module imports them).
+export { failure }
 
 /**
  * The runtimes Provider Settings can point at.
@@ -89,8 +92,8 @@ export function gatewayUrl(value, trustedOrigins = []) {
 
 export class OnlineGateway {
   constructor({ trustedOrigins = [], timeoutMs = 120_000, maxBytes = 2 * 1024 * 1024 } = {}) { Object.assign(this, { trustedOrigins, timeoutMs, maxBytes }) }
-  async request(config, path, { body, signal, onFrame } = {}) {
-    const runtime = runtimeFor(config.kind ?? 'litellm'), label = runtime.label
+  async request(config, path, { body, signal, onFrame, headers, doneOnEnd = false } = {}) {
+    const runtime = runtimeFor(config.kind ?? config.id ?? 'litellm'), label = runtime.label
     const base = gatewayUrl(config.baseUrl, this.trustedOrigins)
     const url = new URL(`${base}${path}`)
     const trusted = this.trustedOrigins.includes(url.origin)
@@ -115,7 +118,13 @@ export class OnlineGateway {
       })
       req = (url.protocol === 'https:' ? https : http).request(url, {
         method: payload ? 'POST' : 'GET', lookup: safeLookup,
-        headers: { ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}), accept: onFrame ? 'text/event-stream' : 'application/json', ...(payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {}) },
+        headers: {
+          // A wire adapter supplies its own credential header. The default is the OpenAI shape,
+          // kept for callers that predate the adapters; an adapter never mixes the two.
+          ...(headers ?? (config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {})),
+          accept: onFrame ? 'text/event-stream' : 'application/json',
+          ...(payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {}),
+        },
       }, (res) => {
         response = res
         if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -142,7 +151,9 @@ export class OnlineGateway {
             if (streamDone) return done(failure('invalid_stream', 'Unexpected content after stream completion.', 502))
             try {
               const parsed = JSON.parse(data)
-              if (parsed.error) throw Error('upstream error')
+              // Anthropic reports a mid-stream failure as an `error` event with a type field;
+              // OpenAI reports `{ error }`. Either is a failed stream, never a short answer.
+              if (parsed.error || parsed.type === 'error') throw Error('upstream error')
               onFrame(parsed)
             } catch { return done(failure('invalid_stream', 'Gateway returned an invalid or failed stream.', 502)) }
           }
@@ -150,7 +161,10 @@ export class OnlineGateway {
         res.on('aborted', () => done(failure('provider_interrupted', 'Gateway response was interrupted.', 502)))
         res.on('error', () => done(failure('provider_interrupted', 'Gateway response failed.', 502)))
         res.on('end', () => {
-          if (onFrame) return streamDone ? done(null, null) : done(failure('provider_interrupted', 'Gateway stream ended without completion.', 502))
+          // Only the OpenAI wire has a `[DONE]` sentinel. A wire without one ends when the body
+          // ends, and its adapter is responsible for asserting that the protocol's own completion
+          // event arrived (Anthropic's `message_stop`, Gemini's final candidate).
+          if (onFrame) return streamDone || doneOnEnd ? done(null, null) : done(failure('provider_interrupted', 'Gateway stream ended without completion.', 502))
           try { done(null, JSON.parse(text)) } catch { done(failure('invalid_response', 'Gateway returned invalid JSON.', 502)) }
         })
       })
@@ -161,9 +175,9 @@ export class OnlineGateway {
       req.end(payload)
     })
   }
+  /** Model listing is a property of the wire, not of the transport: each adapter parses its own. */
   async models(config) {
-    const data = await this.request(config, '/models')
-    if (!Array.isArray(data.data) || data.data.length > 500) throw failure('invalid_model_list', 'Gateway must return at most 500 model records.', 502)
-    return [...new Set(data.data.map((entry) => entry?.id).filter((id) => typeof id === 'string' && id.length > 0 && id.length <= 240 && !/[\x00-\x1f\x7f]/.test(id)))].sort()
+    const wire = config.wire ?? runtimeFor(config.kind ?? config.id ?? 'litellm').wire
+    return wireFor(wire).models(this.request.bind(this), config)
   }
 }

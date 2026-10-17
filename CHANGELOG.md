@@ -26,6 +26,15 @@ Not in 0.2.0. On this branch only.
 - **`PUT /api/providers/active`** switches connections without rewriting a credential, and a probe
   (`POST /api/providers/<id>/test`) reads and writes only the connection it names — a key is never
   spent on another vendor's endpoint.
+- **Anthropic Messages and Gemini generateContent adapters.** Each speaks its vendor's published
+  wire rather than an OpenAI compatibility shim: `x-api-key` + `anthropic-version` and top-level
+  `system` for Anthropic; model in the path, `x-goog-api-key`, `contents`/`systemInstruction` and
+  `?alt=sse` for Gemini. Anthropic's `message_stop` and Gemini's final candidate are the completion
+  signals; a stream that ends early is `provider_interrupted`, never a short answer.
+- **Contract tests, not vendor calls.** `test/online-wires.test.mjs` runs both adapters against
+  local fixtures that return the documented response shapes and records the exact headers and
+  bodies the product sent. Both providers are `ready` in the catalogue — a tested code path — and
+  the matrix says in as many words that neither vendor has been called.
 - No live provider call was made, and no direct per-vendor adapter exists beyond the tested
   OpenAI-compatible transport. See `docs/27-provider-framework.md` for the audited status.
 

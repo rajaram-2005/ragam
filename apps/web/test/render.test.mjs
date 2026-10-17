@@ -535,8 +535,8 @@ test('Chat renders the saved exact model and identifies the online recipient', (
 test('the provider catalogue shows status, never a control, and nothing when unloaded', () => {
   const catalog = {
     valid: true,
-    summary: '3 ready, 14 reachable via an OpenAI-compatible endpoint, 16 pending',
-    counts: { ready: 3, gateway_only: 14, pending: 16 },
+    summary: '5 ready, 14 reachable via an OpenAI-compatible endpoint, 14 pending',
+    counts: { ready: 5, gateway_only: 14, pending: 14 },
     providers: [
       { id: 'litellm', label: 'LiteLLM gateway', status: 'ready', capabilities: [{ id: 'streaming', source: 'test', ref: 'test/online.test.mjs' }] },
       { id: 'openai', label: 'OpenAI', status: 'gateway_only', capabilities: [] },

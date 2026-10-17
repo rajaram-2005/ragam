@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 25,526 source lines, 19,016 test lines
+### `services/core` — 25,910 source lines, 19,329 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -79,9 +79,10 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
 | `online/accounts.mjs` | 387 | Accounts, scrypt password hashes, lockouts, throttling and host-delivered reset codes |
-| `online/app.mjs` | 462 | Authenticated online application, per-account context, exact-model inference, and a provider-connection family: a route per saved connection, an active-connection switch, and a probe that reads only the connection it names |
+| `online/app.mjs` | 465 | Authenticated online application, per-account context, exact-model inference, and a provider-connection family: a route per saved connection, an active-connection switch, and a probe that reads only the connection it names |
 | `online/context-routes.mjs` | 175 | Authenticated context and reviewed read-only tool routes |
-| `online/gateway.mjs` | 169 | Bounded OpenAI-compatible transport for every saved connection: destination validation, SSE, no redirects, and a runtime resolver that admits a catalogue id only when the wire is implemented and the adapter is not pending |
+| `online/gateway.mjs` | 183 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
+| `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
 | `online/http.mjs` | 32 | Bounded JSON requests and no-store responses |
 | `online/store.mjs` | 242 | Multi-connection encrypted store (schema 2): one sealed credential per connection, an active id, a store-wide revision, and a migration that preserves the key of a schema-1 file |
 | `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
@@ -154,9 +155,14 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `packs/builtin.mjs` | 131 | Three shipped packs — engineering repo maintenance, legal document review (confidential, human review, "reading support, not legal advice"), grounded tutoring — each narrow, and each capability either evidenced by a file in this repository or marked unimplemented |
 | `benchmark/harness.mjs` | 254 | The measured benchmark of the adaptive core: every entry calls the real module, a failed entry is kept in the table with its error and fails the run, and a benchmark that measures nothing is refused rather than reported as zero |
 | `release/manifest.mjs` | 268 | Release verification: one version across `VERSION` and the three packages, a dated changelog entry, documented totals compared against supplied measurements (not against each other), required artefacts present, and every shipped pack capability evidenced |
-| `providers/catalog.mjs` | 296 | The vendor catalogue: wire format, auth kind, documentation URL and a status per provider. A `ready` entry may only claim capabilities backed by a test in this repository; `gateway_only` may claim none; `pending` is refused by name. Validation is what keeps a credential field unrepresentable |
-| `providers/select.mjs` | 172 | Capability selection with reasons: strict offline refuses a remote request before candidates are considered, an unrecorded context limit does not satisfy a stated minimum, and every rejected candidate is returned with a code rather than silently dropped |
+| `providers/catalog.mjs` | 323 | The vendor catalogue: wire format, auth kind, documentation URL and a status per provider. A `ready` entry may only claim capabilities backed by a test in this repository; `gateway_only` may claim none; `pending` is refused by name. Validation is what keeps a credential field unrepresentable |
+| `providers/select.mjs` | 173 | Capability selection with reasons: strict offline refuses a remote request before candidates are considered, an unrecorded context limit does not satisfy a stated minimum, and every rejected candidate is returned with a code rather than silently dropped |
 | `providers/errors.mjs` | 228 | One failure shape for every provider: status→code mapping, retryability decided by code, bounded `Retry-After`, and messages redacted against six credential patterns before they can reach a log |
+| `providers/wires/index.mjs` | 25 | The wire registry: `IMPLEMENTED_WIRES` is derived from it, so a provider cannot be promoted onto a wire nothing implements |
+| `providers/wires/openai.mjs` | 43 | OpenAI-compatible chat: `{base}/models`, `{base}/chat/completions`, SSE with a `[DONE]` sentinel |
+| `providers/wires/common.mjs` | 70 | Conversation shaping shared by the native wires: system hoisting, same-role merging, user-first refusal, token counts |
+| `providers/wires/anthropic.mjs` | 93 | Anthropic Messages: `x-api-key`, `anthropic-version`, top-level `system`, content blocks, `message_stop` as the completion signal |
+| `providers/wires/gemini.mjs` | 99 | Gemini generateContent: model in the path, `x-goog-api-key`, `contents`/`systemInstruction`, `alt=sse`, blocked-prompt refusal |
 
 ### `services/fabric` — 12,655 source lines, 9,995 test lines
 

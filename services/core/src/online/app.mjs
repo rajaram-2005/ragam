@@ -15,6 +15,7 @@ import { mostSensitiveDataClass } from '../policy/egress.mjs'
 import { PluginRegistry } from '../plugins/registry.mjs'
 import { McpRegistry, RISK, SERVER_KINDS } from '../mcp/layer.mjs'
 import { PROVIDERS, catalogueReport, describeProvider } from '../providers/catalog.mjs'
+import { wireFor } from '../providers/wires/index.mjs'
 
 /**
  * Session bounds.
@@ -252,19 +253,21 @@ export class OnlineApp {
     const temperature = body.temperature ?? 0.2
     if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 8192 || !Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw failure('invalid_parameters', 'Max tokens must be 1–8192 and temperature 0–2.')
     if (body.sessionId && !context.memory.getSession(body.sessionId)) throw failure('session_not_found', 'That conversation does not exist for this account.', 404)
-    let text = '', reportedModel = null, usage = null, sawContent = false
-    const onFrame = emit ? (data) => {
-      if (data.model) reportedModel = data.model
-      if (data.usage) usage = data.usage
-      const content = data.choices?.[0]?.delta?.content
-      if (typeof content === 'string') { sawContent = true; text += content; emit('delta', { text: content }) }
-    } : null
-    const data = await this.gateway.request(config, '/chat/completions', { signal, body: { model, messages: redacted.value, max_tokens: maxTokens, temperature, stream: Boolean(emit) }, onFrame })
-    if (!emit) {
-      if (typeof data.choices?.[0]?.message?.content !== 'string') throw failure('invalid_completion', 'This model did not return a text completion. No model was substituted.', 502)
-      text = data.choices[0].message.content; reportedModel = data.model ?? null; usage = data.usage ?? null; sawContent = true
-    }
-    if (!sawContent) throw failure('invalid_completion', 'No text completion was returned. Tool execution is not automatic.', 502)
+    // The connection's wire decides the request shape, the credential header and the completion
+    // signal. The app supplies one internal conversation shape and receives one internal result;
+    // it never inspects a provider's JSON.
+    const result = await wireFor(config.wire).chat(this.gateway.request.bind(this.gateway), config, {
+      model,
+      messages: redacted.value,
+      maxTokens,
+      temperature,
+      signal,
+      onText: emit ? (delta) => emit('delta', { text: delta }) : null,
+    })
+    const text = result.text
+    const reportedModel = result.model ?? null
+    const usage = result.usage ?? null
+    if (!text) throw failure('invalid_completion', 'No text completion was returned. Tool execution is not automatic.', 502)
     if (revision === this.store.state.revision && this.store.state.models.includes(model)) this.store.save({ verified: { ...this.store.state.verified, [model]: new Date().toISOString() } })
     if (body.sessionId) {
       context.memory.appendTurn(body.sessionId, { role: 'user', content: prompt, dataClass: classification })
