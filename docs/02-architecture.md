@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 26,592 source lines, 19,863 test lines
+### `services/core` — 26,604 source lines, 19,874 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -167,7 +167,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/wires/azure.mjs` | 74 | Azure OpenAI v1: `api-key` header, `/openai/v1/chat/completions`, the deployment name in `model`, and OpenAI SSE |
 | `providers/wires/sigv4.mjs` | 107 | AWS Signature Version 4 for Bedrock: canonical request, credential scope and derived signing key, checked against AWS's published worked example |
 | `providers/wires/vertex.mjs` | 192 | Vertex AI: a service-account JWT assertion exchanged for an OAuth token, the regional `generateContent` path, and v1beta1 publisher-model discovery |
-| `providers/wires/bedrock.mjs` | 146 | Bedrock Converse: SigV4-signed requests, an IAM credential document, model-metadata filtering, and non-streaming by contract |
+| `providers/wires/bedrock.mjs` | 158 | Bedrock Converse: SigV4-signed requests, an IAM credential document, model-metadata filtering, and non-streaming by contract |
 
 ### `services/fabric` — 12,655 source lines, 9,995 test lines
 

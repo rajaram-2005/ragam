@@ -89,13 +89,28 @@ async function signed(transport, config, { method, url, body, signal }) {
   })
 }
 
+const MAX_PAGES = 20
+
+/** Read a paginated Bedrock list; a partial list would look complete, so a cap is a refusal. */
+async function pages(transport, config, base, path, key) {
+  const records = []
+  let token = null
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const query = token ? `?nextToken=${encodeURIComponent(token)}` : ''
+    const data = await signed(transport, config, { method: 'GET', url: `${base}${path}${query}` })
+    if (!Array.isArray(data?.[key]) || data[key].length > 1000) {
+      throw failure('invalid_model_list', `Bedrock must return at most 1000 ${key} records per page.`, 502)
+    }
+    records.push(...data[key])
+    token = typeof data.nextToken === 'string' && data.nextToken ? data.nextToken : null
+    if (!token) return records
+  }
+  throw failure('model_list_too_large', 'Bedrock returned more pages than this build will read.', 502)
+}
+
 export async function models(transport, config) {
   const base = controlUrl(config.baseUrl)
-  const listed = await signed(transport, config, { method: 'GET', url: `${base}/foundation-models` })
-  if (!Array.isArray(listed?.modelSummaries) || listed.modelSummaries.length > 1000) {
-    throw failure('invalid_model_list', 'Bedrock must return at most 1000 model records.', 502)
-  }
-  const chat = listed.modelSummaries
+  const chat = (await pages(transport, config, base, '/foundation-models', 'modelSummaries'))
     .filter((model) => (model?.outputModalities ?? []).includes('TEXT'))
     .filter((model) => (model?.inferenceTypesSupported ?? []).includes('ON_DEMAND'))
     .filter((model) => (model?.modelLifecycle?.status ?? 'ACTIVE') === 'ACTIVE')
@@ -106,12 +121,9 @@ export async function models(transport, config) {
   // them still gets the foundation-model list rather than no models at all.
   let profiles = []
   try {
-    const data = await signed(transport, config, { method: 'GET', url: `${base}/inference-profiles` })
-    if (Array.isArray(data?.inferenceProfileSummaries) && data.inferenceProfileSummaries.length <= 1000) {
-      profiles = data.inferenceProfileSummaries
-        .filter((profile) => (profile?.status ?? 'ACTIVE') === 'ACTIVE')
-        .map((profile) => profile?.inferenceProfileId)
-    }
+    profiles = (await pages(transport, config, base, '/inference-profiles', 'inferenceProfileSummaries'))
+      .filter((profile) => (profile?.status ?? 'ACTIVE') === 'ACTIVE')
+      .map((profile) => profile?.inferenceProfileId)
   } catch { profiles = [] }
 
   const models = unique([...chat, ...profiles])

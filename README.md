@@ -149,7 +149,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 26,592 | 19,863 | **zero npm packages** | 859 |
+| `services/core` | Node 22 ESM | 26,604 | 19,874 | **zero npm packages** | 859 |
 | `services/fabric` | Python 3.11 | 12,655 | 9,995 | NumPy only | 814 |
 | `apps/web` | React 18 + Vite | 2,868 | 1,890 | react, react-dom | 95 |
 

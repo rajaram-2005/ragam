@@ -218,8 +218,17 @@ async function fixture(t) {
     // Bedrock: model metadata on the control plane, Converse on the runtime host. Both are signed;
     // the fixture records the Authorization header rather than verifying it (the SigV4 test below
     // checks the algorithm against AWS's published vector).
-    if (req.url === '/foundation-models') {
+    if (req.url.startsWith('/foundation-models')) {
+      const page = new URL(`http://fixture${req.url}`).searchParams.get('nextToken')
+      if (page === 'bedrock-page-2') {
+        return json({
+          modelSummaries: [
+            { modelId: 'meta.llama3-70b-instruct-v1:0', outputModalities: ['TEXT'], inferenceTypesSupported: ['ON_DEMAND'], modelLifecycle: { status: 'ACTIVE' } },
+          ],
+        })
+      }
       return json({
+        nextToken: 'bedrock-page-2',
         modelSummaries: [
           { modelId: 'anthropic.claude-3-5-haiku-20241022-v1:0', outputModalities: ['TEXT'], inferenceTypesSupported: ['ON_DEMAND'], modelLifecycle: { status: 'ACTIVE' } },
           { modelId: 'amazon.titan-image-generator-v1', outputModalities: ['IMAGE'], inferenceTypesSupported: ['ON_DEMAND'], modelLifecycle: { status: 'ACTIVE' } },
@@ -646,8 +655,10 @@ test('the Bedrock adapter signs with SigV4, filters model metadata and parses Co
   // model, the legacy model and the provisioned-only model are excluded.
   assert.deepEqual(probed.data.models, [
     'anthropic.claude-3-5-haiku-20241022-v1:0',
+    'meta.llama3-70b-instruct-v1:0',
     'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
   ])
+  assert.match(f.calls.find((call) => call.path.includes('nextToken=bedrock-page-2')).path, /^\/foundation-models\?nextToken=bedrock-page-2$/)
 
   for (const call of f.calls) {
     assert.match(call.headers.authorization, /^AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE0000000000\/\d{8}\/us-east-1\/bedrock\/aws4_request, SignedHeaders=[a-z0-9;-]+, Signature=[0-9a-f]{64}$/)
