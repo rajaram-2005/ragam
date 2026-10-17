@@ -128,7 +128,7 @@ read-only matrix with three sentences and no controls.
 
 ## 4. Provider matrix
 
-**38 entries — 11 ready, 14 reachable via an OpenAI-compatible endpoint, 13 pending.**
+**39 entries — 12 ready, 14 reachable via an OpenAI-compatible endpoint, 13 pending.**
 
 | Provider | Status | Wire | Auth | Capabilities evidenced | Documentation |
 |---|---|---|---|---|---|
@@ -155,7 +155,8 @@ read-only matrix with three sentences and no controls.
 | `azure-openai` — Azure OpenAI | ready | azure_openai | x_api_key | streaming:test | [docs](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle) |
 | `vertex` — Google Vertex AI | ready | gcp_vertex | gcp_adc | streaming:test | [docs](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) |
 | `bedrock` — Amazon Bedrock | ready | aws_bedrock | aws_sigv4 | cancellation:test | [docs](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html) |
-| `openai-images` — OpenAI Images | ready | openai_images | bearer | image_generation:test | [docs](https://developers.openai.com/api/reference/resources/images/methods/generate) |
+| `openai-images` — OpenAI Images | ready | openai_images | bearer | image_generation:test |
+| `gemini-images` — Google Gemini Images | ready | gemini_images | x-api-key | image_generation:test | [docs](https://developers.openai.com/api/reference/resources/images/methods/generate) |
 | `veo` — Google Veo (Gemini API) | ready | gemini_veo | x_api_key | video_generation:test | [docs](https://ai.google.dev/gemini-api/docs/veo) |
 | `runway` — Runway | pending | — | bearer | — | [docs](https://docs.dev.runwayml.com/) |
 | `luma` — Luma AI | pending | — | bearer | — | [docs](https://docs.lumalabs.ai/docs/api) |
@@ -228,12 +229,12 @@ and the notes on every native entry say that no live call has been made.
 
 ## 5. Image and video
 
-Image and video generation are each **implemented for one provider**; the remaining media vendors
+Image generation is **implemented for two providers**; video is implemented for one, and the remaining media vendors
 are pending.
 
 | Area | Capability | Status | What happens today |
 |---|---|---|---|
-| Image | text-to-image through OpenAI Images | **implemented and tested** | `POST /api/image/generate` queues a durable job (202), the provider returns inline base64, the Core validates the container and stores the bytes, and `GET /api/image/jobs/<id>/content` serves them. No provider URL is ever fetched or rendered |
+| Image | text-to-image through OpenAI Images or Gemini Images | **implemented and tested** | `POST /api/image/generate` queues a durable job (202), the selected wire receives the prompt, the provider returns inline base64, the Core validates the container and stores the bytes, and `GET /api/image/jobs/<id>/content` serves them. No provider URL is ever fetched or rendered. When both image connections are saved, OpenAI Images is preferred so an existing choice does not move |
 | Video | text-to-video through Google Veo (Gemini API) | **implemented and tested** | `POST /api/video/generate` queues a job (202); the wire starts `predictLongRunning`, polls the operation with a bounded cancellable loop, downloads the file URI, and the Core validates the MP4 container before storing it. `POST /api/video/jobs/<id>/cancel` aborts the live request |
 | Image | edit, variations, mask, history beyond the job list | planned | Those routes do not exist; the Image area cannot send them and the adapter cannot fake them |
 | Video | image-to-video, extension, a second vendor | planned | The adapter sends a text prompt only; Runway, Luma, fal.ai video and Replicate video remain `pending` and are refused by name |
@@ -332,7 +333,7 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 - **No live provider call was made.** "Implemented, awaiting live credentials" is the ceiling for
   every vendor outside the three tested runtimes and the eight contract-tested native adapters.
 - **Eight native adapters exist, and none has been called live.** Anthropic Messages, Gemini
-  generateContent, Cohere Chat v2, Azure OpenAI v1, Vertex AI, Bedrock Converse, OpenAI Images and
+  generateContent, Cohere Chat v2, Azure OpenAI v1, Vertex AI, Bedrock Converse, OpenAI Images, Gemini Images and
   Google Veo are contract-tested against local fixtures that return the published response shapes. A key that is
   valid, a model that exists and a quota that allows the request are all still unverified; the
   matrix and `docs/03` say so.
@@ -358,13 +359,16 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 - **Video downloads follow one redirect rule and no others.** The gateway refuses redirects for
   every adapter. Google's file URI is fetched directly; an underlying storage redirect would fail
   honestly rather than being followed.
-- **Image generation has one provider, and no image editing.** Only text-to-image through OpenAI
-  Images is implemented. There is no inpainting, mask, variation or upscale route, and no second
-  image vendor. The Image area says which connection it used and never presents a stored sample.
+- **Image generation has two providers and no image editing.** Text-to-image through OpenAI Images
+  and Gemini Images is implemented. There is no inpainting, mask, variation or upscale route. The
+  Image area says which connection it used and never presents a stored sample.
+- **Gemini Images and Gemini chat share an API key shape, not a connection.** They are separate
+  catalogue entries with separate saved keys; saving one does not make the other available, and the
+  image route picks a connection by the wire's modality.
 - **Images are generated once per job; retries are explicit.** A failed job is a record with an
   error, not a background retry loop. Deleting a job removes the record and the stored bytes.
 - **A catalogue id is usable when its wire is implemented and its status is not `pending`.** All
-  nine wires are implemented, so the eleven `ready` entries and the thirteen `gateway_only` entries
+  ten wires are implemented, so the twelve `ready` entries and the fourteen `gateway_only` entries
   can be saved.
 - **The UI cannot configure a pending provider.** That is deliberate: a control that cannot work is
   a claim that it can.
@@ -393,8 +397,8 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 3. A live verification run for the image and video adapters: one paid generation each, recorded
    with date, model, prompt digest and response digest. Until then `openai-images` and `veo` mean
    "tested code path".
-4. A second image vendor, image editing, and a second video vendor (Runway, Luma, fal.ai video or
-   Replicate video), so neither area is one vendor's surface.
+4. A third image vendor and image editing; and a second video vendor (Runway, Luma, fal.ai video
+   or Replicate video), so neither area is one vendor's surface.
 5. Resume of an in-flight video operation after a restart, if the product needs it; until then the
    interruption is recorded rather than hidden.
 6. Provider health checks and usage accounting surfaced in the five areas.
@@ -408,7 +412,8 @@ npm run test:core                      # includes test/provider-framework.test.m
 node --test services/core/test/online.test.mjs          # 29 tests, including schema 2
 node --test services/core/test/online-runtimes.test.mjs # 10 tests
 node --test services/core/test/online-wires.test.mjs    # 20 contract tests, six native chat wires plus SigV4
-node --test services/core/test/online-image.test.mjs    # 9 tests, the image wire and the durable job path
+node --test services/core/test/online-image.test.mjs    # 9 tests, the OpenAI image wire and the durable job path
+node --test services/core/test/online-gemini-images.test.mjs # 3 tests, the Gemini image wire and the same job path
 node --test services/core/test/online-video.test.mjs    # 9 tests, Veo polling, download policy and cancellation
 node --test services/core/test/online-skills.test.mjs   # 9 tests, install, review, versions and chat selection
 node --test services/core/test/online-styles.test.mjs   # 8 tests, preferences, instructions, audit and refusal

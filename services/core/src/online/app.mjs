@@ -217,9 +217,14 @@ export class OnlineApp {
 
   /** The saved connection an image request will use, or a refusal that names what is missing. */
   imageConnection() {
-    const candidates = this.store.connections.filter((connection) => runtimeFor(connection.id).wire === 'openai_images')
-    const record = candidates.find((connection) => connection.id === 'openai-images') ?? candidates[0]
-    if (!record) throw failure('provider_not_configured', 'Add an OpenAI Images connection in Provider Settings.', 503)
+    // Any saved connection whose wire generates images, not one hard-coded vendor. The preference
+    // for OpenAI Images when both are saved keeps an installation's existing choice stable; a
+    // second connection is used when it is the only one.
+    const candidates = this.store.connections.filter((connection) => {
+      try { return wireFor(runtimeFor(connection.id).wire)?.modality === 'image' } catch { return false }
+    })
+    const record = candidates.find((connection) => runtimeFor(connection.id).wire === 'openai_images') ?? candidates[0]
+    if (!record) throw failure('provider_not_configured', 'Add an image connection in Provider Settings (OpenAI Images or Google Gemini Images).', 503)
     return this.store.config(record.id)
   }
 

@@ -68,9 +68,9 @@ test('the provider catalogue is authenticated, read-only and carries no secrets'
   const r = await f.request('GET', '/api/providers/catalog')
   assert.equal(r.status, 200)
   assert.equal(r.data.valid, true)
-  assert.equal(r.data.counts.ready, 11, 'three runtimes, six native chat wires, OpenAI Images and Veo have a tested path')
+  assert.equal(r.data.counts.ready, 12, 'three runtimes, six native chat wires, two image wires and Veo have a tested path')
   assert.ok(r.data.counts.pending > 0, 'the unimplemented adapters must be stated, not hidden')
-  assert.match(r.data.summary, /^11 ready/)
+  assert.match(r.data.summary, /^12 ready/)
   for (const provider of r.data.providers) {
     assert.ok(provider.docsUrl.startsWith('https://'), `${provider.id} must cite documentation`)
     // A descriptor has no credential field, so there is nothing to redact — but assert it anyway,

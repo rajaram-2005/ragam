@@ -46,6 +46,7 @@ export const WIRE_FORMATS = Object.freeze({
   AWS_BEDROCK: 'aws_bedrock',
   GCP_VERTEX: 'gcp_vertex',
   OPENAI_IMAGES: 'openai_images',
+  GEMINI_IMAGES: 'gemini_images',
   GEMINI_VEO: 'gemini_veo',
 })
 
@@ -215,6 +216,7 @@ export const PROVIDERS = Object.freeze([
   // Image vendors. OpenAI Images is a tested code path; every other media vendor is still pending,
   // and the video list has no adapter at all.
   imageNative('openai-images', 'OpenAI Images', 'https://developers.openai.com/api/reference/resources/images/methods/generate', WIRE_FORMATS.OPENAI_IMAGES, AUTH_KINDS.BEARER),
+  imageNative('gemini-images', 'Google Gemini Images', 'https://ai.google.dev/gemini-api/docs/image-generation', WIRE_FORMATS.GEMINI_IMAGES, AUTH_KINDS.X_API_KEY),
   videoNative('veo', 'Google Veo (Gemini API)', 'https://ai.google.dev/gemini-api/docs/veo', WIRE_FORMATS.GEMINI_VEO, AUTH_KINDS.X_API_KEY),
   ...[
     ['runway', 'Runway', 'https://docs.dev.runwayml.com/'],

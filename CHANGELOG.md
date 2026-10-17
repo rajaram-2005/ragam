@@ -93,6 +93,23 @@ Not in 0.2.0. On this branch only.
   refusal, cancellation, pre-queue validation, failed/filtered/still-image outcomes and the
   transport's binary ceiling. No vendor was called.
 
+### A second image provider: Gemini Images (phase 8)
+
+- **Image generation is no longer one vendor.** `providers/wires/gemini-images.mjs` implements the
+  documented Gemini image request (`generateContent` with `responseModalities: ["IMAGE"]`) and reads
+  the image from `candidates[].content.parts[].inlineData`. The catalogue gains `gemini-images` as a
+  ready entry with an `x-goog-api-key` credential, and the Image area reaches it through the same
+  durable job path as OpenAI Images.
+- **The route chooses by modality, not by a hard-coded id.** Any saved connection whose wire
+  generates images is eligible; when both are saved, OpenAI Images keeps an existing installation's
+  choice stable. A failed Gemini generation is a failed job with the provider's reason, never a
+  stored placeholder.
+- **Sizes map to aspect ratios explicitly.** `1024x1024`, `1536x1024` and `1024x1536` become `1:1`,
+  `4:3` and `3:4`; `auto` sends no `imageConfig`. A size that no ratio expresses is refused.
+- **Tests:** `services/core/test/online-gemini-images.test.mjs` (3 tests) covers the model filter,
+  the request shape and header, inline-byte decoding, refusals (missing image, wrong MIME, bad
+  base64, unknown size, safety block), the saved-connection path, stored bytes and a failed job.
+
 ### Measured procedure comparison (phase 7)
 
 - **A review is not a measurement.** `POST /api/skills/:name/measure` runs the same cases through
