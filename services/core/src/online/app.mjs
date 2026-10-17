@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
-import { mkdirSync, existsSync, renameSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, readdirSync, renameSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import { OnlineStore } from './store.mjs'
 import { OnlineGateway, gatewayUrl, failure, runtimeFor } from './gateway.mjs'
@@ -82,6 +83,38 @@ const HARD_STYLE_VIOLATIONS = new Set([
   'sensitive inference', 'diagnosis of the user',
 ])
 
+
+// The documentation shipped with this build, exposed through one in-process MCP server.
+//
+// The directory is resolved from this module rather than the process working directory, so the
+// server works whether Core is started from the repository root or from services/core. Only
+// Markdown files directly inside docs/ are readable; the name pattern and the resolved-prefix
+// check are both applied, because a pattern alone is the kind of check that gets widened later.
+const DOCS_DIR = fileURLToPath(new URL('../../../../docs/', import.meta.url))
+const DOC_NAME = /^[0-9A-Za-z][0-9A-Za-z._-]*\.md$/
+const MAX_DOC_CHARS = 20_000
+
+export function listInstallationDocs() {
+  if (!existsSync(DOCS_DIR)) return []
+  return readdirSync(DOCS_DIR)
+    .filter((name) => DOC_NAME.test(name))
+    .sort()
+    .map((name) => ({ name, bytes: statSync(join(DOCS_DIR, name)).size }))
+}
+
+export function readInstallationDoc(name) {
+  if (typeof name !== 'string' || !DOC_NAME.test(name) || name.includes('..')) {
+    throw Object.assign(new Error('Choose one listed Markdown document by name.'), { code: 'invalid_arguments' })
+  }
+  const file = join(DOCS_DIR, name)
+  if (!file.startsWith(DOCS_DIR) || !existsSync(file)) {
+    throw Object.assign(new Error('No such document in this installation.'), { code: 'not_found' })
+  }
+  const text = readFileSync(file, 'utf8')
+  return { name, text: text.slice(0, MAX_DOC_CHARS), truncated: text.length > MAX_DOC_CHARS, bytes: Buffer.byteLength(text) }
+}
+
+
 export class OnlineApp {
   constructor({ dataDir, trustedOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
@@ -123,6 +156,31 @@ export class OnlineApp {
     this.styles = new StyleStore({ dir: join(this.dir, 'styles') })
     this.plugins = new PluginRegistry({ ledger: this.ledger, grantedScopes: [], requireSignature: false })
     this.mcp = new McpRegistry({ ledger: this.ledger, allowedRisks: [RISK.READ_ONLY] })
+    // One reviewed in-process server makes the MCP area a working surface without pretending a
+    // remote connection exists. It reads the documentation shipped with this build; it cannot
+    // write, reach the network or see an account's data, and its risk tier is read-only.
+    this.mcp.registerServer({
+      id: 'installation-docs',
+      name: 'Installation documentation',
+      kind: SERVER_KINDS.IN_PROCESS,
+      version: '1.0.0',
+      tools: [
+        {
+          name: 'list-documents',
+          description: 'List the Markdown documents installed with this build, with their byte sizes.',
+          inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+          risk: RISK.READ_ONLY,
+          handler: () => ({ documents: listInstallationDocs() }),
+        },
+        {
+          name: 'read-document',
+          description: 'Read one installed Markdown document by name. Output is bounded to 20,000 characters.',
+          inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'A file name from list-documents.' } }, required: ['name'], additionalProperties: false },
+          risk: RISK.READ_ONLY,
+          handler: ({ name }) => readInstallationDoc(name),
+        },
+      ],
+    })
     const schema = { type: 'object', properties: {}, additionalProperties: false }
     this.plugins.install({ manifestVersion: 1, id: 'aetheris.online-status', name: 'Online connection status', version: '1.0.0', protocol: 'local_tool', builtin: true, author: 'Aetheris', license: 'MIT', scopes: [], description: 'Reviewed built-in: reads connection metadata only, never credentials.', capabilities: [{ name: 'status', description: 'Read online connection status.', readOnly: true, inputSchema: schema }] }, { handler: { status: () => this.readiness() } })
     this.plugins.enable('aetheris.online-status')

@@ -11,14 +11,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1812 passing, 0 failing.**
+**Test totals: 1817 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **903 / 903** (55 files, ~51 s) |
+| `services/core` | `node --test test/*.test.mjs` | **908 / 908** (56 files, ~52 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **95 / 95** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 230.29 kB → **69.14 kB gzip**, single chunk, no warnings |
+| `apps/web` build | `vite build` | 235.62 kB → **70.30 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as five jobs split so a
@@ -234,7 +234,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (903 tests)
+### `services/core` — Implemented and tested (908 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -261,7 +261,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Skill evaluation, regression and permissions | **Implemented and tested; not yet reachable from the product** | `skills/evaluation.mjs` + `skills/permissions.mjs`. A candidate must run and pass every check that passed for the incumbent version; a suite that lost a check is rejected as `regression_not_run` rather than passing with fewer. Verdicts go to an append-only digest-chained log, a rejected version stays in the registry, and `promote()` refuses a version with no accepted evaluation or a different check list. A skill's permission block is the scope it runs with: a declaration wider than the runtime grant is refused rather than narrowed, a larger grant is never used, and an agent-written skill may not ask for `/`, the home directory or the network. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Model & provider fabric | **Implemented and tested; not yet reachable from the product** | Adapters declare their kind (`in-process`, `local`, `external`), the capability tags they serve, their limits and their notes; availability is measured by probing, never assumed. One `eligibility()` is shared by routing *and* probing, so a provider the policy forbids is never *contacted* — under `strict_offline` the external adapter's `probe` is called **0 times** while a loopback one is called once — and the module contains no network primitive at all (`fetch`, `node:http`/`net`/`tls`, `undici`), which is checked by reading it rather than by a comment. Refusals carry codes: `no_capability` (naming what is declared instead), `only_external_capability`, `provider_unavailable` (with the probe's own message), `capability_exceeds_limits` (a request too large is refused, never truncated to fit), `no_eligible_provider` (with `partial_coverage`: two adapters that between them cover a request are not combined), `preference_not_eligible` and `no_egress_guard`. Eligible adapters become validated `kind: model` descriptors — an adapter whose notes say `sampled` is not described as deterministic — and can be published into the planner's registry, so a plan is only ever built against providers that are registered *and* measured. No real provider, credential or gateway exists in this build: the external path is exercised against a stub that counts calls. `test/adaptive-providers.test.mjs` (15 tests). See [docs/25](25-adaptive-intelligence.md) §4 |
 | Persistent memory fabric | **Implemented and tested; not yet reachable from the product** | Seven layers (working, episodic, semantic, preference, project, skill, failure) with `assertion` and `verification` held as **separate records** on every entry, so *the user said so* and *an independent check confirmed it* cannot be read as the same thing: a claim's confidence has no number at all. Required provenance rows, versions on correction, contradictions kept and listed, scope and readers enforced on read with each exclusion naming its reason, deletion that takes the provenance with it and leaves a content-free tombstone, and the skill/episodic/failure layers **referencing** the registry and the episode log instead of copying them. The bridge with the existing product memory goes one way each way: an approved memory enters as a claim (approval is permission, not verification) and a fabric entry leaves as a candidate a person must approve. Tested by `memory-fabric.test.mjs` (18) and `memory-bridge.test.mjs` (7). No HTTP route or panel reads it yet, and it is not a retrieval model — there is no ranking beyond SQL ordering and no embedding of any kind. See [docs/25](25-adaptive-intelligence.md) §4 |
-| Plugin and MCP authority boundary | **Implemented and tested; not yet reachable from the product** | Every tool, plugin, resource and prompt result now carries a **provenance** — origin, digest of the exact bytes, and whether the text is instruction-shaped — instead of a bare `untrusted: true`. A consequential action (write, destructive, external, system) must cite a reason, and a reason that came from data is refused (`tainted_justification`) no matter how clearly it asks: authority is minted only from a **user turn** (`not_a_user_turn`), a grant names its actions rather than `*`, the ceiling is checked against the action's risk tier, a hand-edited copy of a token is `authority_tampered` because the fields are re-digested and privileges are read from the stored record, and taint survives derivation so a model's summary of a tool output is refused for the same reason the output was. The instruction classifier is **audit evidence, not the gate**: one named test proves an instruction it does not recognise is refused identically, so a false negative costs nothing. A user turn may `endorse` acting on data, and the record names who and why while the provenance stays untrusted. `test/mcp-authority.test.mjs` (11 tests). See [docs/25](25-adaptive-intelligence.md) §4 |
+| Plugin and MCP authority boundary | **Implemented and tested and reachable from the product** | Every tool, plugin, resource and prompt result now carries a **provenance** — origin, digest of the exact bytes, and whether the text is instruction-shaped — instead of a bare `untrusted: true`. A consequential action (write, destructive, external, system) must cite a reason, and a reason that came from data is refused (`tainted_justification`) no matter how clearly it asks: authority is minted only from a **user turn** (`not_a_user_turn`), a grant names its actions rather than `*`, the ceiling is checked against the action's risk tier, a hand-edited copy of a token is `authority_tampered` because the fields are re-digested and privileges are read from the stored record, and taint survives derivation so a model's summary of a tool output is refused for the same reason the output was. The instruction classifier is **audit evidence, not the gate**: one named test proves an instruction it does not recognise is refused identically, so a false negative costs nothing. A user turn may `endorse` acting on data, and the record names who and why while the provenance stays untrusted. `test/mcp-authority.test.mjs` (11 tests). See [docs/25](25-adaptive-intelligence.md) §4 |
 | Image generation | **Implemented and tested for OpenAI Images and Gemini Images; no live call** | `POST /api/image/generate` validates prompt (4,000 characters), size and model, then queues a durable per-account job (202). The selected wire posts to its provider (OpenAI `{base}/images/generations`, Gemini `{base}/models/{model}:generateContent`), decodes inline bytes, and accepts the artifact only if the container re-encodes to the same bytes; a URL-only or non-image response is `invalid_completion`. Jobs survive a restart, are owned by one account, and `GET /api/image/jobs/<id>/content` serves the stored bytes with `nosniff` and a sandbox CSP. The Image area renders only a succeeded job and shows its prompt, provider, model, size, digest and byte length. `test/online-image.test.mjs` (9 tests) and `test/online-gemini-images.test.mjs` (3); see [docs/27](27-provider-framework.md) §5 |
 
 | Video generation | **Implemented and tested for Google Veo; no live call** | `POST /api/video/generate` validates prompt, aspect ratio, resolution and model, then queues a durable per-account job (202). The `gemini_veo` wire starts `models/{model}:predictLongRunning`, polls the operation with a bounded cancellable loop, downloads the file URI as bytes (the key goes only to the API origin), and stores the MP4 only if the container validates. Duration is measured from `moov/mvhd`; a still image or stub fails `assertGenuineVideo`. `POST /api/video/jobs/<id>/cancel` aborts the live request. `test/online-video.test.mjs` (9 tests); see [docs/27](27-provider-framework.md) §5 |
@@ -512,7 +512,7 @@ Measured release verification on this host:
 
 | Check | Result |
 |---|---|
-| `node services/core/scripts/release-check.mjs --core 903 --web 95 --fabric 814` | `release 0.2.0 verified against 903 + 95 + 814 = 1812 tests` |
+| `node services/core/scripts/release-check.mjs --core 908 --web 95 --fabric 814` | `release 0.2.0 verified against 908 + 95 + 814 = 1817 tests` |
 | `node services/core/scripts/benchmark-adaptive.mjs` | 7/7 benchmarks, 0 failed, artefact at `docs/experiments/phase10-benchmark.json` |
 | `VERSION` / three `package.json` / `package-lock.json` | all `0.2.0` |
 
@@ -548,6 +548,14 @@ never a live internal reference.
 Verified live over HTTP through the dev-server proxy: plugin invoke returns real
 hardware data, a missing required argument yields **403 `plugin_permission_denied`**,
 and an unapproved destructive MCP call yields **409 `approval_required`**.
+
+The online product registers two in-process servers of its own: `aetheris.online`
+(`connection.status`, read-only) and `installation-docs` (`list-documents` and
+`read-document`, read-only, bounded to 20,000 characters, resolved from the
+repository's `docs/` directory rather than the working directory). A member can
+read both; only the owner can toggle a server. `test/online-mcp.test.mjs` (5
+tests) checks the catalogue, preflight, argument validation, the path refusal,
+the untrusted provenance label, the owner gate and the disabled-server refusal.
 
 ---
 

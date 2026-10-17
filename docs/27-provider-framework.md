@@ -79,7 +79,7 @@ What exists, read rather than assumed:
 | Versioned skills, permissions, rollback | **implemented and tested (reviewed procedures and measured comparison)**; execution of declared permissions remains a library | `/api/skills` and `/measure` in `context-routes.mjs`, `skills/product.mjs`, `skills/measure.mjs` |
 | Experience-driven adaptation, regression gates | implemented and tested (library) | `adaptive/loop.mjs`, `adaptive/episodes.mjs` |
 | Response styles (user-chosen) | **implemented and tested (product surface)** | `/api/styles` in `context-routes.mjs`, `online/styles.mjs`, `test/online-styles.test.mjs`; the state *estimator* remains a library in `adaptive/wording.mjs` |
-| Plugins and MCP least privilege | implemented and tested (library) | `plugins/*`, `mcp/*` |
+| Plugins and MCP least privilege | **implemented and tested, with product routes and the Plugins/MCP areas** | `plugins/*`, `mcp/*`, `/api/plugins`, `/api/mcp`, `test/online-mcp.test.mjs` |
 | Safe egress (SSRF, private addresses, redirects, origins) | **implemented and tested** | `online/gateway.mjs`, `policy/egress.mjs`; security controls, **not** an offline product mode |
 | Live-provider verification | not possible here | no credentials, vendor hosts unreachable |
 

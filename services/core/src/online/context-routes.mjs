@@ -223,6 +223,7 @@ export async function contextRoutes(request, response, app, session) {
   if (method === 'POST' && path === '/api/plugins/discover') return sendJson(response, 200, app.plugins.discover(await readJson()), app)
   if (method === 'POST' && path === '/api/plugins/install') return sendJson(response, 201, app.plugins.install(await readJson()), app)
   if (method === 'POST' && segments[1] === 'plugins' && segments[2] && segments[3]) {
+    requireOwner()
     const action = segments[3]
     const body = await readJson()
     if (action === 'enable') return sendJson(response, 200, app.plugins.enable(segments[2]), app)
@@ -249,6 +250,7 @@ export async function contextRoutes(request, response, app, session) {
     return sendJson(response, 200, await app.mcp.callTool(body.server, body.tool, body.arguments ?? {}, body), app)
   }
   if (method === 'POST' && segments[1] === 'mcp' && segments[2] === 'servers' && segments[3] && segments[4] === 'toggle') {
+    requireOwner()
     const body = await readJson()
     return sendJson(response, 200, app.mcp.setEnabled(segments[3], Boolean(body.enabled)), app)
   }

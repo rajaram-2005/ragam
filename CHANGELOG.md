@@ -93,6 +93,25 @@ Not in 0.2.0. On this branch only.
   refusal, cancellation, pre-queue validation, failed/filtered/still-image outcomes and the
   transport's binary ceiling. No vendor was called.
 
+### A working MCP and plugin surface (phase 9)
+
+- **The MCP area now shows the servers this build actually registers.** `installation-docs` is a
+  reviewed in-process server with two read-only tools (`list-documents`, `read-document`); reads are
+  bounded to 20,000 characters, the directory is resolved from the module rather than the working
+  directory, and a name is checked against both a pattern and the resolved prefix. `aetheris.online`
+  keeps the connection-status tool.
+- **The gate is visible before the call.** The area lists servers, tools, risk, scopes, resources
+  and prompts; "Check the gate" runs preflight and "Call" sends validated JSON arguments. Results
+  are labelled untrusted data, with provenance, and cannot grant a permission or trigger a call.
+- **Toggling a server is owner-only.** The MCP toggle and the plugin mutation routes now require the
+  owner; a member can read the catalogue and call reviewed read-only tools, not change what is
+  installed. The old MCP UI addressed `tool.server`, which does not exist, so its call button was
+  broken; it now uses `serverId`.
+- **Tests:** `services/core/test/online-mcp.test.mjs` (5 tests) covers the servers and tools,
+  preflight, argument validation, the traversal refusal, the untrusted provenance label, the owner
+  gate, a disabled server and the plugin surface. The Plugins and MCP render tests move with the
+  new empty-state text.
+
 ### A second image provider: Gemini Images (phase 8)
 
 - **Image generation is no longer one vendor.** `providers/wires/gemini-images.mjs` implements the

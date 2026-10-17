@@ -375,7 +375,7 @@ test('online status removes device tiers and shows zero models honestly', () => 
 test('Plugins does not offer executable unreviewed sample installations', () => {
   const markup=render('PluginsArea',React.createElement(components.PluginsArea))
   assert.match(markup,/Arbitrary extension installation and execution are disabled/)
-  assert.match(markup,/No reviewed plugins loaded yet/)
+  assert.match(markup,/No reviewed plugin is loaded/)
   assert.doesNotMatch(markup,/Demo Text Tools|Install plugin/)
 
 })
@@ -396,8 +396,8 @@ test('the policy is displayed but never rendered as a control', () => {
 
 test('MCP renders honestly before any server is loaded', () => {
   const markup=render('McpArea',React.createElement(components.McpArea))
-  assert.match(markup,/No tools loaded yet/)
-  assert.match(markup,/Remote MCP connections are not configured/)
+  assert.match(markup,/No tool matches/)
+  assert.match(markup,/No remote MCP connection is configured/)
   assert.match(markup,/enforced server-side/)
 
 })
