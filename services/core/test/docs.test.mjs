@@ -435,6 +435,12 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.setup, 'all three suites (1668 tests)'], [doc.setup, 'npm run test:core         # 762'],
     [doc.setup, '| **Core service** | 762 tests pass'],
     [doc.readme, '1668 tests: core 762, web 92, fabric 814'], [doc.readme, 'All 1668 run in CI'],
+    // The Phase 7 total.
+    [doc.status, '**764 / 764**'], [doc.status, 'Implemented and tested (764 tests)'],
+    [doc.status, '**Test totals: 1670 passing'],
+    [doc.setup, 'all three suites (1670 tests)'], [doc.setup, 'npm run test:core         # 764'],
+    [doc.setup, '| **Core service** | 764 tests pass'],
+    [doc.readme, '1670 tests: core 764, web 92, fabric 814'], [doc.readme, 'All 1670 run in CI'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -691,22 +697,22 @@ test('the status doc reports the real test totals', () => {
   // evaluation and permission suites, the emotional-states suite, and the provider fabric.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 43)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 44)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**764 / 764**'), 'core total must be stated')
+  assert.ok(status.includes('**775 / 775**'), 'core total must be stated')
   assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
   assert.ok(status.includes('**92 / 92**'), 'web total must be stated')
-  assert.ok(status.includes('1670 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('1681 passing'), 'the grand total must equal the sum of the suites')
   // README and docs/03 must state the *same* total. They disagreed for two phases: README said
   // 709/1615 in its setup snippet while its own component table said 738, and this assertion
   // pinned the stale form, so the contradiction passed every check. A total is stated in both
   // documents or it is stated in neither.
-  assert.ok(squash(doc.readme()).includes('1670 tests: core 764, web 92, fabric 814'),
+  assert.ok(squash(doc.readme()).includes('1681 tests: core 775, web 92, fabric 814'),
     'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1670 run in CI'),
+  assert.ok(squash(doc.readme()).includes('All 1681 run in CI'),
     'README must state the same totals where it describes CI')
   assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
 
@@ -719,13 +725,13 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(764), `core heading must say 764, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(775), `core heading must say 775, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(92), `web heading must say 92, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1670,
+    1681,
     `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1234`,
   )
 })

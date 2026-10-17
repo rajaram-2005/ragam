@@ -541,8 +541,70 @@ by name, and its correctness does not depend on recognising an attacker's phrasi
 tool/plugin/resource/prompt result, and a named test proving the gate does not consult the
 classifier that exists only as evidence.
 
-**Phase 8 — image and video workflows.** **Phase 9 — industry packs.** **Phase 10 — benchmark, harden,
-document, release.**
+**Phase 8 — image and video workflows.** ✅ **Met, 2026-10-17.**
+`services/core/src/media/workflow.mjs` (487 lines) with `test/media-workflow.test.mjs` (11 tests),
+layered on the byte validation and job queue the repository already had rather than replacing them.
+
+The directive does not state Phase 8's acceptance criteria, so they are derived from the standing
+rules instead of invented for the tests — and each one is a named test:
+
+| Rule | Criterion | Test |
+|---|---|---|
+| "Do not falsely advertise a capability the available model or hardware cannot deliver" | a modality nothing can serve is reported unavailable and refused by name | `acceptance: a modality nothing can serve is reported unavailable and refused by name` |
+| "Do not represent a still image, static preview or synthetic placeholder as a completed generated video" | a video request answered with an image is refused, never delivered | `acceptance: a video request answered with a still image is refused, never delivered` |
+| "Do not report success without execution evidence" | a delivered artifact is measured before it is described | `acceptance: a delivered artifact is measured before it is described` |
+
+**A request is routed, not attempted.** `generate()` asks the Phase 6 fabric for `image.generate` or
+`video.generate`, and a request nothing can serve is refused with the fabric's own code and reason —
+`unavailable`, carrying `fabricCode` (usually `no_capability`) and the fabric's sentence. There is no
+code path that produces "a picture" out of whatever is lying around, which is the whole point: the
+failure mode this prevents is a product that answers an image request with a placeholder and calls it
+a result.
+
+**An artifact is measured before it is described.** The job queue already refuses bytes that are not
+the modality they claim and already refuses a still image presented as a video; this layer adds the
+properties the caller was actually promised, read from the artifact's own header:
+
+| Measurement | Source | Refusal when it disagrees |
+|---|---|---|
+| image width/height | PNG `IHDR`, GIF logical screen, JPEG SOF | `dimensions_mismatch`, naming the axis and both numbers |
+| video duration | MP4 `mvhd` (timescale and duration) | `duration_short` (tolerance 250 ms — a clip shorter than asked for is a different answer, not rounding) |
+| container is a video at all | magic bytes | `still_image_substitution`, `output_not_verified` |
+| the clip is not a stub | byte length | `output_too_small` (under 8 KiB) |
+
+The fixtures in the test are **real containers** — a PNG with correct chunk CRCs, an MP4 with a real
+`ftyp`/`moov`/`mvhd` — so the measurement code parses headers rather than a mock of a header. The
+*provider* is a test double, because this build has none; that is criterion 1 and it is stated rather
+than implied.
+
+`verified` is `'full'` only when every property the caller asked for was measured from the bytes. When
+a container this build does not parse is returned — WebM's duration lives in an EBML tree it does not
+read — the result is `'partial'` and `unverified` names the gap: *"duration (the WebM duration lives in
+an EBML tree this build does not parse)"*. It does not guess, and it does not refuse a format merely
+for being unfamiliar.
+
+**Pointing it at a cloud provider is a governed action, not a flag.** Two separate decisions:
+
+* the **installation** opts in (`allowExternal`), which is what makes an external provider eligible
+  at all — without it the fabric refuses with `no_eligible_provider`, and `describe()` says so;
+* the **request** needs an authority minted from a user turn (Phase 7), because sending a prompt to a
+  cloud provider is egress. Missing grant → `authority_required`; a grant that does not name
+  `media.generate` → `action_not_granted` from the broker, passed through with its own code rather
+  than flattened into `provider_failed`. `describe()` therefore reports `requiresAuthority: true`
+  for an external provider: reachable and still not usable without a grant.
+
+**Not claimed.** No image or video provider exists in this build, so nothing here claims that
+generation works — it claims that the workflow refuses correctly, measures what arrives, and says
+which parts it could not measure. The product's routes still refuse with their own limitation codes
+(`not_implemented`, `needs_hardware`); `MediaWorkflow` is not wired to them yet, which is the same
+position as the rest of the adaptive core. Quality, safety filtering of the *prompt* and multi-artifact
+requests are out of scope: `count` above 1 is refused rather than silently reduced.
+
+**Phase 8 — image and video workflows.** ✅ **Met, 2026-10-17.** See the Phase 8 record above:
+`media/workflow.mjs` (487 lines), `test/media-workflow.test.mjs` (11 tests), routed and refused
+through the provider fabric, measured from artifact headers, and a still image refused as a video.
+
+**Phase 9 — industry packs.** **Phase 10 — benchmark, harden, document, release.**
 
 ## 5. Durability, and the run that is not running
 
@@ -582,9 +644,10 @@ product: intent, planning, budgets, timeouts, checkpoints, the runner and the me
 exercised by tests, and no HTTP route or Chat panel calls them. The fabric is a schema and a set of
 rules for what may be believed and why — not a retrieval model. Emotional interaction states and the provider
 fabric are built and tested but not reachable from the product — the seven states are a wording
-setting, and the provider fabric measures eligibility for a loop no HTTP route calls — and the plugin/MCP authority
-boundary is built and tested but the HTTP layer does not consult it, so the running server is not
-protected by it yet. Image and video workflows and industry packs are not built. Timing here is timing on this box (2 cores, 3,939 MB), at
+setting, and the provider fabric measures eligibility for a loop no HTTP route calls — the plugin/MCP authority
+boundary and the image and video workflows are built and tested, but the HTTP layer consults neither,
+so the running server is not protected by the boundary and its media routes still refuse with their
+own limitation codes. Industry packs are not built. Timing here is timing on this box (2 cores, 3,939 MB), at
 the sample counts stated beside each figure — not a property of another machine. And the rule this
 page states rather than claims: no phase is complete before its acceptance tests pass, which is why
 §4 describes Phase 2 by what its test runs and refuses to describe the phases that have none.

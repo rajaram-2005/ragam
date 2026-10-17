@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 22,887 source lines, 17,468 test lines
+### `services/core` — 23,374 source lines, 17,832 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -113,6 +113,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `server.mjs` | 48 | Entry point, startup banner, graceful shutdown |
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
 | `media/validate.mjs` | 143 | Magic-byte sniffing, video genuineness check |
+| `media/workflow.mjs` | 487 | Image and video generation as a workflow rather than an attempt: routed through the provider fabric so an unservable request is refused by name, authorised through the broker when the provider is external, measured from the artifact's own header (PNG/GIF/JPEG dimensions, MP4 `mvhd` duration) before it is described, and a still image returned for a video request refused as a substitution rather than delivered |
 | `klyvaron/footprint.mjs` | 137 | The footprint report a user sees: categorized bytes plus unmanaged files, against the 5 GB budget |
 | `providers/base.mjs` | 136 | Provider contract, timeout and retry helpers |
 | `policy/classify.mjs` | 143 | Secret and sensitivity classification, redaction |
