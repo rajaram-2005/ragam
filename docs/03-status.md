@@ -11,11 +11,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1753 passing, 0 failing.**
+**Test totals: 1768 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **844 / 844** (49 files, ~48 s) |
+| `services/core` | `node --test test/*.test.mjs` | **859 / 859** (49 files, ~48 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **95 / 95** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | 206.68 kB → **63.62 kB gzip**, single chunk, no warnings |
@@ -126,7 +126,7 @@ instead.
 | — | Remote training: free-first LoRA smoke run (Kaggle, Colab fallback) | **Built; smoke run not executed** | [`21-remote-training.md`](./21-remote-training.md): pinned base (Qwen2.5-0.5B-Instruct at a commit, licence checked at that commit), synthetic starter data with pinned hashes, a stage ledger that reports PASSED, FAILED or NOT RUN per stage, and persistence only after a read-back. Tested with a fake backend and a torch-free Hub gate; the Transformers + PEFT backend and the notebook have never run. No Pro or Max model is trained. A 2026-10-15 audit re-ran both suites, re-derived the dataset hashes, checked every package pin against PyPI, re-read the backend's calls against those exact wheels, corrected three widened Sparsiz numbers in §7, and stopped the notebook cloning a session branch |
 | — | Klyvaron family: the stance, the two differentiators and the modalities | **Specified and enforced; the differentiators have no artifact yet** | [`22-klyvaron-differentiation.md`](./22-klyvaron-differentiation.md): the non-competitive stance and the four new plan gates are values in `klyvaron/tiers.mjs` and `klyvaron/plan.mjs`, so a tier that names a competitor is invalid and a relabelled text model cannot back an image capability. Trend awareness and understanding the user's expressed history are defined on every tier with acceptance criteria and are **`unavailable` everywhere**: the dated-source ledger (`klyvaron/trends.mjs`) and the consent-gated, evidence-cited reader (`klyvaron/affect.mjs`) are implemented and tested, and a mechanism is not a model artifact. Pro and Max remain **unbuilt**; no image or video artifact exists at any tier |
 | — | Klyvaron: the family's own models | **Two artifacts released, two presets unbuilt** | `aetheris-core-v1` — four presets, the parameter and memory arithmetic and the seven-step recipe, all in `klyvaron/architecture.mjs` ([24](./24-own-models.md)). `aetheris-lite-lm@0.1.1` is the released Lite artifact. **`klyvaron-mini-lm@0.1.0`** is the second: 1,421,952 parameters trained from random initialisation on a corpus assembled from seven licence-checked sources, evaluated with the split held out **by source** — perplexity **4.7342** against a bigram baseline of **15.8644**, 0 hard failures and **one soft failure recorded rather than waived** (8,456 s against a 3,600 s wall-clock target; the threshold was not relaxed to pass it). `klyvaron-pro-lm` and `klyvaron-max-lm` have no weights: for them `corpus`, `tokenizer`, `backend`, `train`, `evaluate` and `release` are open |
-| — | Universal provider framework (unreleased, on this branch) | **Partially implemented** | [`27`](./27-provider-framework.md): a 33-entry catalogue with per-capability evidence, capability selection with explainable refusals, error normalisation with redaction, `GET /api/providers/catalog` and a capability matrix in Provider Settings. Five providers are `ready`: the three runtimes this build tests, plus Anthropic Messages and Gemini generateContent, whose native adapters are contract-tested against local fixtures and never called live. Fourteen are reachable only through an OpenAI-compatible endpoint and 14 are pending adapters refused by name. The store now holds **several connections** (schema 2), each with its own encrypted key, models and verification record, one active; `custom` and `custom-<name>` endpoints are first-class and a schema-1 file migrates with its key preserved. No live vendor call has been made |
+| — | Universal provider framework (unreleased, on this branch) | **Partially implemented** | [`27`](./27-provider-framework.md): a 33-entry catalogue with per-capability evidence, capability selection with explainable refusals, error normalisation with redaction, `GET /api/providers/catalog` and a capability matrix in Provider Settings. Nine providers are `ready`: the three runtimes this build tests, plus six native wires — Anthropic Messages, Gemini generateContent, Cohere Chat v2, Azure OpenAI v1, Vertex AI (service-account OAuth) and Bedrock Converse (SigV4) — each contract-tested against a local fixture and never called live. Fourteen are reachable only through an OpenAI-compatible endpoint and ten are pending adapters refused by name. The store now holds **several connections** (schema 2), each with its own encrypted credential, models and verification record, one active; `custom` and `custom-<name>` endpoints are first-class and a schema-1 file migrates with its key preserved. No live vendor call has been made |
 | — | Aetheris Lite release gate | **Complete** | `fabric/lm/card.py` drives the existing `ModelReleaseManager`. Hard requirements: beat the bigram baseline, unknown-rate ≤ 2%, loss must fall. The rejection path is tested more than the acceptance path |
 
 ### Phase 4 in detail — the most important limitation
@@ -219,7 +219,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Local chat inference with an installed model | **Not a requirement (online-first)** | Retained legacy path is tested against a loopback server; the active product performs no local inference. The 2026-10-17 override makes cloud inference the default |
 | Strict offline mode verifiably blocks network | **Superseded — not a completion criterion** | The 2026-10-17 online-first override removes offline operation as a product requirement; the recording-`fetch` measurement is kept as history of the legacy path, not as a gate |
 | Hybrid sends only authorized requests externally | **Met** | Exact-host allowlist + classification ceiling; `confidential`/`restricted` need explicit authorization |
-| An external provider, when one is configured, uses supported endpoints and handles provider failure | **Met against fixtures; no live provider called** | The online entry saves provider connections, requires explicit consent per revision, refuses a mismatched route, and normalises auth/quota/outage failures. OpenAI-compatible, Anthropic and Gemini wires are contract-tested; a valid key and quota remain unverified |
+| An external provider, when one is configured, uses supported endpoints and handles provider failure | **Met against fixtures; no live provider called** | The online entry saves provider connections, requires explicit consent per revision, refuses a mismatched route, and normalises auth/quota/outage failures. Seven wires are contract-tested — OpenAI-compatible, Anthropic, Gemini, Cohere, Azure OpenAI, Vertex AI and Bedrock — including their differing credential chains; a valid key and quota remain unverified |
 | Private knowledge indexed / retrieved / cited / managed locally | **Met** | Ingest, content-hash dedupe, chunk, BM25, cited grounding, ACL, purge, audit |
 | Plugin + MCP enforce capability permissions | **Met** | Scope allowlist, elevated-scope approvals, forbidden scopes, risk-tier gates, schema validation of arguments and output |
 | God Mode tasks observable / pausable / resumable / cancellable / verifiable | **Met** | All five exercised by tests; pause→resume checkpoints at `phaseIndex=1` (2 → 9 steps) |
@@ -234,7 +234,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (844 tests)
+### `services/core` — Implemented and tested (859 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -243,6 +243,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Audit ledger | **Implemented and tested** | Append-only SQLite; refusals audited; NDJSON export; subject purge |
 | Accounts & sign-in (online entry) | **Implemented and tested** | 18 tests; scrypt hashes with no reversible copy, per-account lockout and throttling, owner/member roles, host-delivered reset codes, per-account stores; see doc 20 |
 | Model registry & router | **Implemented and tested** | Capability gating before scoring; unknown latency scores 0.5, not 0 |
+| Native provider adapters | **Implemented and tested against local fixtures; no live call** | Seven wires: OpenAI-compatible, Anthropic Messages, Gemini generateContent, Cohere Chat v2, Azure OpenAI v1, Vertex AI and Bedrock Converse. Cohere paginates discovery; Azure uses `api-key` and the deployment name; Vertex exchanges a service-account JWT for a cached OAuth token; Bedrock signs with SigV4 against AWS's published vector and is non-streaming by contract. Structured credentials are validated and compacted at save time. See [docs/27](27-provider-framework.md) §4.1 |
 | Ollama / llama.cpp, legacy entry | **Implemented and tested against a fixture server** | `providers/local.mjs`, used by the retained legacy service only. The online entry uses the `/v1` routes of the same runtimes; see [docs/19](19-online-only-phase-2.md) |
 | Ollama / llama.cpp, online entry | **Implemented and tested against a loopback fixture** | Same transport as LiteLLM; keyless by default; exact trusted origin required. No real runtime qualified here |
 | Klyvaron development plan | **Implemented and tested** | Per-tier gates derived from the tier records, `klyvaron.mjs plan`; see [docs/11](11-klyvaron-family.md) §1.5 |
@@ -503,7 +504,7 @@ Measured release verification on this host:
 
 | Check | Result |
 |---|---|
-| `node services/core/scripts/release-check.mjs --core 844 --web 95 --fabric 814` | `release 0.2.0 verified against 844 + 95 + 814 = 1753 tests` |
+| `node services/core/scripts/release-check.mjs --core 859 --web 95 --fabric 814` | `release 0.2.0 verified against 859 + 95 + 814 = 1768 tests` |
 | `node services/core/scripts/benchmark-adaptive.mjs` | 7/7 benchmarks, 0 failed, artefact at `docs/experiments/phase10-benchmark.json` |
 | `VERSION` / three `package.json` / `package-lock.json` | all `0.2.0` |
 

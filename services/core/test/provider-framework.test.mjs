@@ -41,6 +41,7 @@ const valid = {
   category: 'vendor',
   wire: WIRE_FORMATS.OPENAI_CHAT,
   auth: AUTH_KINDS.BEARER,
+  credential: 'api_key',
   status: PROVIDER_STATUS.PENDING,
   docsUrl: 'https://example.test/docs',
   capabilities: [],
@@ -66,10 +67,12 @@ test('acceptance: a provider cannot claim a capability this build does not imple
   assert.equal(advertised.valid, false)
   assert.match(advertised.problems.join('\n'), /ready but 'tools' is not backed by a test/)
 
-  // And a ready entry on a wire with no adapter is refused too.
+  // And a ready entry on a wire with no adapter is refused too. Every wire this build publishes is
+  // implemented now, so the fixture names one that is not in WIRE_FORMATS at all.
   const wrongWire = validateProvider({
     ...valid,
-    wire: WIRE_FORMATS.COHERE_CHAT,
+    wire: 'no_such_wire',
+    credential: 'api_key',
     status: PROVIDER_STATUS.READY,
     capabilities: [{ id: CAPABILITIES.STREAMING, source: 'test', ref: 'test/example.test.mjs' }],
   })
@@ -109,13 +112,19 @@ test('acceptance: a successful connection is not evidence of a capability', () =
 test('acceptance: nothing the catalogue returns can contain a credential', () => {
   // The guarantee is structural — descriptors have no credential field — so the validator must
   // refuse one that is smuggled in.
-  for (const key of ['apiKey', 'key', 'token', 'secret', 'credential']) {
+  for (const key of ['apiKey', 'key', 'token', 'secret']) {
     const verdict = validateProvider({ ...valid, [key]: 'sk-live-should-never-be-here' })
     assert.equal(verdict.valid, false, `${key} was accepted`)
     assert.match(verdict.problems.join('\n'), /unknown field/)
   }
-  const described = JSON.stringify(describeProvider('litellm'))
-  assert.ok(!/sk-|bearer [a-z0-9]{8,}|api[_-]?key/i.test(described))
+  // `credential` is a kind, never a value: a secret pasted into it is refused as an unknown kind.
+  const smuggled = validateProvider({ ...valid, credential: 'sk-live-should-never-be-here' })
+  assert.equal(smuggled.valid, false)
+  assert.match(smuggled.problems.join('\n'), /is not a known kind/)
+  const described = describeProvider('litellm')
+  assert.equal(described.credential, 'api_key')
+  const { credential, ...rest } = described
+  assert.ok(!/sk-|bearer [a-z0-9]{8,}|api[_-]?key/i.test(JSON.stringify(rest)))
 })
 
 test('a ready provider is chosen only for capabilities it evidences by test', () => {
@@ -137,7 +146,7 @@ test('an unknown context limit does not satisfy a stated requirement', () => {
 test('remote selection requires the installation to opt in, and health is respected', () => {
   const remote = selectProvider({ capabilities: [CAPABILITIES.STREAMING], remote: true })
   assert.equal(remote.chosen, null)
-  assert.ok(remote.rejected.every((entry) => [REFUSAL_CODES.REMOTE_NOT_ALLOWED, REFUSAL_CODES.WIRE_NOT_IMPLEMENTED, REFUSAL_CODES.ADAPTER_PENDING].includes(entry.code)))
+  assert.ok(remote.rejected.every((entry) => [REFUSAL_CODES.REMOTE_NOT_ALLOWED, REFUSAL_CODES.WIRE_NOT_IMPLEMENTED, REFUSAL_CODES.ADAPTER_PENDING, REFUSAL_CODES.CAPABILITY_MISSING].includes(entry.code)))
 
   const healthy = selectProvider({ capabilities: [CAPABILITIES.STREAMING], remote: true }, { allowRemote: true }, { litellm: 'ready' })
   assert.equal(healthy.chosen.id, 'litellm')
@@ -178,13 +187,17 @@ test('the catalogue refuses the excluded aggregator by name', () => {
 test('the report states the three counts and the honest headline', () => {
   const report = catalogueReport()
   assert.equal(report.valid, true)
-  assert.equal(report.counts.ready, 5)
-  assert.ok(report.counts.gateway_only >= 10)
-  assert.ok(report.counts.pending >= 10)
-  assert.match(report.summary, /^5 ready/)
+  assert.equal(report.counts.ready, 9)
+  assert.equal(report.counts.gateway_only, 14)
+  assert.equal(report.counts.pending, 10)
+  assert.match(report.summary, /^9 ready/)
   const matrix = capabilityMatrix()
   assert.equal(matrix.valid, true)
-  assert.deepEqual(matrix.tested, ['litellm', 'ollama', 'llamacpp', 'anthropic', 'gemini'])
+  // Catalogue order, not alphabetical: the matrix is a table a reader compares row by row.
+  assert.deepEqual(matrix.tested, [
+    'litellm', 'ollama', 'llamacpp', 'anthropic', 'gemini',
+    'cohere', 'azure-openai', 'vertex', 'bedrock',
+  ])
   assert.ok(matrix.rows.every((row) => row.status !== PROVIDER_STATUS.READY || row.tested.length > 0))
 })
 

@@ -27,9 +27,9 @@ export { failure }
  * configured endpoint, and the UI and ledger say so.
  */
 export const RUNTIMES = Object.freeze({
-  litellm: Object.freeze({ id: 'litellm', label: 'LiteLLM', keyRequired: true }),
-  ollama: Object.freeze({ id: 'ollama', label: 'Ollama', keyRequired: false }),
-  llamacpp: Object.freeze({ id: 'llamacpp', label: 'llama.cpp server', keyRequired: false }),
+  litellm: Object.freeze({ id: 'litellm', label: 'LiteLLM', keyRequired: true, credential: 'api_key' }),
+  ollama: Object.freeze({ id: 'ollama', label: 'Ollama', keyRequired: false, credential: 'api_key' }),
+  llamacpp: Object.freeze({ id: 'llamacpp', label: 'llama.cpp server', keyRequired: false, credential: 'api_key' }),
 })
 
 /**
@@ -53,7 +53,7 @@ export function runtimeFor(kind = 'litellm') {
     return { ...runtime, wire: 'openai_chat' }
   }
   if (keylessCustom(kind)) {
-    return { id: kind, label: 'Custom OpenAI-compatible endpoint', keyRequired: false, wire: 'openai_chat' }
+    return { id: kind, label: 'Custom OpenAI-compatible endpoint', keyRequired: false, wire: 'openai_chat', credential: 'api_key' }
   }
   let provider
   try {
@@ -67,7 +67,7 @@ export function runtimeFor(kind = 'litellm') {
   if (!IMPLEMENTED_WIRES.includes(provider.wire)) {
     throw failure('wire_not_implemented', `${provider.label} needs a wire format this build does not implement.`, 400)
   }
-  return { id: provider.id, label: provider.label, keyRequired: !KEYLESS.has(kind), wire: provider.wire }
+  return { id: provider.id, label: provider.label, keyRequired: !KEYLESS.has(kind), wire: provider.wire, credential: provider.credential }
 }
 /** `custom` or `custom-<name>`: a user-named OpenAI-compatible endpoint. */
 function keylessCustom(kind) {
@@ -92,12 +92,15 @@ export function gatewayUrl(value, trustedOrigins = []) {
 
 export class OnlineGateway {
   constructor({ trustedOrigins = [], timeoutMs = 120_000, maxBytes = 2 * 1024 * 1024 } = {}) { Object.assign(this, { trustedOrigins, timeoutMs, maxBytes }) }
-  async request(config, path, { body, signal, onFrame, headers, doneOnEnd = false } = {}) {
+  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false } = {}) {
     const runtime = runtimeFor(config.kind ?? config.id ?? 'litellm'), label = runtime.label
     const base = gatewayUrl(config.baseUrl, this.trustedOrigins)
     const url = new URL(`${base}${path}`)
     const trusted = this.trustedOrigins.includes(url.origin)
-    const payload = body === undefined ? null : JSON.stringify(body)
+    // A wire that signs its request must sign the exact bytes that are sent, so a body may be
+    // supplied already serialised. The default stays JSON, and `contentType` exists because a
+    // token exchange is form-encoded; neither changes what existing callers send.
+    const payload = body === undefined ? null : typeof body === 'string' ? body : JSON.stringify(body)
     if (payload && Buffer.byteLength(payload) > this.maxBytes) throw failure('payload_too_large', 'Assembled request is too large.', 413)
     if (runtime.keyRequired && !config.apiKey) throw failure('provider_not_configured', `Configure a ${label} key in Provider Settings.`, 503)
     if (signal?.aborted) throw failure('cancelled', 'Request cancelled.', 499)
@@ -123,7 +126,7 @@ export class OnlineGateway {
           // kept for callers that predate the adapters; an adapter never mixes the two.
           ...(headers ?? (config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {})),
           accept: onFrame ? 'text/event-stream' : 'application/json',
-          ...(payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {}),
+          ...(payload ? { 'content-type': contentType ?? 'application/json', 'content-length': Buffer.byteLength(payload) } : {}),
         },
       }, (res) => {
         response = res

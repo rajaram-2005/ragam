@@ -78,9 +78,18 @@ test('the runtime family is closed: unknown ids and pending adapters are refused
   assert.equal(runtimeFor('anthropic').wire, 'anthropic_messages')
   assert.equal(runtimeFor('gemini').wire, 'gemini_generate')
   assert.equal(runtimeFor('anthropic').keyRequired, true)
+  // The newer native wires travel with their credential kind, so the settings form and the
+  // connector agree on what must be pasted.
+  assert.equal(runtimeFor('cohere').wire, 'cohere_chat')
+  assert.equal(runtimeFor('azure-openai').wire, 'azure_openai')
+  assert.equal(runtimeFor('azure-openai').credential, 'api_key')
+  assert.equal(runtimeFor('vertex').wire, 'gcp_vertex')
+  assert.equal(runtimeFor('vertex').credential, 'service_account')
+  assert.equal(runtimeFor('bedrock').wire, 'aws_bedrock')
+  assert.equal(runtimeFor('bedrock').credential, 'aws_credentials')
 
   // A provider the catalogue marks pending is refused with the reason, not treated as unknown.
-  assert.throws(() => runtimeFor('cohere'), (e) => e.code === 'adapter_pending')
+  assert.throws(() => runtimeFor('stability'), (e) => e.code === 'adapter_pending')
   // And anything the catalogue does not know is still refused rather than defaulted.
   assert.throws(() => runtimeFor('not-a-provider'), (e) => e.code === 'invalid_runtime')
   assert.throws(() => runtimeFor('__proto__'), (e) => e.code === 'invalid_runtime')

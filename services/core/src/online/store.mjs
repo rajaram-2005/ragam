@@ -202,6 +202,8 @@ export class OnlineStore {
       return {
         id: record.id,
         label: runtime?.label ?? record.id,
+        wire: runtime?.wire ?? null,
+        credential: runtime?.credential ?? null,
         baseUrl: record.baseUrl,
         keyRequired: runtime?.keyRequired ?? true,
         keyConfigured: Boolean(record.key),
@@ -223,6 +225,8 @@ export class OnlineStore {
       kind: active,
       active,
       name: runtime?.label ?? null,
+      wire: runtime?.wire ?? null,
+      credential: runtime?.credential ?? null,
       baseUrl: record?.baseUrl ?? '',
       keyRequired: runtime?.keyRequired ?? true,
       keyConfigured: Boolean(record?.key),

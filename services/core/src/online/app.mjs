@@ -15,7 +15,7 @@ import { mostSensitiveDataClass } from '../policy/egress.mjs'
 import { PluginRegistry } from '../plugins/registry.mjs'
 import { McpRegistry, RISK, SERVER_KINDS } from '../mcp/layer.mjs'
 import { PROVIDERS, catalogueReport, describeProvider } from '../providers/catalog.mjs'
-import { wireFor } from '../providers/wires/index.mjs'
+import { normaliseCredential, wireFor } from '../providers/wires/index.mjs'
 
 /**
  * Session bounds.
@@ -178,8 +178,16 @@ export class OnlineApp {
     if (typeof body.baseUrl !== 'string') throw failure('invalid_endpoint', 'A gateway URL is required.')
     const baseUrl = gatewayUrl(body.baseUrl, this.gateway.trustedOrigins)
     const existing = this.store.connections.find((connection) => connection.id === kind)
-    const key = body.apiKey
-    if (key !== undefined && (typeof key !== 'string' || key.length > 8192 || /[\r\n]/.test(key))) throw failure('invalid_key', 'Invalid gateway key.')
+    let key = body.apiKey
+    if (key !== undefined) {
+      const limit = runtime.credential === 'api_key' ? 8192 : 16384
+      if (typeof key !== 'string' || key.length > limit) throw failure('invalid_key', 'Invalid gateway key.')
+      // A structured credential is a JSON document that legitimately contains newlines. It is
+      // validated by its wire and compacted before sealing, so an unusable document fails here —
+      // at save time, in front of the person who pasted it — rather than on the first request.
+      if (runtime.credential !== 'api_key') key = normaliseCredential(runtime.wire, key)
+      if (key.length > 8192 || /[\r\n]/.test(key)) throw failure('invalid_key', 'Invalid gateway key.')
+    }
     // A destination is the connection AND the endpoint. Changing either one is a new recipient, so
     // that connection's stored key is not forwarded to it: the caller must supply one or, for a
     // local endpoint that needs none, go without. Other connections' keys are never touched.

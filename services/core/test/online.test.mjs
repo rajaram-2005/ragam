@@ -68,14 +68,16 @@ test('the provider catalogue is authenticated, read-only and carries no secrets'
   const r = await f.request('GET', '/api/providers/catalog')
   assert.equal(r.status, 200)
   assert.equal(r.data.valid, true)
-  assert.equal(r.data.counts.ready, 5, 'three runtimes and two native wires have a tested path')
+  assert.equal(r.data.counts.ready, 9, 'three runtimes and six native wires have a tested path')
   assert.ok(r.data.counts.pending > 0, 'the unimplemented adapters must be stated, not hidden')
-  assert.match(r.data.summary, /^5 ready/)
+  assert.match(r.data.summary, /^9 ready/)
   for (const provider of r.data.providers) {
     assert.ok(provider.docsUrl.startsWith('https://'), `${provider.id} must cite documentation`)
     // A descriptor has no credential field, so there is nothing to redact — but assert it anyway,
     // because "there is nothing to redact" is exactly the property that silently regresses.
-    for (const field of ['apiKey', 'key', 'token', 'secret', 'credential']) assert.equal(field in provider, false)
+    for (const field of ['apiKey', 'key', 'token', 'secret']) assert.equal(field in provider, false)
+    // A kind is not a secret, and it must be one the form understands.
+    assert.ok(provider.credential === null || ['api_key', 'service_account', 'aws_credentials'].includes(provider.credential))
   }
   const text = JSON.stringify(r.data)
   assert.ok(!/sk-[A-Za-z0-9]|bearer\s+[a-z0-9]/i.test(text), 'the catalogue leaked a credential shape')
@@ -333,11 +335,11 @@ test('a second provider connection is stored beside the first, with its own key'
 test('a connection is refused when the catalogue says there is no adapter', async (t) => {
   const f = await fixture(t)
   await f.login()
-  // Cohere is still `pending`: its wire has no adapter. Anthropic is not used here any more
-  // because it now has one, and a test that kept asserting the refusal would pin a falsehood.
-  const cohere = await f.request('PUT', '/api/providers/cohere', { baseUrl: 'https://api.cohere.com', apiKey: 'x' })
-  assert.equal(cohere.status, 400)
-  assert.equal(cohere.data.error, 'adapter_pending')
+  // Stability is still `pending`: it has no adapter. Cohere is not used here any more because it
+  // now has one, and a test that kept asserting the refusal would pin a falsehood.
+  const pending = await f.request('PUT', '/api/providers/stability', { baseUrl: 'https://api.stability.ai', apiKey: 'x' })
+  assert.equal(pending.status, 400)
+  assert.equal(pending.data.error, 'adapter_pending')
   // A pending connection is not stored as a side effect of being refused.
   assert.equal(f.app.store.connections.length, 0)
 

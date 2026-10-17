@@ -1,4 +1,4 @@
-import { IMPLEMENTED } from './wires/index.mjs'
+import { CREDENTIAL_KINDS, IMPLEMENTED, credentialFor } from './wires/index.mjs'
 
 // The provider catalogue: what the world offers, and how little of it this build can prove.
 //
@@ -42,6 +42,7 @@ export const WIRE_FORMATS = Object.freeze({
   ANTHROPIC_MESSAGES: 'anthropic_messages',
   GEMINI_GENERATE: 'gemini_generate',
   COHERE_CHAT: 'cohere_chat',
+  AZURE_OPENAI: 'azure_openai',
   AWS_BEDROCK: 'aws_bedrock',
   GCP_VERTEX: 'gcp_vertex',
 })
@@ -88,6 +89,7 @@ const ready = (id, label, doc, capabilities, extra = {}) => Object.freeze({
   category: 'gateway',
   wire: WIRE_FORMATS.OPENAI_CHAT,
   auth: AUTH_KINDS.BEARER,
+  credential: CREDENTIAL_KINDS.API_KEY,
   status: PROVIDER_STATUS.READY,
   docsUrl: doc,
   // The tested transport: `GET {base}/models`, `POST {base}/chat/completions`, SSE streaming,
@@ -106,22 +108,24 @@ const streaming = cap(CAPABILITIES.STREAMING, 'test', GATEWAY_TESTS)
 const cancellation = cap(CAPABILITIES.CANCELLATION, 'test', GATEWAY_TESTS)
 const WIRE_TESTS = 'test/online-wires.test.mjs'
 const wireStreaming = cap(CAPABILITIES.STREAMING, 'test', WIRE_TESTS)
+const wireCancellation = cap(CAPABILITIES.CANCELLATION, 'test', WIRE_TESTS)
 
 // A native adapter: a published wire this build speaks, contract-tested against a local fixture.
 // `ready` here means exactly what it means for the three runtimes — a tested code path — and not
 // that the vendor has been called. The note says the second part.
-const native = (id, label, doc, wire, auth) => Object.freeze({
+const native = (id, label, doc, wire, auth, { streaming: streams = true, capabilities = [] } = {}) => Object.freeze({
   id, label,
   category: 'vendor',
   wire,
   auth,
+  credential: credentialFor(wire),
   status: PROVIDER_STATUS.READY,
   docsUrl: doc,
-  // Streaming is claimed because a test exercises it. Cancellation is not claimed for these
-  // wires yet: the transport supports it, but no test in this repository has aborted one.
-  capabilities: Object.freeze([wireStreaming]),
+  // Streaming is claimed only where a test exercises it. Bedrock's native stream is a binary
+  // event framing this transport does not parse, so its adapter is non-streaming and says so.
+  capabilities: Object.freeze([...(streams ? [wireStreaming] : []), ...capabilities]),
   egress: Object.freeze({ https: true, operatorConfigured: false }),
-  notes: 'Native adapter, contract-tested against a local fixture. No live call has been made in this build; the key you save is sent only to the endpoint you configure.',
+  notes: 'Native adapter, contract-tested against a local fixture. No live call has been made in this build; the credential you save is sent only to the endpoint you configure.',
 })
 
 export const PROVIDERS = Object.freeze([
@@ -133,6 +137,10 @@ export const PROVIDERS = Object.freeze([
   // paper over: auth header, system-prompt placement, role names and the completion signal.
   native('anthropic', 'Anthropic Claude', 'https://docs.anthropic.com/en/api/messages', WIRE_FORMATS.ANTHROPIC_MESSAGES, AUTH_KINDS.X_API_KEY),
   native('gemini', 'Google Gemini', 'https://ai.google.dev/api/generate-content', WIRE_FORMATS.GEMINI_GENERATE, AUTH_KINDS.X_API_KEY),
+  native('cohere', 'Cohere', 'https://docs.cohere.com/reference/chat', WIRE_FORMATS.COHERE_CHAT, AUTH_KINDS.BEARER),
+  native('azure-openai', 'Azure OpenAI', 'https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle', WIRE_FORMATS.AZURE_OPENAI, AUTH_KINDS.X_API_KEY),
+  native('vertex', 'Google Vertex AI', 'https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations', WIRE_FORMATS.GCP_VERTEX, AUTH_KINDS.GCP_ADC),
+  native('bedrock', 'Amazon Bedrock', 'https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html', WIRE_FORMATS.AWS_BEDROCK, AUTH_KINDS.AWS_SIGV4, { streaming: false, capabilities: [wireCancellation] }),
 
   // OpenAI-compatible vendors. `gateway_only` is a statement about the wire format, not a tested
   // integration: an operator can point a compatible endpoint at them, and nothing here has done so.
@@ -157,6 +165,7 @@ export const PROVIDERS = Object.freeze([
     category: 'openai-compatible',
     wire: WIRE_FORMATS.OPENAI_CHAT,
     auth: AUTH_KINDS.BEARER,
+    credential: CREDENTIAL_KINDS.API_KEY,
     status: PROVIDER_STATUS.GATEWAY_ONLY,
     docsUrl,
     // Deliberately empty: nothing in this repository has called this vendor, so no capability is
@@ -164,28 +173,6 @@ export const PROVIDERS = Object.freeze([
     capabilities: Object.freeze([]),
     egress: Object.freeze({ https: true, operatorConfigured: true }),
     notes: `OpenAI-compatible. Reachable by pointing a compatible endpoint at ${docsRoot.replace('https://', '')}; not independently verified in this build.`,
-  })),
-
-  // Vendors whose wire format this build does not implement. No capability list: there is nothing
-  // honest to put in it.
-  ...[
-    ['vertex', 'Google Vertex AI', 'https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference', WIRE_FORMATS.GCP_VERTEX, AUTH_KINDS.GCP_ADC],
-    ['cohere', 'Cohere', 'https://docs.cohere.com/reference/chat', WIRE_FORMATS.COHERE_CHAT, AUTH_KINDS.BEARER],
-    ['azure-openai', 'Azure OpenAI', 'https://learn.microsoft.com/en-us/azure/ai-services/openai/reference', WIRE_FORMATS.OPENAI_CHAT, AUTH_KINDS.X_API_KEY],
-    ['bedrock', 'Amazon Bedrock', 'https://docs.aws.amazon.com/bedrock/latest/APIReference/welcome.html', WIRE_FORMATS.AWS_BEDROCK, AUTH_KINDS.AWS_SIGV4],
-  ].map(([id, label, docsUrl, wire, auth]) => Object.freeze({
-    id,
-    label,
-    category: 'vendor',
-    wire,
-    auth,
-    status: PROVIDER_STATUS.PENDING,
-    docsUrl,
-    capabilities: Object.freeze([]),
-    // Azure OpenAI speaks the OpenAI chat wire but not the OpenAI endpoint or auth shape; it is
-    // pending rather than gateway_only precisely because "same wire" is not "same request".
-    notes: 'Adapter pending. It is refused by name, not mapped onto a compatible-looking transport.',
-    egress: Object.freeze({ https: true, operatorConfigured: false }),
   })),
 
   // Media vendors. The product's Image and Video areas have no adapter; these entries exist so the
@@ -207,6 +194,7 @@ export const PROVIDERS = Object.freeze([
     category: 'media',
     wire: null,
     auth: AUTH_KINDS.BEARER,
+    credential: null,
     status: PROVIDER_STATUS.PENDING,
     docsUrl,
     capabilities: Object.freeze([]),
@@ -235,7 +223,7 @@ export function providersByStatus(status) {
 export function validateProvider(provider) {
   const problems = []
   const fail = (message) => problems.push(message)
-  const allowed = new Set(['id', 'label', 'category', 'wire', 'auth', 'status', 'docsUrl', 'capabilities', 'egress', 'notes'])
+  const allowed = new Set(['id', 'label', 'category', 'wire', 'auth', 'credential', 'status', 'docsUrl', 'capabilities', 'egress', 'notes'])
   for (const key of Object.keys(provider ?? {})) if (!allowed.has(key)) fail(`${key}: unknown field`)
 
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(provider?.id ?? '')) fail(`id '${provider?.id}' is not kebab-case`)
@@ -243,6 +231,15 @@ export function validateProvider(provider) {
   if (!Object.values(AUTH_KINDS).includes(provider?.auth)) fail(`auth '${provider?.auth}' is not a known kind`)
   if (!Object.values(PROVIDER_STATUS).includes(provider?.status)) fail(`status '${provider?.status}' is not a known status`)
   if (typeof provider?.docsUrl !== 'string' || !provider.docsUrl.startsWith('https://')) fail('docsUrl must be an https URL')
+  // A credential kind is a property of the wire, so the catalogue may only restate it. An entry
+  // that claims a different kind would put the wrong form in front of the user.
+  if (provider?.wire === null) {
+    if (provider?.credential !== null) fail('a provider with no wire has no credential kind')
+  } else if (!Object.values(CREDENTIAL_KINDS).includes(provider?.credential)) {
+    fail(`credential '${provider?.credential}' is not a known kind`)
+  } else if (provider.credential !== credentialFor(provider.wire)) {
+    fail(`credential '${provider.credential}' disagrees with wire '${provider.wire}'`)
+  }
 
   // The only evidence a capability has is what a test exercises or what the vendor documents. A
   // capability with neither is an advertisement.
@@ -300,6 +297,7 @@ export function describeProvider(id) {
     category: provider.category,
     status: provider.status,
     wire: provider.wire,
+    credential: provider.credential,
     auth: provider.auth,
     docsUrl: provider.docsUrl,
     capabilities: provider.capabilities,

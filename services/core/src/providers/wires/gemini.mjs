@@ -68,31 +68,34 @@ export async function chat(transport, config, { model, messages, maxTokens, temp
   let reported = null
   let usage = null
   let sawCandidate = false
+  let finished = false
   const onFrame = (frame) => {
     if (frame?.modelVersion) reported = frame.modelVersion
     if (frame?.usageMetadata) usage = usageOf(frame)
     if (Array.isArray(frame?.candidates) && frame.candidates.length) sawCandidate = true
+    if (frame?.candidates?.[0]?.finishReason) finished = true
     const delta = textOf(frame)
     if (delta) { text += delta; onText(delta) }
   }
   await transport(config, path, { headers: headers(config), signal, body, onFrame, doneOnEnd: true })
   if (!sawCandidate) throw failure('invalid_completion', 'Gemini returned no candidate. No model was substituted.', 502)
+  if (!finished) throw failure('provider_interrupted', 'Gemini stream ended without a finish reason.', 502)
   return { text, model: reported, usage }
 }
 
-function textOf(data) {
+export function textOf(data) {
   const parts = data?.candidates?.[0]?.content?.parts
   if (!Array.isArray(parts)) return ''
   return parts.filter((part) => typeof part?.text === 'string').map((part) => part.text).join('')
 }
 
-function usageOf(data) {
+export function usageOf(data) {
   const meta = data?.usageMetadata
   return tokens(meta?.promptTokenCount, meta?.candidatesTokenCount)
 }
 
 /** A blocked prompt is a refusal with a published reason code, and only that code is echoed. */
-function blockedMessage(data) {
+export function blockedMessage(data) {
   const reason = data?.promptFeedback?.blockReason ?? data?.candidates?.[0]?.finishReason
   const safe = typeof reason === 'string' && /^[A-Z][A-Z0-9_]{0,39}$/.test(reason) ? ` (${reason})` : ''
   return `Gemini returned no text${safe}. No model was substituted.`

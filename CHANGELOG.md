@@ -32,17 +32,26 @@ Not in 0.2.0. On this branch only.
 - **`PUT /api/providers/active`** switches connections without rewriting a credential, and a probe
   (`POST /api/providers/<id>/test`) reads and writes only the connection it names — a key is never
   spent on another vendor's endpoint.
-- **Anthropic Messages and Gemini generateContent adapters.** Each speaks its vendor's published
-  wire rather than an OpenAI compatibility shim: `x-api-key` + `anthropic-version` and top-level
-  `system` for Anthropic; model in the path, `x-goog-api-key`, `contents`/`systemInstruction` and
-  `?alt=sse` for Gemini. Anthropic's `message_stop` and Gemini's final candidate are the completion
-  signals; a stream that ends early is `provider_interrupted`, never a short answer.
-- **Contract tests, not vendor calls.** `test/online-wires.test.mjs` runs both adapters against
+- **Six native adapters, each speaking its vendor's published wire.** Anthropic Messages
+  (`x-api-key` + `anthropic-version`, top-level `system`), Gemini generateContent (model in the
+  path, `x-goog-api-key`, `contents`/`systemInstruction`, `?alt=sse`), Cohere Chat v2 (Bearer,
+  `message.content[]`, typed SSE ending at `message-end`, paginated `/v1/models`), Azure OpenAI v1
+  (`api-key`, `/openai/v1`, the deployment name in `model`, no `api-version`), Vertex AI (a
+  service-account JWT exchanged for a cached OAuth token, regional `generateContent`, v1beta1
+  publisher-model discovery) and Bedrock Converse (SigV4, IAM credential JSON, non-streaming by
+  contract). A stream that ends before its protocol's completion signal is `provider_interrupted`,
+  never a short answer.
+- **Credentials stay one encrypted string per connection.** A structured credential — a
+  service-account JSON or `{accessKeyId, secretAccessKey, sessionToken?, region?}` — is validated
+  by its wire and compacted before sealing, so an unusable document fails at save time. The
+  catalogue and `public()` expose the credential *kind*, never a value.
+- **Contract tests, not vendor calls.** `test/online-wires.test.mjs` runs every adapter against
   local fixtures that return the documented response shapes and records the exact headers and
-  bodies the product sent. Both providers are `ready` in the catalogue — a tested code path — and
-  the matrix says in as many words that neither vendor has been called.
-- No live provider call was made, and no direct per-vendor adapter exists beyond the tested
-  OpenAI-compatible transport. See `docs/27-provider-framework.md` for the audited status.
+  bodies the product sent, including a SigV4 signature checked against AWS's published worked
+  example. All six native adapters are `ready` in the catalogue — a tested code path — and the matrix
+  says in as many words that no vendor has been called.
+- No live provider call was made. The ten `pending` entries are media and local-model vendors; see
+  `docs/27-provider-framework.md` for the audited status.
 
 ## [0.2.0] — 2026-10-17
 

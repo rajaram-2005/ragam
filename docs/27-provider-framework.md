@@ -66,10 +66,10 @@ What exists, read rather than assumed:
 | Provider registry with capability metadata | **implemented and tested** | `providers/catalog.mjs`, `test/provider-framework.test.mjs` |
 | Capability-based routing with explainable refusals | **implemented and tested** | `providers/select.mjs` |
 | Error normalisation, retry classification, redaction | **implemented and tested** | `providers/errors.mjs` |
-| Provider setup UI (credentials, test, model list) | implemented for the three runtimes, Anthropic, Gemini and custom endpoints | `ProviderSettings.jsx`, `test/online.test.mjs`, `test/online-wires.test.mjs` |
+| Provider setup UI (credentials, test, model list) | implemented for the three runtimes, the six native wires and custom endpoints | `ProviderSettings.jsx`, `test/online.test.mjs`, `test/online-wires.test.mjs` |
 | Capability matrix in the UI | **implemented and tested (read-only)** | `ProviderCatalogue.jsx`, `test/render.test.mjs` |
 | Catalog API | **implemented and tested** | `GET /api/providers/catalog` |
-| Direct per-vendor chat adapters | **implemented and tested for Anthropic and Gemini**; Bedrock, Vertex, Cohere and Azure planned | `providers/wires/*.mjs`, `test/online-wires.test.mjs`; the rest stay `pending` and are refused by name |
+| Direct per-vendor chat adapters | **implemented and tested for Anthropic, Gemini, Cohere, Azure OpenAI, Vertex and Bedrock**; no vendor called live | `providers/wires/*.mjs`, `test/online-wires.test.mjs`; media vendors stay `pending` and are refused by name |
 | Other OpenAI-compatible vendors | implemented, awaiting live credentials | §4 — `gateway_only`; no vendor called |
 | Image generation, editing, history | planned | product routes still refuse `not_implemented` |
 | Video generation, async jobs, cancellation | planned | idem |
@@ -100,7 +100,7 @@ and a status:
 
 | Status | Meaning | What it may claim |
 |---|---|---|
-| `ready` | a tested code path reaches it (the three runtimes against a local server; Anthropic and Gemini against a contract fixture) | capabilities whose evidence is a test in this repository |
+| `ready` | a tested code path reaches it (the three runtimes against a local server; the six native wires against a contract fixture) | capabilities whose evidence is a test in this repository |
 | `gateway_only` | it speaks the OpenAI-compatible wire the transport implements | **nothing** — the capability list is empty by rule |
 | `pending` | it needs a wire adapter this build does not have | nothing; it is refused by selection |
 
@@ -128,7 +128,7 @@ read-only matrix with three sentences and no controls.
 
 ## 4. Provider matrix
 
-**33 entries — 5 ready, 14 reachable via an OpenAI-compatible endpoint, 14 pending.**
+**33 entries — 9 ready, 14 reachable via an OpenAI-compatible endpoint, 10 pending.**
 
 | Provider | Status | Wire | Auth | Capabilities evidenced | Documentation |
 |---|---|---|---|---|---|
@@ -151,10 +151,10 @@ read-only matrix with three sentences and no controls.
 | `localai` — LocalAI | gateway_only | openai_chat | bearer | — | [docs](https://localai.io/features/openai-functions/) |
 | `anthropic` — Anthropic Claude | ready | anthropic_messages | x_api_key | streaming:test | [docs](https://docs.anthropic.com/en/api/messages) |
 | `gemini` — Google Gemini | ready | gemini_generate | x_api_key | streaming:test | [docs](https://ai.google.dev/api/generate-content) |
-| `vertex` — Google Vertex AI | pending | gcp_vertex | gcp_adc | — | [docs](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference) |
-| `cohere` — Cohere | pending | cohere_chat | bearer | — | [docs](https://docs.cohere.com/reference/chat) |
-| `azure-openai` — Azure OpenAI | pending | openai_chat | x_api_key | — | [docs](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference) |
-| `bedrock` — Amazon Bedrock | pending | aws_bedrock | aws_sigv4 | — | [docs](https://docs.aws.amazon.com/bedrock/latest/APIReference/welcome.html) |
+| `cohere` — Cohere | ready | cohere_chat | bearer | streaming:test | [docs](https://docs.cohere.com/reference/chat) |
+| `azure-openai` — Azure OpenAI | ready | azure_openai | x_api_key | streaming:test | [docs](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle) |
+| `vertex` — Google Vertex AI | ready | gcp_vertex | gcp_adc | streaming:test | [docs](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) |
+| `bedrock` — Amazon Bedrock | ready | aws_bedrock | aws_sigv4 | cancellation:test | [docs](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html) |
 | `openai-images` — OpenAI Images | pending | — | bearer | — | [docs](https://platform.openai.com/docs/api-reference/images) |
 | `stability` — Stability AI | pending | — | bearer | — | [docs](https://platform.stability.ai/docs/api-reference) |
 | `fal` — fal.ai | pending | — | bearer | — | [docs](https://docs.fal.ai/) |
@@ -169,10 +169,11 @@ read-only matrix with three sentences and no controls.
 `gateway_only` is a statement about a wire format, not an integration: an operator can point a
 compatible endpoint at these vendors, and nothing in this repository has done so.
 
-`ready` for `anthropic` and `gemini` means the same thing it means for the three runtimes: a code
+`ready` for the six native adapters means the same thing it means for the three runtimes: a code
 path this repository exercises against a fixture. It does **not** mean the vendor was called. Their
 request shapes are not OpenAI's — auth header, system-prompt placement, role names and the
-completion signal all differ — so each has its own adapter rather than a compatibility shim:
+completion signal all differ — so each has its own adapter rather than a compatibility shim. The
+first two are compared here; the four added in the latest increment are in §4.1:
 
 | Difference | Anthropic Messages | Gemini generateContent |
 |---|---|---|
@@ -186,6 +187,37 @@ completion signal all differ — so each has its own adapter rather than a compa
 
 `pending` adapters are refused by name — `adapter_pending` — even if a vendor documents the
 capability.
+
+### 4.1 The four adapters added in this increment
+
+Each is a wire of its own — request shape, credential chain and completion signal — rather than
+another compatibility shim. All four are contract-tested against local fixtures that return the
+published response shapes, and **no vendor has been called live**.
+
+| Wire | Request | Credential | Streaming | What is genuinely different |
+|---|---|---|---|---|
+| `cohere_chat` | `POST {base}/v2/chat`, `GET {base}/v1/models` | `Authorization: Bearer` | typed SSE, `content-delta` through `message-end` | model discovery is paginated (`next_page_token`, 100 per page); the system prompt is a `system` message, not a separate field |
+| `azure_openai` | `POST {base}/openai/v1/chat/completions`, `GET {base}/openai/v1/models` | `api-key` header | OpenAI SSE with `[DONE]` | no `api-version` (the v1 API); the selected id is the **deployment name**, sent in `model`, not a model name in a path |
+| `gcp_vertex` | `POST {base}/v1/projects/{p}/locations/{l}/publishers/google/models/{m}:generateContent` | service-account JSON → RS256 JWT assertion → OAuth access token | `:streamGenerateContent?alt=sse` | the token is exchanged once per credential and cached by audience; discovery uses the v1beta1 publisher-model list because v1 has no list method |
+| `aws_bedrock` | `POST {base}/model/{id}/converse`, `GET {control}/foundation-models` | IAM access key JSON, SigV4 | **not implemented** — `ConverseStream` is a binary event stream, not SSE | model metadata lives on a different host (`bedrock.` rather than `bedrock-runtime.`); inference profiles are listed separately and a permission gap there does not hide the foundation models |
+
+**Credentials are still one encrypted string per connection.** The store does not gain a schema-3
+with a second secret field. A structured credential is a JSON document — the service-account file,
+or `{accessKeyId, secretAccessKey, sessionToken?, region?}` — validated by its wire and **compacted
+before sealing**, so an unusable document fails at save time in front of the person who pasted it,
+and what is encrypted is one line. `public()` returns the credential *kind*
+(`api_key`, `service_account`, `aws_credentials`), never a value; Provider Settings renders a
+password field for a key and a text area for a document.
+
+**Signing is checked, not asserted.** `wires/sigv4.mjs` implements the canonical request, the
+credential scope and the date → region → service → `aws4_request` key chain, and a contract test
+reproduces AWS's published worked example byte for byte (signature
+`5d672d79…f2b5d7`). Reversing that chain still produces a plausible signature, which is exactly why
+the vector, not a self-consistency check, is the test.
+
+**What remains unproven.** A key that works, a deployment that exists, a model that is enabled for
+the project and a quota that allows the request. The catalogue's `ready` means "a tested code path",
+and the notes on every native entry say that no live call has been made.
 
 ---
 
@@ -243,9 +275,11 @@ store holds **more than one connection**:
 - **A connection id is a catalogue id or `custom-<name>`.** `custom` and `custom-<name>` are
   first-class keyless OpenAI-compatible endpoints, so an OpenAI-compatible server that is not in the
   catalogue can be saved without pretending to be one that is.
-- **One sealed key per connection.** `key` is AES-256-GCM ciphertext under the same `master.key`
-  (directory `0700`, file `0600`, atomic temp-file + rename). No API response returns it: `public()`
-  reports `keyConfigured: true` and nothing else.
+- **One sealed credential per connection.** `key` is AES-256-GCM ciphertext under the same
+  `master.key` (directory `0700`, file `0600`, atomic temp-file + rename). It holds either one API
+  key or one compact JSON credential document; the wire's `credential` kind says which, and the
+  document is validated and compacted at save time. No API response returns it: `public()` reports
+  `keyConfigured: true` and the kind, and nothing else.
 - **`revision` is store-wide** and increments on any connection change, so a chat authorisation
   recorded against an older revision does not silently authorise a newer configuration.
 - **Migration is a read, not a rewrite the user has to trigger.** A schema-1 file — one record whose
@@ -272,26 +306,39 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 ## 9. Known limitations of this increment
 
 - **No live provider call was made.** "Implemented, awaiting live credentials" is the ceiling for
-  every vendor outside the three tested runtimes.
-- **Two native adapters exist, and neither has been called live.** Anthropic Messages and Gemini
-  generateContent are contract-tested against local fixtures that return the published response
-  shapes. A key that is valid, a model that exists and a quota that allows the request are all still
-  unverified; the matrix and `docs/03` say so.
-- **Bedrock, Vertex, Cohere and Azure remain `pending`.** Each needs its own request builder (and,
-  for Bedrock and Vertex, its own signing and credential chain). Adding a connection for one is
-  refused with `adapter_pending` rather than accepted and quietly broken.
-- **A catalogue id is usable only when its `wire` is `openai_chat`.** The fourteen `gateway_only`
-  entries that speak that wire can be saved against the implemented transport; the rest cannot.
+  every vendor outside the three tested runtimes and the six contract-tested native adapters.
+- **Six native adapters exist, and none has been called live.** Anthropic Messages, Gemini
+  generateContent, Cohere Chat v2, Azure OpenAI v1, Vertex AI and Bedrock Converse are
+  contract-tested against local fixtures that return the published response shapes. A key that is
+  valid, a model that exists and a quota that allows the request are all still unverified; the
+  matrix and `docs/03` say so.
+- **Bedrock does not stream in this build.** `ConverseStream` returns
+  `application/vnd.amazon.eventstream`; the transport parses SSE. The stream endpoint therefore
+  returns that provider's answer in one `done` event, and no `delta` frames are fabricated.
+- **Vertex accepts a service-account JSON, not an express-mode API key.** The service-account
+  chain is the one Vertex documents for a project principal; express mode is a separate, narrower
+  surface and is not implemented.
+- **Azure discovery is a model list, not a deployment list.** Azure exposes deployment listing only
+  through the ARM management plane; the data-plane `/openai/v1/models` response is the resource's
+  models. The v1 chat API names the **deployment** in `model`, so the connection needs a deployment
+  whose name matches the selected id. The hint in Provider Settings says this, and a missing
+  deployment fails with Azure's own not-found error rather than being silently substituted.
+- **Ten media providers remain `pending`.** Every remaining pending entry is a media or local-model
+  vendor with no adapter; adding a connection for one is `400 adapter_pending`, not accepted and
+  quietly broken.
+- **A catalogue id is usable when its wire is implemented and its status is not `pending`.** All
+  seven wires are implemented, so the nine `ready` entries and the fourteen `gateway_only` entries
+  can be saved.
 - **The UI cannot configure a pending provider.** That is deliberate: a control that cannot work is
   a claim that it can.
 
 ## 10. Remaining work, ranked
 
-1. A live verification run for Anthropic and Gemini: one real request each, recorded with date,
+1. A live verification run for the six native adapters: one real request each, recorded with date,
    model and response digest. Until then their status means "tested code path", not "verified
    vendor".
-2. Bedrock, Vertex, Cohere and Azure adapters — each needs its own signing and credential chain, not
-   another compatibility shim.
+2. Bedrock streaming through the AWS event-stream framing, if the product needs it; until then the
+   limitation is stated rather than hidden.
 3. Image generation through one verified provider, reusing `media/workflow.mjs` and the job queue.
 4. Video generation, async lifecycle, cancellation and restart recovery.
 5. Provider health checks and usage accounting surfaced in the five areas.
@@ -303,7 +350,7 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 npm run test:core                      # includes test/provider-framework.test.mjs
 node --test services/core/test/online.test.mjs          # 29 tests, including schema 2
 node --test services/core/test/online-runtimes.test.mjs # 10 tests
-node --test services/core/test/online-wires.test.mjs    # 5 contract tests, two native wires
+node --test services/core/test/online-wires.test.mjs    # 20 contract tests, six native wires plus SigV4
 node --test services/core/test/provider-framework.test.mjs
 npm run test:web                       # includes the catalogue and saved-connection renders
 ```
