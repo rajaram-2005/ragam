@@ -66,13 +66,13 @@ What exists, read rather than assumed:
 | Provider registry with capability metadata | **implemented and tested** | `providers/catalog.mjs`, `test/provider-framework.test.mjs` |
 | Capability-based routing with explainable refusals | **implemented and tested** | `providers/select.mjs` |
 | Error normalisation, retry classification, redaction | **implemented and tested** | `providers/errors.mjs` |
-| Provider setup UI (credentials, test, model list) | implemented for the three runtimes, the six native wires and custom endpoints | `ProviderSettings.jsx`, `test/online.test.mjs`, `test/online-wires.test.mjs` |
+| Provider setup UI (credentials, test, model list) | implemented for the three runtimes, every `ready` catalogue wire, and custom endpoints; each wire publishes its own endpoint hint and controls | `ProviderSettings.jsx`, `test/online.test.mjs`, `test/online-wires.test.mjs`, `test/online-media-wires.test.mjs` |
 | Capability matrix in the UI | **implemented and tested (read-only)** | `ProviderCatalogue.jsx`, `test/render.test.mjs` |
 | Catalog API | **implemented and tested** | `GET /api/providers/catalog` |
-| Direct per-vendor chat adapters | **implemented and tested for Anthropic, Gemini, Cohere, Azure OpenAI, Vertex and Bedrock**; no vendor called live | `providers/wires/*.mjs`, `test/online-wires.test.mjs`; media vendors stay `pending` and are refused by name |
+| Direct per-vendor adapters | **implemented and tested for six chat wires, nine image wires and five video wires**; no vendor called live | `providers/wires/*.mjs`, `test/online-wires.test.mjs`, `test/online-media-wires.test.mjs`; ComfyUI and Diffusers stay `pending` and are refused by name |
 | Other OpenAI-compatible vendors | implemented, awaiting live credentials | §4 — `gateway_only`; no vendor called |
-| Image generation | **implemented and tested for OpenAI Images**; editing and history planned | `wires/images.mjs`, `/api/image/*`, `test/online-image.test.mjs`; no vendor called live |
-| Video generation, async jobs, cancellation | **implemented and tested for Google Veo**; other video vendors pending | `wires/veo.mjs`, `/api/video/*`, `test/online-video.test.mjs`; no vendor called live |
+| Image generation | **implemented and tested for OpenAI Images, Gemini Images, Stability AI, Recraft, Ideogram, FLUX, fal.ai, Replicate and Adobe Firefly**; editing planned | `providers/wires/*-images.mjs`, `/api/image/*`, `test/online-image.test.mjs`, `test/online-media-wires.test.mjs`; no vendor called live |
+| Video generation, async jobs, cancellation | **implemented and tested for Google Veo, Runway, Luma, fal.ai video and Replicate video** | `providers/wires/*-video.mjs`, `/api/video/*`, `test/online-video.test.mjs`, `test/online-media-wires.test.mjs`; no vendor called live |
 | Klyvaron Lite/Pro/Max runtime adapters | partially implemented | docs/24: two Lite artifacts released, Pro/Max unbuilt |
 | Klyvaron Image / Video registries | planned | docs/22 records the modality roles; no weights exist |
 | Persistent memory, provenance, deletion | implemented and tested (product routes; the layered fabric remains a library) | `/api/memory` in `context-routes.mjs`; `memory/store.mjs` |
@@ -100,7 +100,7 @@ and a status:
 
 | Status | Meaning | What it may claim |
 |---|---|---|
-| `ready` | a tested code path reaches it (the three runtimes against a local server; the six native wires against a contract fixture) | capabilities whose evidence is a test in this repository |
+| `ready` | a tested code path reaches it (the three runtimes against a local server; every native chat, image and video wire against a contract fixture) | capabilities whose evidence is a test in this repository |
 | `gateway_only` | it speaks the OpenAI-compatible wire the transport implements | **nothing** — the capability list is empty by rule |
 | `pending` | it needs a wire adapter this build does not have | nothing; it is refused by selection |
 
@@ -128,13 +128,19 @@ read-only matrix with three sentences and no controls.
 
 ## 4. Provider matrix
 
-**39 entries — 12 ready, 14 reachable via an OpenAI-compatible endpoint, 13 pending.**
+**39 entries — 23 ready, 14 reachable via an OpenAI-compatible endpoint, 2 pending.**
 
 | Provider | Status | Wire | Auth | Capabilities evidenced | Documentation |
 |---|---|---|---|---|---|
 | `litellm` — LiteLLM gateway | ready | openai_chat | bearer | streaming:test<br>cancellation:test | [docs](https://docs.litellm.ai/docs/providers) |
 | `ollama` — Ollama (OpenAI-compatible) | ready | openai_chat | bearer | streaming:test<br>cancellation:test | [docs](https://github.com/ollama/ollama/blob/main/docs/openai.md) |
 | `llamacpp` — llama.cpp server | ready | openai_chat | bearer | streaming:test<br>cancellation:test | [docs](https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md) |
+| `anthropic` — Anthropic Claude | ready | anthropic_messages | x_api_key | streaming:test | [docs](https://docs.anthropic.com/en/api/messages) |
+| `gemini` — Google Gemini | ready | gemini_generate | x_api_key | streaming:test | [docs](https://ai.google.dev/api/generate-content) |
+| `cohere` — Cohere | ready | cohere_chat | bearer | streaming:test | [docs](https://docs.cohere.com/reference/chat) |
+| `azure-openai` — Azure OpenAI | ready | azure_openai | x_api_key | streaming:test | [docs](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle) |
+| `vertex` — Google Vertex AI | ready | gcp_vertex | gcp_adc | streaming:test | [docs](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) |
+| `bedrock` — Amazon Bedrock | ready | aws_bedrock | aws_sigv4 | cancellation:test | [docs](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html) |
 | `openai` — OpenAI | gateway_only | openai_chat | bearer | — | [docs](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) |
 | `openrouter` — OpenRouter | gateway_only | openai_chat | bearer | — | [docs](https://openrouter.ai/docs/quickstart) |
 | `mistral` — Mistral AI | gateway_only | openai_chat | bearer | — | [docs](https://docs.mistral.ai/api/) |
@@ -149,37 +155,34 @@ read-only matrix with three sentences and no controls.
 | `huggingface` — Hugging Face Inference Providers | gateway_only | openai_chat | bearer | — | [docs](https://huggingface.co/docs/inference-providers/index) |
 | `vllm` — vLLM (OpenAI-compatible server) | gateway_only | openai_chat | bearer | — | [docs](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html) |
 | `localai` — LocalAI | gateway_only | openai_chat | bearer | — | [docs](https://localai.io/features/openai-functions/) |
-| `anthropic` — Anthropic Claude | ready | anthropic_messages | x_api_key | streaming:test | [docs](https://docs.anthropic.com/en/api/messages) |
-| `gemini` — Google Gemini | ready | gemini_generate | x_api_key | streaming:test | [docs](https://ai.google.dev/api/generate-content) |
-| `cohere` — Cohere | ready | cohere_chat | bearer | streaming:test | [docs](https://docs.cohere.com/reference/chat) |
-| `azure-openai` — Azure OpenAI | ready | azure_openai | x_api_key | streaming:test | [docs](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle) |
-| `vertex` — Google Vertex AI | ready | gcp_vertex | gcp_adc | streaming:test | [docs](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) |
-| `bedrock` — Amazon Bedrock | ready | aws_bedrock | aws_sigv4 | cancellation:test | [docs](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html) |
-| `openai-images` — OpenAI Images | ready | openai_images | bearer | image_generation:test |
-| `gemini-images` — Google Gemini Images | ready | gemini_images | x-api-key | image_generation:test | [docs](https://developers.openai.com/api/reference/resources/images/methods/generate) |
+| `openai-images` — OpenAI Images | ready | openai_images | bearer | image_generation:test | [docs](https://developers.openai.com/api/reference/resources/images/methods/generate) |
+| `gemini-images` — Google Gemini Images | ready | gemini_images | x_api_key | image_generation:test | [docs](https://ai.google.dev/gemini-api/docs/image-generation) |
+| `stability` — Stability AI | ready | stability_images | bearer | image_generation:test | [docs](https://platform.stability.ai/docs/api-reference) |
+| `recraft` — Recraft | ready | recraft_images | bearer | image_generation:test | [docs](https://www.recraft.ai/docs/api-reference/endpoints) |
+| `ideogram` — Ideogram | ready | ideogram_images | x_api_key | image_generation:test | [docs](https://developer.ideogram.ai/ideogram-api/api-overview) |
+| `black-forest-labs` — Black Forest Labs (FLUX) | ready | bfl_images | x_api_key | image_generation:test | [docs](https://docs.bfl.ai/quick_start/generating_images) |
+| `fal` — fal.ai | ready | fal_images | bearer | image_generation:test | [docs](https://docs.fal.ai/model-apis/model-endpoints/queue) |
+| `replicate` — Replicate | ready | replicate_images | bearer | image_generation:test | [docs](https://replicate.com/docs/reference/http) |
+| `firefly` — Adobe Firefly | ready | firefly_images | oauth2 | image_generation:test | [docs](https://developer.adobe.com/firefly-services/docs/firefly-api/) |
 | `veo` — Google Veo (Gemini API) | ready | gemini_veo | x_api_key | video_generation:test | [docs](https://ai.google.dev/gemini-api/docs/veo) |
-| `runway` — Runway | pending | — | bearer | — | [docs](https://docs.dev.runwayml.com/) |
-| `luma` — Luma AI | pending | — | bearer | — | [docs](https://docs.lumalabs.ai/docs/api) |
-| `fal-video` — fal.ai video | pending | — | bearer | — | [docs](https://docs.fal.ai/model-endpoints/queue) |
-| `replicate-video` — Replicate video | pending | — | bearer | — | [docs](https://replicate.com/docs/reference/http) |
-| `stability` — Stability AI | pending | — | bearer | — | [docs](https://platform.stability.ai/docs/api-reference) |
-| `fal` — fal.ai | pending | — | bearer | — | [docs](https://docs.fal.ai/) |
-| `replicate` — Replicate | pending | — | bearer | — | [docs](https://replicate.com/docs/reference/http) |
-| `recraft` — Recraft | pending | — | bearer | — | [docs](https://www.recraft.ai/docs) |
-| `ideogram` — Ideogram | pending | — | bearer | — | [docs](https://developer.ideogram.ai/api-reference) |
-| `black-forest-labs` — Black Forest Labs (FLUX) | pending | — | bearer | — | [docs](https://docs.bfl.ml/) |
-| `firefly` — Adobe Firefly | pending | — | bearer | — | [docs](https://developer.adobe.com/firefly-services/docs/firefly-api/) |
+| `runway` — Runway | ready | runway_video | bearer | video_generation:test | [docs](https://docs.dev.runwayml.com/) |
+| `luma` — Luma AI | ready | luma_video | bearer | video_generation:test | [docs](https://docs.lumalabs.ai/docs/video-generation) |
+| `fal-video` — fal.ai video | ready | fal_video | bearer | video_generation:test | [docs](https://docs.fal.ai/model-apis/model-endpoints/queue) |
+| `replicate-video` — Replicate video | ready | replicate_video | bearer | video_generation:test | [docs](https://replicate.com/docs/reference/http) |
 | `comfyui` — ComfyUI (local) | pending | — | bearer | — | [docs](https://github.com/comfyanonymous/ComfyUI) |
 | `diffusers` — Diffusers (local) | pending | — | bearer | — | [docs](https://huggingface.co/docs/diffusers/index) |
 
 `gateway_only` is a statement about a wire format, not an integration: an operator can point a
 compatible endpoint at these vendors, and nothing in this repository has done so.
 
-`ready` for the eight native adapters (six chat shapes, one image shape and one video shape) means the
-same thing it means for the three runtimes: a code path this repository exercises against a fixture. It does **not** mean the vendor was called. Their
-request shapes are not OpenAI's — auth header, system-prompt placement, role names and the
-completion signal all differ — so each has its own adapter rather than a compatibility shim. The
-first two are compared here; the four added in the latest increment are in §4.1:
+`ready` for the native adapters (six chat shapes, nine image shapes and five video shapes) means the
+same thing it means for the three runtimes: a code path this repository exercises against a fixture.
+It does **not** mean the vendor was called. The nine image and five video adapters are contract-tested
+in `test/online-media-wires.test.mjs`, which also drives the Image and Video routes through a local
+vendor fixture; no vendor host has been contacted. Their request shapes are not interchangeable — auth
+header, submit/poll contract and result shape all differ — so each has its own adapter. The two chat
+shapes compared here illustrate the same rule; the four chat adapters added in an earlier increment
+are in §4.1:
 
 | Difference | Anthropic Messages | Gemini generateContent |
 |---|---|---|
@@ -194,7 +197,7 @@ first two are compared here; the four added in the latest increment are in §4.1
 `pending` adapters are refused by name — `adapter_pending` — even if a vendor documents the
 capability.
 
-### 4.1 The four adapters added in this increment
+### 4.1 The four chat adapters added in an earlier increment
 
 Each is a wire of its own — request shape, credential chain and completion signal — rather than
 another compatibility shim. All four are contract-tested against local fixtures that return the
@@ -229,21 +232,23 @@ and the notes on every native entry say that no live call has been made.
 
 ## 5. Image and video
 
-Image generation is **implemented for two providers**; video is implemented for one, and the remaining media vendors
-are pending.
+Nine image wires and five video wires are **implemented and tested** against documented response
+shapes. No vendor has been called live: vendor hosts are unreachable from the build sandbox and no
+credentials exist for them.
 
 | Area | Capability | Status | What happens today |
 |---|---|---|---|
-| Image | text-to-image through OpenAI Images or Gemini Images | **implemented and tested** | `POST /api/image/generate` queues a durable job (202), the selected wire receives the prompt, the provider returns inline base64, the Core validates the container and stores the bytes, and `GET /api/image/jobs/<id>/content` serves them. No provider URL is ever fetched or rendered. When both image connections are saved, OpenAI Images is preferred so an existing choice does not move |
-| Video | text-to-video through Google Veo (Gemini API) | **implemented and tested** | `POST /api/video/generate` queues a job (202); the wire starts `predictLongRunning`, polls the operation with a bounded cancellable loop, downloads the file URI, and the Core validates the MP4 container before storing it. `POST /api/video/jobs/<id>/cancel` aborts the live request |
-| Image | edit, variations, mask, history beyond the job list | planned | Those routes do not exist; the Image area cannot send them and the adapter cannot fake them |
-| Video | image-to-video, extension, a second vendor | planned | The adapter sends a text prompt only; Runway, Luma, fal.ai video and Replicate video remain `pending` and are refused by name |
-| Image | Stability, fal.ai, Replicate, Recraft, Ideogram, BFL, Firefly, ComfyUI, Diffusers | pending | Each is refused by name. A model name in a catalogue is not an adapter |
+| Image | text-to-image through OpenAI Images, Gemini Images, Stability AI, Recraft, Ideogram, FLUX, fal.ai, Replicate and Adobe Firefly | **implemented and tested** | `POST /api/image/generate` queues a durable job (202), the selected wire receives the prompt, the artifact is reduced to bytes (inline base64, raw response bytes, or a provider URL downloaded without the key), the Core validates the container and stores the bytes, and `GET /api/image/jobs/<id>/content` serves them. A URL-only response from a wire that documents inline bytes fails rather than being fetched. When several image connections are saved, OpenAI Images is preferred so an existing choice does not move; otherwise the first configured image connection is used |
+| Video | text-to-video through Google Veo, Runway, Luma, fal.ai video and Replicate video | **implemented and tested** | `POST /api/video/generate` queues a job (202); each wire implements its provider's own submit/poll contract (operation name, task id, generation id, fal queue request or Replicate prediction), polls with a bounded cancellable loop, downloads the clip without the key when the host differs from the API origin, and the Core validates the MP4 container before storing it. `POST /api/video/jobs/<id>/cancel` aborts the live request and, where the provider documents it, issues a best-effort provider-side cancel |
+| Image | edit, variations, mask, history beyond the job list | planned | Those routes do not exist; the Image area cannot send them and the adapters cannot fake them |
+| Video | image-to-video, extension, storyboard or edit | planned | Every video adapter sends a text prompt only |
+| Image | ComfyUI, Diffusers | pending | Both are refused by name. A model name in a catalogue is not an adapter |
+| Media | provider-published geometry controls | implemented per wire | The wire publishes `SIZES`, `ASPECT_RATIOS` and `RESOLUTIONS`; an empty list means the adapter deliberately offers no such control. Replicate image and video, for example, publish no common size or geometry input, so the UI hides the field and the adapter sends only the documented `prompt` |
 
 The `media/workflow.mjs` measurement layer is used by both paths for container checks and digests,
-and its tests remain the check on what "validated" means. The image wire adds a prompt cap of 4,000
-characters (the provider allows 32,000; this product caps what it will send), four sizes
-(`1024x1024`, `1536x1024`, `1024x1536`, `auto`), and a 20 MB decoded-image ceiling. A response with
+and its tests remain the check on what "validated" means. The media wires share a prompt cap of 4,000
+characters (some providers allow more; this product caps what it will send), a 24 MB image
+ceiling, a 96 MB video ceiling, strict base64 decoding and container sniffing. A response with
 only a URL, a non-image payload, a truncated base64 value or a container whose bytes do not
 re-encode is `invalid_completion` — never a broken image in the browser.
 
@@ -269,6 +274,45 @@ cancelled job stays visible with its reason and has no media element.
 - **Klyvaron Image and Video** have modality *roles* in `klyvaron/architecture.mjs` and no
   artifacts. No model card claims one. There is no registry for them yet, because a registry of
   models that do not exist would be a fiction with good formatting.
+
+### 6.1 Product tiers in the online build
+
+The online entry sells **Lite, Pro and Max as product tiers**, and says so in the payload rather
+than only in the documentation. `GET /api/klyvaron` returns:
+
+```
+{ product: 'klyvaron', independentWeights: false, revision,
+  note: 'Klyvaron Lite, Pro and Max are product tiers, not first-party model weights. …',
+  tiers: [{ id, label, intent,
+            presets: { chat|image|video: { configured, connectionId, provider, wire, model,
+                                           provenance } } }] }
+```
+
+- A preset is a **pointer** to a saved connection and a model that connection already listed. It
+  holds no credential; the connection names the secret.
+- `provenance` is `{ kind: 'third_party_api', providerId, provider, wire, model,
+  firstPartyWeights: false, training: 'none_by_this_project', statement }`. The fields are
+  machine-readable so a later view cannot drop the disclosure while keeping the tier name.
+- `PUT /api/klyvaron/{lite|pro|max}` is owner-only and validates the tier, the modality, that the
+  connection is saved and configured, that the wire serves that modality, and that the model is on
+  the connection's tested list (`model_unlisted`, 409). Changing a preset bumps the store revision,
+  so the next chat re-asks for consent to the destination it will actually use.
+- `DELETE /api/klyvaron/{tier}/{modality}` clears one preset and leaves the connection and its key
+  untouched.
+- A request carrying `tier` resolves **before** model selection: an unconfigured tier is
+  `klyvaron_tier_unconfigured` (409) and is never silently replaced by the active connection's
+  model. A chat request may also carry `authorization.providerId`; a mismatch is
+  `consent_provider_mismatch` (409) rather than a redirect.
+- Image and video jobs record `params.tier` and `params.provenance` beside the prompt, provider
+  and model. Chat responses carry `klyvaron: { tier, provenance }`, or `null` when no tier was used.
+- Provider Settings renders the panel: each row names the provider and model that will serve the
+  tier, shows the provenance sentence, and offers only the connections and models the server
+  already validated. Before the read resolves it says so instead of showing a tier it cannot name.
+
+What this is **not:** it is not a family of pretrained models, not fine-tuning, and not a claim that
+a tier's name describes a capability the underlying vendor model lacks. The local artifacts in
+documents 08 and 24 remain the only Klyvaron weights that exist, and the online build does not load
+them.
 
 ---
 
@@ -348,28 +392,30 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
   models. The v1 chat API names the **deployment** in `model`, so the connection needs a deployment
   whose name matches the selected id. The hint in Provider Settings says this, and a missing
   deployment fails with Azure's own not-found error rather than being silently substituted.
-- **Thirteen media providers remain `pending`.** Every remaining pending entry is a media or
-  local-model vendor with no adapter; adding a connection for one is `400 adapter_pending`, not
-  accepted and quietly broken.
-- **Video is one vendor and one prompt mode.** Only text-to-video through Veo is implemented. There
-  is no image-to-video, extension or second video vendor, and no storyboard or edit route.
+- **Two local media stacks remain `pending`.** ComfyUI and Diffusers have no adapter; adding a
+  connection for either is `400 adapter_pending`, not accepted and quietly broken. They are
+  optional developer integrations, not a fallback the online product needs.
+- **Video is five vendors and one prompt mode.** Text-to-video through Veo, Runway, Luma, fal.ai
+  video and Replicate video is implemented. There is no image-to-video, extension, storyboard or
+  edit route.
 - **A restart interrupts an in-flight video.** The queue persists terminal records and marks a job
   interrupted mid-render as `failed` with `interrupted`; it does not resume a provider operation
   whose name was not durably stored. A completed clip and its record survive a restart.
 - **Video downloads follow one redirect rule and no others.** The gateway refuses redirects for
   every adapter. Google's file URI is fetched directly; an underlying storage redirect would fail
   honestly rather than being followed.
-- **Image generation has two providers and no image editing.** Text-to-image through OpenAI Images
-  and Gemini Images is implemented. There is no inpainting, mask, variation or upscale route. The
-  Image area says which connection it used and never presents a stored sample.
+- **Image generation has nine providers and no image editing.** Text-to-image through OpenAI Images,
+  Gemini Images, Stability, Recraft, Ideogram, FLUX, fal.ai, Replicate and Firefly is implemented.
+  There is no inpainting, mask, variation or upscale route. The Image area says which connection it
+  used and never presents a stored sample.
 - **Gemini Images and Gemini chat share an API key shape, not a connection.** They are separate
   catalogue entries with separate saved keys; saving one does not make the other available, and the
   image route picks a connection by the wire's modality.
 - **Images are generated once per job; retries are explicit.** A failed job is a record with an
   error, not a background retry loop. Deleting a job removes the record and the stored bytes.
 - **A catalogue id is usable when its wire is implemented and its status is not `pending`.** All
-  ten wires are implemented, so the twelve `ready` entries and the fourteen `gateway_only` entries
-  can be saved.
+  twenty-one wires are implemented, so the twenty-three `ready` entries and the fourteen
+  `gateway_only` entries can be saved.
 - **The UI cannot configure a pending provider.** That is deliberate: a control that cannot work is
   a claim that it can.
 - **A style is a preference, never an inference.** The chat route reads the stored value or sends
@@ -389,16 +435,16 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 
 ## 10. Remaining work, ranked
 
-1. A live verification run for the six native adapters: one real request each, recorded with date,
+1. A live verification run for every native adapter: one real request each, recorded with date,
    model and response digest. Until then their status means "tested code path", not "verified
    vendor".
 2. Bedrock streaming through the AWS event-stream framing, if the product needs it; until then the
    limitation is stated rather than hidden.
-3. A live verification run for the image and video adapters: one paid generation each, recorded
-   with date, model, prompt digest and response digest. Until then `openai-images` and `veo` mean
-   "tested code path".
-4. A third image vendor and image editing; and a second video vendor (Runway, Luma, fal.ai video
-   or Replicate video), so neither area is one vendor's surface.
+3. A live verification run for each image and video adapter: one paid generation each, recorded
+   with date, model, prompt digest and response digest. Until then every media entry means "tested
+   code path".
+4. Image editing (mask, variation, upscale) and image-to-video; both are absent routes, not
+   unfinished adapters.
 5. Resume of an in-flight video operation after a restart, if the product needs it; until then the
    interruption is recorded rather than hidden.
 6. Provider health checks and usage accounting surfaced in the five areas.
@@ -411,7 +457,8 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 npm run test:core                      # includes test/provider-framework.test.mjs
 node --test services/core/test/online.test.mjs          # 29 tests, including schema 2
 node --test services/core/test/online-runtimes.test.mjs # 10 tests
-node --test services/core/test/online-wires.test.mjs    # 20 contract tests, six native chat wires plus SigV4
+node --test services/core/test/online-wires.test.mjs      # 20 contract tests, six native chat wires plus SigV4
+node --test services/core/test/online-media-wires.test.mjs # 11 contract tests, nine image and five video wires
 node --test services/core/test/online-image.test.mjs    # 9 tests, the OpenAI image wire and the durable job path
 node --test services/core/test/online-gemini-images.test.mjs # 3 tests, the Gemini image wire and the same job path
 node --test services/core/test/online-video.test.mjs    # 9 tests, Veo polling, download policy and cancellation

@@ -48,6 +48,17 @@ export const WIRE_FORMATS = Object.freeze({
   OPENAI_IMAGES: 'openai_images',
   GEMINI_IMAGES: 'gemini_images',
   GEMINI_VEO: 'gemini_veo',
+  STABILITY_IMAGES: 'stability_images',
+  RECRAFT_IMAGES: 'recraft_images',
+  IDEOGRAM_IMAGES: 'ideogram_images',
+  BFL_IMAGES: 'bfl_images',
+  FAL_IMAGES: 'fal_images',
+  FAL_VIDEO: 'fal_video',
+  REPLICATE_IMAGES: 'replicate_images',
+  REPLICATE_VIDEO: 'replicate_video',
+  RUNWAY_VIDEO: 'runway_video',
+  LUMA_VIDEO: 'luma_video',
+  FIREFLY_IMAGES: 'firefly_images',
 })
 
 /**
@@ -213,37 +224,31 @@ export const PROVIDERS = Object.freeze([
     notes: `OpenAI-compatible. Reachable by pointing a compatible endpoint at ${docsRoot.replace('https://', '')}; not independently verified in this build.`,
   })),
 
-  // Image vendors. OpenAI Images is a tested code path; every other media vendor is still pending,
-  // and the video list has no adapter at all.
+  // Image vendors with a tested wire. The capability is contract-tested against a local
+  // fixture that returns the documented shape; no vendor has been called live. Their notes
+  // say both things, because the row is a claim about this repository, not about the market.
   imageNative('openai-images', 'OpenAI Images', 'https://developers.openai.com/api/reference/resources/images/methods/generate', WIRE_FORMATS.OPENAI_IMAGES, AUTH_KINDS.BEARER),
   imageNative('gemini-images', 'Google Gemini Images', 'https://ai.google.dev/gemini-api/docs/image-generation', WIRE_FORMATS.GEMINI_IMAGES, AUTH_KINDS.X_API_KEY),
+  imageNative('stability', 'Stability AI', 'https://platform.stability.ai/docs/api-reference', WIRE_FORMATS.STABILITY_IMAGES, AUTH_KINDS.BEARER),
+  imageNative('recraft', 'Recraft', 'https://www.recraft.ai/docs/api-reference/endpoints', WIRE_FORMATS.RECRAFT_IMAGES, AUTH_KINDS.BEARER),
+  imageNative('ideogram', 'Ideogram', 'https://developer.ideogram.ai/ideogram-api/api-overview', WIRE_FORMATS.IDEOGRAM_IMAGES, AUTH_KINDS.X_API_KEY),
+  imageNative('black-forest-labs', 'Black Forest Labs (FLUX)', 'https://docs.bfl.ai/quick_start/generating_images', WIRE_FORMATS.BFL_IMAGES, AUTH_KINDS.X_API_KEY),
+  imageNative('fal', 'fal.ai', 'https://docs.fal.ai/model-apis/model-endpoints/queue', WIRE_FORMATS.FAL_IMAGES, AUTH_KINDS.BEARER),
+  imageNative('replicate', 'Replicate', 'https://replicate.com/docs/reference/http', WIRE_FORMATS.REPLICATE_IMAGES, AUTH_KINDS.BEARER),
+  imageNative('firefly', 'Adobe Firefly', 'https://developer.adobe.com/firefly-services/docs/firefly-api/', WIRE_FORMATS.FIREFLY_IMAGES, AUTH_KINDS.OAUTH2),
+
+  // Video vendors with a tested wire. Each adapter implements the vendor's own asynchronous
+  // task contract, including bounded polling and cancellation.
   videoNative('veo', 'Google Veo (Gemini API)', 'https://ai.google.dev/gemini-api/docs/veo', WIRE_FORMATS.GEMINI_VEO, AUTH_KINDS.X_API_KEY),
+  videoNative('runway', 'Runway', 'https://docs.dev.runwayml.com/', WIRE_FORMATS.RUNWAY_VIDEO, AUTH_KINDS.BEARER),
+  videoNative('luma', 'Luma AI', 'https://docs.lumalabs.ai/docs/video-generation', WIRE_FORMATS.LUMA_VIDEO, AUTH_KINDS.BEARER),
+  videoNative('fal-video', 'fal.ai video', 'https://docs.fal.ai/model-apis/model-endpoints/queue', WIRE_FORMATS.FAL_VIDEO, AUTH_KINDS.BEARER),
+  videoNative('replicate-video', 'Replicate video', 'https://replicate.com/docs/reference/http', WIRE_FORMATS.REPLICATE_VIDEO, AUTH_KINDS.BEARER),
+
+  // Local image stacks stay optional and unintegrated. The product is online-first: these are
+  // developer/self-hosted options, not a fallback, and they are refused by name until an
+  // adapter and its tests exist.
   ...[
-    ['runway', 'Runway', 'https://docs.dev.runwayml.com/'],
-    ['luma', 'Luma AI', 'https://docs.lumalabs.ai/docs/api'],
-    ['fal-video', 'fal.ai video', 'https://docs.fal.ai/model-endpoints/queue'],
-    ['replicate-video', 'Replicate video', 'https://replicate.com/docs/reference/http'],
-  ].map(([id, label, docsUrl]) => Object.freeze({
-    id,
-    label,
-    category: 'media',
-    wire: null,
-    auth: AUTH_KINDS.BEARER,
-    credential: null,
-    status: PROVIDER_STATUS.PENDING,
-    docsUrl,
-    capabilities: Object.freeze([]),
-    egress: Object.freeze({ https: true, operatorConfigured: false }),
-    notes: 'No video adapter in this build. The vendor documents the capability; this repository does not implement it.',
-  })),
-  ...[
-    ['stability', 'Stability AI', 'https://platform.stability.ai/docs/api-reference'],
-    ['fal', 'fal.ai', 'https://docs.fal.ai/'],
-    ['replicate', 'Replicate', 'https://replicate.com/docs/reference/http'],
-    ['recraft', 'Recraft', 'https://www.recraft.ai/docs'],
-    ['ideogram', 'Ideogram', 'https://developer.ideogram.ai/api-reference'],
-    ['black-forest-labs', 'Black Forest Labs (FLUX)', 'https://docs.bfl.ml/'],
-    ['firefly', 'Adobe Firefly', 'https://developer.adobe.com/firefly-services/docs/firefly-api/'],
     ['comfyui', 'ComfyUI (local)', 'https://github.com/comfyanonymous/ComfyUI'],
     ['diffusers', 'Diffusers (local)', 'https://huggingface.co/docs/diffusers/index'],
   ].map(([id, label, docsUrl]) => Object.freeze({
@@ -256,7 +261,7 @@ export const PROVIDERS = Object.freeze([
     status: PROVIDER_STATUS.PENDING,
     docsUrl,
     capabilities: Object.freeze([]),
-    notes: 'No image or video adapter exists in this build. See docs/26, "What it does not claim".',
+    notes: 'Optional local image stack with no adapter in this build. The online product does not require it and does not fall back to it.',
     egress: Object.freeze({ https: true, operatorConfigured: false }),
   })),
 ])

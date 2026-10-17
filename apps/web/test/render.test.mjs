@@ -91,6 +91,7 @@ async function loadComponents() {
     "export { default as McpArea } from '../../src/areas/McpArea.jsx'",
     "export { default as ProviderSettings } from '../../src/components/ProviderSettings.jsx'",
     "export { default as ProviderCatalogue } from '../../src/components/ProviderCatalogue.jsx'",
+    "export { default as KlyvaronTiers } from '../../src/components/KlyvaronTiers.jsx'",
     "export { default as App } from '../../src/App.jsx'",
     "export { default as SignInPage } from '../../src/pages/SignInPage.jsx'",
     "export { default as SignUpPage } from '../../src/pages/SignUpPage.jsx'",
@@ -370,6 +371,14 @@ test('online status removes device tiers and shows zero models honestly', () => 
   assert.match(markup,/Online only/)
   assert.doesNotMatch(markup,/hardware|Klyvaron|training fabric/)
 
+})
+
+test('the Klyvaron panel names the provider behind each tier and offers no model it cannot serve', () => {
+  const markup = render('KlyvaronTiers', React.createElement(components.KlyvaronTiers, { owner: false, providers: { connections: [] } }))
+  // The component fetches on mount; before that it says so and offers no control. A panel that
+  // rendered a tier row it had not read would be describing a destination it cannot name.
+  assert.match(markup, /not loaded yet/)
+  assert.doesNotMatch(markup, /<(button|select)\b/)
 })
 
 test('Plugins does not offer executable unreviewed sample installations', () => {

@@ -91,6 +91,12 @@ export const api = {
   testProvider: (kind) => request('POST', `/api/providers/${encodeURIComponent(kind)}/test`, {}),
   removeProvider: (kind) => request('DELETE', `/api/providers/${encodeURIComponent(kind)}`, {}),
   activateProvider: (id) => request('PUT', '/api/providers/active', { id }),
+  // Klyvaron product tiers are pointers to a saved connection and a listed model, not
+  // weights of their own. Reading is available to any signed-in account; assigning is
+  // owner-only and the server enforces that.
+  klyvaron: () => request('GET', '/api/klyvaron'),
+  setKlyvaronPreset: (tier, body) => request('PUT', `/api/klyvaron/${encodeURIComponent(tier)}`, body),
+  clearKlyvaronPreset: (tier, modality) => request('DELETE', `/api/klyvaron/${encodeURIComponent(tier)}/${encodeURIComponent(modality)}`, {}),
   selectModel: (model) => request('PUT', '/api/models/selection', { model }),
   modelCatalog: (q = '') => request('GET', `/api/models/catalog?q=${encodeURIComponent(q)}`),
   refreshCatalog: (sourceId, authorizeNetwork = false) => request('POST', '/api/models/catalog/refresh', { sourceId, authorizeNetwork }),

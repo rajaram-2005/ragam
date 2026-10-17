@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 import { Banner, Button, Field } from './ui.jsx'
 import ProviderCatalogue from './ProviderCatalogue.jsx'
+import KlyvaronTiers from './KlyvaronTiers.jsx'
 // `account` decides what this dialog offers. The gateway connection and its key belong to
 // the installation, so only the owner account may change them: with an open sign-up page,
 // letting any member re-point the connection or delete the stored key would hand a
@@ -32,6 +33,17 @@ const ENDPOINT_FOR_WIRE = Object.freeze({
   gemini_veo: { placeholder: 'https://generativelanguage.googleapis.com/v1beta', hint: 'Gemini API base, including /v1beta. The Video area starts a Veo long-running operation through this connection; it is not used for chat or images.' },
   anthropic_messages: { placeholder: 'https://api.anthropic.com/v1', hint: 'Anthropic\u2019s API base, including /v1.' },
   gemini_generate: { placeholder: 'https://generativelanguage.googleapis.com/v1beta', hint: 'The Gemini API base, including /v1beta.' },
+  stability_images: { placeholder: 'https://api.stability.ai', hint: 'Stability API base (the adapter adds /v2beta/stable-image/generate/...). The key is sent as a Bearer token.' },
+  recraft_images: { placeholder: 'https://external.api.recraft.ai/v1', hint: 'Recraft API base, including /v1. This adapter asks for inline PNG bytes (b64_json), never a download URL.' },
+  ideogram_images: { placeholder: 'https://api.ideogram.ai', hint: 'Ideogram API base (the adapter adds /v2/image/generate/{model}). The key is sent as the Api-Key header.' },
+  bfl_images: { placeholder: 'https://api.bfl.ai', hint: 'Black Forest Labs API base. The adapter polls the provider-supplied polling_url and downloads the signed sample without the key.' },
+  fal_images: { placeholder: 'https://queue.fal.run', hint: 'fal.ai queue base. Model ids include their owner path (fal-ai/flux/dev); the key is sent as Authorization: Key.' },
+  fal_video: { placeholder: 'https://queue.fal.run', hint: 'fal.ai queue base. The same queue contract as images; the clip URL is downloaded without the key.' },
+  replicate_images: { placeholder: 'https://api.replicate.com/v1', hint: 'Replicate API base, including /v1. Model ids are owner/name; polling uses the prediction own urls.get.' },
+  replicate_video: { placeholder: 'https://api.replicate.com/v1', hint: 'Replicate API base, including /v1. Video models are polled to a signed output URL, then validated as MP4.' },
+  runway_video: { placeholder: 'https://api.dev.runwayml.com', hint: 'Runway API base. Every request carries the documented X-Runway-Version header; cancellation is a DELETE on the task.' },
+  luma_video: { placeholder: 'https://api.lumalabs.ai/dream-machine/v1', hint: 'Luma Dream Machine API base, including /v1. Generations are polled until completed, then the clip is downloaded without the key.' },
+  firefly_images: { placeholder: 'https://firefly-api.adobe.io', hint: 'Adobe Firefly API base. The credential is a client id and secret; a short-lived IMS token is exchanged and cached in memory only.' },
 })
 const endpointFor = (wire) => ENDPOINT_FOR_WIRE[wire] ?? {
   placeholder: 'https://api.example.com/v1',
@@ -41,6 +53,8 @@ const CREDENTIAL_FOR_KIND = Object.freeze({
   api_key: { label: 'API key', hint: 'Stored encrypted on the server; never saved in browser storage or returned by the API.' },
   service_account: { label: 'Service-account JSON', hint: 'Paste the downloaded service-account key file. It is validated and compacted on the server and encrypted at rest; the private key is never returned by the API.' },
   aws_credentials: { label: 'IAM credential JSON', hint: '{"accessKeyId":"\u2026","secretAccessKey":"\u2026"} with optional "sessionToken" and "region". The secret signs requests and is never returned by the API.' },
+  // Firefly has no single API key. The client id is public; the secret is the credential.
+  client_credentials: { label: 'Adobe client JSON', hint: '{"clientId":"\u2026","clientSecret":"\u2026"} from the Adobe Developer Console. Both are sealed server-side; the secret is never returned.' },
 })
 const credentialFor = (kind) => CREDENTIAL_FOR_KIND[kind] ?? CREDENTIAL_FOR_KIND.api_key
 // A saved connection that is not one of the three runtimes still needs a label and a key rule on
@@ -187,6 +201,7 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
         <Button type="submit" disabled={busy || !owner || !addUrl}>Save and use</Button>
       </form> : null}
     </details> : null}
+    <KlyvaronTiers providers={provider} owner={owner} onChanged={onChanged} />
     <ProviderCatalogue catalog={catalog} />
   </dialog>
 }

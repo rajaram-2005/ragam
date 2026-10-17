@@ -8,11 +8,22 @@ import { failure } from '../../online/failure.mjs'
 import * as anthropic from './anthropic.mjs'
 import * as azure from './azure.mjs'
 import * as bedrock from './bedrock.mjs'
+import * as bflImages from './bfl-images.mjs'
 import * as cohere from './cohere.mjs'
+import * as falImages from './fal-images.mjs'
+import * as falVideo from './fal-video.mjs'
+import * as fireflyImages from './firefly-images.mjs'
 import * as gemini from './gemini.mjs'
 import * as geminiImages from './gemini-images.mjs'
+import * as ideogramImages from './ideogram-images.mjs'
 import * as images from './images.mjs'
+import * as lumaVideo from './luma-video.mjs'
 import * as openai from './openai.mjs'
+import * as recraftImages from './recraft-images.mjs'
+import * as replicateImages from './replicate-images.mjs'
+import * as replicateVideo from './replicate-video.mjs'
+import * as runwayVideo from './runway-video.mjs'
+import * as stabilityImages from './stability-images.mjs'
 import * as veo from './veo.mjs'
 import * as vertex from './vertex.mjs'
 
@@ -27,6 +38,17 @@ const WIRES = Object.freeze({
   [images.wire]: images,
   [geminiImages.wire]: geminiImages,
   [veo.wire]: veo,
+  [stabilityImages.wire]: stabilityImages,
+  [recraftImages.wire]: recraftImages,
+  [ideogramImages.wire]: ideogramImages,
+  [bflImages.wire]: bflImages,
+  [falImages.wire]: falImages,
+  [falVideo.wire]: falVideo,
+  [replicateImages.wire]: replicateImages,
+  [replicateVideo.wire]: replicateVideo,
+  [runwayVideo.wire]: runwayVideo,
+  [lumaVideo.wire]: lumaVideo,
+  [fireflyImages.wire]: fireflyImages,
 })
 
 /**
@@ -40,6 +62,9 @@ export const CREDENTIAL_KINDS = Object.freeze({
   API_KEY: 'api_key',
   SERVICE_ACCOUNT: 'service_account',
   AWS_CREDENTIALS: 'aws_credentials',
+  // A two-part OAuth client: public client id plus the secret. Used by Adobe Firefly, whose
+  // API has no single API key. Still one encrypted string per connection.
+  CLIENT_CREDENTIALS: 'client_credentials',
 })
 
 /** The credential kind a wire expects, defaulting to an API key. */
@@ -53,7 +78,11 @@ export function normaliseCredential(wire, value) {
   const found = Object.hasOwn(WIRES, wire) ? WIRES[wire] : null
   if (!found) throw failure('wire_not_implemented', `No adapter for wire '${wire}' in this build.`, 400)
   if ((found.credential ?? CREDENTIAL_KINDS.API_KEY) === CREDENTIAL_KINDS.API_KEY) return value
-  return JSON.stringify(found.readCredential(value))
+  const normalised = found.readCredential(value)
+  // A wire may return its compacted document as an object (service account, AWS, Firefly)
+  // or as a string; the store seals one string either way. JSON.stringify() of an already
+  // serialised string would seal a quoted document and fail later, at token exchange.
+  return typeof normalised === 'string' ? normalised : JSON.stringify(normalised)
 }
 
 /** Wires the gateway's transport can speak. */

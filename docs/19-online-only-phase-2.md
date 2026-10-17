@@ -2,6 +2,8 @@
 
 Date: 2026-10-14. This supersedes the earlier offline-first product direction.
 
+**Update (2026-10-17):** the provider framework now ships native chat, image and video adapters and several saved connections from a 39-entry catalogue; see [27-provider-framework.md](./27-provider-framework.md). The phase-2 text below records the 2026-10-14 increment. Where it says Image and Video have no adapter, or that Provider Settings saves one endpoint, docs/27 and the Image/Video rows of [03-status.md](./03-status.md) are current.
+
 ## Agreed scope and delivered change
 
 The user selected **five areas with simplified Chat**, and **LiteLLM gateway first**.
@@ -15,7 +17,7 @@ The active `npm run core` entry now loads `online/app.mjs`, not the legacy offli
 - Conversation history, optional approved memory and text-file knowledge remain. Files are limited to supported plain-text formats up to 1 MiB in the UI; no PDF/Office parsing. Context is sent only when selected for the request. Sensitive data needs explicit per-request authorization; credential-shaped content is redacted. Classification covers the entire assembled request and cannot be lowered by a caller's `public` label.
 - Plugins/MCP retain reviewed read-only built-ins. Arbitrary extension installs, trust-key modifications, external MCP registration and agent-driven tool execution are disabled in this increment. Built-ins are trusted because they are part of reviewed application source, not because of a publisher signature or a claimed in-process sandbox.
 
-**Not delivered:** real online Image/Video generation adapters, direct native provider integrations (Ollama's `/api/chat` and llama.cpp's native protocols are not used online; both runtimes are reached over `/v1`), cloud deployment, durable autonomous tasks, or a qualified Sparsiz training loop. Image/Video clearly state that their adapters are not connected; no synthetic output is substituted. LiteLLM metadata does not prove image/video support or access rights.
+**Not delivered on 2026-10-14:** real online Image/Video generation adapters, direct native provider integrations (Ollama's `/api/chat` and llama.cpp's native protocols are not used online; both runtimes are reached over `/v1`), cloud deployment, durable autonomous tasks, or a qualified Sparsiz training loop. Image/Video clearly stated that their adapters were not connected; no synthetic output was substituted. On 2026-10-17 the image and video adapters landed (docs/27); cloud deployment and a qualified Sparsiz loop remain undone, and no live vendor call has been made.
 
 ## Run and connect
 
