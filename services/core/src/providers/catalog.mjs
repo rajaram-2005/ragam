@@ -46,6 +46,7 @@ export const WIRE_FORMATS = Object.freeze({
   AWS_BEDROCK: 'aws_bedrock',
   GCP_VERTEX: 'gcp_vertex',
   OPENAI_IMAGES: 'openai_images',
+  GEMINI_VEO: 'gemini_veo',
 })
 
 /**
@@ -111,6 +112,7 @@ const streaming = cap(CAPABILITIES.STREAMING, 'test', GATEWAY_TESTS)
 const cancellation = cap(CAPABILITIES.CANCELLATION, 'test', GATEWAY_TESTS)
 const WIRE_TESTS = 'test/online-wires.test.mjs'
 const IMAGE_TESTS = 'test/online-image.test.mjs'
+const VIDEO_TESTS = 'test/online-video.test.mjs'
 const wireStreaming = cap(CAPABILITIES.STREAMING, 'test', WIRE_TESTS)
 const wireCancellation = cap(CAPABILITIES.CANCELLATION, 'test', WIRE_TESTS)
 
@@ -133,6 +135,19 @@ const imageNative = (id, label, doc, wire, auth) => Object.freeze({
   capabilities: Object.freeze([cap(CAPABILITIES.IMAGE_GENERATION, 'test', IMAGE_TESTS)]),
   egress: Object.freeze({ https: true, operatorConfigured: false }),
   notes: 'Native image adapter, contract-tested against a local fixture. No live call has been made in this build; the key you save is sent only to the endpoint you configure.',
+})
+
+const videoNative = (id, label, doc, wire, auth) => Object.freeze({
+  id, label,
+  category: 'media',
+  wire,
+  auth,
+  credential: credentialFor(wire),
+  status: PROVIDER_STATUS.READY,
+  docsUrl: doc,
+  capabilities: Object.freeze([cap(CAPABILITIES.VIDEO_GENERATION, 'test', VIDEO_TESTS)]),
+  egress: Object.freeze({ https: true, operatorConfigured: false }),
+  notes: 'Native video adapter: a long-running operation polled to completion, then a validated MP4. Contract-tested against a local fixture; no live call has been made in this build.',
 })
 
 const native = (id, label, doc, wire, auth, { streaming: streams = true, capabilities = [] } = {}) => Object.freeze({
@@ -200,6 +215,25 @@ export const PROVIDERS = Object.freeze([
   // Image vendors. OpenAI Images is a tested code path; every other media vendor is still pending,
   // and the video list has no adapter at all.
   imageNative('openai-images', 'OpenAI Images', 'https://developers.openai.com/api/reference/resources/images/methods/generate', WIRE_FORMATS.OPENAI_IMAGES, AUTH_KINDS.BEARER),
+  videoNative('veo', 'Google Veo (Gemini API)', 'https://ai.google.dev/gemini-api/docs/veo', WIRE_FORMATS.GEMINI_VEO, AUTH_KINDS.X_API_KEY),
+  ...[
+    ['runway', 'Runway', 'https://docs.dev.runwayml.com/'],
+    ['luma', 'Luma AI', 'https://docs.lumalabs.ai/docs/api'],
+    ['fal-video', 'fal.ai video', 'https://docs.fal.ai/model-endpoints/queue'],
+    ['replicate-video', 'Replicate video', 'https://replicate.com/docs/reference/http'],
+  ].map(([id, label, docsUrl]) => Object.freeze({
+    id,
+    label,
+    category: 'media',
+    wire: null,
+    auth: AUTH_KINDS.BEARER,
+    credential: null,
+    status: PROVIDER_STATUS.PENDING,
+    docsUrl,
+    capabilities: Object.freeze([]),
+    egress: Object.freeze({ https: true, operatorConfigured: false }),
+    notes: 'No video adapter in this build. The vendor documents the capability; this repository does not implement it.',
+  })),
   ...[
     ['stability', 'Stability AI', 'https://platform.stability.ai/docs/api-reference'],
     ['fal', 'fal.ai', 'https://docs.fal.ai/'],

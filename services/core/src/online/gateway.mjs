@@ -92,7 +92,7 @@ export function gatewayUrl(value, trustedOrigins = []) {
 
 export class OnlineGateway {
   constructor({ trustedOrigins = [], timeoutMs = 120_000, maxBytes = 2 * 1024 * 1024 } = {}) { Object.assign(this, { trustedOrigins, timeoutMs, maxBytes }) }
-  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes } = {}) {
+  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, binary = false } = {}) {
     const runtime = runtimeFor(config.kind ?? config.id ?? 'litellm'), label = runtime.label
     const base = gatewayUrl(config.baseUrl, this.trustedOrigins)
     const url = new URL(`${base}${path}`)
@@ -128,7 +128,7 @@ export class OnlineGateway {
           // A wire adapter supplies its own credential header. The default is the OpenAI shape,
           // kept for callers that predate the adapters; an adapter never mixes the two.
           ...(headers ?? (config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {})),
-          accept: onFrame ? 'text/event-stream' : 'application/json',
+          accept: binary ? '*/*' : onFrame ? 'text/event-stream' : 'application/json',
           ...(payload ? { 'content-type': contentType ?? 'application/json', 'content-length': Buffer.byteLength(payload) } : {}),
         },
       }, (res) => {
@@ -139,11 +139,16 @@ export class OnlineGateway {
         }
         if (onFrame && !String(res.headers['content-type']).includes('text/event-stream')) return done(failure('invalid_stream', 'Gateway did not return a streaming response.', 502))
         let text = '', size = 0, streamDone = false
-        res.setEncoding('utf8')
+        // A generated video is bytes, not a JSON document. Decoding it as UTF-8 and parsing it
+        // would corrupt the artifact, so binary responses are accumulated as Buffers and the
+        // caller validates the container itself.
+        const chunks = []
+        if (!binary) res.setEncoding('utf8')
         res.on('data', (chunk) => {
           if (finished) return
-          size += Buffer.byteLength(chunk)
+          size += binary ? chunk.length : Buffer.byteLength(chunk)
           if (size > responseLimit) return done(failure('provider_response_too_large', 'Gateway response exceeds the configured limit.', 502))
+          if (binary) { chunks.push(chunk); return }
           text += chunk
           if (!onFrame) return
           // Handle CRLF even when a CR and LF arrive in separate chunks.
@@ -171,6 +176,7 @@ export class OnlineGateway {
           // ends, and its adapter is responsible for asserting that the protocol's own completion
           // event arrived (Anthropic's `message_stop`, Gemini's final candidate).
           if (onFrame) return streamDone || doneOnEnd ? done(null, null) : done(failure('provider_interrupted', 'Gateway stream ended without completion.', 502))
+          if (binary) return done(null, { bytes: Buffer.concat(chunks), contentType: String(res.headers['content-type'] ?? '') })
           try { done(null, JSON.parse(text)) } catch { done(failure('invalid_response', 'Gateway returned invalid JSON.', 502)) }
         })
       })

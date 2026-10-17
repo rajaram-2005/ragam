@@ -61,7 +61,7 @@ export function MediaPreview({ job, kind }) {
     )
   }
 
-  const url = api.artifactUrl(job.id)
+  const url = kind === 'video' ? api.videoArtifactUrl(job.id) : api.imageArtifactUrl(job.id)
   return (
     <div className="media-frame">
       {kind === 'video' ? (

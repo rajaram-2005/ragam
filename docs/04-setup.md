@@ -231,8 +231,8 @@ limitations.
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1777 tests)
-npm run test:core         # 868
+npm test                  # all three suites (1786 tests)
+npm run test:core         # 877
 npm run test:web          # 92
 npm run test:fabric       # 814 — needs numpy + pytest on the interpreter
 ```
@@ -287,7 +287,7 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 868 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Core service** | 877 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
 | **Fabric** | 814 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 95 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 48-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
@@ -447,15 +447,15 @@ Anthropic Messages, Gemini generateContent, Cohere Chat v2, Azure OpenAI v1, Ver
 Converse and OpenAI Images. LiteLLM, Ollama and llama.cpp server are reached over their
 OpenAI-compatible routes; no vendor is contacted unless you save its endpoint and credential in
 Provider Settings, and every request goes only to the connection that names it. The catalogue marks
-ten entries `ready` (a tested code path), fourteen `gateway_only` (the wire format, not a verified
-vendor) and nine `pending` (no adapter; refused by name). See
+eleven entries `ready` (a tested code path), fourteen `gateway_only` (the wire format, not a verified
+vendor) and thirteen `pending` (no adapter; refused by name). See
 [docs/27](27-provider-framework.md); FreeLLMAPI remains excluded.
 
-**Image generation is real, for one provider.** Save an OpenAI Images connection, test it to list
-its image models, then generate from the Image area. The job is asynchronous and durable; the
-images are validated by the Core and stored under the account's data directory. Video generation
-has no adapter: `POST /api/video/generate` answers `503 capability_unavailable` and never
-substitutes a still image or a simulated clip.
+**Image and video generation are real, for one provider each.** Save an OpenAI Images connection
+and a Google Veo connection, test each to list its models, then generate from the Image or Video
+area. Both are asynchronous durable jobs; the bytes are validated by the Core, stored under the
+account's data directory, and served only by the job that produced them. Video polls a
+long-running operation, can be cancelled, and never substitutes a still image or a simulated clip.
 
 Optional **metadata-only** sources are now configured using
 `AETHERIS_MODEL_CATALOG_FILE`; see [17 — Model catalog](./17-model-catalog.md).

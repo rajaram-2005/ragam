@@ -147,7 +147,7 @@ export default function ImageArea({ provider, refreshReadiness, onSettings }) {
               {job.artifact ? ` · ${job.artifact.format?.toUpperCase()} · ${bytesOf(job.artifact.byteLength)} · sha256 ${job.artifact.sha256?.slice(0, 12)}…` : ''}
             </p>
             {job.state === 'succeeded' && job.artifact
-              ? <img className="generated-image" loading="lazy" src={`/api/image/jobs/${job.id}/content`} alt={job.result?.revisedPrompt ?? job.params?.prompt ?? 'Generated image'} />
+              ? <img className="generated-image" loading="lazy" src={api.imageArtifactUrl(job.id)} alt={job.result?.revisedPrompt ?? job.params?.prompt ?? 'Generated image'} />
               : null}
             {job.state === 'failed' || job.state === 'cancelled' || job.state === 'timed_out'
               ? <Banner tone="bad" title="No image was produced"><p>{job.error ?? 'The job ended without an artifact.'}</p></Banner>
@@ -156,7 +156,7 @@ export default function ImageArea({ provider, refreshReadiness, onSettings }) {
               ? <p className="small">Waiting for the provider… {job.stage ?? job.state}. The image is not shown until its bytes pass validation.</p>
               : null}
             <div className="row">
-              {job.artifact ? <a className="button" href={`/api/image/jobs/${job.id}/content`} download={`image-${job.id.slice(0, 8)}.${job.artifact.format === 'jpeg' ? 'jpg' : job.artifact.format}`}>Download</a> : null}
+              {job.artifact ? <a className="button" href={api.imageArtifactUrl(job.id)} download={`image-${job.id.slice(0, 8)}.${job.artifact.format === 'jpeg' ? 'jpg' : job.artifact.format}`}>Download</a> : null}
               <Button variant="danger" onClick={() => remove(job.id)}>Delete image and record</Button>
             </div>
           </article>)}

@@ -311,8 +311,20 @@ export class MediaJobQueue {
 
     const artifact = await this.#store(job, bytes, validation, filenameHint)
     // Provenance the provider reported, kept beside the artifact rather than folded into it.
+    // A bounded set of primitive provenance fields. Nothing provider-shaped is copied wholesale:
+    // a provider response is untrusted input, and this record is rendered in the UI.
+    const text = (value) => (typeof value === 'string' && value.length <= 200 ? value : null)
+    const number = (value) => (Number.isFinite(value) && value >= 0 ? value : null)
     const resultMeta = result && typeof result === 'object'
-      ? { model: result.model ?? null, revisedPrompt: result.revisedPrompt ?? null, usage: result.usage ?? null }
+      ? {
+          model: text(result.model),
+          revisedPrompt: text(result.revisedPrompt),
+          usage: result.usage && typeof result.usage === 'object' ? result.usage : null,
+          durationSeconds: number(result.durationSeconds),
+          aspectRatio: text(result.aspectRatio),
+          resolution: text(result.resolution),
+          platform: text(result.platform),
+        }
       : null
     this.#transition(job, JOB_STATES.SUCCEEDED, { stage: 'complete', progress: 100, artifact, validation, result: resultMeta, finishedAt: Date.now() })
     this.#audit(

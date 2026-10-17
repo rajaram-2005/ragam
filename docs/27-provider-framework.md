@@ -71,8 +71,8 @@ What exists, read rather than assumed:
 | Catalog API | **implemented and tested** | `GET /api/providers/catalog` |
 | Direct per-vendor chat adapters | **implemented and tested for Anthropic, Gemini, Cohere, Azure OpenAI, Vertex and Bedrock**; no vendor called live | `providers/wires/*.mjs`, `test/online-wires.test.mjs`; media vendors stay `pending` and are refused by name |
 | Other OpenAI-compatible vendors | implemented, awaiting live credentials | §4 — `gateway_only`; no vendor called |
-| Image generation, editing, history | planned | product routes still refuse `not_implemented` |
-| Video generation, async jobs, cancellation | planned | idem |
+| Image generation | **implemented and tested for OpenAI Images**; editing and history planned | `wires/images.mjs`, `/api/image/*`, `test/online-image.test.mjs`; no vendor called live |
+| Video generation, async jobs, cancellation | **implemented and tested for Google Veo**; other video vendors pending | `wires/veo.mjs`, `/api/video/*`, `test/online-video.test.mjs`; no vendor called live |
 | Klyvaron Lite/Pro/Max runtime adapters | partially implemented | docs/24: two Lite artifacts released, Pro/Max unbuilt |
 | Klyvaron Image / Video registries | planned | docs/22 records the modality roles; no weights exist |
 | Persistent memory, provenance, deletion | implemented and tested (library) | `memory/fabric.mjs`; not on a route |
@@ -128,7 +128,7 @@ read-only matrix with three sentences and no controls.
 
 ## 4. Provider matrix
 
-**33 entries — 10 ready, 14 reachable via an OpenAI-compatible endpoint, 9 pending.**
+**38 entries — 11 ready, 14 reachable via an OpenAI-compatible endpoint, 13 pending.**
 
 | Provider | Status | Wire | Auth | Capabilities evidenced | Documentation |
 |---|---|---|---|---|---|
@@ -156,6 +156,11 @@ read-only matrix with three sentences and no controls.
 | `vertex` — Google Vertex AI | ready | gcp_vertex | gcp_adc | streaming:test | [docs](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) |
 | `bedrock` — Amazon Bedrock | ready | aws_bedrock | aws_sigv4 | cancellation:test | [docs](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html) |
 | `openai-images` — OpenAI Images | ready | openai_images | bearer | image_generation:test | [docs](https://developers.openai.com/api/reference/resources/images/methods/generate) |
+| `veo` — Google Veo (Gemini API) | ready | gemini_veo | x_api_key | video_generation:test | [docs](https://ai.google.dev/gemini-api/docs/veo) |
+| `runway` — Runway | pending | — | bearer | — | [docs](https://docs.dev.runwayml.com/) |
+| `luma` — Luma AI | pending | — | bearer | — | [docs](https://docs.lumalabs.ai/docs/api) |
+| `fal-video` — fal.ai video | pending | — | bearer | — | [docs](https://docs.fal.ai/model-endpoints/queue) |
+| `replicate-video` — Replicate video | pending | — | bearer | — | [docs](https://replicate.com/docs/reference/http) |
 | `stability` — Stability AI | pending | — | bearer | — | [docs](https://platform.stability.ai/docs/api-reference) |
 | `fal` — fal.ai | pending | — | bearer | — | [docs](https://docs.fal.ai/) |
 | `replicate` — Replicate | pending | — | bearer | — | [docs](https://replicate.com/docs/reference/http) |
@@ -169,8 +174,8 @@ read-only matrix with three sentences and no controls.
 `gateway_only` is a statement about a wire format, not an integration: an operator can point a
 compatible endpoint at these vendors, and nothing in this repository has done so.
 
-`ready` for the seven native adapters (six chat shapes and one image shape) means the same thing it
-means for the three runtimes: a code path this repository exercises against a fixture. It does **not** mean the vendor was called. Their
+`ready` for the eight native adapters (six chat shapes, one image shape and one video shape) means the
+same thing it means for the three runtimes: a code path this repository exercises against a fixture. It does **not** mean the vendor was called. Their
 request shapes are not OpenAI's — auth header, system-prompt placement, role names and the
 completion signal all differ — so each has its own adapter rather than a compatibility shim. The
 first two are compared here; the four added in the latest increment are in §4.1:
@@ -223,27 +228,36 @@ and the notes on every native entry say that no live call has been made.
 
 ## 5. Image and video
 
-Image generation is **implemented for one provider**; video generation is not implemented at all.
+Image and video generation are each **implemented for one provider**; the remaining media vendors
+are pending.
 
 | Area | Capability | Status | What happens today |
 |---|---|---|---|
 | Image | text-to-image through OpenAI Images | **implemented and tested** | `POST /api/image/generate` queues a durable job (202), the provider returns inline base64, the Core validates the container and stores the bytes, and `GET /api/image/jobs/<id>/content` serves them. No provider URL is ever fetched or rendered |
+| Video | text-to-video through Google Veo (Gemini API) | **implemented and tested** | `POST /api/video/generate` queues a job (202); the wire starts `predictLongRunning`, polls the operation with a bounded cancellable loop, downloads the file URI, and the Core validates the MP4 container before storing it. `POST /api/video/jobs/<id>/cancel` aborts the live request |
 | Image | edit, variations, mask, history beyond the job list | planned | Those routes do not exist; the Image area cannot send them and the adapter cannot fake them |
+| Video | image-to-video, extension, a second vendor | planned | The adapter sends a text prompt only; Runway, Luma, fal.ai video and Replicate video remain `pending` and are refused by name |
 | Image | Stability, fal.ai, Replicate, Recraft, Ideogram, BFL, Firefly, ComfyUI, Diffusers | pending | Each is refused by name. A model name in a catalogue is not an adapter |
-| Video | text-to-video, image-to-video, jobs, cancel | pending | `POST /api/video/generate` is `503 capability_unavailable`; the workflow refuses a still image presented as a video |
 
-The `media/workflow.mjs` measurement layer is used by the image path for dimensions and digests, and
-its tests remain the check on what "validated" means. The image wire adds the provider boundary:
-`{base}/images/generations`, a prompt cap of 4,000 characters (the provider allows 32,000; this
-product caps what it will send), four sizes (`1024x1024`, `1536x1024`, `1024x1536`, `auto`), and a
-20 MB decoded-image ceiling. A response with only a URL, a non-image payload, a truncated base64
-value or a container whose bytes do not re-encode is `invalid_completion` — never a broken image in
-the browser.
+The `media/workflow.mjs` measurement layer is used by both paths for container checks and digests,
+and its tests remain the check on what "validated" means. The image wire adds a prompt cap of 4,000
+characters (the provider allows 32,000; this product caps what it will send), four sizes
+(`1024x1024`, `1536x1024`, `1024x1536`, `auto`), and a 20 MB decoded-image ceiling. A response with
+only a URL, a non-image payload, a truncated base64 value or a container whose bytes do not
+re-encode is `invalid_completion` — never a broken image in the browser.
 
-**Provenance is part of the artifact.** Every job stores the prompt, the provider and model that
-answered, the revised prompt when the vendor returns one, the byte length and the SHA-256 digest.
-The Image area renders a picture only for a job whose state is `succeeded` and whose artifact the
-Core validated. A failed job stays visible with its error and has no image element.
+The video wire adds the asynchronous half: an operation name is the only thing the start call
+returns, the poll is bounded and cancellable, and the finished file is downloaded as bytes. The
+credential is sent only to the API origin; a file URI on another public HTTPS host is fetched
+without it, and a redirect is refused. Duration is measured from the MP4's own `moov/mvhd` box, not
+copied from a provider claim. A still image, a stub or a truncated container fails
+`assertGenuineVideo` and never becomes a `<video>`.
+
+**Provenance is part of the artifact.** Every job stores the prompt, the provider and model, the
+size or aspect ratio/resolution that was requested, the measured duration (video), the byte length
+and SHA-256 digest, and the revised prompt when the vendor returns one. The area renders a result
+only for a job whose state is `succeeded` and whose artifact the Core validated. A failed or
+cancelled job stays visible with its reason and has no media element.
 
 ## 6. Klyvaron
 
@@ -316,10 +330,10 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 ## 9. Known limitations of this increment
 
 - **No live provider call was made.** "Implemented, awaiting live credentials" is the ceiling for
-  every vendor outside the three tested runtimes and the seven contract-tested native adapters.
-- **Seven native adapters exist, and none has been called live.** Anthropic Messages, Gemini
-  generateContent, Cohere Chat v2, Azure OpenAI v1, Vertex AI, Bedrock Converse and OpenAI Images
-  are contract-tested against local fixtures that return the published response shapes. A key that is
+  every vendor outside the three tested runtimes and the eight contract-tested native adapters.
+- **Eight native adapters exist, and none has been called live.** Anthropic Messages, Gemini
+  generateContent, Cohere Chat v2, Azure OpenAI v1, Vertex AI, Bedrock Converse, OpenAI Images and
+  Google Veo are contract-tested against local fixtures that return the published response shapes. A key that is
   valid, a model that exists and a quota that allows the request are all still unverified; the
   matrix and `docs/03` say so.
 - **Bedrock does not stream in this build.** `ConverseStream` returns
@@ -333,16 +347,24 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
   models. The v1 chat API names the **deployment** in `model`, so the connection needs a deployment
   whose name matches the selected id. The hint in Provider Settings says this, and a missing
   deployment fails with Azure's own not-found error rather than being silently substituted.
-- **Nine media providers remain `pending`.** Every remaining pending entry is a media or local-model
-  vendor with no adapter; adding a connection for one is `400 adapter_pending`, not accepted and
-  quietly broken.
+- **Thirteen media providers remain `pending`.** Every remaining pending entry is a media or
+  local-model vendor with no adapter; adding a connection for one is `400 adapter_pending`, not
+  accepted and quietly broken.
+- **Video is one vendor and one prompt mode.** Only text-to-video through Veo is implemented. There
+  is no image-to-video, extension or second video vendor, and no storyboard or edit route.
+- **A restart interrupts an in-flight video.** The queue persists terminal records and marks a job
+  interrupted mid-render as `failed` with `interrupted`; it does not resume a provider operation
+  whose name was not durably stored. A completed clip and its record survive a restart.
+- **Video downloads follow one redirect rule and no others.** The gateway refuses redirects for
+  every adapter. Google's file URI is fetched directly; an underlying storage redirect would fail
+  honestly rather than being followed.
 - **Image generation has one provider, and no image editing.** Only text-to-image through OpenAI
   Images is implemented. There is no inpainting, mask, variation or upscale route, and no second
   image vendor. The Image area says which connection it used and never presents a stored sample.
 - **Images are generated once per job; retries are explicit.** A failed job is a record with an
   error, not a background retry loop. Deleting a job removes the record and the stored bytes.
 - **A catalogue id is usable when its wire is implemented and its status is not `pending`.** All
-  eight wires are implemented, so the ten `ready` entries and the fourteen `gateway_only` entries
+  nine wires are implemented, so the eleven `ready` entries and the fourteen `gateway_only` entries
   can be saved.
 - **The UI cannot configure a pending provider.** That is deliberate: a control that cannot work is
   a claim that it can.
@@ -354,10 +376,13 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
    vendor".
 2. Bedrock streaming through the AWS event-stream framing, if the product needs it; until then the
    limitation is stated rather than hidden.
-3. A live verification run for the image adapter: one paid image, recorded with date, model,
-   prompt digest and response digest. Until then `openai-images` means "tested code path".
-4. A second image vendor and image editing, so "Image" is not one vendor's text-to-image surface.
-5. Video generation, async lifecycle, cancellation and restart recovery.
+3. A live verification run for the image and video adapters: one paid generation each, recorded
+   with date, model, prompt digest and response digest. Until then `openai-images` and `veo` mean
+   "tested code path".
+4. A second image vendor, image editing, and a second video vendor (Runway, Luma, fal.ai video or
+   Replicate video), so neither area is one vendor's surface.
+5. Resume of an in-flight video operation after a restart, if the product needs it; until then the
+   interruption is recorded rather than hidden.
 6. Provider health checks and usage accounting surfaced in the five areas.
 7. Product routes for the adaptive core, which remains a library.
 
@@ -369,6 +394,7 @@ node --test services/core/test/online.test.mjs          # 29 tests, including sc
 node --test services/core/test/online-runtimes.test.mjs # 10 tests
 node --test services/core/test/online-wires.test.mjs    # 20 contract tests, six native chat wires plus SigV4
 node --test services/core/test/online-image.test.mjs    # 9 tests, the image wire and the durable job path
+node --test services/core/test/online-video.test.mjs    # 9 tests, Veo polling, download policy and cancellation
 node --test services/core/test/provider-framework.test.mjs
 npm run test:web                       # includes the catalogue and saved-connection renders
 ```

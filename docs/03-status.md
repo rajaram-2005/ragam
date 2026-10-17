@@ -11,14 +11,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1777 passing, 0 failing.**
+**Test totals: 1786 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **868 / 868** (50 files, ~48 s) |
+| `services/core` | `node --test test/*.test.mjs` | **877 / 877** (51 files, ~48 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **95 / 95** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 214.54 kB → **66.02 kB gzip**, single chunk, no warnings |
+| `apps/web` build | `vite build` | 221.17 kB → **66.93 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as five jobs split so a
@@ -234,7 +234,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (868 tests)
+### `services/core` — Implemented and tested (877 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -263,6 +263,8 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Persistent memory fabric | **Implemented and tested; not yet reachable from the product** | Seven layers (working, episodic, semantic, preference, project, skill, failure) with `assertion` and `verification` held as **separate records** on every entry, so *the user said so* and *an independent check confirmed it* cannot be read as the same thing: a claim's confidence has no number at all. Required provenance rows, versions on correction, contradictions kept and listed, scope and readers enforced on read with each exclusion naming its reason, deletion that takes the provenance with it and leaves a content-free tombstone, and the skill/episodic/failure layers **referencing** the registry and the episode log instead of copying them. The bridge with the existing product memory goes one way each way: an approved memory enters as a claim (approval is permission, not verification) and a fabric entry leaves as a candidate a person must approve. Tested by `memory-fabric.test.mjs` (18) and `memory-bridge.test.mjs` (7). No HTTP route or panel reads it yet, and it is not a retrieval model — there is no ranking beyond SQL ordering and no embedding of any kind. See [docs/25](25-adaptive-intelligence.md) §4 |
 | Plugin and MCP authority boundary | **Implemented and tested; not yet reachable from the product** | Every tool, plugin, resource and prompt result now carries a **provenance** — origin, digest of the exact bytes, and whether the text is instruction-shaped — instead of a bare `untrusted: true`. A consequential action (write, destructive, external, system) must cite a reason, and a reason that came from data is refused (`tainted_justification`) no matter how clearly it asks: authority is minted only from a **user turn** (`not_a_user_turn`), a grant names its actions rather than `*`, the ceiling is checked against the action's risk tier, a hand-edited copy of a token is `authority_tampered` because the fields are re-digested and privileges are read from the stored record, and taint survives derivation so a model's summary of a tool output is refused for the same reason the output was. The instruction classifier is **audit evidence, not the gate**: one named test proves an instruction it does not recognise is refused identically, so a false negative costs nothing. A user turn may `endorse` acting on data, and the record names who and why while the provenance stays untrusted. `test/mcp-authority.test.mjs` (11 tests). See [docs/25](25-adaptive-intelligence.md) §4 |
 | Image generation | **Implemented and tested for OpenAI Images; no live call** | `POST /api/image/generate` validates prompt (4,000 characters), size and model, then queues a durable per-account job (202). The `openai_images` wire posts to `{base}/images/generations`, decodes inline `b64_json`, and accepts the artifact only if the container re-encodes to the same bytes; a URL-only or non-image response is `invalid_completion`. Jobs survive a restart, are owned by one account, and `GET /api/image/jobs/<id>/content` serves the stored bytes with `nosniff` and a sandbox CSP. The Image area renders only a succeeded job and shows its prompt, provider, model, size, digest and byte length. `test/online-image.test.mjs` (9 tests); see [docs/27](27-provider-framework.md) §5 |
+
+| Video generation | **Implemented and tested for Google Veo; no live call** | `POST /api/video/generate` validates prompt, aspect ratio, resolution and model, then queues a durable per-account job (202). The `gemini_veo` wire starts `models/{model}:predictLongRunning`, polls the operation with a bounded cancellable loop, downloads the file URI as bytes (the key goes only to the API origin), and stores the MP4 only if the container validates. Duration is measured from `moov/mvhd`; a still image or stub fails `assertGenuineVideo`. `POST /api/video/jobs/<id>/cancel` aborts the live request. `test/online-video.test.mjs` (9 tests); see [docs/27](27-provider-framework.md) §5 |
 | Video workflow | **Implemented and tested; no provider installed** | Same module: a video request needs a real clip — a still image returned instead is refused as `still_image_substitution`, a stub under 8 KiB as `output_too_small`, and a clip shorter than requested as `duration_short`. Duration is read from the MP4 `mvhd` box; a WebM returns `verified: partial` naming the unparsed EBML duration rather than assuming it. The legacy route still refuses with `needs_hardware` (501); **never substitutes a still image**, and this workflow is the check that would catch it if it tried. See [docs/25](25-adaptive-intelligence.md) §4 |
 
 ### `services/fabric` — Implemented and tested (814 tests)
@@ -504,7 +506,7 @@ Measured release verification on this host:
 
 | Check | Result |
 |---|---|
-| `node services/core/scripts/release-check.mjs --core 868 --web 95 --fabric 814` | `release 0.2.0 verified against 868 + 95 + 814 = 1777 tests` |
+| `node services/core/scripts/release-check.mjs --core 877 --web 95 --fabric 814` | `release 0.2.0 verified against 877 + 95 + 814 = 1786 tests` |
 | `node services/core/scripts/benchmark-adaptive.mjs` | 7/7 benchmarks, 0 failed, artefact at `docs/experiments/phase10-benchmark.json` |
 | `VERSION` / three `package.json` / `package-lock.json` | all `0.2.0` |
 

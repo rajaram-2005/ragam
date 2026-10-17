@@ -73,6 +73,26 @@ Not in 0.2.0. On this branch only.
   decoding and tamper rejection, URL-only and non-image responses, per-account isolation, deletion,
   restart persistence and the prompt/size/model refusals. No vendor was called.
 
+### Video generation (phase 4)
+
+- **Google Veo is a real adapter with a real asynchronous lifecycle.** `gemini_veo` starts
+  `models/{model}:predictLongRunning`, polls the operation with a bounded cancellable loop, and
+  downloads the finished file as bytes. The API key is sent only to the API origin; a file URI on
+  another host is fetched without it, and a redirect is refused.
+- **The artifact is measured, not asserted.** The MP4 container must validate, `assertGenuineVideo`
+  rejects a still image or a stub, and duration is read from `moov/mvhd`. The job records the model,
+  platform, requested aspect ratio and resolution, measured duration, byte length and digest.
+- **Video jobs are durable, per account and cancellable.** `POST /api/video/generate` returns 202;
+  `GET /api/video/jobs[.id]` reports it; `.../content` serves the stored bytes; `.../cancel` aborts
+  the live provider request; `DELETE` removes the record and the artifact. A terminal job survives a
+  restart; an interrupted one is recorded as `failed` with `interrupted`, never replayed.
+- **The catalogue now names the video market.** `veo` is `ready`; Runway, Luma, fal.ai video and
+  Replicate video are `pending` and refused by name rather than silently missing.
+- **Tests:** `services/core/test/online-video.test.mjs` (9 tests) covers model discovery, the
+  operation request, polling, binary download, credential non-leakage to a second host, redirect
+  refusal, cancellation, pre-queue validation, failed/filtered/still-image outcomes and the
+  transport's binary ceiling. No vendor was called.
+
 ## [0.2.0] — 2026-10-17
 
 The adaptive intelligence work, phases 1–10 of the directive: capability profiles over one shared

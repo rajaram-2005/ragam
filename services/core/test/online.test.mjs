@@ -68,9 +68,9 @@ test('the provider catalogue is authenticated, read-only and carries no secrets'
   const r = await f.request('GET', '/api/providers/catalog')
   assert.equal(r.status, 200)
   assert.equal(r.data.valid, true)
-  assert.equal(r.data.counts.ready, 10, 'three runtimes, six native chat wires and OpenAI Images have a tested path')
+  assert.equal(r.data.counts.ready, 11, 'three runtimes, six native chat wires, OpenAI Images and Veo have a tested path')
   assert.ok(r.data.counts.pending > 0, 'the unimplemented adapters must be stated, not hidden')
-  assert.match(r.data.summary, /^10 ready/)
+  assert.match(r.data.summary, /^11 ready/)
   for (const provider of r.data.providers) {
     assert.ok(provider.docsUrl.startsWith('https://'), `${provider.id} must cite documentation`)
     // A descriptor has no credential field, so there is nothing to redact — but assert it anyway,
@@ -196,7 +196,7 @@ test('only reviewed built-in tools execute; custom installs and removed features
  assert.equal((await f.request('POST','/api/mcp/call',{server:'aetheris.online',tool:'connection.status',arguments:{}})).status,200)
  for (const path of ['/api/hardware','/api/tasks','/api/storage','/api/skills']) assert.equal((await f.request('GET',path)).status,404)
  assert.equal((await f.request('POST','/api/image/generate',{})).data.error,'provider_not_configured')
- assert.equal((await f.request('POST','/api/video/generate',{})).data.error,'capability_unavailable')
+ assert.equal((await f.request('POST','/api/video/generate',{})).data.error,'provider_not_configured')
 })
 test('connection removal clears credentials and model selection without deleting conversations', async (t) => {
  const f=await fixture(t);await f.configure();await f.request('POST','/api/sessions',{title:'keep me'})

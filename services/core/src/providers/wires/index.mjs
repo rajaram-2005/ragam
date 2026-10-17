@@ -12,6 +12,7 @@ import * as cohere from './cohere.mjs'
 import * as gemini from './gemini.mjs'
 import * as images from './images.mjs'
 import * as openai from './openai.mjs'
+import * as veo from './veo.mjs'
 import * as vertex from './vertex.mjs'
 
 const WIRES = Object.freeze({
@@ -23,6 +24,7 @@ const WIRES = Object.freeze({
   [bedrock.wire]: bedrock,
   [vertex.wire]: vertex,
   [images.wire]: images,
+  [veo.wire]: veo,
 })
 
 /**

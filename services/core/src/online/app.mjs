@@ -69,7 +69,7 @@ const PROVIDER_CONNECTION = new RegExp(`^${PROVIDER_CONNECTION_PREFIX}([a-z0-9]+
 export const RESET_REQUESTED_MESSAGE = 'If an account on this installation uses that email address, a single-use reset code is now waiting on the Core host. It expires in 15 minutes.'
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null }) {
+  constructor({ dataDir, trustedOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
     // should refuse without leaving a half-written data directory behind.
     const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
@@ -86,6 +86,9 @@ export class OnlineApp {
     this.dir = resolve(dataDir); mkdirSync(this.dir, { recursive: true, mode: 0o700 })
     this.store = new OnlineStore(this.dir)
     this.gateway = new OnlineGateway({ trustedOrigins, timeoutMs })
+    // The video wire polls a long-running operation. Tests shorten the interval; production uses
+    // the documented 10-second cadence. This is a timing seam, not a behaviour switch.
+    this.mediaPoll = mediaPoll
     this.secureCookie = secureCookie; this.sessions = new Map(); this.authAttempts = new Map()
     this.activeRequests = 0
     this.ledger = new AuditLedger(join(this.dir, 'audit.sqlite'))
@@ -183,7 +186,7 @@ export class OnlineApp {
       capabilities: {
         chat: s.configured && s.models.length > 0 && typeof chatWire?.chat === 'function',
         imageGeneration: this.imageAvailable(),
-        videoGeneration: false,
+        videoGeneration: this.videoAvailable(),
       },
       provider: { kind: s.kind, name: s.name, baseUrl: s.baseUrl, selectedModel: s.selectedModel, checkedAt: s.checkedAt },
       accounts: { total: this.accounts.count() },
@@ -239,6 +242,69 @@ export class OnlineApp {
       run: ({ signal }) => wire.generate(this.gateway.request.bind(this.gateway), config, { model, prompt, size: body.size, signal }),
     })
     this.ledger.record({ category: 'media', action: 'image_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model } })
+    return job
+  }
+
+  /** The saved connection a video request will use, or a refusal that names what is missing. */
+  videoConnection() {
+    const candidates = this.store.connections.filter((connection) => runtimeFor(connection.id).wire === 'gemini_veo')
+    const record = candidates.find((connection) => connection.id === 'veo') ?? candidates[0]
+    if (!record) throw failure('provider_not_configured', 'Add a Google Veo connection in Provider Settings.', 503)
+    return this.store.config(record.id)
+  }
+
+  /** Whether this installation can start a video job now: a key and a listed model, not a maybe. */
+  videoAvailable() {
+    try {
+      const config = this.videoConnection()
+      const record = this.store.connections.find((connection) => connection.id === config.id)
+      return Boolean(record?.key && (record.models ?? []).length)
+    } catch { return false }
+  }
+
+  /**
+   * Queue one video generation. Video is a long-running provider operation, so the HTTP response is
+   * the job record and nothing else; polling, cancellation and the restart rule live in the queue.
+   */
+  async startVideo(body, session) {
+    const config = this.videoConnection()
+    const record = this.store.connections.find((connection) => connection.id === config.id)
+    const models = record?.models ?? []
+    const model = typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0])
+    if (!model) throw failure('model_unavailable', 'Test the video connection to list its models, then choose one.', 409)
+    if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
+    const wire = wireFor(config.wire)
+    if (typeof wire.generate !== 'function') throw failure('capability_unavailable', 'That connection does not generate video.', 409)
+    const prompt = body.prompt
+    if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
+    if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps video prompts at 4,000 characters.', 400)
+    if (body.aspectRatio !== undefined && !(wire.ASPECT_RATIOS ?? []).includes(body.aspectRatio)) {
+      throw failure('invalid_parameters', `Aspect ratio must be one of ${(wire.ASPECT_RATIOS ?? []).join(', ')}.`, 400)
+    }
+    if (body.resolution !== undefined && !(wire.RESOLUTIONS ?? []).includes(body.resolution)) {
+      throw failure('invalid_parameters', `Resolution must be one of ${(wire.RESOLUTIONS ?? []).join(', ')}.`, 400)
+    }
+    const context = this.contextFor(session.accountId)
+    const job = context.media.enqueue({
+      kind: 'video',
+      // Video renders for minutes and the provider operation is paid for once; the deadline is
+      // bounded and stated in the job record, and the job is failed honestly if it is exceeded.
+      timeoutMs: 15 * 60 * 1000,
+      params: { prompt, aspectRatio: body.aspectRatio ?? null, resolution: body.resolution ?? null, model, provider: config.id },
+      subject: session.accountId,
+      filenameHint: `${config.id}-video`,
+      run: ({ signal, progress }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
+        model,
+        prompt,
+        aspectRatio: body.aspectRatio,
+        resolution: body.resolution,
+        signal,
+        onProgress: progress,
+        poll: this.mediaPoll ?? undefined,
+        trustedOrigins: this.gateway.trustedOrigins,
+      }),
+    })
+    this.ledger.record({ category: 'media', action: 'video_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model } })
     return job
   }
   async configure(body, { session, kind = 'litellm' } = {}) {
@@ -530,16 +596,27 @@ export class OnlineApp {
         }
         // Generated media is per account, like history: the queue is opened under the account id
         // and a job id from another account is a 404 here, not a record with a different owner.
-        const mediaJob = /^\/api\/(?:image|media)\/jobs\/([0-9a-f-]{36})(\/content)?$/.exec(path)
+        const mediaJob = /^\/api\/(?:image|video|media)\/jobs\/([0-9a-f-]{36})(\/content)?$/.exec(path)
+        const mediaCancel = /^\/api\/(?:image|video|media)\/jobs\/([0-9a-f-]{36})\/cancel$/.exec(path)
         const mediaFor = () => this.contextFor(session.accountId).media
         if (req.method === 'GET' && path === '/api/image/jobs') return sendJson(res, 200, { jobs: mediaFor().list({ kind: 'image', limit: 50 }) })
+        if (req.method === 'GET' && path === '/api/video/jobs') return sendJson(res, 200, { jobs: mediaFor().list({ kind: 'video', limit: 50 }) })
         if (req.method === 'GET' && path === '/api/media/jobs') return sendJson(res, 200, { jobs: mediaFor().list({ limit: 50 }) })
-        if (req.method === 'GET' && path === '/api/video/jobs') return sendJson(res, 200, { jobs: [] })
         if (req.method === 'POST' && path === '/api/image/generate') {
           const job = await this.startImage(await readBody(req, { principal: session.accountId }), session)
           return sendJson(res, 202, job)
         }
-        if (req.method === 'POST' && path === '/api/video/generate') throw failure('capability_unavailable', 'No video adapter is qualified in this build. No substitute output is generated.', 503)
+        if (req.method === 'POST' && path === '/api/video/generate') {
+          const job = await this.startVideo(await readBody(req, { principal: session.accountId }), session)
+          return sendJson(res, 202, job)
+        }
+        if (mediaCancel && req.method === 'POST') {
+          const media = mediaFor()
+          if (!media.has(mediaCancel[1])) throw failure('job_not_found', 'No such media job for this account.', 404)
+          const result = media.cancel(mediaCancel[1])
+          this.ledger.record({ category: 'media', action: 'media_cancel', outcome: result.cancelled ? 'success' : 'denied', subject: session.accountId, detail: { jobId: mediaCancel[1], state: result.state } })
+          return sendJson(res, 200, result)
+        }
         if (mediaJob && req.method === 'GET' && mediaJob[2]) {
           const media = mediaFor()
           const job = media.has(mediaJob[1]) ? media.get(mediaJob[1]) : null
@@ -550,8 +627,11 @@ export class OnlineApp {
             'content-length': artifact.byteLength,
             'cache-control': 'private, no-store',
             'x-content-type-options': 'nosniff',
-            // The bytes are an image, but a browser should still treat the response as inert.
+            // The bytes are media, but a browser should still treat the response as inert.
             'content-security-policy': "default-src 'none'; sandbox",
+            // The response is complete and not resumable; a partial read must fail rather than
+            // be presented as the whole clip.
+            'accept-ranges': 'none',
           })
           return res.end(Buffer.from(bytes))
         }

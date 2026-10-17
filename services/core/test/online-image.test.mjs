@@ -183,7 +183,7 @@ test('an image connection refuses chat without sending a request, and a video re
   assert.equal(f.calls.some((call) => call.path === '/v1/chat/completions'), false)
   const video = await f.request('POST', '/api/video/generate', {})
   assert.equal(video.status, 503)
-  assert.equal(video.data.error, 'capability_unavailable')
+  assert.equal(video.data.error, 'provider_not_configured', 'no video connection is saved in this fixture')
 })
 
 test('a provider failure, a URL-only response and non-image bytes fail the job with no artifact', async (t) => {

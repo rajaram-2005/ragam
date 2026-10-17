@@ -111,12 +111,6 @@ export const api = {
 
   // --- chat ---------------------------------------------------------------
   chat: (body, options) => request('POST', '/api/chat', body, options),
-  // Image generation is a job: the POST returns a record, and the Image area polls it. The bytes
-  // are fetched from the same job, never from a provider URL.
-  imageJobs: () => request('GET', '/api/image/jobs'),
-  imageJob: (id) => request('GET', `/api/image/jobs/${encodeURIComponent(id)}`),
-  generateImage: (body) => request('POST', '/api/image/generate', body),
-  deleteImageJob: (id) => request('DELETE', `/api/image/jobs/${encodeURIComponent(id)}`, {}),
   knowledgeSearch: (body) => request('POST', '/api/knowledge/search', body),
   knowledgeIngest: (body) => request('POST', '/api/knowledge/ingest', body),
   knowledgeStats: () => request('GET', '/api/knowledge/stats'),
@@ -177,18 +171,26 @@ export const api = {
   approveTask: (id, body) => request('POST', `/api/tasks/${encodeURIComponent(id)}/approve`, body),
 
   // --- image / video ------------------------------------------------------
-  generateImage: (body, options) => request('POST', '/api/image/generate', body, options),
-  imageJobs: (limit = 25) => request('GET', `/api/image/jobs?limit=${limit}`),
-  generateVideo: (body, options) => request('POST', '/api/video/generate', body, options),
-  videoJobs: (limit = 25) => request('GET', `/api/video/jobs?limit=${limit}`),
-  // Direct URL for an <img>/<video> tag. Only valid for a succeeded job.
-  // The bytes of a generated image, served by the job that produced it. A URL returned by a
-  // provider is never used: the Core only stores and serves bytes it validated itself.
-  artifactUrl: (jobId) => `/api/image/jobs/${encodeURIComponent(jobId)}/content`,
-  // Unfiltered job list. /api/media/jobs does not filter by kind server-side, so no
-  // kind parameter is sent; use imageJobs/videoJobs for a filtered view.
-  mediaJobs: (limit = 25) => request('GET', `/api/media/jobs?limit=${limit}`),
+  // Generation is a job: the POST returns a record (202) and the area polls it. The bytes are
+  // fetched from the job the Core validated, never from a provider-supplied URL.
+  generateImage: (body) => request('POST', '/api/image/generate', body),
+  imageJobs: () => request('GET', '/api/image/jobs'),
+  imageJob: (id) => request('GET', `/api/image/jobs/${encodeURIComponent(id)}`),
+  deleteImageJob: (id) => request('DELETE', `/api/image/jobs/${encodeURIComponent(id)}`, {}),
+  generateVideo: (body) => request('POST', '/api/video/generate', body),
+  videoJobs: () => request('GET', '/api/video/jobs'),
+  videoJob: (id) => request('GET', `/api/video/jobs/${encodeURIComponent(id)}`),
+  deleteVideoJob: (id) => request('DELETE', `/api/video/jobs/${encodeURIComponent(id)}`, {}),
   cancelMediaJob: (jobId) => request('POST', `/api/media/jobs/${encodeURIComponent(jobId)}/cancel`, {}),
+  cancelVideoJob: (jobId) => request('POST', `/api/video/jobs/${encodeURIComponent(jobId)}/cancel`, {}),
+  // Direct URLs for an <img>/<video> tag. Only valid for a succeeded job. Each is a literal
+  // route so the client-path check can see the endpoint it names.
+  artifactUrl: (jobId) => `/api/image/jobs/${encodeURIComponent(jobId)}/content`,
+  imageArtifactUrl: (jobId) => `/api/image/jobs/${encodeURIComponent(jobId)}/content`,
+  videoArtifactUrl: (jobId) => `/api/video/jobs/${encodeURIComponent(jobId)}/content`,
+  // Unfiltered job list. /api/media/jobs does not filter by kind server-side; use
+  // imageJobs/videoJobs for a filtered view.
+  mediaJobs: (limit = 25) => request('GET', `/api/media/jobs?limit=${limit}`),
 
   // --- plugins ------------------------------------------------------------
   plugins: (state) => request('GET', `/api/plugins${state ? `?state=${encodeURIComponent(state)}` : ''}`),
