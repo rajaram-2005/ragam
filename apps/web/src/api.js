@@ -192,6 +192,10 @@ export const api = {
   // imageJobs/videoJobs for a filtered view.
   mediaJobs: (limit = 25) => request('GET', `/api/media/jobs?limit=${limit}`),
 
+  // --- response styles -----------------------------------------------------
+  styles: () => request('GET', '/api/styles'),
+  setStyle: (style) => request('PUT', '/api/styles', { style }),
+
   // --- skills -------------------------------------------------------------
   skills: () => request('GET', '/api/skills'),
   skill: (name) => request('GET', `/api/skills/${encodeURIComponent(name)}`),

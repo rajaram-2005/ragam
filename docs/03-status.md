@@ -11,14 +11,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1795 passing, 0 failing.**
+**Test totals: 1803 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **886 / 886** (52 files, ~49 s) |
+| `services/core` | `node --test test/*.test.mjs` | **894 / 894** (53 files, ~50 s) |
 | `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **95 / 95** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 226.38 kB → **68.19 kB gzip**, single chunk, no warnings |
+| `apps/web` build | `vite build` | 227.34 kB → **68.45 kB gzip**, single chunk, no warnings |
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as five jobs split so a
@@ -234,7 +234,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (886 tests)
+### `services/core` — Implemented and tested (894 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -267,6 +267,8 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Video generation | **Implemented and tested for Google Veo; no live call** | `POST /api/video/generate` validates prompt, aspect ratio, resolution and model, then queues a durable per-account job (202). The `gemini_veo` wire starts `models/{model}:predictLongRunning`, polls the operation with a bounded cancellable loop, downloads the file URI as bytes (the key goes only to the API origin), and stores the MP4 only if the container validates. Duration is measured from `moov/mvhd`; a still image or stub fails `assertGenuineVideo`. `POST /api/video/jobs/<id>/cancel` aborts the live request. `test/online-video.test.mjs` (9 tests); see [docs/27](27-provider-framework.md) §5 |
 
 | Reviewed procedures | **Implemented and tested** | Owner installs a structured document; a named structural review (document parses, at least two steps, scope declared, no network) promotes a candidate, and a new version is a candidate again. A validated, text-only procedure can be selected for one message: its text is sent as reference material, usage is counted only after the provider answers, and versions, rollback and deletion persist. A procedure declaring file or network access is refused because this product has no executor. `test/online-skills.test.mjs` (9 tests); the learned-procedure surface stays archived |
+
+| Response styles | **Implemented and tested** | Seven styles (supportive, focused, curious, cautious, reflective, playful, technical), set by the person in Chat and stored per account. The server sends the style as an instruction with the prohibitions attached, audits every reply, shows soft findings without rewriting the text, and refuses a claim of consciousness, dependence or manipulation with `style_violation`, storing nothing. Nothing infers a style from a message: the estimator stays a library. `test/online-styles.test.mjs` (8 tests) |
 | Video workflow | **Implemented and tested; no provider installed** | Same module: a video request needs a real clip — a still image returned instead is refused as `still_image_substitution`, a stub under 8 KiB as `output_too_small`, and a clip shorter than requested as `duration_short`. Duration is read from the MP4 `mvhd` box; a WebM returns `verified: partial` naming the unparsed EBML duration rather than assuming it. The legacy route still refuses with `needs_hardware` (501); **never substitutes a still image**, and this workflow is the check that would catch it if it tried. See [docs/25](25-adaptive-intelligence.md) §4 |
 
 ### `services/fabric` — Implemented and tested (814 tests)
@@ -508,7 +510,7 @@ Measured release verification on this host:
 
 | Check | Result |
 |---|---|
-| `node services/core/scripts/release-check.mjs --core 886 --web 95 --fabric 814` | `release 0.2.0 verified against 886 + 95 + 814 = 1795 tests` |
+| `node services/core/scripts/release-check.mjs --core 894 --web 95 --fabric 814` | `release 0.2.0 verified against 894 + 95 + 814 = 1803 tests` |
 | `node services/core/scripts/benchmark-adaptive.mjs` | 7/7 benchmarks, 0 failed, artefact at `docs/experiments/phase10-benchmark.json` |
 | `VERSION` / three `package.json` / `package-lock.json` | all `0.2.0` |
 

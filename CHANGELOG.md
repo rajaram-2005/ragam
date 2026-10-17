@@ -93,6 +93,27 @@ Not in 0.2.0. On this branch only.
   refusal, cancellation, pre-queue validation, failed/filtered/still-image outcomes and the
   transport's binary ceiling. No vendor was called.
 
+### Response styles (phase 6)
+
+- **A style is a preference the person sets, not a guess about how they feel.** Seven styles
+  (supportive, focused, curious, cautious, reflective, playful, technical) are stored per account
+  by `PUT /api/styles`; the chat route reads that value and sends one short instruction. There is no
+  route that infers a style, and the adaptive estimator in `adaptive/wording.mjs` remains a library.
+- **The instruction carries its own boundary.** Every style includes the same prohibitions: no
+  claimed feelings, consciousness, memories or relationship; no flattery, pressure or manufactured
+  urgency; and no implication that tone changes a fact, the evidence or a permission.
+- **The reply is audited, and findings are visible.** `auditWording` runs on every styled reply.
+  A soft finding (an idiomatic "happy to help", a superlative) is returned with the text unchanged
+  and a warning the UI shows; a claim of consciousness, dependence, manipulation, invented
+  emotional history or an inferred sensitive attribute is refused with `style_violation` and the
+  text is discarded, not stored and not counted.
+- **Tests:** `services/core/test/online-styles.test.mjs` (8 tests) covers the seven ids, the
+  default of no instruction, no inference from an emotional message, per-account durability across
+  a restart, an unreadable preference, the instruction reaching the provider, an invalid style
+  failing before any provider call, a soft warning, a hard refusal with an empty history, and
+  authentication.
+
+
 ### Reviewed procedures (phase 5)
 
 - **Skills are a product surface, not a library-only module.** `GET /api/skills` lists every

@@ -10,6 +10,8 @@ import { AccountStore, ROLES, DEFAULT_MAX_ACCOUNTS } from './accounts.mjs'
 import { AuditLedger } from '../audit/ledger.mjs'
 import { MemoryStore } from '../memory/store.mjs'
 import { SkillService } from '../skills/product.mjs'
+import { StyleStore, instructionFor } from './styles.mjs'
+import { auditWording } from '../adaptive/wording.mjs'
 import { MediaJobQueue } from '../media/jobs.mjs'
 import { KnowledgePipeline } from '../knowledge/pipeline.mjs'
 import { classifyText, redactDeep } from '../policy/classify.mjs'
@@ -69,6 +71,17 @@ const PROVIDER_CONNECTION = new RegExp(`^${PROVIDER_CONNECTION_PREFIX}([a-z0-9]+
 /** Answered identically for a known and an unknown address, on purpose. */
 export const RESET_REQUESTED_MESSAGE = 'If an account on this installation uses that email address, a single-use reset code is now waiting on the Core host. It expires in 15 minutes.'
 
+
+// Rules whose presence in a reply is a product failure rather than a style note. These are the
+// claims the directive forbids absolutely: consciousness, dependence, manipulation, invented
+// emotional history and an inferred sensitive attribute. The wording layer names the rules;
+// this set decides which names stop a reply.
+const HARD_STYLE_VIOLATIONS = new Set([
+  'claimed consciousness', 'claimed subjective experience', 'dependency appeal', 'possessiveness',
+  'guilt', 'attachment claim', 'simulated sadness', 'simulated worry', 'fabricated emotional history',
+  'sensitive inference', 'diagnosis of the user',
+])
+
 export class OnlineApp {
   constructor({ dataDir, trustedOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
@@ -104,6 +117,10 @@ export class OnlineApp {
     // Skills are installation-wide reviewed procedures, separate from plugins: a skill is text a
     // person selects, not code this service executes.
     this.skills = new SkillService({ dir: join(this.dir, 'skills') })
+    // A style is a stored preference, not an estimate. The estimator in adaptive/wording.mjs
+    // guesses a state from a message; this surface never does: no preference means no
+    // instruction, and the chat route never infers one from what the user wrote.
+    this.styles = new StyleStore({ dir: join(this.dir, 'styles') })
     this.plugins = new PluginRegistry({ ledger: this.ledger, grantedScopes: [], requireSignature: false })
     this.mcp = new McpRegistry({ ledger: this.ledger, allowedRisks: [RISK.READ_ONLY] })
     const schema = { type: 'object', properties: {}, additionalProperties: false }
@@ -404,6 +421,13 @@ export class OnlineApp {
       })
       skillUsed = { name: loaded.name, version: loaded.version }
     }
+    // Response style: the user's choice, applied as an instruction. Null is the default and
+    // means no instruction at all -- 'no style' is not 'neutral style', because a neutral style
+    // the user did not ask for would still be the product changing how it speaks.
+    if (body.style !== undefined && body.style !== null) {
+      const instruction = instructionFor(body.style)
+      messages.unshift({ role: 'system', content: instruction })
+    }
     const classification = mostSensitiveDataClass(...messages.map((m) => classifyText(m.content).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
     if (['restricted','confidential'].includes(classification) && body.authorization?.allowSensitive !== true) throw failure('sensitive_consent_required', 'This request or its context contains sensitive information. Explicitly authorize this transfer or remove it.', 403)
     const redacted = redactDeep(messages)
@@ -428,6 +452,18 @@ export class OnlineApp {
     const reportedModel = result.model ?? null
     const usage = result.usage ?? null
     if (!text) throw failure('invalid_completion', 'No text completion was returned. Tool execution is not automatic.', 502)
+    // The instruction is a control, not a guarantee, so the reply is checked too. Findings are
+    // named and never silently rewritten: a checker that edits prose is a checker whose findings
+    // nobody can see. Claims about consciousness, dependence or manipulation are refused outright
+    // and the text is not stored; a soft finding (an idiomatic 'happy to help', a superlative) is
+    // returned with a warning the caller can show.
+    const audit = auditWording(text)
+    const styleAudit = { ok: audit.ok, violations: [...new Set(audit.violations.map((v) => v.name))] }
+    const refusal = audit.violations.filter((v) => HARD_STYLE_VIOLATIONS.has(v.name))
+    if (refusal.length) {
+      this.ledger.record({ category: 'policy', action: 'style_violation', outcome: 'blocked', subject: session.accountId, detail: { model, rules: [...new Set(refusal.map((v) => v.name))] } })
+      throw failure('style_violation', `The reply made a claim the product does not allow (${[...new Set(refusal.map((v) => v.name))].join(', ')}). It was discarded, not stored, and nothing was counted. Try again or choose another style.`, 502)
+    }
     if (revision === this.store.state.revision && this.store.state.models.includes(model)) this.store.save({ verified: { ...this.store.state.verified, [model]: new Date().toISOString() } })
     if (body.sessionId) {
       context.memory.appendTurn(body.sessionId, { role: 'user', content: prompt, dataClass: classification })
@@ -438,7 +474,7 @@ export class OnlineApp {
       this.skills.recordUse(skillUsed.name)
       this.ledger.record({ category: 'skills', action: 'skill_use', outcome: 'success', subject: session.accountId, detail: { skill: skillUsed.name, version: skillUsed.version } })
     }
-    return { text, modelId: model, providerModel: reportedModel, provider: runtimeFor(this.store.kind()).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null, skill: skillUsed }
+    return { text, modelId: model, providerModel: reportedModel, provider: runtimeFor(this.store.kind()).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null, skill: skillUsed, style: body.style ?? null, styleAudit }
   }
   authenticated(req) {
     const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]

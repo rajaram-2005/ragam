@@ -78,7 +78,7 @@ What exists, read rather than assumed:
 | Persistent memory, provenance, deletion | implemented and tested (product routes; the layered fabric remains a library) | `/api/memory` in `context-routes.mjs`; `memory/store.mjs` |
 | Versioned skills, permissions, rollback | **implemented and tested (reviewed procedures)**; execution of declared permissions remains a library | `/api/skills` in `context-routes.mjs`, `skills/product.mjs`, `test/online-skills.test.mjs` |
 | Experience-driven adaptation, regression gates | implemented and tested (library) | `adaptive/loop.mjs`, `adaptive/episodes.mjs` |
-| Emotional interaction states | implemented and tested (library) | `adaptive/wording.mjs` |
+| Response styles (user-chosen) | **implemented and tested (product surface)** | `/api/styles` in `context-routes.mjs`, `online/styles.mjs`, `test/online-styles.test.mjs`; the state *estimator* remains a library in `adaptive/wording.mjs` |
 | Plugins and MCP least privilege | implemented and tested (library) | `plugins/*`, `mcp/*` |
 | Safe egress (SSRF, private addresses, redirects, origins) | **implemented and tested** | `online/gateway.mjs`, `policy/egress.mjs`; security controls, **not** an offline product mode |
 | Live-provider verification | not possible here | no credentials, vendor hosts unreachable |
@@ -364,10 +364,20 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 - **Images are generated once per job; retries are explicit.** A failed job is a record with an
   error, not a background retry loop. Deleting a job removes the record and the stored bytes.
 - **A catalogue id is usable when its wire is implemented and its status is not `pending`.** All
-  nine wires are implemented, so the eleven `ready` entries and the fourteen `gateway_only` entries
+  nine wires are implemented, so the eleven `ready` entries and the thirteen `gateway_only` entries
   can be saved.
 - **The UI cannot configure a pending provider.** That is deliberate: a control that cannot work is
   a claim that it can.
+- **A style is a preference, never an inference.** The chat route reads the stored value or sends
+  no style instruction; it does not inspect the message for a mood. The estimator in
+  `adaptive/wording.mjs` still exists as a library and is not reachable from chat.
+- **The style audit reads the reply text, not the model's intent.** It finds the listed patterns;
+  it cannot prove a sentence has no manipulative effect. A soft finding is returned with a warning
+  and the answer is shown unchanged; a claim of consciousness, dependence, manipulation, invented
+  emotional history or an inferred sensitive attribute is refused and discarded. There is no
+  automatic retry, so the user chooses whether to try again.
+- **The style preference is per account, not per conversation.** Changing it applies to the next
+  message; earlier turns are not re-rendered.
 
 ## 10. Remaining work, ranked
 
@@ -384,7 +394,8 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 5. Resume of an in-flight video operation after a restart, if the product needs it; until then the
    interruption is recorded rather than hidden.
 6. Provider health checks and usage accounting surfaced in the five areas.
-7. Product routes for the adaptive core, which remains a library.
+7. Product routes for the adaptive core's measured loop, which remains a library; the style
+   estimator is deliberately not one of them.
 
 ## 11. Tests
 
@@ -395,6 +406,8 @@ node --test services/core/test/online-runtimes.test.mjs # 10 tests
 node --test services/core/test/online-wires.test.mjs    # 20 contract tests, six native chat wires plus SigV4
 node --test services/core/test/online-image.test.mjs    # 9 tests, the image wire and the durable job path
 node --test services/core/test/online-video.test.mjs    # 9 tests, Veo polling, download policy and cancellation
+node --test services/core/test/online-skills.test.mjs   # 9 tests, install, review, versions and chat selection
+node --test services/core/test/online-styles.test.mjs   # 8 tests, preferences, instructions, audit and refusal
 node --test services/core/test/provider-framework.test.mjs
 npm run test:web                       # includes the catalogue and saved-connection renders
 ```

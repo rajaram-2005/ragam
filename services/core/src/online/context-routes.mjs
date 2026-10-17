@@ -8,6 +8,7 @@
 import { CANDIDATE_STATES } from '../memory/store.mjs'
 import { validateManifest } from '../plugins/manifest.mjs'
 import { readBody, sendJson } from './http.mjs'
+import { STYLES, STYLE_PROHIBITIONS } from './styles.mjs'
 import { failure } from './gateway.mjs'
 export async function contextRoutes(request, response, app, session) {
  if (!session?.accountId) throw failure('unauthenticated', 'Sign in to this Aetheris installation.', 401)
@@ -113,6 +114,23 @@ export async function contextRoutes(request, response, app, session) {
   }
 
 
+  // --- response styles ----------------------------------------------------
+  // A per-account preference. It is not a measurement of mood and there is no route that infers
+  // one: the only way a style is set is this route, with the user's own body.
+  if (path === '/api/styles') {
+    if (method === 'GET') {
+      return sendJson(response, 200, {
+        styles: STYLES.map(({ id, label, instruction }) => ({ id, label, instruction })),
+        prohibitions: STYLE_PROHIBITIONS,
+        preference: app.styles.get(accountId),
+      }, app)
+    }
+    if (method === 'PUT') {
+      const body = await readJson()
+      if (!('style' in body)) throw failure('invalid_style', 'Send { style } with one of the listed ids, or null.', 400)
+      return sendJson(response, 200, app.styles.set(accountId, body.style ?? null), app)
+    }
+  }
   // --- skills -------------------------------------------------------------
   // A skill is a reviewed procedure, not code. Installing or changing one is an owner act;
   // selecting one is the person's own choice and is recorded when the provider answers.

@@ -236,6 +236,10 @@ test('online areas remove offline and research surfaces without removing optiona
   assert.match(chat, /SkillsPanel/)
   const panels = read('components/ContextPanels.jsx')
   assert.match(panels, /A procedure is reference text, not code/)
+  // A style is a user-set preference for phrasing, not the removed adaptive-state estimator.
+  assert.match(chat, /api\.setStyle/)
+  assert.match(chat, /changes how an answer is phrased, not the facts or the result/)
+  assert.match(panels, /A procedure is reference text, not code/)
   assert.doesNotMatch(chat, /TaskPanel|ModelCatalog|ExecutionMode/)
   for (const area of ['Image','Video']) assert.match(read(`areas/${area}Area.jsx`), /no simulated output/i)
 

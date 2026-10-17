@@ -135,6 +135,7 @@ them rather than restating them.
 | Export and deletion of user data | **Completed** | |
 | Learned procedures visible and controllable | **Archived** | Review, confirm, pin, set aside, restore and delete, in Chat's advanced view |
 | Reviewed procedures (installed, versioned, selected for one message) | **Implemented and tested** | Owner installs a document; a structural review promotes a candidate; a member selects a validated, text-only procedure; rollback and deletion are recorded |
+| Response styles (user-set wording) | **Implemented and tested** | Seven fixed styles in Chat, stored per account; a reply is audited, soft findings are shown without rewriting, hard claims are refused; nothing infers a style |
 | Accessibility audit against WCAG | **Partial** | Keyboard and semantics are covered; no formal conformance audit has been run |
 | Onboarding for a first-time user | **Partial** | Suggested prompts and plain language; no guided tour |
 | Mobile build | **Partial** | Storage accounting and a mobile tier exist; there is no mobile application |
