@@ -11,6 +11,7 @@ import { lookup } from 'node:dns'
 import { isIP, BlockList } from 'node:net'
 import { IMPLEMENTED_WIRES, PROVIDER_STATUS, providerById } from '../providers/catalog.mjs'
 import { wireFor } from '../providers/wires/index.mjs'
+import { retryAfterMs } from '../providers/errors.mjs'
 import { failure } from './failure.mjs'
 
 // Re-exported because every existing caller imports it from here; the definition moved so the wire
@@ -138,8 +139,26 @@ export class OnlineGateway {
       }, (res) => {
         response = res
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          const code = res.statusCode === 401 || res.statusCode === 403 ? 'provider_auth_failed' : res.statusCode === 429 ? 'provider_rate_limited' : 'provider_error'
-          return done(failure(code, `${label} returned HTTP ${res.statusCode}. Check gateway access, model permissions and quota.`, 502))
+          // Provider error bodies are bounded and normalized by the selected adapter. Never return
+          // raw vendor bodies to the browser: they may contain request fragments or sensitive IDs.
+          const chunks = []; let size = 0
+          res.on('data', (chunk) => {
+            size += chunk.length
+            if (size > 32 * 1024) { done(failure('provider_error_body_too_large', `${label} returned an oversized error response.`, 502)); return }
+            chunks.push(chunk)
+          })
+          res.on('end', () => {
+            let payload = null
+            try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { /* safe generic mapping below */ }
+            let normalized
+            try { normalized = wireFor(runtime.wire).normalizeError?.(res.statusCode, payload, res.headers) } catch { normalized = null }
+            normalized ??= { code: res.statusCode === 401 || res.statusCode === 403 ? 'provider_auth_failed' : res.statusCode === 429 ? 'provider_rate_limited' : 'provider_error', message: `${label} returned HTTP ${res.statusCode}. Check access, model permissions and quota.` }
+            const error = failure(normalized.code, normalized.message, 502)
+            const retryDelay = retryAfterMs(res.headers)
+            if (retryDelay !== null) error.retryAfterMs = retryDelay
+            done(error)
+          })
+          return
         }
         if (onFrame && !String(res.headers['content-type']).includes('text/event-stream')) return done(failure('invalid_stream', 'Gateway did not return a streaming response.', 502))
         let text = '', size = 0, streamDone = false
@@ -192,8 +211,12 @@ export class OnlineGateway {
     })
   }
   /** Model listing is a property of the wire, not of the transport: each adapter parses its own. */
-  async models(config) {
-    const wire = config.wire ?? runtimeFor(config.kind ?? config.id ?? 'litellm').wire
-    return wireFor(wire).models(this.request.bind(this), config)
+  async modelCatalogue(config) {
+    const wireId = config.wire ?? runtimeFor(config.kind ?? config.id ?? 'litellm').wire
+    const wire = wireFor(wireId)
+    if (typeof wire.modelCatalogue === 'function') return wire.modelCatalogue(this.request.bind(this), config)
+    const ids = await wire.models(this.request.bind(this), config)
+    return ids.map((id) => ({ id, name: id, capabilities: { input: ['unknown'], output: ['unknown'], contextTokens: null, maxOutputTokens: null, streaming: 'unknown', tools: 'not_exposed_by_ragam', structuredOutput: 'not_exposed_by_ragam', imageInput: 'unknown', provenance: { source: 'unavailable', provider: config.id } } }))
   }
+  async models(config) { return (await this.modelCatalogue(config)).map((record) => record.id) }
 }

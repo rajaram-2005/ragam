@@ -493,6 +493,11 @@ export class OnlineApp {
     if (typeof body.baseUrl !== 'string') throw failure('invalid_endpoint', 'A gateway URL is required.')
     const baseUrl = gatewayUrl(body.baseUrl, this.gateway.trustedOrigins)
     const existing = this.store.connections.find((connection) => connection.id === kind)
+    const requestedOptions = body.options ?? (existing?.baseUrl === baseUrl ? existing.options : {})
+    if (!requestedOptions || typeof requestedOptions !== 'object' || Array.isArray(requestedOptions)) throw failure('invalid_provider_config', 'Provider options must be a JSON object.')
+    if (kind !== 'fireworks' && Object.keys(requestedOptions).length) throw failure('invalid_provider_config', 'This provider does not accept additional connection options.')
+    const options = kind === 'fireworks' ? { ...(requestedOptions.accountId ? { accountId: requestedOptions.accountId } : {}) } : {}
+    wireFor(runtime.wire).validateConfig?.({ id: kind, wire: runtime.wire, options })
     let key = body.apiKey
     if (key !== undefined) {
       const limit = runtime.credential === 'api_key' ? 8192 : 16384
@@ -506,12 +511,12 @@ export class OnlineApp {
     // A destination is the connection AND the endpoint. Changing either one is a new recipient, so
     // that connection's stored key is not forwarded to it: the caller must supply one or, for a
     // local endpoint that needs none, go without. Other connections' keys are never touched.
-    const sameDestination = Boolean(existing) && baseUrl === existing.baseUrl
+    const sameDestination = Boolean(existing) && baseUrl === existing.baseUrl && JSON.stringify(options) === JSON.stringify(existing.options ?? {})
     if (!key && runtime.keyRequired && (!sameDestination || !existing?.key)) {
       throw failure('key_required', 'Enter a key for this provider. Existing keys are never carried to a different endpoint.')
     }
     const stored = key ? this.store.seal(key) : (sameDestination ? existing.key : null)
-    this.store.saveConnection(kind, { baseUrl, key: stored, models: [], selectedModel: '', verified: {}, checkedAt: null })
+    this.store.saveConnection(kind, { baseUrl, options, key: stored, models: [], modelDetails: [], selectedModel: '', verified: {}, checkedAt: null })
     this.ledger.record({ category: 'provider', action: 'configure', outcome: 'success', subject: session?.accountId ?? 'owner', detail: { kind, role: session?.role ?? null, keyStored: Boolean(stored) } })
     return this.store.public()
   }
@@ -524,11 +529,13 @@ export class OnlineApp {
   async refreshModels(kind = this.store.kind()) {
     const revision = this.store.revision
     const config = this.store.config(kind)
-    const models = await this.gateway.models(config)
+    const modelDetails = await this.gateway.modelCatalogue(config)
+    const models = modelDetails.map((entry) => entry.id)
     if (revision !== this.store.revision) throw failure('provider_changed', 'Connection changed while checking models. Check it again.', 409)
     const record = this.store.connections.find((connection) => connection.id === kind)
     this.store.saveConnection(kind, {
       models,
+      modelDetails,
       checkedAt: new Date().toISOString(),
       selectedModel: models.includes(record?.selectedModel) ? record.selectedModel : '',
       verified: Object.fromEntries(Object.entries(record?.verified ?? {}).filter(([id]) => models.includes(id))),

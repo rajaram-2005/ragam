@@ -544,7 +544,7 @@ test('Chat renders the saved exact model and identifies the online recipient', (
 test('the provider catalogue shows status, never a control, and nothing when unloaded', () => {
   const catalog = {
     valid: true,
-    summary: '5 ready, 14 reachable via an OpenAI-compatible endpoint, 14 pending',
+    summary: '5 ready, 14 individually adapted Chat providers (contract tested; live verification pending), 14 pending',
     counts: { ready: 5, gateway_only: 14, pending: 14 },
     providers: [
       { id: 'litellm', label: 'LiteLLM gateway', status: 'ready', capabilities: [{ id: 'streaming', source: 'test', ref: 'test/online.test.mjs' }] },
@@ -555,7 +555,7 @@ test('the provider catalogue shows status, never a control, and nothing when unl
   const markup = render('ProviderCatalogue', React.createElement(components.ProviderCatalogue, { catalog }))
   assert.match(markup, /ready in this build/)
   assert.match(markup, /tested: streaming/)
-  assert.match(markup, /not verified here/)
+  assert.match(markup, /adapter contract-tested; live vendor verification pending/)
   assert.match(markup, /1 pending adapters/)
   assert.match(markup, /adapter pending; not selectable/)
   // No button, input or select: the catalogue is information, and a control that cannot work

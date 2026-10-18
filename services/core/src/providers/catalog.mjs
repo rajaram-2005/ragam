@@ -12,9 +12,9 @@ import { CREDENTIAL_KINDS, IMPLEMENTED, credentialFor } from './wires/index.mjs'
 //
 //   ready         this build has a tested code path to it (the transports in online/gateway.mjs).
 //                 Requires `source: 'test'` on every capability.
-//   gateway_only  it speaks a wire format the tested transport already speaks (OpenAI-compatible
-//                 `/chat/completions`), so an operator *can* reach it by pointing a compatible
-//                 endpoint at it. Not independently verified here, and the status says so.
+//   gateway_only  legacy status for the fourteen Step 2 Chat adapters. Their own modules are
+//                 fixture-tested, but this does not mean any authorized live vendor call succeeded.
+//                 `integrationType`, `adapterStatus`, and `liveVerification` disambiguate the state.
 //   pending       it needs a wire adapter this build does not have. It cannot be selected, and
 //                 `selectProvider` refuses it by name even if it advertises the capability.
 //
@@ -36,9 +36,13 @@ export const AUTH_KINDS = Object.freeze({
   NONE: 'none',
 })
 
-/** The wire protocols. Only one is implemented by this build's transport. */
+/** Wire contracts implemented by the shared guarded transport and their individual adapters. */
 export const WIRE_FORMATS = Object.freeze({
   OPENAI_CHAT: 'openai_chat',
+  OPENROUTER_CHAT: 'openrouter_chat', MISTRAL_CHAT: 'mistral_chat', DEEPSEEK_CHAT: 'deepseek_chat',
+  GROQ_CHAT: 'groq_chat', TOGETHER_CHAT: 'together_chat', FIREWORKS_CHAT: 'fireworks_chat',
+  XAI_RESPONSES: 'xai_responses', PERPLEXITY_ROUTER: 'perplexity_router', NOVITA_CHAT: 'novita_chat',
+  SAMBANOVA_CHAT: 'sambanova_chat', HUGGINGFACE_CHAT: 'huggingface_chat', VLLM_CHAT: 'vllm_chat', LOCALAI_CHAT: 'localai_chat',
   ANTHROPIC_MESSAGES: 'anthropic_messages',
   GEMINI_GENERATE: 'gemini_generate',
   COHERE_CHAT: 'cohere_chat',
@@ -191,39 +195,36 @@ export const PROVIDERS = Object.freeze([
   native('vertex', 'Google Vertex AI', 'https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations', WIRE_FORMATS.GCP_VERTEX, AUTH_KINDS.GCP_ADC),
   native('bedrock', 'Amazon Bedrock', 'https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html', WIRE_FORMATS.AWS_BEDROCK, AUTH_KINDS.AWS_SIGV4, { streaming: false, capabilities: [wireCancellation] }),
 
-  // OpenAI-compatible vendors. `gateway_only` is a statement about the wire format, not a tested
-  // integration: an operator can point a compatible endpoint at them, and nothing here has done so.
+  // Fourteen individual Chat providers. Each has a provider-specific contract adapter; the
+  // compatibility class identifies the API path, not successful live vendor access. Adapter
+  // contract tests use deterministic local fixtures, while liveVerification remains pending.
   ...[
-    ['openai', 'OpenAI', 'https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create', 'https://developers.openai.com/api/reference'],
-    ['openrouter', 'OpenRouter', 'https://openrouter.ai/docs/quickstart', 'https://openrouter.ai/docs'],
-    ['mistral', 'Mistral AI', 'https://docs.mistral.ai/api/', 'https://docs.mistral.ai'],
-    ['deepseek', 'DeepSeek', 'https://api-docs.deepseek.com/', 'https://api-docs.deepseek.com'],
-    ['groq', 'Groq', 'https://console.groq.com/docs/openai', 'https://console.groq.com/docs'],
-    ['together', 'Together AI', 'https://docs.together.ai/docs/openai-api-compatibility', 'https://docs.together.ai'],
-    ['fireworks', 'Fireworks AI', 'https://docs.fireworks.ai/api-reference/introduction', 'https://docs.fireworks.ai'],
-    ['xai', 'xAI', 'https://docs.x.ai/docs/api-reference', 'https://docs.x.ai'],
-    ['perplexity', 'Perplexity', 'https://docs.perplexity.ai/api-reference/chat-completions', 'https://docs.perplexity.ai'],
-    ['novita', 'Novita AI', 'https://novita.ai/docs/api-reference/model-apis-llm-create-chat-completion', 'https://novita.ai/docs'],
-    ['sambanova', 'SambaNova', 'https://docs.sambanova.ai/cloud/docs/get-started/api-reference', 'https://docs.sambanova.ai'],
-    ['huggingface', 'Hugging Face Inference Providers', 'https://huggingface.co/docs/inference-providers/index', 'https://huggingface.co/docs/inference-providers'],
-    ['vllm', 'vLLM (OpenAI-compatible server)', 'https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html', 'https://docs.vllm.ai'],
-    ['localai', 'LocalAI', 'https://localai.io/features/openai-functions/', 'https://localai.io'],
-  ].map(([id, label, docsUrl, docsRoot]) => Object.freeze({
-    id,
-    label,
-    category: 'openai-compatible',
-    wire: WIRE_FORMATS.OPENAI_CHAT,
-    auth: AUTH_KINDS.BEARER,
-    credential: CREDENTIAL_KINDS.API_KEY,
-    status: PROVIDER_STATUS.GATEWAY_ONLY,
-    docsUrl,
-    // Deliberately empty: nothing in this repository has called this vendor, so no capability is
-    // evidenced. The status says "this wire format is implemented", not "this vendor is verified".
-    capabilities: Object.freeze([]),
+    ['openai', 'OpenAI', 'https://developers.openai.com/api/reference/chat-completions/overview', WIRE_FORMATS.OPENAI_CHAT, 'native-vendor'],
+    ['openrouter', 'OpenRouter', 'https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request', WIRE_FORMATS.OPENROUTER_CHAT, 'gateway-routed'],
+    ['mistral', 'Mistral AI', 'https://docs.mistral.ai/api/endpoint/chat/', WIRE_FORMATS.MISTRAL_CHAT, 'openai-compatible'],
+    ['deepseek', 'DeepSeek', 'https://api-docs.deepseek.com/api/create-chat-completion/', WIRE_FORMATS.DEEPSEEK_CHAT, 'openai-compatible'],
+    ['groq', 'Groq', 'https://console.groq.com/docs/api-reference', WIRE_FORMATS.GROQ_CHAT, 'openai-compatible'],
+    ['together', 'Together AI', 'https://docs.together.ai/reference/chat-completions', WIRE_FORMATS.TOGETHER_CHAT, 'openai-compatible'],
+    ['fireworks', 'Fireworks AI', 'https://docs.fireworks.ai/api-reference/post-chatcompletions', WIRE_FORMATS.FIREWORKS_CHAT, 'openai-compatible'],
+    ['xai', 'xAI', 'https://docs.x.ai/developers/rest-api-reference/inference/responses', WIRE_FORMATS.XAI_RESPONSES, 'native-vendor'],
+    ['perplexity', 'Perplexity Router', 'https://docs.perplexity.ai/api-reference/gateway-chat-completions-post', WIRE_FORMATS.PERPLEXITY_ROUTER, 'gateway-routed'],
+    ['novita', 'Novita AI', 'https://docs.novita.ai/api-reference/model-apis-llm-create-chat-completion', WIRE_FORMATS.NOVITA_CHAT, 'openai-compatible'],
+    ['sambanova', 'SambaNova', 'https://docs.sambanova.ai/docs/api-reference/chat-completions/create-chat-based-completion', WIRE_FORMATS.SAMBANOVA_CHAT, 'openai-compatible'],
+    ['huggingface', 'Hugging Face Inference Providers', 'https://huggingface.co/docs/inference-providers/tasks/chat-completion', WIRE_FORMATS.HUGGINGFACE_CHAT, 'gateway-routed'],
+    ['vllm', 'vLLM (OpenAI-compatible server)', 'https://docs.vllm.ai/en/latest/serving/online_serving/', WIRE_FORMATS.VLLM_CHAT, 'openai-compatible'],
+    ['localai', 'LocalAI', 'https://localai.io/docs/features/openai-functions/', WIRE_FORMATS.LOCALAI_CHAT, 'openai-compatible'],
+  ].map(([id, label, docsUrl, wire, integrationType]) => Object.freeze({
+    id, label, category: integrationType === 'native-vendor' ? 'native-vendor' : integrationType,
+    wire, auth: AUTH_KINDS.BEARER, credential: CREDENTIAL_KINDS.API_KEY,
+    status: PROVIDER_STATUS.GATEWAY_ONLY, docsUrl, capabilities: Object.freeze([]),
+    integrationType, adapterStatus: 'contract_tested', liveVerification: 'pending',
     egress: Object.freeze({ https: true, operatorConfigured: true }),
-    notes: `OpenAI-compatible. Reachable by pointing a compatible endpoint at ${docsRoot.replace('https://', '')}; not independently verified in this build.`,
+    notes: integrationType === 'gateway-routed'
+      ? 'Uses the vendor-documented routed API. Contract tested with fixtures; no authorized live vendor call has qualified it.'
+      : integrationType === 'native-vendor'
+        ? 'Uses the vendor-specific API contract. Contract tested with fixtures; no authorized live vendor call has qualified it.'
+        : 'Uses the vendor-documented OpenAI-compatible Chat Completions API. Model-specific capabilities are unknown unless returned by the vendor model catalogue.' ,
   })),
-
   // Image vendors with a tested wire. The capability is contract-tested against a local
   // fixture that returns the documented shape; no vendor has been called live. Their notes
   // say both things, because the row is a claim about this repository, not about the market.
@@ -286,7 +287,7 @@ export function providersByStatus(status) {
 export function validateProvider(provider) {
   const problems = []
   const fail = (message) => problems.push(message)
-  const allowed = new Set(['id', 'label', 'category', 'wire', 'auth', 'credential', 'status', 'docsUrl', 'capabilities', 'egress', 'notes'])
+  const allowed = new Set(['id', 'label', 'category', 'wire', 'auth', 'credential', 'status', 'docsUrl', 'capabilities', 'egress', 'notes', 'integrationType', 'adapterStatus', 'liveVerification'])
   for (const key of Object.keys(provider ?? {})) if (!allowed.has(key)) fail(`${key}: unknown field`)
 
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(provider?.id ?? '')) fail(`id '${provider?.id}' is not kebab-case`)
@@ -324,7 +325,7 @@ export function validateProvider(provider) {
       if (capability.source !== 'test') fail(`'${provider.id}' is ready but '${capability.id}' is not backed by a test`)
     }
   }
-  if (provider?.status === PROVIDER_STATUS.GATEWAY_ONLY && provider.wire !== WIRE_FORMATS.OPENAI_CHAT) {
+  if (provider?.status === PROVIDER_STATUS.GATEWAY_ONLY && !IMPLEMENTED_WIRES.includes(provider.wire)) {
     fail(`'${provider.id}' is gateway_only on a wire the gateway does not speak`)
   }
   if (provider?.status === PROVIDER_STATUS.PENDING && (provider.capabilities ?? []).length > 0) {
@@ -365,6 +366,9 @@ export function describeProvider(id) {
     docsUrl: provider.docsUrl,
     capabilities: provider.capabilities,
     notes: provider.notes,
+    integrationType: provider.integrationType ?? null,
+    adapterStatus: provider.adapterStatus ?? null,
+    liveVerification: provider.liveVerification ?? null,
     egress: provider.egress,
   })
 }
@@ -379,6 +383,6 @@ export function catalogueReport() {
     total: PROVIDERS.length,
     counts: Object.freeze(counts),
     // Stated with every report, because a count of zero is the interesting number here.
-    summary: `${counts.ready} ready, ${counts.gateway_only} reachable via an OpenAI-compatible endpoint, ${counts.pending} pending`,
+    summary: `${counts.ready} ready, ${counts.gateway_only} individually adapted Chat providers (contract tested; live verification pending), ${counts.pending} pending`,
   })
 }

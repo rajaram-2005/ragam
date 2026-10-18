@@ -26,6 +26,20 @@ const CUSTOM_OPTION = { id: 'custom', label: 'Custom OpenAI-compatible endpoint'
 // tells a person what to paste, and a missing entry falls back to the generic OpenAI-compatible one.
 const ENDPOINT_FOR_WIRE = Object.freeze({
   azure_openai: { placeholder: 'https://<resource>.openai.azure.com', hint: 'The resource endpoint from the Azure portal. This client adds /openai/v1. The selected id is sent as `model`, so it must be the deployment name; the data-plane model list does not enumerate deployments.' },
+  openai_chat: { placeholder: 'https://api.openai.com/v1', hint: 'OpenAI Chat Completions API base, including /v1. This contract adapter does not claim Responses-only features.' },
+  openrouter_chat: { placeholder: 'https://openrouter.ai/api/v1', hint: 'OpenRouter routed API base, including /api/v1. Per-model capabilities are provider/model-dependent.' },
+  mistral_chat: { placeholder: 'https://api.mistral.ai/v1', hint: 'Mistral API base, including /v1.' },
+  deepseek_chat: { placeholder: 'https://api.deepseek.com', hint: 'DeepSeek API root. The adapter adds /models and /chat/completions.' },
+  groq_chat: { placeholder: 'https://api.groq.com/openai/v1', hint: 'Groq OpenAI-compatible API base, including /openai/v1.' },
+  together_chat: { placeholder: 'https://api.together.xyz/v1', hint: 'Together API base, including /v1.' },
+  fireworks_chat: { placeholder: 'https://api.fireworks.ai', hint: 'Fireworks API root. Inference and account-scoped model listing use different documented API paths.' },
+  xai_responses: { placeholder: 'https://api.x.ai/v1', hint: 'xAI API base, including /v1. Uses the native Responses API.' },
+  perplexity_router: { placeholder: 'https://api.perplexity.ai', hint: 'Perplexity API root. Model listing uses /v1/models; chat uses /router/v1/chat/completions.' },
+  novita_chat: { placeholder: 'https://api.novita.ai/openai/v1', hint: 'Novita OpenAI-compatible API base, including /openai/v1.' },
+  sambanova_chat: { placeholder: 'https://api.sambanova.ai/v1', hint: 'SambaNova Cloud API base, including /v1. Dedicated SambaStack endpoints are operator supplied.' },
+  huggingface_chat: { placeholder: 'https://router.huggingface.co/v1', hint: 'Hugging Face Inference Providers router. The token needs the Inference Providers permission.' },
+  vllm_chat: { placeholder: 'http://<vllm-host>:8000/v1', hint: 'Optional vLLM server. The Core host must trust this exact origin; model-specific parser settings govern features.' },
+  localai_chat: { placeholder: 'http://<localai-host>:8080/v1', hint: 'Optional LocalAI server. The Core host must trust this exact origin; backend and parser determine features.' },
   gcp_vertex: { placeholder: 'https://us-central1-aiplatform.googleapis.com', hint: 'The regional Vertex AI endpoint. The service-account JSON names the project; the region comes from this host.' },
   aws_bedrock: { placeholder: 'https://bedrock-runtime.us-east-1.amazonaws.com', hint: 'The Bedrock runtime endpoint for your credential\u2019s region. Requests are signed with SigV4.' },
   cohere_chat: { placeholder: 'https://api.cohere.com', hint: 'Cohere\u2019s API host. This client adds /v2/chat and /v1/models.' },
@@ -81,10 +95,12 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
   // configuring or testing their connection.
   const [catalog, setCatalog] = useState(null)
   const [addKind, setAddKind] = useState('')
-  const [addUrl, setAddUrl] = useState(''), [addKey, setAddKey] = useState('')
+  const [addUrl, setAddUrl] = useState(''), [addKey, setAddKey] = useState(''), [addAccountId, setAddAccountId] = useState('')
   const connections = provider?.connections ?? []
   // The saved connection, when it is for the runtime on screen. Test and remove act on that.
   const saved = connections.find((connection) => connection.id === kind) ?? null
+  const selectedEvidence = saved?.modelDetails?.find((entry) => entry.id === saved?.selectedModel) ?? null
+  const selectedVerification = saved?.verified?.[saved?.selectedModel] ?? null
   const runtimeOptions = [...RUNTIME_OPTIONS, ...connections
     .filter((connection) => !RUNTIME_OPTIONS.some((option) => option.id === connection.id))
     .map(connectionOption)]
@@ -102,8 +118,9 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
       .filter((entry) => entry.status !== 'pending' && entry.wire !== null)
       .map((entry) => ({
         id: entry.id,
-        label: `${entry.label}${entry.wire === 'openai_chat' && entry.status !== 'ready' ? ' (compatible endpoint)' : ''}`,
+        label: `${entry.label}${entry.integrationType === 'gateway-routed' ? ' (gateway-routed API)' : entry.integrationType === 'openai-compatible' ? ' (OpenAI-compatible API)' : entry.integrationType === 'native-vendor' ? ' (native API)' : ''}`,
         wire: entry.wire,
+        integrationType: entry.integrationType,
         credential: entry.credential ?? 'api_key',
         ...endpointFor(entry.wire),
       })),
@@ -116,7 +133,11 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
   const addCredential = credentialFor(nextAdd.credential)
   useEffect(() => {
     dialog.current?.showModal()
-    api.provider().then((s) => { setProvider(s); setKind(s.kind ?? 'litellm'); setUrl(s.baseUrl) }).catch(setError)
+    api.provider().then((s) => {
+      setProvider(s); setKind(s.kind ?? 'litellm'); setUrl(s.baseUrl)
+      const activeConnection = s.connections?.find((connection) => connection.id === s.kind)
+      setAddAccountId(activeConnection?.options?.accountId ?? s.options?.accountId ?? '')
+    }).catch(setError)
     api.catalog().then(setCatalog).catch(() => setCatalog(null))
     return () => { dialog.current?.close() }
   }, [])
@@ -132,6 +153,7 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
     // A different runtime is a different recipient, so its endpoint is entered afresh, never copied from the old one.
     const saved = provider?.connections?.find((connection) => connection.id === id)
     setUrl(saved?.baseUrl ?? (provider && provider.kind === id ? provider.baseUrl : ''))
+    setAddAccountId(saved?.options?.accountId ?? '')
   }
   return <dialog className="provider-dialog" ref={dialog} onCancel={(e) => { e.preventDefault(); if (!busy) onClose() }} aria-labelledby="provider-settings-title">
     <div className="row between"><h2 id="provider-settings-title">Provider Settings</h2><Button disabled={busy} onClick={onClose}>Close</Button></div>
@@ -139,13 +161,16 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
     {owner ? null : <Banner tone="info" title="Read-only for this account"><p>Only the owner account of this installation can change its gateway connection or key. You can still choose a model and chat through the connection that is configured.</p></Banner>}
     {error ? <Banner tone="bad" title={error.message} /> : null}
     {notice ? <Banner tone="info" title={notice} /> : null}
-    <form onSubmit={async (e) => { e.preventDefault(); if (await act(() => api.saveProvider(kind, { baseUrl: url, ...(key ? { apiKey: key } : {}) }))) setNotice('Connection saved. Test it to fetch models; no prompt is sent by that test.') }}>
+    <form onSubmit={async (e) => { e.preventDefault(); if (await act(() => api.saveProvider(kind, { baseUrl: url, ...(key ? { apiKey: key } : {}), ...(kind === 'fireworks' ? { options: { accountId: addAccountId } } : {}) }))) setNotice('Connection saved. Test it to fetch models; no prompt is sent by that test.') }}>
       <Field label="Connection" hint="Which saved connection this form edits. Saving activates it; the other connections and their keys are kept.">
         <select aria-label="Connection" className="select" value={kind} onChange={(e) => chooseRuntime(e.target.value)} disabled={busy || !provider || !owner}>
           {runtimeOptions.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
         </select>
       </Field>
       <Field label={`${runtime.label} API base URL`} hint={runtime.hint}><input autoFocus className="input" type="url" required value={url} placeholder={runtime.placeholder} onChange={(e) => setUrl(e.target.value)} disabled={busy || !provider || !owner} /></Field>
+      {kind === 'fireworks' ? <Field label="Fireworks account ID" hint="Required to retrieve your account-scoped model list. Changing this account ID requires supplying the API key again because the destination changes.">
+        <input className="input" type="text" required maxLength={128} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,127}" value={addAccountId} onChange={(e) => setAddAccountId(e.target.value)} disabled={busy || !provider || !owner} />
+      </Field> : null}
       <Field
         label={`${credentialFor(runtime.credential).label}${runtime.keyRequired ? '' : ' (optional)'}`}
         hint={saved?.keyConfigured
@@ -159,10 +184,16 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
       <Button type="submit" variant="primary" busy={busy} disabled={!provider || !url || !owner}>Save connection</Button>
     </form>
     <div className="row" style={{ marginTop: 16 }}>
-      <Button busy={busy} disabled={!owner || !saved?.configured || url !== saved?.baseUrl || Boolean(key)} onClick={async () => { const s = await act(() => api.testProvider(kind)); if (s) setNotice(`Connection checked: ${s.models.length} listed models. Inference and modality support are not yet verified.`) }}>Test connection & refresh models</Button>
+      <Button busy={busy} disabled={!owner || !saved?.configured || url !== saved?.baseUrl || Boolean(key) || (kind === 'fireworks' && addAccountId !== saved?.options?.accountId)} onClick={async () => { const s = await act(() => api.testProvider(kind)); if (s) setNotice(`Connection checked: ${s.models.length} listed models. Inference and modality support are not yet verified.`) }}>Test connection & refresh models</Button>
       <Button variant="danger" disabled={busy || !owner || !saved} onClick={async () => { if (window.confirm('Remove the connection and any stored key? Your conversations are kept.')) { if (await act(() => api.removeProvider(kind))) setNotice('Connection and stored credential removed.') } }}>Remove connection</Button>
     </div>
-    <p className="small">Model selection lives in Chat. No automatic fallback. Requests may incur provider charges; gateway budgets and quotas still apply. Image and Video require separate qualified adapters.</p>
+    {selectedEvidence ? <p className="small" aria-label="Selected model capability evidence">
+      Catalogue evidence for <strong>{selectedEvidence.name}</strong>: input {selectedEvidence.capabilities.input.join(', ')}, output {selectedEvidence.capabilities.output.join(', ')}
+      {selectedEvidence.capabilities.contextTokens ? `, context window ${selectedEvidence.capabilities.contextTokens.toLocaleString()} tokens` : ''}.
+      Streaming: {selectedEvidence.capabilities.streaming}; tools and structured output: not exposed by RAGAM Chat.
+      {selectedVerification ? ` A text inference succeeded at ${selectedVerification}; this does not qualify streaming or other capabilities.` : ' No successful text inference has been recorded for this model yet.'}
+    </p> : null}
+    <p className="small">Model selection lives in Chat. Model-list success is not inference verification. No automatic fallback. Requests may incur provider charges; gateway budgets and quotas still apply. Image and Video require separate qualified adapters.</p>
     {provider ? <details className="connections" style={{ marginTop: 20 }} open={(provider.connections?.length ?? 0) > 1}>
       <summary>Saved connections ({provider.connections?.length ?? 0})</summary>
       <p className="small">Each connection has its own encrypted credential. Activating one changes where the next request goes; it does not overwrite the others.</p>
@@ -182,8 +213,12 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
       {addOptions.length ? <form onSubmit={async (e) => {
         e.preventDefault()
         if (!nextAddKind) return
-        const result = await act(() => api.saveProvider(nextAddKind, { baseUrl: addUrl, ...(addKey ? { apiKey: addKey } : {}) }))
-        if (result) { setAddKey(''); setAddUrl(''); setNotice('Connection saved and made active. Test it to fetch models; no prompt is sent by that test.') }
+        const result = await act(() => api.saveProvider(nextAddKind, {
+          baseUrl: addUrl,
+          ...(addKey ? { apiKey: addKey } : {}),
+          ...(nextAddKind === 'fireworks' ? { options: { accountId: addAccountId } } : {}),
+        }))
+        if (result) { setAddKey(''); setAddUrl(''); setAddAccountId(''); setNotice('Connection saved and made active. Test it to fetch models; no prompt is sent by that test.') }
       }}>
         <Field label="Add a connection" hint="A catalogue provider whose wire format this build implements, or a custom endpoint. Providers with pending adapters are not listed.">
           <select aria-label="Add a connection" className="select" value={nextAddKind} onChange={(e) => setAddKind(e.target.value)} disabled={busy || !owner}>
@@ -193,6 +228,9 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
         <Field label="API base URL" hint={`${nextAdd.hint ?? 'Including /v1 if the endpoint needs it.'} Must be public HTTPS unless the operator trusts this exact origin.`}>
           <input className="input" type="url" required value={addUrl} placeholder={nextAdd.placeholder ?? 'https://api.example.com/v1'} onChange={(e) => setAddUrl(e.target.value)} disabled={busy || !owner} />
         </Field>
+        {nextAddKind === 'fireworks' ? <Field label="Fireworks account ID" hint="Required for the account-scoped model catalogue. This is configuration metadata, not a credential.">
+          <input className="input" type="text" required maxLength={128} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,127}" value={addAccountId} onChange={(e) => setAddAccountId(e.target.value)} disabled={busy || !owner} />
+        </Field> : null}
         <Field label={addCredential.label} hint={`${addCredential.hint} Leave blank only for endpoints that need none.`}>
           {nextAdd.credential === 'api_key'
             ? <input className="input" type="password" autoComplete="new-password" value={addKey} maxLength={8192} onChange={(e) => setAddKey(e.target.value)} disabled={busy || !owner} />

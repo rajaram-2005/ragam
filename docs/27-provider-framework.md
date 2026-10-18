@@ -69,8 +69,8 @@ What exists, read rather than assumed:
 | Provider setup UI (credentials, test, model list) | implemented for the three runtimes, every `ready` catalogue wire, and custom endpoints; each wire publishes its own endpoint hint and controls | `ProviderSettings.jsx`, `test/online.test.mjs`, `test/online-wires.test.mjs`, `test/online-media-wires.test.mjs` |
 | Capability matrix in the UI | **implemented and tested (read-only)** | `ProviderCatalogue.jsx`, `test/render.test.mjs` |
 | Catalog API | **implemented and tested** | `GET /api/providers/catalog` |
-| Direct per-vendor adapters | **implemented and tested for six chat wires, nine image wires and five video wires**; no vendor called live | `providers/wires/*.mjs`, `test/online-wires.test.mjs`, `test/online-media-wires.test.mjs`; ComfyUI and Diffusers stay `pending` and are refused by name |
-| Other OpenAI-compatible vendors | implemented, awaiting live credentials | §4 — `gateway_only`; no vendor called |
+| Direct per-vendor adapters | **implemented and contract-tested for fourteen audited Chat providers, six other chat wires, nine image wires and five video wires**; no vendor called live | `providers/wires/*.mjs`, `test/provider-adapters.test.mjs`, `test/online-wires.test.mjs`, `test/online-media-wires.test.mjs`; ComfyUI and Diffusers stay `pending` and are refused by name |
+| Universal Chat adapters | implemented and contract-tested; awaiting authorized live qualification | §4 — each audited provider has a distinct wire adapter and live status remains pending |
 | Image generation | **implemented and tested for OpenAI Images, Gemini Images, Stability AI, Recraft, Ideogram, FLUX, fal.ai, Replicate and Adobe Firefly**; editing planned | `providers/wires/*-images.mjs`, `/api/image/*`, `test/online-image.test.mjs`, `test/online-media-wires.test.mjs`; no vendor called live |
 | Video generation, async jobs, cancellation | **implemented and tested for Google Veo, Runway, Luma, fal.ai video and Replicate video** | `providers/wires/*-video.mjs`, `/api/video/*`, `test/online-video.test.mjs`, `test/online-media-wires.test.mjs`; no vendor called live |
 | Klyvaron Lite/Pro/Max runtime adapters | partially implemented | docs/24: two Lite artifacts released, Pro/Max unbuilt |
@@ -91,8 +91,7 @@ note says so.
 
 ## 3. The provider framework
 
-Three catalogue modules and one adapter per implemented wire; no vendor socket in any of them
-(the transport lives in `online/gateway.mjs`).
+One provider catalogue and an adapter registry with a distinct module for each vendor contract; no vendor socket in the adapters (the guarded transport lives in `online/gateway.mjs`).
 
 **`providers/catalog.mjs` — what exists, and what this build can prove.** Each descriptor carries an
 id, label, category, wire format, auth kind, a documentation URL, a free-text note, an egress policy,
@@ -101,7 +100,7 @@ and a status:
 | Status | Meaning | What it may claim |
 |---|---|---|
 | `ready` | a tested code path reaches it (the three runtimes against a local server; every native chat, image and video wire against a contract fixture) | capabilities whose evidence is a test in this repository |
-| `gateway_only` | it speaks the OpenAI-compatible wire the transport implements | **nothing** — the capability list is empty by rule |
+| `gateway_only` | legacy status for these fourteen provider-specific Chat adapters; see `integrationType`, `adapterStatus`, and `liveVerification` | no provider-level capability claim; model-level metadata is retained separately and is unknown when absent |
 | `pending` | it needs a wire adapter this build does not have | nothing; it is refused by selection |
 
 Validation is the enforcement: a `ready` entry whose capability is backed by a vendor document
@@ -128,61 +127,99 @@ read-only matrix with three sentences and no controls.
 
 ## 4. Provider matrix
 
-**39 entries — 23 ready, 14 reachable via an OpenAI-compatible endpoint, 2 pending.**
+**23 ready, 14 individually adapted Chat providers (contract tested; live verification pending), 2 pending**
 
-| Provider | Status | Wire | Auth | Capabilities evidenced | Documentation |
-|---|---|---|---|---|---|
-| `litellm` — LiteLLM gateway | ready | openai_chat | bearer | streaming:test<br>cancellation:test | [docs](https://docs.litellm.ai/docs/providers) |
-| `ollama` — Ollama (OpenAI-compatible) | ready | openai_chat | bearer | streaming:test<br>cancellation:test | [docs](https://github.com/ollama/ollama/blob/main/docs/openai.md) |
-| `llamacpp` — llama.cpp server | ready | openai_chat | bearer | streaming:test<br>cancellation:test | [docs](https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md) |
-| `anthropic` — Anthropic Claude | ready | anthropic_messages | x_api_key | streaming:test | [docs](https://docs.anthropic.com/en/api/messages) |
-| `gemini` — Google Gemini | ready | gemini_generate | x_api_key | streaming:test | [docs](https://ai.google.dev/api/generate-content) |
-| `cohere` — Cohere | ready | cohere_chat | bearer | streaming:test | [docs](https://docs.cohere.com/reference/chat) |
-| `azure-openai` — Azure OpenAI | ready | azure_openai | x_api_key | streaming:test | [docs](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle) |
-| `vertex` — Google Vertex AI | ready | gcp_vertex | gcp_adc | streaming:test | [docs](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) |
-| `bedrock` — Amazon Bedrock | ready | aws_bedrock | aws_sigv4 | cancellation:test | [docs](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html) |
-| `openai` — OpenAI | gateway_only | openai_chat | bearer | — | [docs](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) |
-| `openrouter` — OpenRouter | gateway_only | openai_chat | bearer | — | [docs](https://openrouter.ai/docs/quickstart) |
-| `mistral` — Mistral AI | gateway_only | openai_chat | bearer | — | [docs](https://docs.mistral.ai/api/) |
-| `deepseek` — DeepSeek | gateway_only | openai_chat | bearer | — | [docs](https://api-docs.deepseek.com/) |
-| `groq` — Groq | gateway_only | openai_chat | bearer | — | [docs](https://console.groq.com/docs/openai) |
-| `together` — Together AI | gateway_only | openai_chat | bearer | — | [docs](https://docs.together.ai/docs/openai-api-compatibility) |
-| `fireworks` — Fireworks AI | gateway_only | openai_chat | bearer | — | [docs](https://docs.fireworks.ai/api-reference/introduction) |
-| `xai` — xAI | gateway_only | openai_chat | bearer | — | [docs](https://docs.x.ai/docs/api-reference) |
-| `perplexity` — Perplexity | gateway_only | openai_chat | bearer | — | [docs](https://docs.perplexity.ai/api-reference/chat-completions) |
-| `novita` — Novita AI | gateway_only | openai_chat | bearer | — | [docs](https://novita.ai/docs/api-reference/model-apis-llm-create-chat-completion) |
-| `sambanova` — SambaNova | gateway_only | openai_chat | bearer | — | [docs](https://docs.sambanova.ai/cloud/docs/get-started/api-reference) |
-| `huggingface` — Hugging Face Inference Providers | gateway_only | openai_chat | bearer | — | [docs](https://huggingface.co/docs/inference-providers/index) |
-| `vllm` — vLLM (OpenAI-compatible server) | gateway_only | openai_chat | bearer | — | [docs](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html) |
-| `localai` — LocalAI | gateway_only | openai_chat | bearer | — | [docs](https://localai.io/features/openai-functions/) |
-| `openai-images` — OpenAI Images | ready | openai_images | bearer | image_generation:test | [docs](https://developers.openai.com/api/reference/resources/images/methods/generate) |
-| `gemini-images` — Google Gemini Images | ready | gemini_images | x_api_key | image_generation:test | [docs](https://ai.google.dev/gemini-api/docs/image-generation) |
-| `stability` — Stability AI | ready | stability_images | bearer | image_generation:test | [docs](https://platform.stability.ai/docs/api-reference) |
-| `recraft` — Recraft | ready | recraft_images | bearer | image_generation:test | [docs](https://www.recraft.ai/docs/api-reference/endpoints) |
-| `ideogram` — Ideogram | ready | ideogram_images | x_api_key | image_generation:test | [docs](https://developer.ideogram.ai/ideogram-api/api-overview) |
-| `black-forest-labs` — Black Forest Labs (FLUX) | ready | bfl_images | x_api_key | image_generation:test | [docs](https://docs.bfl.ai/quick_start/generating_images) |
-| `fal` — fal.ai | ready | fal_images | bearer | image_generation:test | [docs](https://docs.fal.ai/model-apis/model-endpoints/queue) |
-| `replicate` — Replicate | ready | replicate_images | bearer | image_generation:test | [docs](https://replicate.com/docs/reference/http) |
-| `firefly` — Adobe Firefly | ready | firefly_images | oauth2 | image_generation:test | [docs](https://developer.adobe.com/firefly-services/docs/firefly-api/) |
-| `veo` — Google Veo (Gemini API) | ready | gemini_veo | x_api_key | video_generation:test | [docs](https://ai.google.dev/gemini-api/docs/veo) |
-| `runway` — Runway | ready | runway_video | bearer | video_generation:test | [docs](https://docs.dev.runwayml.com/) |
-| `luma` — Luma AI | ready | luma_video | bearer | video_generation:test | [docs](https://docs.lumalabs.ai/docs/video-generation) |
-| `fal-video` — fal.ai video | ready | fal_video | bearer | video_generation:test | [docs](https://docs.fal.ai/model-apis/model-endpoints/queue) |
-| `replicate-video` — Replicate video | ready | replicate_video | bearer | video_generation:test | [docs](https://replicate.com/docs/reference/http) |
-| `comfyui` — ComfyUI (local) | pending | — | bearer | — | [docs](https://github.com/comfyanonymous/ComfyUI) |
-| `diffusers` — Diffusers (local) | pending | — | bearer | — | [docs](https://huggingface.co/docs/diffusers/index) |
+`gateway_only` in the legacy status field means the provider is selectable through a tested adapter,
+but not live-qualified. The separate `integrationType` column distinguishes native vendor API,
+OpenAI-compatible API, and gateway-routed API. Fixture tests are not vendor calls. Per-model
+capabilities come only from provider model metadata; unknown stays unknown. Streaming/vision/tools
+are not inferred from a text-completion success.
 
-`gateway_only` is a statement about a wire format, not an integration: an operator can point a
-compatible endpoint at these vendors, and nothing in this repository has done so.
+| Provider | Status | Integration type | Wire | Auth | Adapter status | Live verification | Capabilities evidenced | Documentation |
+|---|---|---|---|---|---|---|---|---|
+| `litellm` — LiteLLM gateway | ready | — | openai_chat | bearer | contract_tested | not_performed | streaming:test<br>cancellation:test | [docs](https://docs.litellm.ai/docs/providers) |
+| `ollama` — Ollama (OpenAI-compatible) | ready | — | openai_chat | bearer | contract_tested | not_performed | streaming:test<br>cancellation:test | [docs](https://github.com/ollama/ollama/blob/main/docs/openai.md) |
+| `llamacpp` — llama.cpp server | ready | — | openai_chat | bearer | contract_tested | not_performed | streaming:test<br>cancellation:test | [docs](https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md) |
+| `anthropic` — Anthropic Claude | ready | — | anthropic_messages | x_api_key | contract_tested | not_performed | streaming:test | [docs](https://docs.anthropic.com/en/api/messages) |
+| `gemini` — Google Gemini | ready | — | gemini_generate | x_api_key | contract_tested | not_performed | streaming:test | [docs](https://ai.google.dev/api/generate-content) |
+| `cohere` — Cohere | ready | — | cohere_chat | bearer | contract_tested | not_performed | streaming:test | [docs](https://docs.cohere.com/reference/chat) |
+| `azure-openai` — Azure OpenAI | ready | — | azure_openai | x_api_key | contract_tested | not_performed | streaming:test | [docs](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle) |
+| `vertex` — Google Vertex AI | ready | — | gcp_vertex | gcp_adc | contract_tested | not_performed | streaming:test | [docs](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) |
+| `bedrock` — Amazon Bedrock | ready | — | aws_bedrock | aws_sigv4 | contract_tested | not_performed | cancellation:test | [docs](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html) |
+| `openai` — OpenAI | gateway_only | native-vendor | openai_chat | bearer | contract_tested | pending | — | [docs](https://developers.openai.com/api/reference/chat-completions/overview) |
+| `openrouter` — OpenRouter | gateway_only | gateway-routed | openrouter_chat | bearer | contract_tested | pending | — | [docs](https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request) |
+| `mistral` — Mistral AI | gateway_only | openai-compatible | mistral_chat | bearer | contract_tested | pending | — | [docs](https://docs.mistral.ai/api/endpoint/chat/) |
+| `deepseek` — DeepSeek | gateway_only | openai-compatible | deepseek_chat | bearer | contract_tested | pending | — | [docs](https://api-docs.deepseek.com/api/create-chat-completion/) |
+| `groq` — Groq | gateway_only | openai-compatible | groq_chat | bearer | contract_tested | pending | — | [docs](https://console.groq.com/docs/api-reference) |
+| `together` — Together AI | gateway_only | openai-compatible | together_chat | bearer | contract_tested | pending | — | [docs](https://docs.together.ai/reference/chat-completions) |
+| `fireworks` — Fireworks AI | gateway_only | openai-compatible | fireworks_chat | bearer | contract_tested | pending | — | [docs](https://docs.fireworks.ai/api-reference/post-chatcompletions) |
+| `xai` — xAI | gateway_only | native-vendor | xai_responses | bearer | contract_tested | pending | — | [docs](https://docs.x.ai/developers/rest-api-reference/inference/responses) |
+| `perplexity` — Perplexity Router | gateway_only | gateway-routed | perplexity_router | bearer | contract_tested | pending | — | [docs](https://docs.perplexity.ai/api-reference/gateway-chat-completions-post) |
+| `novita` — Novita AI | gateway_only | openai-compatible | novita_chat | bearer | contract_tested | pending | — | [docs](https://docs.novita.ai/api-reference/model-apis-llm-create-chat-completion) |
+| `sambanova` — SambaNova | gateway_only | openai-compatible | sambanova_chat | bearer | contract_tested | pending | — | [docs](https://docs.sambanova.ai/docs/api-reference/chat-completions/create-chat-based-completion) |
+| `huggingface` — Hugging Face Inference Providers | gateway_only | gateway-routed | huggingface_chat | bearer | contract_tested | pending | — | [docs](https://huggingface.co/docs/inference-providers/tasks/chat-completion) |
+| `vllm` — vLLM (OpenAI-compatible server) | gateway_only | openai-compatible | vllm_chat | bearer | contract_tested | pending | — | [docs](https://docs.vllm.ai/en/latest/serving/online_serving/) |
+| `localai` — LocalAI | gateway_only | openai-compatible | localai_chat | bearer | contract_tested | pending | — | [docs](https://localai.io/docs/features/openai-functions/) |
+| `openai-images` — OpenAI Images | ready | — | openai_images | bearer | contract_tested | not_performed | image_generation:test | [docs](https://developers.openai.com/api/reference/resources/images/methods/generate) |
+| `gemini-images` — Google Gemini Images | ready | — | gemini_images | x_api_key | contract_tested | not_performed | image_generation:test | [docs](https://ai.google.dev/gemini-api/docs/image-generation) |
+| `stability` — Stability AI | ready | — | stability_images | bearer | contract_tested | not_performed | image_generation:test | [docs](https://platform.stability.ai/docs/api-reference) |
+| `recraft` — Recraft | ready | — | recraft_images | bearer | contract_tested | not_performed | image_generation:test | [docs](https://www.recraft.ai/docs/api-reference/endpoints) |
+| `ideogram` — Ideogram | ready | — | ideogram_images | x_api_key | contract_tested | not_performed | image_generation:test | [docs](https://developer.ideogram.ai/ideogram-api/api-overview) |
+| `black-forest-labs` — Black Forest Labs (FLUX) | ready | — | bfl_images | x_api_key | contract_tested | not_performed | image_generation:test | [docs](https://docs.bfl.ai/quick_start/generating_images) |
+| `fal` — fal.ai | ready | — | fal_images | bearer | contract_tested | not_performed | image_generation:test | [docs](https://docs.fal.ai/model-apis/model-endpoints/queue) |
+| `replicate` — Replicate | ready | — | replicate_images | bearer | contract_tested | not_performed | image_generation:test | [docs](https://replicate.com/docs/reference/http) |
+| `firefly` — Adobe Firefly | ready | — | firefly_images | oauth2 | contract_tested | not_performed | image_generation:test | [docs](https://developer.adobe.com/firefly-services/docs/firefly-api/) |
+| `veo` — Google Veo (Gemini API) | ready | — | gemini_veo | x_api_key | contract_tested | not_performed | video_generation:test | [docs](https://ai.google.dev/gemini-api/docs/veo) |
+| `runway` — Runway | ready | — | runway_video | bearer | contract_tested | not_performed | video_generation:test | [docs](https://docs.dev.runwayml.com/) |
+| `luma` — Luma AI | ready | — | luma_video | bearer | contract_tested | not_performed | video_generation:test | [docs](https://docs.lumalabs.ai/docs/video-generation) |
+| `fal-video` — fal.ai video | ready | — | fal_video | bearer | contract_tested | not_performed | video_generation:test | [docs](https://docs.fal.ai/model-apis/model-endpoints/queue) |
+| `replicate-video` — Replicate video | ready | — | replicate_video | bearer | contract_tested | not_performed | video_generation:test | [docs](https://replicate.com/docs/reference/http) |
+| `comfyui` — ComfyUI (local) | pending | — | — | bearer | not_implemented | not_performed | — | [docs](https://github.com/comfyanonymous/ComfyUI) |
+| `diffusers` — Diffusers (local) | pending | — | — | bearer | not_implemented | not_performed | — | [docs](https://huggingface.co/docs/diffusers/index) |
+`gateway_only` is retained for catalogue compatibility: each of the fourteen rows now has a dedicated provider adapter and contract fixtures. The status does not imply a successful vendor call or live qualification.
+
+### 4.1 Universal Chat adapters (Step 2)
+
+The audit set is exactly `openai`, `openrouter`, `mistral`, `deepseek`, `groq`, `together`,
+`fireworks`, `xai`, `perplexity`, `novita`, `sambanova`, `huggingface`, `vllm`, and `localai`.
+FreeLLMAPI is excluded. Each module implements its own model-list parser, request endpoint and
+error normalization, while all requests still pass through the shared DNS/SSRF, redirect, timeout,
+size-limit, and cancellation transport.
+
+| Integration class | Providers | Contract distinction |
+|---|---|---|
+| Native vendor API | OpenAI, xAI | OpenAI Chat Completions; xAI Responses API with `response.output_text.delta` streaming and completed-response validation |
+| OpenAI-compatible API | Mistral, DeepSeek, Groq, Together, Fireworks, Novita, SambaNova, vLLM, LocalAI | Provider-specific paths, model-list response shapes and metadata; local servers remain optional and require explicit trusted origins |
+| Gateway-routed API | OpenRouter, Perplexity Router, Hugging Face Inference Providers | Routed model ids and endpoints are retained verbatim; routing/provider behavior is model-dependent |
+
+OpenRouter, Mistral, DeepSeek, Groq, Together, Fireworks, xAI, Perplexity, Novita, SambaNova,
+Hugging Face, vLLM and LocalAI have separate wire modules under
+`services/core/src/providers/wires/`; OpenAI's existing wire gained model metadata and normalized
+error support. Fireworks model discovery uses its account-scoped control-plane path and therefore
+requires a separate non-secret Account ID setting; changing it counts as a destination change and
+requires re-entering the API key. xAI is not sent an invented Chat Completions request. Perplexity
+uses `/v1/models` and `/router/v1/chat/completions` as separately documented paths.
+
+Model-list metadata is stored separately from the public string-id model list. Documented model
+modalities and context windows are retained when present; unsupported/unreported properties remain
+`unknown`. The Chat route currently exposes text completion only, so tools and structured output are
+shown as `not_exposed_by_ragam`. A model-list success does not set its inference marker, and one
+successful inference does not prove streaming or any other capability. No model is substituted on
+an endpoint error, unavailable id or failed stream.
+
+`test/provider-adapters.test.mjs` exercises request construction, model parsing, text and SSE paths,
+capability unknowns, Fireworks configuration and negative error mapping for all fourteen adapters.
+`test/provider-adapters-integration.test.mjs` drives owner-protected model refresh and Chat through
+the shared gateway using a deterministic local HTTP fixture. These are **contract/regression tests,
+not live tests**. No live vendor call was made; the sandbox has no authorized vendor credentials and
+provider hosts are outside its network allowlist.
 
 `ready` for the native adapters (six chat shapes, nine image shapes and five video shapes) means the
 same thing it means for the three runtimes: a code path this repository exercises against a fixture.
 It does **not** mean the vendor was called. The nine image and five video adapters are contract-tested
 in `test/online-media-wires.test.mjs`, which also drives the Image and Video routes through a local
 vendor fixture; no vendor host has been contacted. Their request shapes are not interchangeable — auth
-header, submit/poll contract and result shape all differ — so each has its own adapter. The two chat
-shapes compared here illustrate the same rule; the four chat adapters added in an earlier increment
-are in §4.1:
+header, submit/poll contract and result shape all differ — so each has its own adapter. The different chat shapes compared here illustrate the same rule; the existing native chat adapters are detailed in §4.2:
 
 | Difference | Anthropic Messages | Gemini generateContent |
 |---|---|---|
@@ -197,7 +234,7 @@ are in §4.1:
 `pending` adapters are refused by name — `adapter_pending` — even if a vendor documents the
 capability.
 
-### 4.1 The four chat adapters added in an earlier increment
+### 4.2 Other native chat adapters
 
 Each is a wire of its own — request shape, credential chain and completion signal — rather than
 another compatibility shim. All four are contract-tested against local fixtures that return the
@@ -414,7 +451,7 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 - **Images are generated once per job; retries are explicit.** A failed job is a record with an
   error, not a background retry loop. Deleting a job removes the record and the stored bytes.
 - **A catalogue id is usable when its wire is implemented and its status is not `pending`.** All
-  twenty-one wires are implemented, so the twenty-three `ready` entries and the fourteen
+  34 registered wires are implemented, so the twenty-three `ready` entries and the fourteen
   `gateway_only` entries can be saved.
 - **The UI cannot configure a pending provider.** That is deliberate: a control that cannot work is
   a claim that it can.

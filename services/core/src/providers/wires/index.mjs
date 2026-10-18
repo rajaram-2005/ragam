@@ -14,6 +14,19 @@ import * as falImages from './fal-images.mjs'
 import * as falVideo from './fal-video.mjs'
 import * as fireflyImages from './firefly-images.mjs'
 import * as gemini from './gemini.mjs'
+import * as deepseek from './deepseek.mjs'
+import * as fireworks from './fireworks.mjs'
+import * as groq from './groq.mjs'
+import * as huggingface from './huggingface.mjs'
+import * as localai from './localai.mjs'
+import * as mistral from './mistral.mjs'
+import * as novita from './novita.mjs'
+import * as openrouter from './openrouter.mjs'
+import * as perplexity from './perplexity.mjs'
+import * as sambanova from './sambanova.mjs'
+import * as together from './together.mjs'
+import * as vllm from './vllm.mjs'
+import * as xai from './xai.mjs'
 import * as geminiImages from './gemini-images.mjs'
 import * as ideogramImages from './ideogram-images.mjs'
 import * as images from './images.mjs'
@@ -29,6 +42,19 @@ import * as vertex from './vertex.mjs'
 
 const WIRES = Object.freeze({
   [openai.wire]: openai,
+  [openrouter.wire]: openrouter,
+  [mistral.wire]: mistral,
+  [deepseek.wire]: deepseek,
+  [groq.wire]: groq,
+  [together.wire]: together,
+  [fireworks.wire]: fireworks,
+  [xai.wire]: xai,
+  [perplexity.wire]: perplexity,
+  [novita.wire]: novita,
+  [sambanova.wire]: sambanova,
+  [huggingface.wire]: huggingface,
+  [vllm.wire]: vllm,
+  [localai.wire]: localai,
   [anthropic.wire]: anthropic,
   [cohere.wire]: cohere,
   [gemini.wire]: gemini,

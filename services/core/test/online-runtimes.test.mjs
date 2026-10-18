@@ -71,7 +71,7 @@ test('the runtime family is closed: unknown ids and pending adapters are refused
   // requirement.
   assert.equal(runtimeFor('openai').keyRequired, true)
   assert.equal(runtimeFor('vllm').keyRequired, false)
-  assert.equal(runtimeFor('vllm').wire, 'openai_chat')
+  assert.equal(runtimeFor('vllm').wire, 'vllm_chat')
   assert.equal(runtimeFor('custom-work').label, 'Custom OpenAI-compatible endpoint')
 
   // Native wires are connections too, and the wire travels with the runtime record.

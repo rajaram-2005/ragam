@@ -102,6 +102,8 @@ function normaliseRecord(id, record = {}) {
     baseUrl: typeof record.baseUrl === 'string' ? record.baseUrl : '',
     key: record.key ?? null,
     models: Array.isArray(record.models) ? record.models.filter((model) => typeof model === 'string') : [],
+    modelDetails: normaliseModelDetails(record.modelDetails),
+    options: normaliseOptions(record.options),
     selectedModel: typeof record.selectedModel === 'string' ? record.selectedModel : '',
     verified: record.verified && typeof record.verified === 'object' ? { ...record.verified } : {},
     checkedAt: typeof record.checkedAt === 'string' ? record.checkedAt : null,
@@ -178,7 +180,7 @@ export class OnlineStore {
     if (!record.baseUrl || (runtime.keyRequired && !record.key)) {
       throw failure('provider_not_configured', `Add your ${runtime.label} connection in Provider Settings.`, 503)
     }
-    return { id, kind: id, label: runtime.label, wire: runtime.wire, baseUrl: record.baseUrl, apiKey: record.key ? this.#open(record.key) : null }
+    return { id, kind: id, label: runtime.label, wire: runtime.wire, baseUrl: record.baseUrl, options: { ...record.options }, apiKey: record.key ? this.#open(record.key) : null }
   }
 
   /** Save (create or update) one connection and make it active. */
@@ -187,7 +189,10 @@ export class OnlineStore {
     // Refuses an id the catalogue knows to be unimplemented, before anything is stored.
     runtimeFor(id)
     const existing = this.data.connections[id] ?? emptyRecord(id)
-    this.data.connections[id] = { ...existing, ...patch, id }
+    const safePatch = { ...patch }
+    if (Object.hasOwn(safePatch, 'modelDetails')) safePatch.modelDetails = normaliseModelDetails(safePatch.modelDetails)
+    if (Object.hasOwn(safePatch, 'options')) safePatch.options = normaliseOptions(safePatch.options)
+    this.data.connections[id] = { ...existing, ...safePatch, id }
     this.data.active = id
     this.data.revision += 1
     this.#persist()
@@ -297,6 +302,8 @@ export class OnlineStore {
         keyConfigured: Boolean(record.key),
         configured: Boolean(runtime) && Boolean(record.baseUrl) && (Boolean(record.key) || !runtime.keyRequired),
         models: record.models,
+        modelDetails: record.modelDetails,
+        options: record.options,
         selectedModel: record.selectedModel,
         checkedAt: record.checkedAt,
         verified: record.verified,
@@ -330,6 +337,8 @@ export class OnlineStore {
       keyConfigured: Boolean(record?.key),
       configured: Boolean(view?.configured),
       models: record?.models ?? [],
+      modelDetails: record?.modelDetails ?? [],
+      options: record?.options ?? {},
       selectedModel: record?.selectedModel ?? '',
       checkedAt: record?.checkedAt ?? null,
       verified: record?.verified ?? {},
@@ -346,6 +355,35 @@ export class OnlineStore {
   }
 }
 
+function normaliseOptions(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const accountId = value.accountId
+  return typeof accountId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(accountId) ? { accountId } : {}
+}
+function normaliseModelDetails(value) {
+  if (!Array.isArray(value)) return []
+  return value.slice(0, 500).filter((row) => row && typeof row.id === 'string' && row.id.length <= 240).map((row) => {
+    const source = row.capabilities && typeof row.capabilities === 'object' ? row.capabilities : {}
+    const strings = (items) => Array.isArray(items) ? items.filter((item) => typeof item === 'string' && item.length <= 40).slice(0, 16) : ['unknown']
+    const enumValue = (item, allowed) => allowed.includes(item) ? item : 'unknown'
+    const provenance = source.provenance && typeof source.provenance === 'object'
+      ? { source: String(source.provenance.source ?? 'unknown').slice(0, 40), provider: String(source.provenance.provider ?? '').slice(0, 80), ...(typeof source.provenance.docs === 'string' && source.provenance.docs.startsWith('https://') ? { docs: source.provenance.docs.slice(0, 300) } : {}) }
+      : { source: 'unknown', provider: '' }
+    return {
+      id: row.id, name: typeof row.name === 'string' ? row.name.slice(0, 240) : row.id,
+      capabilities: {
+        input: strings(source.input), output: strings(source.output),
+        contextTokens: Number.isSafeInteger(source.contextTokens) && source.contextTokens > 0 ? source.contextTokens : null,
+        maxOutputTokens: Number.isSafeInteger(source.maxOutputTokens) && source.maxOutputTokens > 0 ? source.maxOutputTokens : null,
+        streaming: enumValue(source.streaming, ['documented', 'reported', 'not_supported', 'unknown']),
+        tools: enumValue(source.tools, ['documented', 'reported', 'not_supported', 'not_exposed_by_ragam', 'unknown']),
+        structuredOutput: enumValue(source.structuredOutput, ['documented', 'reported', 'not_supported', 'not_exposed_by_ragam', 'unknown']),
+        imageInput: enumValue(source.imageInput, ['documented', 'reported', 'not_supported', 'unknown']),
+        provenance,
+      },
+    }
+  })
+}
 function emptyRecord(id = null) {
-  return { id, baseUrl: '', key: null, models: [], selectedModel: '', verified: {}, checkedAt: null }
+  return { id, baseUrl: '', key: null, models: [], modelDetails: [], options: {}, selectedModel: '', verified: {}, checkedAt: null }
 }
