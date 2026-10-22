@@ -11,6 +11,7 @@ import { lookup } from 'node:dns'
 import { isIP, BlockList } from 'node:net'
 import { IMPLEMENTED_WIRES, PROVIDER_STATUS, providerById } from '../providers/catalog.mjs'
 import { wireFor } from '../providers/wires/index.mjs'
+import { retryAfterMs } from '../providers/errors.mjs'
 import { failure } from './failure.mjs'
 
 // Re-exported because every existing caller imports it from here; the definition moved so the wire
@@ -92,7 +93,7 @@ export function gatewayUrl(value, trustedOrigins = []) {
 
 export class OnlineGateway {
   constructor({ trustedOrigins = [], timeoutMs = 120_000, maxBytes = 2 * 1024 * 1024 } = {}) { Object.assign(this, { trustedOrigins, timeoutMs, maxBytes }) }
-  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, binary = false } = {}) {
+  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, binary = false, method: requestedMethod = null } = {}) {
     const runtime = runtimeFor(config.kind ?? config.id ?? 'litellm'), label = runtime.label
     const base = gatewayUrl(config.baseUrl, this.trustedOrigins)
     const url = new URL(`${base}${path}`)
@@ -122,20 +123,42 @@ export class OnlineGateway {
         if (options.all) callback(null, allowed)
         else callback(null, allowed[0].address, allowed[0].family)
       })
+      const method = requestedMethod ?? (payload ? 'POST' : 'GET')
+      if (!['GET', 'POST', 'DELETE', 'PUT', 'PATCH'].includes(method)) return done(failure('invalid_method', 'Unsupported request method.', 400))
       req = (url.protocol === 'https:' ? https : http).request(url, {
-        method: payload ? 'POST' : 'GET', lookup: safeLookup,
+        method, lookup: safeLookup,
         headers: {
           // A wire adapter supplies its own credential header. The default is the OpenAI shape,
           // kept for callers that predate the adapters; an adapter never mixes the two.
           ...(headers ?? (config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {})),
-          accept: binary ? '*/*' : onFrame ? 'text/event-stream' : 'application/json',
+          // A wire that negotiates a representation (Stability's `Accept: image/*`) must keep
+          // its header. The default only fills in when the adapter did not choose one.
+          accept: headers?.accept ?? (binary ? '*/*' : onFrame ? 'text/event-stream' : 'application/json'),
           ...(payload ? { 'content-type': contentType ?? 'application/json', 'content-length': Buffer.byteLength(payload) } : {}),
         },
       }, (res) => {
         response = res
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          const code = res.statusCode === 401 || res.statusCode === 403 ? 'provider_auth_failed' : res.statusCode === 429 ? 'provider_rate_limited' : 'provider_error'
-          return done(failure(code, `${label} returned HTTP ${res.statusCode}. Check gateway access, model permissions and quota.`, 502))
+          // Provider error bodies are bounded and normalized by the selected adapter. Never return
+          // raw vendor bodies to the browser: they may contain request fragments or sensitive IDs.
+          const chunks = []; let size = 0
+          res.on('data', (chunk) => {
+            size += chunk.length
+            if (size > 32 * 1024) { done(failure('provider_error_body_too_large', `${label} returned an oversized error response.`, 502)); return }
+            chunks.push(chunk)
+          })
+          res.on('end', () => {
+            let payload = null
+            try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { /* safe generic mapping below */ }
+            let normalized
+            try { normalized = wireFor(runtime.wire).normalizeError?.(res.statusCode, payload, res.headers) } catch { normalized = null }
+            normalized ??= { code: res.statusCode === 401 || res.statusCode === 403 ? 'provider_auth_failed' : res.statusCode === 429 ? 'provider_rate_limited' : 'provider_error', message: `${label} returned HTTP ${res.statusCode}. Check access, model permissions and quota.` }
+            const error = failure(normalized.code, normalized.message, 502)
+            const retryDelay = retryAfterMs(res.headers)
+            if (retryDelay !== null) error.retryAfterMs = retryDelay
+            done(error)
+          })
+          return
         }
         if (onFrame && !String(res.headers['content-type']).includes('text/event-stream')) return done(failure('invalid_stream', 'Gateway did not return a streaming response.', 502))
         let text = '', size = 0, streamDone = false
@@ -188,8 +211,12 @@ export class OnlineGateway {
     })
   }
   /** Model listing is a property of the wire, not of the transport: each adapter parses its own. */
-  async models(config) {
-    const wire = config.wire ?? runtimeFor(config.kind ?? config.id ?? 'litellm').wire
-    return wireFor(wire).models(this.request.bind(this), config)
+  async modelCatalogue(config) {
+    const wireId = config.wire ?? runtimeFor(config.kind ?? config.id ?? 'litellm').wire
+    const wire = wireFor(wireId)
+    if (typeof wire.modelCatalogue === 'function') return wire.modelCatalogue(this.request.bind(this), config)
+    const ids = await wire.models(this.request.bind(this), config)
+    return ids.map((id) => ({ id, name: id, capabilities: { input: ['unknown'], output: ['unknown'], contextTokens: null, maxOutputTokens: null, streaming: 'unknown', tools: 'not_exposed_by_ragam', structuredOutput: 'not_exposed_by_ragam', imageInput: 'unknown', provenance: { source: 'unavailable', provider: config.id } } }))
   }
+  async models(config) { return (await this.modelCatalogue(config)).map((record) => record.id) }
 }

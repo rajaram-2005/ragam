@@ -91,6 +91,7 @@ async function loadComponents() {
     "export { default as McpArea } from '../../src/areas/McpArea.jsx'",
     "export { default as ProviderSettings } from '../../src/components/ProviderSettings.jsx'",
     "export { default as ProviderCatalogue } from '../../src/components/ProviderCatalogue.jsx'",
+    "export { default as KlyvaronTiers } from '../../src/components/KlyvaronTiers.jsx'",
     "export { default as App } from '../../src/App.jsx'",
     "export { default as SignInPage } from '../../src/pages/SignInPage.jsx'",
     "export { default as SignUpPage } from '../../src/pages/SignUpPage.jsx'",
@@ -372,6 +373,14 @@ test('online status removes device tiers and shows zero models honestly', () => 
 
 })
 
+test('the Klyvaron panel names the provider behind each tier and offers no model it cannot serve', () => {
+  const markup = render('KlyvaronTiers', React.createElement(components.KlyvaronTiers, { owner: false, providers: { connections: [] } }))
+  // The component fetches on mount; before that it says so and offers no control. A panel that
+  // rendered a tier row it had not read would be describing a destination it cannot name.
+  assert.match(markup, /not loaded yet/)
+  assert.doesNotMatch(markup, /<(button|select)\b/)
+})
+
 test('Plugins does not offer executable unreviewed sample installations', () => {
   const markup=render('PluginsArea',React.createElement(components.PluginsArea))
   assert.match(markup,/Arbitrary extension installation and execution are disabled/)
@@ -535,7 +544,7 @@ test('Chat renders the saved exact model and identifies the online recipient', (
 test('the provider catalogue shows status, never a control, and nothing when unloaded', () => {
   const catalog = {
     valid: true,
-    summary: '5 ready, 14 reachable via an OpenAI-compatible endpoint, 14 pending',
+    summary: '5 ready, 14 individually adapted Chat providers (contract tested; live verification pending), 14 pending',
     counts: { ready: 5, gateway_only: 14, pending: 14 },
     providers: [
       { id: 'litellm', label: 'LiteLLM gateway', status: 'ready', capabilities: [{ id: 'streaming', source: 'test', ref: 'test/online.test.mjs' }] },
@@ -546,7 +555,7 @@ test('the provider catalogue shows status, never a control, and nothing when unl
   const markup = render('ProviderCatalogue', React.createElement(components.ProviderCatalogue, { catalog }))
   assert.match(markup, /ready in this build/)
   assert.match(markup, /tested: streaming/)
-  assert.match(markup, /not verified here/)
+  assert.match(markup, /adapter contract-tested; live vendor verification pending/)
   assert.match(markup, /1 pending adapters/)
   assert.match(markup, /adapter pending; not selectable/)
   // No button, input or select: the catalogue is information, and a control that cannot work

@@ -68,16 +68,16 @@ test('the provider catalogue is authenticated, read-only and carries no secrets'
   const r = await f.request('GET', '/api/providers/catalog')
   assert.equal(r.status, 200)
   assert.equal(r.data.valid, true)
-  assert.equal(r.data.counts.ready, 12, 'three runtimes, six native chat wires, two image wires and Veo have a tested path')
+  assert.equal(r.data.counts.ready, 23, 'three runtimes, six native chat wires, nine image wires and five video wires have a tested path')
   assert.ok(r.data.counts.pending > 0, 'the unimplemented adapters must be stated, not hidden')
-  assert.match(r.data.summary, /^12 ready/)
+  assert.match(r.data.summary, /^23 ready/)
   for (const provider of r.data.providers) {
     assert.ok(provider.docsUrl.startsWith('https://'), `${provider.id} must cite documentation`)
     // A descriptor has no credential field, so there is nothing to redact — but assert it anyway,
     // because "there is nothing to redact" is exactly the property that silently regresses.
     for (const field of ['apiKey', 'key', 'token', 'secret']) assert.equal(field in provider, false)
     // A kind is not a secret, and it must be one the form understands.
-    assert.ok(provider.credential === null || ['api_key', 'service_account', 'aws_credentials'].includes(provider.credential))
+    assert.ok(provider.credential === null || ['api_key', 'service_account', 'aws_credentials', 'client_credentials'].includes(provider.credential))
   }
   const text = JSON.stringify(r.data)
   assert.ok(!/sk-[A-Za-z0-9]|bearer\s+[a-z0-9]/i.test(text), 'the catalogue leaked a credential shape')
@@ -250,7 +250,7 @@ test('a schema-1 store migrates to one connection without losing the key', (t) =
 
 test('the migration is pure and refuses a record that is neither schema', () => {
   const fresh = migrateState(null)
-  assert.deepEqual(fresh, { schema: STORE_SCHEMA, revision: 0, active: null, connections: {} })
+  assert.deepEqual(fresh, { schema: STORE_SCHEMA, revision: 0, active: null, connections: {}, klyvaron: { tiers: {} } })
   const legacy = migrateState({ kind: 'litellm', baseUrl: 'https://g.example/v1', key: null, revision: 2 })
   assert.equal(legacy.active, 'litellm')
   assert.equal(legacy.revision, 2)
@@ -337,9 +337,10 @@ test('a second provider connection is stored beside the first, with its own key'
 test('a connection is refused when the catalogue says there is no adapter', async (t) => {
   const f = await fixture(t)
   await f.login()
-  // Stability is still `pending`: it has no adapter. Cohere is not used here any more because it
-  // now has one, and a test that kept asserting the refusal would pin a falsehood.
-  const pending = await f.request('PUT', '/api/providers/stability', { baseUrl: 'https://api.stability.ai', apiKey: 'x' })
+  // ComfyUI is still `pending`: it has no adapter. Stability and the other media vendors are not
+  // used here any more because they now have one, and a test that kept asserting the refusal
+  // would pin a falsehood.
+  const pending = await f.request('PUT', '/api/providers/comfyui', { baseUrl: 'https://example.test', apiKey: 'x' })
   assert.equal(pending.status, 400)
   assert.equal(pending.data.error, 'adapter_pending')
   // A pending connection is not stored as a side effect of being refused.

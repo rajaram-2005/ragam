@@ -2,7 +2,7 @@
   "name": "aetheris-omni",
   "version": "0.2.0",
   "private": true,
-  "description": "Aetheris Omni \u2014 a local-first AI platform with exactly five product areas: Chat, Image, Video, Plugins, MCP",
+  "description": "Aetheris Omni \u2014 an online-first AI platform with exactly five product areas: Chat, Image, Video, Plugins, MCP",
   "license": "MIT",
   "type": "module",
   "engines": {

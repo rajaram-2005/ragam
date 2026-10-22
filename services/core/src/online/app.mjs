@@ -21,6 +21,7 @@ import { PluginRegistry } from '../plugins/registry.mjs'
 import { McpRegistry, RISK, SERVER_KINDS } from '../mcp/layer.mjs'
 import { PROVIDERS, catalogueReport, describeProvider } from '../providers/catalog.mjs'
 import { normaliseCredential, wireFor } from '../providers/wires/index.mjs'
+import { KLYVARON_TIERS, MODALITIES, KLYVARON_NOTE, tierFor, provenanceFor, resolveTier } from './klyvaron.mjs'
 
 /**
  * Session bounds.
@@ -254,12 +255,87 @@ export class OnlineApp {
       providers: PROVIDERS.map((provider) => describeProvider(provider.id)),
     }
   }
+  /**
+   * Klyvaron product tiers, with the exact provider and model each preset resolves to.
+   *
+   * The name on the outside is a tier; the model on the inside is a third-party API the operator
+   * configured. A tier with no preset is returned as `configured: false` rather than silently
+   * pointing at the active connection: the label would otherwise describe a different model than
+   * the one the operator chose.
+   */
+  klyvaronView() {
+    const view = this.store.public()
+    const connections = new Map(view.connections.map((connection) => [connection.id, connection]))
+    return {
+      product: 'klyvaron',
+      independentWeights: false,
+      note: KLYVARON_NOTE,
+      revision: view.revision,
+      tiers: KLYVARON_TIERS.map((tier) => ({
+        id: tier.id,
+        label: tier.label,
+        intent: tier.intent,
+        presets: Object.fromEntries(MODALITIES.map((modality) => {
+          const preset = this.store.klyvaronPreset(tier.id, modality)
+          if (!preset) return [modality, { configured: false, provenance: null }]
+          const connection = connections.get(preset.connectionId)
+          return [modality, {
+            configured: Boolean(connection?.configured),
+            connectionId: preset.connectionId,
+            provider: connection?.label ?? preset.connectionId,
+            wire: connection?.wire ?? null,
+            model: preset.model,
+            provenance: connection ? provenanceFor(connection, preset.model) : null,
+          }]
+        })),
+      })),
+    }
+  }
+
+  /** Point a tier at a saved connection and a model that connection already lists. */
+  setKlyvaronPreset(tier, body, session) {
+    const entry = tierFor(tier)
+    if (!entry) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
+    if (!MODALITIES.includes(body?.modality)) throw failure('invalid_modality', 'A tier preset is for chat, image or video.', 400)
+    if (typeof body?.connectionId !== 'string' || typeof body?.model !== 'string') throw failure('invalid_preset', 'A preset needs a saved connection and a listed model.', 400)
+    // `config()` refuses an unconfigured connection, so a preset can never point at a name that
+    // has no endpoint or key behind it.
+    const config = this.store.config(body.connectionId)
+    const wire = wireFor(config.wire)
+    const actual = wire.modality ?? 'chat'
+    if (actual !== body.modality) {
+      throw failure('klyvaron_tier_modality', `${entry.label} is a ${body.modality} tier; ${config.label} serves ${actual}.`, 409)
+    }
+    this.store.saveKlyvaronPreset(tier, body.modality, { connectionId: body.connectionId, model: body.model })
+    this.ledger.record({ category: 'provider', action: 'klyvaron_preset', outcome: 'success', subject: session?.accountId ?? null, detail: { tier, modality: body.modality, provider: config.id, model: body.model } })
+    return this.klyvaronView()
+  }
+
+  clearKlyvaronPreset(tier, modality) {
+    if (!tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
+    this.store.removeKlyvaronPreset(tier, modality)
+    return this.klyvaronView()
+  }
+
   readiness() {
     const s = this.store.public()
     // `kind` is a connection id, not a wire name: resolve the wire the connection will use, or a
     // custom endpoint would report chat unavailable on an installation that can chat.
     let chatWire = null
     try { chatWire = s.kind ? wireFor(runtimeFor(s.kind).wire) : null } catch { chatWire = null }
+    const mediaFor = (kind) => {
+      const id = s.preferred?.[kind] ?? null
+      const connection = id ? (s.connections ?? []).find((entry) => entry.id === id) : null
+      return {
+        connectionId: id,
+        wire: connection?.wire ?? null,
+        sizes: connection?.sizes ?? [],
+        aspectRatios: connection?.aspectRatios ?? [],
+        resolutions: connection?.resolutions ?? [],
+        models: connection?.models ?? [],
+        keyConfigured: Boolean(connection?.keyConfigured),
+      }
+    }
     return { status: !s.configured ? 'setup_required' : s.checkedAt ? 'configured' : 'connection_unchecked', policy: 'online_only', offlineEnforced: false,
       models: { total: s.models.length, ready: Object.keys(s.verified).length },
       capabilities: {
@@ -267,23 +343,24 @@ export class OnlineApp {
         imageGeneration: this.imageAvailable(),
         videoGeneration: this.videoAvailable(),
       },
+      media: { image: mediaFor('image'), video: mediaFor('video') },
       provider: { kind: s.kind, name: s.name, baseUrl: s.baseUrl, selectedModel: s.selectedModel, checkedAt: s.checkedAt },
       accounts: { total: this.accounts.count() },
       note: 'Listing a model does not verify inference or modality support. No local inference or fallback.' }
   }
   models() { const kind = this.store.kind(); return this.store.state.models.map((id) => ({ id, displayName: id, provider: kind, location: 'online', availability: this.store.state.verified[id] ? 'inference_observed' : 'listed_unverified', selectable: true })) }
 
-  /** The saved connection an image request will use, or a refusal that names what is missing. */
+  /**
+   * The saved connection an image request will use, or a refusal that names what is missing.
+   *
+   * Any configured connection whose wire generates images, not one hard-coded vendor. The
+   * preference (OpenAI Images first, then any other) is computed by the store and published in
+   * `preferred`, so the settings page, the Image area and this method cannot disagree.
+   */
   imageConnection() {
-    // Any saved connection whose wire generates images, not one hard-coded vendor. The preference
-    // for OpenAI Images when both are saved keeps an installation's existing choice stable; a
-    // second connection is used when it is the only one.
-    const candidates = this.store.connections.filter((connection) => {
-      try { return wireFor(runtimeFor(connection.id).wire)?.modality === 'image' } catch { return false }
-    })
-    const record = candidates.find((connection) => runtimeFor(connection.id).wire === 'openai_images') ?? candidates[0]
-    if (!record) throw failure('provider_not_configured', 'Add an image connection in Provider Settings (OpenAI Images or Google Gemini Images).', 503)
-    return this.store.config(record.id)
+    const id = this.store.public().preferred.image
+    if (!id) throw failure('provider_not_configured', 'Add and test an image connection in Provider Settings (OpenAI Images, Gemini Images, Stability AI, Recraft, Ideogram, FLUX, fal.ai, Replicate or Adobe Firefly).', 503)
+    return this.store.config(id)
   }
 
   /** Whether the installation can generate an image now: a key and a listed model, not a maybe. */
@@ -291,7 +368,7 @@ export class OnlineApp {
     try {
       const config = this.imageConnection()
       const record = this.store.connections.find((connection) => connection.id === config.id)
-      return Boolean(record?.key && (record.models ?? []).length)
+      return Boolean((record?.key || !runtimeFor(config.id).keyRequired) && (record.models ?? []).length)
     } catch { return false }
   }
 
@@ -301,10 +378,13 @@ export class OnlineApp {
    * configured provider; no other connection's key is touched.
    */
   async startImage(body, session) {
-    const config = this.imageConnection()
+    const tier = body.tier === undefined || body.tier === null ? null : body.tier
+    if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
+    const resolved = tier === null ? null : resolveTier({ tier, modality: 'image', store: this.store, configFor: (id) => this.store.config(id), wireFor })
+    const config = resolved?.config ?? this.imageConnection()
     const record = this.store.connections.find((connection) => connection.id === config.id)
     const models = record?.models ?? []
-    const model = typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0])
+    const model = resolved?.model ?? (typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0]))
     if (!model) throw failure('model_unavailable', 'Test the image connection to list its models, then choose one.', 409)
     if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
     const wire = wireFor(config.wire)
@@ -313,28 +393,35 @@ export class OnlineApp {
     if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
     if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps image prompts at 4,000 characters.', 400)
     // Refused here rather than inside the asynchronous job: an unsupported size must be a 400 in
-    // front of the person who chose it, not a failed record they discover by polling.
-    if (body.size !== undefined && !(wire.SIZES ?? []).includes(body.size)) {
-      throw failure('invalid_parameters', `Size must be one of ${(wire.SIZES ?? []).join(', ')}.`, 400)
+    // front of the person who chose it, not a failed record they discover by polling. A wire with
+    // no size list deliberately offers no control (the model decides geometry); a supplied size
+    // is ignored rather than sent to a provider that never documented it.
+    const sizes = wire.SIZES ?? []
+    const size = sizes.length ? body.size : undefined
+    if (size !== undefined && !sizes.includes(size)) {
+      throw failure('invalid_parameters', `Size must be one of ${sizes.join(', ')}.`, 400)
     }
     const context = this.contextFor(session.accountId)
     const job = context.media.enqueue({
       kind: 'image',
-      params: { prompt, size: body.size ?? null, model, provider: config.id },
+      params: { prompt, size: size ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
       subject: session.accountId,
       filenameHint: `${config.id}-image`,
-      run: ({ signal }) => wire.generate(this.gateway.request.bind(this.gateway), config, { model, prompt, size: body.size, signal }),
+      run: ({ signal }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
+        model, prompt, size, signal,
+        poll: this.mediaPoll ?? undefined,
+        trustedOrigins: this.gateway.trustedOrigins,
+      }),
     })
-    this.ledger.record({ category: 'media', action: 'image_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model } })
+    this.ledger.record({ category: 'media', action: 'image_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model, tier: resolved?.tier ?? null } })
     return job
   }
 
   /** The saved connection a video request will use, or a refusal that names what is missing. */
   videoConnection() {
-    const candidates = this.store.connections.filter((connection) => runtimeFor(connection.id).wire === 'gemini_veo')
-    const record = candidates.find((connection) => connection.id === 'veo') ?? candidates[0]
-    if (!record) throw failure('provider_not_configured', 'Add a Google Veo connection in Provider Settings.', 503)
-    return this.store.config(record.id)
+    const id = this.store.public().preferred.video
+    if (!id) throw failure('provider_not_configured', 'Add and test a video connection in Provider Settings (Google Veo, Runway, Luma, fal.ai video or Replicate video).', 503)
+    return this.store.config(id)
   }
 
   /** Whether this installation can start a video job now: a key and a listed model, not a maybe. */
@@ -342,7 +429,7 @@ export class OnlineApp {
     try {
       const config = this.videoConnection()
       const record = this.store.connections.find((connection) => connection.id === config.id)
-      return Boolean(record?.key && (record.models ?? []).length)
+      return Boolean((record?.key || !runtimeFor(config.id).keyRequired) && (record.models ?? []).length)
     } catch { return false }
   }
 
@@ -351,10 +438,13 @@ export class OnlineApp {
    * the job record and nothing else; polling, cancellation and the restart rule live in the queue.
    */
   async startVideo(body, session) {
-    const config = this.videoConnection()
+    const tier = body.tier === undefined || body.tier === null ? null : body.tier
+    if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
+    const resolved = tier === null ? null : resolveTier({ tier, modality: 'video', store: this.store, configFor: (id) => this.store.config(id), wireFor })
+    const config = resolved?.config ?? this.videoConnection()
     const record = this.store.connections.find((connection) => connection.id === config.id)
     const models = record?.models ?? []
-    const model = typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0])
+    const model = resolved?.model ?? (typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0]))
     if (!model) throw failure('model_unavailable', 'Test the video connection to list its models, then choose one.', 409)
     if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
     const wire = wireFor(config.wire)
@@ -362,11 +452,18 @@ export class OnlineApp {
     const prompt = body.prompt
     if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
     if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps video prompts at 4,000 characters.', 400)
-    if (body.aspectRatio !== undefined && !(wire.ASPECT_RATIOS ?? []).includes(body.aspectRatio)) {
-      throw failure('invalid_parameters', `Aspect ratio must be one of ${(wire.ASPECT_RATIOS ?? []).join(', ')}.`, 400)
+    // A wire with an empty list does not send that control at all. Replicate video, for
+    // example, documents no common geometry input across its models; sending one would be a
+    // guess. An unsupported value on a wire that DOES document the control is a 400 here.
+    const aspects = wire.ASPECT_RATIOS ?? []
+    const resolutions = wire.RESOLUTIONS ?? []
+    const aspectRatio = aspects.length ? body.aspectRatio : undefined
+    const resolution = resolutions.length ? body.resolution : undefined
+    if (body.aspectRatio !== undefined && aspects.length && !aspects.includes(body.aspectRatio)) {
+      throw failure('invalid_parameters', `Aspect ratio must be one of ${aspects.join(', ')}.`, 400)
     }
-    if (body.resolution !== undefined && !(wire.RESOLUTIONS ?? []).includes(body.resolution)) {
-      throw failure('invalid_parameters', `Resolution must be one of ${(wire.RESOLUTIONS ?? []).join(', ')}.`, 400)
+    if (body.resolution !== undefined && resolutions.length && !resolutions.includes(body.resolution)) {
+      throw failure('invalid_parameters', `Resolution must be one of ${resolutions.join(', ')}.`, 400)
     }
     const context = this.contextFor(session.accountId)
     const job = context.media.enqueue({
@@ -374,21 +471,21 @@ export class OnlineApp {
       // Video renders for minutes and the provider operation is paid for once; the deadline is
       // bounded and stated in the job record, and the job is failed honestly if it is exceeded.
       timeoutMs: 15 * 60 * 1000,
-      params: { prompt, aspectRatio: body.aspectRatio ?? null, resolution: body.resolution ?? null, model, provider: config.id },
+      params: { prompt, aspectRatio: aspectRatio ?? null, resolution: resolution ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
       subject: session.accountId,
       filenameHint: `${config.id}-video`,
       run: ({ signal, progress }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
         model,
         prompt,
-        aspectRatio: body.aspectRatio,
-        resolution: body.resolution,
+        aspectRatio,
+        resolution,
         signal,
         onProgress: progress,
         poll: this.mediaPoll ?? undefined,
         trustedOrigins: this.gateway.trustedOrigins,
       }),
     })
-    this.ledger.record({ category: 'media', action: 'video_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model } })
+    this.ledger.record({ category: 'media', action: 'video_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model, tier: resolved?.tier ?? null } })
     return job
   }
   async configure(body, { session, kind = 'litellm' } = {}) {
@@ -396,6 +493,11 @@ export class OnlineApp {
     if (typeof body.baseUrl !== 'string') throw failure('invalid_endpoint', 'A gateway URL is required.')
     const baseUrl = gatewayUrl(body.baseUrl, this.gateway.trustedOrigins)
     const existing = this.store.connections.find((connection) => connection.id === kind)
+    const requestedOptions = body.options ?? (existing?.baseUrl === baseUrl ? existing.options : {})
+    if (!requestedOptions || typeof requestedOptions !== 'object' || Array.isArray(requestedOptions)) throw failure('invalid_provider_config', 'Provider options must be a JSON object.')
+    if (kind !== 'fireworks' && Object.keys(requestedOptions).length) throw failure('invalid_provider_config', 'This provider does not accept additional connection options.')
+    const options = kind === 'fireworks' ? { ...(requestedOptions.accountId ? { accountId: requestedOptions.accountId } : {}) } : {}
+    wireFor(runtime.wire).validateConfig?.({ id: kind, wire: runtime.wire, options })
     let key = body.apiKey
     if (key !== undefined) {
       const limit = runtime.credential === 'api_key' ? 8192 : 16384
@@ -409,12 +511,12 @@ export class OnlineApp {
     // A destination is the connection AND the endpoint. Changing either one is a new recipient, so
     // that connection's stored key is not forwarded to it: the caller must supply one or, for a
     // local endpoint that needs none, go without. Other connections' keys are never touched.
-    const sameDestination = Boolean(existing) && baseUrl === existing.baseUrl
+    const sameDestination = Boolean(existing) && baseUrl === existing.baseUrl && JSON.stringify(options) === JSON.stringify(existing.options ?? {})
     if (!key && runtime.keyRequired && (!sameDestination || !existing?.key)) {
       throw failure('key_required', 'Enter a key for this provider. Existing keys are never carried to a different endpoint.')
     }
     const stored = key ? this.store.seal(key) : (sameDestination ? existing.key : null)
-    this.store.saveConnection(kind, { baseUrl, key: stored, models: [], selectedModel: '', verified: {}, checkedAt: null })
+    this.store.saveConnection(kind, { baseUrl, options, key: stored, models: [], modelDetails: [], selectedModel: '', verified: {}, checkedAt: null })
     this.ledger.record({ category: 'provider', action: 'configure', outcome: 'success', subject: session?.accountId ?? 'owner', detail: { kind, role: session?.role ?? null, keyStored: Boolean(stored) } })
     return this.store.public()
   }
@@ -427,11 +529,13 @@ export class OnlineApp {
   async refreshModels(kind = this.store.kind()) {
     const revision = this.store.revision
     const config = this.store.config(kind)
-    const models = await this.gateway.models(config)
+    const modelDetails = await this.gateway.modelCatalogue(config)
+    const models = modelDetails.map((entry) => entry.id)
     if (revision !== this.store.revision) throw failure('provider_changed', 'Connection changed while checking models. Check it again.', 409)
     const record = this.store.connections.find((connection) => connection.id === kind)
     this.store.saveConnection(kind, {
       models,
+      modelDetails,
       checkedAt: new Date().toISOString(),
       selectedModel: models.includes(record?.selectedModel) ? record.selectedModel : '',
       verified: Object.fromEntries(Object.entries(record?.verified ?? {}).filter(([id]) => models.includes(id))),
@@ -451,11 +555,17 @@ export class OnlineApp {
     // This account's own history, memory and knowledge. Nothing here can reach another
     // account's stores, because they are different databases, not different filters.
     const context = this.contextFor(session.accountId)
-    const state = this.store.state, config = this.store.config(), revision = state.revision
-    const model = body.model || state.selectedModel
+    const state = this.store.state, revision = state.revision
+    const tier = body.tier === undefined || body.tier === null ? null : body.tier
+    if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
+    const resolved = tier === null ? null : resolveTier({ tier, modality: 'chat', store: this.store, configFor: (id) => this.store.config(id), wireFor })
+    const config = resolved?.config ?? this.store.config()
+    const model = resolved?.model ?? (body.model || state.selectedModel)
+    const modelSource = resolved ? (this.store.connections.find((connection) => connection.id === config.id)?.models ?? []) : state.models
     if (body.executionMode && body.executionMode !== 'online') throw failure('online_only', 'Local and hybrid inference are not available.', 400)
-    if (!state.models.includes(model)) throw failure('model_unavailable', 'Choose a listed model. This request will not switch to another model.', 409)
+    if (!modelSource.includes(model)) throw failure('model_unavailable', 'Choose a listed model. This request will not switch to another model.', 409)
     if (body.authorization?.providerRevision !== revision || body.authorization?.confirmed !== true) throw failure('consent_required', 'Confirm sending this request to the current gateway.', 403)
+    if (resolved && body.authorization?.providerId && body.authorization.providerId !== config.id) throw failure('consent_provider_mismatch', 'The request is authorized for a different provider than this tier uses.', 409)
     const incoming = body.messages ?? [{ role: 'user', content: body.prompt }]
     if (!Array.isArray(incoming) || incoming.length < 1 || incoming.length > 100 || incoming.some((m) => !m || !['user','assistant'].includes(m.role) || typeof m.content !== 'string' || m.content.length > 100_000)) throw failure('invalid_messages', 'Send up to 100 text user/assistant messages.')
     if (incoming.at(-1).role !== 'user' || !incoming.at(-1).content.trim()) throw failure('invalid_messages', 'The last message must be a nonempty user message.')
@@ -527,17 +637,18 @@ export class OnlineApp {
       this.ledger.record({ category: 'policy', action: 'style_violation', outcome: 'blocked', subject: session.accountId, detail: { model, rules: [...new Set(refusal.map((v) => v.name))] } })
       throw failure('style_violation', `The reply made a claim the product does not allow (${[...new Set(refusal.map((v) => v.name))].join(', ')}). It was discarded, not stored, and nothing was counted. Try again or choose another style.`, 502)
     }
-    if (revision === this.store.state.revision && this.store.state.models.includes(model)) this.store.save({ verified: { ...this.store.state.verified, [model]: new Date().toISOString() } })
+    // A tier may target a connection other than the active one; recording 'observed inference' on the active connection would be a false record, so this path records the ledger entry only.
+    if (!resolved && revision === this.store.state.revision && this.store.state.models.includes(model)) this.store.save({ verified: { ...this.store.state.verified, [model]: new Date().toISOString() } })
     if (body.sessionId) {
       context.memory.appendTurn(body.sessionId, { role: 'user', content: prompt, dataClass: classification })
       context.memory.appendTurn(body.sessionId, { role: 'assistant', content: text, dataClass: classification })
     }
-    this.ledger.record({ category: 'model', action: 'online_chat', outcome: 'success', subject: session.accountId, detail: { model, provider: this.store.kind(), classification, redacted: redacted.findings.length, role: session.role, skill: skillUsed?.name ?? null } })
+    this.ledger.record({ category: 'model', action: 'online_chat', outcome: 'success', subject: session.accountId, detail: { model, provider: config.id, classification, redacted: redacted.findings.length, role: session.role, skill: skillUsed?.name ?? null, tier: resolved?.tier ?? null } })
     if (skillUsed) {
       this.skills.recordUse(skillUsed.name)
       this.ledger.record({ category: 'skills', action: 'skill_use', outcome: 'success', subject: session.accountId, detail: { skill: skillUsed.name, version: skillUsed.version } })
     }
-    return { text, modelId: model, providerModel: reportedModel, provider: runtimeFor(this.store.kind()).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null, skill: skillUsed, style: body.style ?? null, styleAudit }
+    return { text, modelId: model, providerModel: reportedModel, provider: config.label ?? runtimeFor(config.id).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null, skill: skillUsed, style: body.style ?? null, styleAudit, klyvaron: resolved ? { tier: resolved.tier, provenance: resolved.provenance } : null }
   }
   authenticated(req) {
     const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]
@@ -663,10 +774,22 @@ export class OnlineApp {
         if (req.method === 'GET' && path === '/api/providers') return sendJson(res, 200, this.store.public())
         // Read-only meta-information about providers, separate from the installation's connection.
         if (req.method === 'GET' && path === '/api/providers/catalog') return sendJson(res, 200, this.providerCatalogue())
+        // Product tiers are read-only information until the owner assigns a preset to one.
+        if (req.method === 'GET' && path === '/api/klyvaron') return sendJson(res, 200, this.klyvaronView())
         // The gateway connection and its key belong to the installation, so they belong
         // to the account that owns it. An open sign-up page cannot be an open door to
         // re-pointing somebody else's provider credentials or spending their key.
         const requireOwner = () => { if (session.role !== ROLES.OWNER) throw failure('owner_required', 'Only the owner account of this installation can change its gateway connection.', 403) }
+        const tierMatch = /^\/api\/klyvaron\/(lite|pro|max)$/.exec(path)
+        const tierModalityMatch = /^\/api\/klyvaron\/(lite|pro|max)\/(chat|image|video)$/.exec(path)
+        if (req.method === 'PUT' && tierMatch) {
+          requireOwner()
+          return sendJson(res, 200, this.setKlyvaronPreset(tierMatch[1], await readBody(req, { principal: session.accountId }), session))
+        }
+        if (req.method === 'DELETE' && tierModalityMatch) {
+          requireOwner()
+          return sendJson(res, 200, this.clearKlyvaronPreset(tierModalityMatch[1], tierModalityMatch[2]))
+        }
         // One route per connection, so the connection a request means is in the URL and never
         // guessed from the body. The three runtimes keep their literal paths; any other catalogue
         // provider or named custom endpoint uses the same shape under its own id.

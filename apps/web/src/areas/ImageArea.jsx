@@ -9,7 +9,7 @@ import { Banner, Button, EmptyState, ErrorNote, Field, Panel, Stat, Stats } from
 // provider and model that answered, and the measured dimensions/digest are shown beside it, because
 // an image with no provenance is indistinguishable from a stock picture.
 
-const SIZES = ['1024x1024', '1536x1024', '1024x1536', 'auto']
+const DEFAULT_SIZES = ['1024x1024', '1536x1024', '1024x1536', 'auto']
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled', 'timed_out'])
 
 const bytesOf = (value) => {
@@ -24,25 +24,38 @@ const when = (value) => {
   return Number.isFinite(time) && time > 0 ? new Date(time).toLocaleString() : '—'
 }
 
-export default function ImageArea({ provider, refreshReadiness, onSettings }) {
+export default function ImageArea({ provider, readiness, refreshReadiness, onSettings }) {
   const [jobs, setJobs] = useState([])
   const [prompt, setPrompt] = useState('')
-  const [size, setSize] = useState(SIZES[0])
+  const [size, setSize] = useState('auto')
   const [model, setModel] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState('')
 
-  const connection = useMemo(
-    () => (provider?.connections ?? []).find((entry) => entry.wire === 'openai_images') ?? null,
-    [provider],
-  )
+  // The server publishes which configured connection an image request will use, and what
+  // controls that wire documents. Reading both from the readiness record means this area
+  // cannot disagree with the route: an adapter that offers no size control simply gets no
+  // size field, rather than sending a value the provider never defined.
+  const connection = useMemo(() => {
+    const preferred = readiness?.media?.image?.connectionId
+    const candidates = provider?.connections ?? []
+    return candidates.find((entry) => entry.id === preferred)
+      ?? candidates.find((entry) => entry.modality === 'image' && entry.configured)
+      ?? null
+  }, [provider, readiness])
   const models = connection?.models ?? []
+  const SIZES = connection?.sizes?.length ? connection.sizes : (connection ? [] : DEFAULT_SIZES)
 
   useEffect(() => {
     if (models.length && !models.includes(model)) setModel(models[0])
     if (!models.length && model) setModel('')
   }, [models, model])
+
+  useEffect(() => {
+    if (!SIZES.length) return
+    if (!SIZES.includes(size)) setSize(SIZES.includes('auto') ? 'auto' : SIZES[0])
+  }, [SIZES, size])
 
   useEffect(() => {
     let alive = true
@@ -70,7 +83,7 @@ export default function ImageArea({ provider, refreshReadiness, onSettings }) {
     if (!connection || !model || !prompt.trim()) return
     setBusy(true); setError(null); setNotice('')
     try {
-      const job = await api.generateImage({ prompt, size, model })
+      const job = await api.generateImage({ prompt, size: SIZES.length ? size : undefined, model })
       setJobs((current) => [job, ...current.filter((entry) => entry.id !== job.id)])
       setPrompt('')
       setNotice('Generation queued. The image appears here when the provider returns bytes this build can validate.')
@@ -93,7 +106,7 @@ export default function ImageArea({ provider, refreshReadiness, onSettings }) {
   return <Panel title="Online image generation" actions={<Button onClick={onSettings}>Provider Settings</Button>}>
     {!connection
       ? <Banner tone="warn" title="No image provider is configured">
-          <p>Add an <strong>OpenAI Images</strong> connection in Provider Settings and test it. The chat connection is not reused as an image provider: a model name in a chat list does not prove image generation.</p>
+          <p>Add an image-capable connection in Provider Settings (OpenAI Images, Gemini Images, Stability AI, Recraft, Ideogram, FLUX, fal.ai, Replicate or Adobe Firefly) and test it. A chat connection is not reused as an image provider: a model name in a chat list does not prove image generation.</p>
           <p>No simulated output or local fallback is ever shown here.</p>
         </Banner>
       : null}
@@ -114,11 +127,13 @@ export default function ImageArea({ provider, refreshReadiness, onSettings }) {
                 {models.map((id) => <option key={id} value={id}>{id}</option>)}
               </select>
             </Field>
-            <Field label="Size" hint="Requested dimensions; the stored artifact records what was actually returned.">
-              <select className="select" value={size} onChange={(e) => setSize(e.target.value)} disabled={busy}>
-                {SIZES.map((value) => <option key={value} value={value}>{value}</option>)}
-              </select>
-            </Field>
+            {SIZES.length
+              ? <Field label="Size" hint="Requested dimensions; the stored artifact records what was actually returned.">
+                  <select className="select" value={size} onChange={(e) => setSize(e.target.value)} disabled={busy}>
+                    {SIZES.map((value) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                </Field>
+              : null}
             <Button type="submit" variant="primary" busy={busy} disabled={busy || !prompt.trim() || !model}>Generate image</Button>
           </div>
         </form>

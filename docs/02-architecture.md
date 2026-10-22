@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 28,145 source lines, 21,456 test lines
+### `services/core` — 30,393 source lines, 22,478 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -79,12 +79,13 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
 | `online/accounts.mjs` | 387 | Accounts, scrypt password hashes, lockouts, throttling and host-delivered reset codes |
-| `online/app.mjs` | 779 | Authenticated online application, per-account context, exact-model inference, and a provider-connection family: a route per saved connection, an active-connection switch, and a probe that reads only the connection it names |
+| `online/app.mjs` | 902 | Authenticated online application, per-account context, exact-model inference and Klyvaron tier presets, and a provider-connection family: a route per saved connection, an active-connection switch, and a probe that reads only the connection it names |
 | `online/context-routes.mjs` | 260 | Authenticated context and reviewed read-only tool routes |
-| `online/gateway.mjs` | 195 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
+| `online/gateway.mjs` | 222 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
 | `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
 | `online/http.mjs` | 32 | Bounded JSON requests and no-store responses |
-| `online/store.mjs` | 246 | Multi-connection encrypted store (schema 2): one sealed credential per connection, an active id, a store-wide revision, and a migration that preserves the key of a schema-1 file |
+| `online/klyvaron.mjs` | 87 | Klyvaron product tiers in the online build: resolve a tier to a saved connection and a listed model, refuse an unconfigured tier by name, and name the third-party provider and model as provenance |
+| `online/store.mjs` | 389 | Multi-connection encrypted store (schema 2): one sealed credential per connection, an active id, a store-wide revision, a migration that preserves the key of a schema-1 file, and optional Klyvaron tier presets stored as connection/model pointers |
 | `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `klyvaron/format.mjs` | 622 | The Klyvaron artifact format: manifest validation, the shared vocabulary digest, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
@@ -158,11 +159,25 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `packs/builtin.mjs` | 131 | Three shipped packs — engineering repo maintenance, legal document review (confidential, human review, "reading support, not legal advice"), grounded tutoring — each narrow, and each capability either evidenced by a file in this repository or marked unimplemented |
 | `benchmark/harness.mjs` | 254 | The measured benchmark of the adaptive core: every entry calls the real module, a failed entry is kept in the table with its error and fails the run, and a benchmark that measures nothing is refused rather than reported as zero |
 | `release/manifest.mjs` | 268 | Release verification: one version across `VERSION` and the three packages, a dated changelog entry, documented totals compared against supplied measurements (not against each other), required artefacts present, and every shipped pack capability evidenced |
-| `providers/catalog.mjs` | 379 | The vendor catalogue: wire format, auth kind, documentation URL and a status per provider. A `ready` entry may only claim capabilities backed by a test in this repository; `gateway_only` may claim none; `pending` is refused by name. Validation is what keeps a credential field unrepresentable |
+| `providers/catalog.mjs` | 388 | The vendor catalogue: wire format, auth kind, documentation URL and a status per provider. A `ready` entry may only claim capabilities backed by a test in this repository; `gateway_only` may claim none; `pending` is refused by name. Validation is what keeps a credential field unrepresentable |
 | `providers/select.mjs` | 173 | Capability selection with reasons: strict offline refuses a remote request before candidates are considered, an unrecorded context limit does not satisfy a stated minimum, and every rejected candidate is returned with a code rather than silently dropped |
 | `providers/errors.mjs` | 228 | One failure shape for every provider: status→code mapping, retryability decided by code, bounded `Retry-After`, and messages redacted against six credential patterns before they can reach a log |
-| `providers/wires/index.mjs` | 66 | The wire registry: `IMPLEMENTED_WIRES` is derived from it, so a provider cannot be promoted onto a wire nothing implements |
-| `providers/wires/openai.mjs` | 43 | OpenAI-compatible chat: `{base}/models`, `{base}/chat/completions`, SSE with a `[DONE]` sentinel |
+| `providers/wires/index.mjs` | 121 | The wire registry: `IMPLEMENTED_WIRES` is derived from it, so a provider cannot be promoted onto a wire nothing implements |
+| `providers/wires/openai.mjs` | 72 | OpenAI-compatible chat: `{base}/models`, `{base}/chat/completions`, SSE with a `[DONE]` sentinel |
+| `providers/wires/deepseek.mjs` | 12 | DeepSeek Chat Completions and rich model metadata for context, output limits and modalities |
+| `providers/wires/fireworks.mjs` | 50 | Fireworks inference plus bounded, account-scoped cursor-paginated model discovery |
+| `providers/wires/groq.mjs` | 12 | Groq OpenAI-compatible Chat Completions over its documented /openai/v1 base |
+| `providers/wires/huggingface.mjs` | 12 | Hugging Face Inference Providers router adapter; provider-dependent capabilities remain unknown |
+| `providers/wires/localai.mjs` | 12 | Optional LocalAI Chat Completions adapter without inferred backend/parser capabilities |
+| `providers/wires/mistral.mjs` | 13 | Mistral Chat Completions and native model-list shape, retaining reported metadata only |
+| `providers/wires/novita.mjs` | 12 | Novita OpenAI-compatible API with documented /openai/v1 endpoint paths |
+| `providers/wires/openai-compatible.mjs` | 116 | Shared tested request/response envelope with provider-specific model-list parsers, metadata normalization and safe provider error mapping |
+| `providers/wires/openrouter.mjs` | 12 | OpenRouter routed Chat Completions and model catalogue, with routed model ids preserved |
+| `providers/wires/perplexity.mjs` | 13 | Perplexity routed API with separate /v1/models and /router/v1/chat/completions paths |
+| `providers/wires/sambanova.mjs` | 12 | SambaNova Cloud Chat Completions and model-list adapter |
+| `providers/wires/together.mjs` | 13 | Together Chat Completions and chat-only model catalogue parsing |
+| `providers/wires/vllm.mjs` | 12 | Optional self-hosted vLLM Chat Completions adapter, still subject to trusted-origin egress policy |
+| `providers/wires/xai.mjs` | 68 | Native xAI Responses API, language-model metadata and response.completed stream validation |
 | `providers/wires/common.mjs` | 70 | Conversation shaping shared by the native wires: system hoisting, same-role merging, user-first refusal, token counts |
 | `providers/wires/anthropic.mjs` | 93 | Anthropic Messages: `x-api-key`, `anthropic-version`, top-level `system`, content blocks, `message_stop` as the completion signal |
 | `providers/wires/gemini.mjs` | 102 | Gemini generateContent: model in the path, `x-goog-api-key`, `contents`/`systemInstruction`, `alt=sse`, blocked-prompt refusal |
@@ -174,6 +189,20 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/wires/gemini-images.mjs` | 105 | Gemini image generation over `generateContent`: inline `inlineData` bytes, size-to-aspect-ratio mapping, and the same refusal of a returned URL |
 | `providers/wires/images.mjs` | 82 | OpenAI Images: `{base}/images/generations`, inline base64 decoded and re-encoded before it is accepted, a 4,000-character product prompt cap, four sizes, and a refusal rather than a fetch when a response carries only a URL |
 | `providers/wires/veo.mjs` | 172 | Veo through the Gemini API: `predictLongRunning`, bounded cancellable polling, a file download that sends the key only to the API origin, and MP4 duration measured from `moov/mvhd` |
+| `providers/wires/media-common.mjs` | 225 | Shared media-wire helpers: strict base64 decoding, inline-versus-URL artifact acquisition, a bounded cancellable poll schedule, multipart bodies, container sniffing, and the rule that a provider URL receives the credential only on the exact configured API origin |
+| `providers/wires/stability-images.mjs` | 88 | Stability AI v2beta: Bearer auth, multipart `prompt`/`output_format`/`aspect_ratio`, `Accept: image/*`, and raw response bytes validated as a real image container |
+| `providers/wires/recraft-images.mjs` | 66 | Recraft: `/images/generations` with `response_format: b64_json`, a URL-only response refused rather than fetched, and the requested PNG format pinned |
+| `providers/wires/ideogram-images.mjs` | 108 | Ideogram v2: `Api-Key` multipart generation, both the synchronous `data[]` result and an accepted asynchronous `generation_id` polled to completion, and delivery URLs fetched without the key |
+| `providers/wires/bfl-images.mjs` | 102 | Black Forest Labs FLUX: `x-key` submission, polling the provider-supplied `polling_url` only on its own origin, and a signed `result.sample` downloaded without the key |
+| `providers/wires/fal-queue.mjs` | 104 | The fal.ai queue contract shared by image and video: submit, poll status, fetch the result, same-origin URL checks, and best-effort `PUT` cancellation |
+| `providers/wires/fal-images.mjs` | 70 | fal.ai image models: the documented prompt and preset `image_size` inputs, result URL extraction, and no credential on the CDN hop |
+| `providers/wires/fal-video.mjs` | 70 | fal.ai video models: documented prompt, aspect-ratio and resolution inputs, queue polling, and MP4 download without the key |
+| `providers/wires/replicate-predictions.mjs` | 105 | Replicate predictions: `POST /models/{owner}/{name}/predictions`, polling the prediction's own `urls.get`, cancellation, and output-URL extraction across the shapes models return |
+| `providers/wires/replicate-images.mjs` | 54 | Replicate image models with a deliberately empty size list (no common geometry input), a prompt-only prediction, and a signed output URL downloaded without the token |
+| `providers/wires/replicate-video.mjs` | 54 | Replicate video models with empty geometry lists, a prompt-only prediction, and a validated MP4 download |
+| `providers/wires/runway-video.mjs` | 125 | Runway: the mandatory `X-Runway-Version` header, `text_to_video`, ratio mapping, `duration` only for the gen4 family, bounded task polling, output download and `DELETE` cancellation |
+| `providers/wires/luma-video.mjs` | 109 | Luma Dream Machine: `POST /generations`, `queued`/`dreaming`/`completed`/`failed` translation, `assets.video` download without the key, and `DELETE` cancellation |
+| `providers/wires/firefly-images.mjs` | 126 | Adobe Firefly: a validated two-part OAuth client credential, an in-memory IMS token exchange and cache, `x-api-key` plus Bearer generation, and a delivery download that carries neither secret |
 
 ### `services/fabric` — 12,655 source lines, 9,995 test lines
 
@@ -185,11 +214,11 @@ central finite differences to ~3e-10**, and a prototype that trains the two diff
 in the same loss as the language objective. See its own
 [`README`](../services/fabric/README.md).
 
-### `apps/web` — 3,504 source lines, 1,894 test lines
+### `apps/web` — 3,716 source lines, 1,903 test lines
 
 Five area components, three sign-in pages (sign in, create account, reset
-password) and the account card in the sidebar, a shell, shared primitives, an API
-client and four test files. The sign-in pages are not areas and add no navigation
+password), the account card and the Klyvaron tier panel, a shell, shared primitives,
+an API client and four test files. The sign-in pages are not areas and add no navigation
 entry; see [20 — Accounts and sign-in](20-accounts-and-sign-in.md). Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).
 
