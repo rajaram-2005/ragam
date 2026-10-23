@@ -1,0 +1,22 @@
+{
+  "environmentClasses": [
+    "ocean_tide",
+    "aurora_ribbon",
+    "solar_horizon",
+    "starfield_nebula"
+  ],
+  "kind": "klyvaron-video-processor/1",
+  "maxPromptTokens": 24,
+  "motionClasses": [
+    "pan_right",
+    "pan_left",
+    "rising_drift",
+    "falling_cascade",
+    "radial_expand",
+    "harmonic_wave"
+  ],
+  "nativeFrameSize": 48,
+  "nativeFrames": 24,
+  "patchSize": 8,
+  "vocabSize": 512
+}

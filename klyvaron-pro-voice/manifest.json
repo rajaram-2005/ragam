@@ -1,0 +1,77 @@
+{
+  "architecture": {
+    "config": {
+      "audio_frames": 96,
+      "d_ff": 512,
+      "d_model": 192,
+      "max_chars": 32,
+      "n_dec_layers": 4,
+      "n_enc_layers": 4,
+      "n_heads": 4,
+      "n_mels": 40,
+      "n_utterances": 12,
+      "vocab_size": 34
+    },
+    "configDigest": "e2868fcc87bd8e884a0db3af7dcdc296a6e1a428b55ee7275e488280914c16d3",
+    "id": "aetheris-voice-v1"
+  },
+  "id": "klyvaron-pro-voice",
+  "limitations": [
+    "Trained on 16 kHz mono multi-formant speech (288 multi-pitch training utterances, 120 held-out unseen-speaker utterances across 12 phrase classes and 34-symbol character vocabulary).",
+    "Multi-speaker overlapping diarization, zero-shot voice cloning, and noisy far-field multilingual dictation are unsupported.",
+    "Both speech input (`speech.transcribe`) and speech output (`speech.synthesize`) are executed by first-party weights and evaluated with round-trip CER."
+  ],
+  "metrics": {
+    "finalLoss": 0.8219,
+    "initialLoss": 10.6513,
+    "lossImprovement": 9.8294,
+    "meanSpectrumBaselineL1": 0.2487,
+    "parameterCount": 3076311,
+    "roundTripTtsToAsrCer": 0.0549,
+    "steps": 240,
+    "uniformUtteranceBaseline": 0.0833,
+    "validationCharacterErrorRate": 0.159,
+    "validationTtsMelL1": 0.1695,
+    "validationUtteranceAccuracy": 1.0,
+    "wallSeconds": 175.061
+  },
+  "modality": "voice",
+  "parameterCount": 3076311,
+  "processor": {
+    "file": "processor.json",
+    "sha256": "e6f57b41688363ad9a091a51b5d9f1ba3fec3d237b654e8e58d8e5dbce7d2323"
+  },
+  "provenance": {
+    "baseModel": null,
+    "dataset": "klyvaron-articulatory-speech-v1 (seed=20261401, heldOutSeed=20262300, 16kHz PCM)",
+    "licence": "MIT",
+    "origin": "first_party_trained_from_scratch",
+    "seed": 20261301,
+    "trainer": "services/fabric/fabric/multimodal/voice_model.py"
+  },
+  "quantization": {
+    "fp32WeightsSha256": "71c621cce6df22306235e18d166115070e35f69f9d784c808f1e98457f3b9f19",
+    "scheme": "float16_compressed_npz"
+  },
+  "runtimeVersion": "klyvaron-multimodal-runtime/1.0",
+  "schema": "klyvaron.multimodal/1",
+  "supportedTasks": [
+    "speech.transcribe",
+    "speech.synthesize"
+  ],
+  "tensorCount": 105,
+  "tier": "pro",
+  "unsupportedTasks": [
+    "multi_speaker_overlapping_diarization",
+    "zero_shot_voice_cloning",
+    "multilingual_far_field_noisy_dictation",
+    "full_duplex_sub_50ms_streaming_telephony"
+  ],
+  "version": "0.1.0",
+  "weights": {
+    "bytes": 5699324,
+    "file": "weights.npz",
+    "sha256": "d50a346cce8c48f32d03bca0567a83c8654bf3f305082e073ef156381abee7db",
+    "weightsSha256": "5cced1f528162c0c65806a7a9c4740a7a059780ee954d8948f3267c35a5d3753"
+  }
+}

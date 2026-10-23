@@ -1,0 +1,23 @@
+{
+  "kind": "klyvaron-vision-processor/1",
+  "layoutClasses": [
+    "horizon_split",
+    "centered_focal",
+    "diagonal_flow",
+    "radial_glow"
+  ],
+  "maxPromptTokens": 24,
+  "nativeResolution": 64,
+  "patchSize": 8,
+  "sceneClasses": [
+    "sunset_horizon",
+    "ocean_waves",
+    "forest_canopy",
+    "mountain_peaks",
+    "night_cosmos",
+    "aurora_sky",
+    "geometric_prism",
+    "golden_desert"
+  ],
+  "vocabSize": 512
+}

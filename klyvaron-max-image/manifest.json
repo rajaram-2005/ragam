@@ -1,0 +1,81 @@
+{
+  "architecture": {
+    "config": {
+      "d_ff": 832,
+      "d_model": 304,
+      "image_size": 64,
+      "max_text_len": 24,
+      "n_dec_blocks": 6,
+      "n_denoise_steps": 6,
+      "n_enc_layers": 6,
+      "n_heads": 8,
+      "n_layouts": 4,
+      "n_scenes": 8,
+      "n_text_layers": 3,
+      "patch_size": 8,
+      "vocab_size": 512
+    },
+    "configDigest": "037fcd32b70b51bb8ddb3b02f4b2f10759cf0b846d3abf2a560388f83ad43822",
+    "id": "aetheris-image-v1"
+  },
+  "id": "klyvaron-max-image",
+  "limitations": [
+    "Trained on 8 structured visual scene families (384 training images, 128 held-out validation images) at 64x64 native latent resolution with bicubic upsampling to requested PNG dimensions.",
+    "Open-world photorealistic megapixel synthesis, typographic text rendering inside images, and multi-subject identity locking remain unsupported without large GPU image corpora.",
+    "Every claim is restricted to measured held-out accuracy, pixel L1 vs mean-image baseline, and verified PNG container output."
+  ],
+  "metrics": {
+    "finalLoss": 0.5976,
+    "generationPromptAlignmentAccuracy": 0.9375,
+    "initialLoss": 5.3609,
+    "lossImprovement": 4.7633,
+    "meanPixelBaselineL1": 0.2577,
+    "parameterCount": 13662960,
+    "steps": 160,
+    "uniformSceneBaseline": 0.125,
+    "validationLayoutAccuracy": 1.0,
+    "validationPixelL1": 0.1669,
+    "validationSceneAccuracy": 0.9844,
+    "wallSeconds": 363.528
+  },
+  "modality": "image",
+  "parameterCount": 13662960,
+  "processor": {
+    "file": "processor.json",
+    "sha256": "e3e153d7fa923389222f795998f917d23e7f85d878de758d96a56884562ee6d3"
+  },
+  "provenance": {
+    "baseModel": null,
+    "dataset": "klyvaron-procedural-scenes-v1 (seed=20261202, heldOutSeed=20262101, 8 scene classes)",
+    "licence": "MIT",
+    "origin": "first_party_trained_from_scratch",
+    "seed": 20261102,
+    "trainer": "services/fabric/fabric/multimodal/image_model.py"
+  },
+  "quantization": {
+    "fp32WeightsSha256": "2439c9c28a70c23c360130e6eafe319e1701f28897ae0fd1611ea09f399c9541",
+    "scheme": "float16_compressed_npz"
+  },
+  "runtimeVersion": "klyvaron-multimodal-runtime/1.0",
+  "schema": "klyvaron.multimodal/1",
+  "supportedTasks": [
+    "image.generate",
+    "image.edit",
+    "vision.understand"
+  ],
+  "tensorCount": 174,
+  "tier": "max",
+  "unsupportedTasks": [
+    "photorealistic_megapixel_open_world_synthesis",
+    "typographic_text_rendering_in_images",
+    "multi_subject_identity_preservation",
+    "inpainting_with_arbitrary_polygon_masks"
+  ],
+  "version": "0.1.0",
+  "weights": {
+    "bytes": 25238266,
+    "file": "weights.npz",
+    "sha256": "ce5e12c6ac7bb897c34248191ee149d2e3ae31cc8c856688ace6827f46c4781b",
+    "weightsSha256": "69a26b9be0134aaa60d75fc4a9c57f6c7a690af3bd7cd301fe410f5afa5eb9b1"
+  }
+}

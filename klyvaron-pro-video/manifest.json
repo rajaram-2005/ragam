@@ -1,0 +1,82 @@
+{
+  "architecture": {
+    "config": {
+      "d_ff": 448,
+      "d_model": 160,
+      "frame_size": 48,
+      "max_text_len": 24,
+      "n_envs": 4,
+      "n_frames": 16,
+      "n_heads": 4,
+      "n_motions": 6,
+      "n_spatial_layers": 3,
+      "n_temporal_layers": 3,
+      "n_text_layers": 2,
+      "patch_size": 8,
+      "vocab_size": 512
+    },
+    "configDigest": "8bb13c135af6fce2646f27de4bb345c8543161c7010f266d71f7875d15942332",
+    "id": "aetheris-video-v1"
+  },
+  "id": "klyvaron-pro-video",
+  "limitations": [
+    "Trained on 6 physical motion trajectories x 4 visual environments (240 training clips, 96 held-out clips, 16 native frames).",
+    "Long-form multi-minute cinema synthesis, synchronized audio-video foley tracks, and photorealistic human acting are not supported.",
+    "Outputs are genuine H.264 ISO-BMFF MP4 clips verified for non-zero temporal motion and valid moov/mvhd duration."
+  ],
+  "metrics": {
+    "finalLoss": 1.3317,
+    "generationEnvironmentAlignmentAccuracy": 1.0,
+    "generationMotionAlignmentAccuracy": 0.1667,
+    "initialLoss": 6.7421,
+    "lossImprovement": 5.4104,
+    "parameterCount": 2221482,
+    "staticBaselineFrameL1": 0.1546,
+    "steps": 160,
+    "uniformEnvironmentBaseline": 0.25,
+    "uniformMotionBaseline": 0.1667,
+    "validationEnvironmentAccuracy": 1.0,
+    "validationFrameL1": 0.0908,
+    "validationMotionAccuracy": 1.0,
+    "wallSeconds": 88.408
+  },
+  "modality": "video",
+  "parameterCount": 2221482,
+  "processor": {
+    "file": "processor.json",
+    "sha256": "d304605de3be7945e0863d819e205b5f1acab7e5878ff0f45694b66b5b47e1ec"
+  },
+  "provenance": {
+    "baseModel": null,
+    "dataset": "klyvaron-spatiotemporal-clips-v1 (seed=20261301, heldOutSeed=20262200, 24 motion-scene pairs)",
+    "licence": "MIT",
+    "origin": "first_party_trained_from_scratch",
+    "seed": 20261201,
+    "trainer": "services/fabric/fabric/multimodal/video_model.py"
+  },
+  "quantization": {
+    "fp32WeightsSha256": "dc126a09439c44613e4bbf1fc58c2b368345489229f10c39c58748d52ec7491e",
+    "scheme": "float16_compressed_npz"
+  },
+  "runtimeVersion": "klyvaron-multimodal-runtime/1.0",
+  "schema": "klyvaron.multimodal/1",
+  "supportedTasks": [
+    "video.generate",
+    "video.understand"
+  ],
+  "tensorCount": 103,
+  "tier": "pro",
+  "unsupportedTasks": [
+    "long_form_multi_minute_video_synthesis",
+    "synchronized_audio_video_foley_generation",
+    "photorealistic_human_character_acting",
+    "4k_60fps_cinematic_rendering"
+  ],
+  "version": "0.1.0",
+  "weights": {
+    "bytes": 4122280,
+    "file": "weights.npz",
+    "sha256": "e96666360581a832a39e2ea9101177365bde3e22747afa9f0d3151bb44962e45",
+    "weightsSha256": "600270d1e34e169659b4df01e9d4b13288567a508f3b42738057ac4ebcdbb4ec"
+  }
+}
