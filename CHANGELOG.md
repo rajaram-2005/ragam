@@ -14,6 +14,31 @@ requests safe.
 
 Not in 0.2.0. On this branch only.
 
+- **First-party Klyvaron Pro & Max multimodal build across Chat, Image, Video, and Voice.**
+  Separates `PRODUCT_SUBSCRIPTION_TIERS`, 8 `KLYVARON_MODEL_IDENTITIES`
+  (`klyvaron-{pro,max}-{lm,image,video,voice}@0.1.0`), and programmatic `RUNTIME_READINESS_STATES`
+  (`ready`, `partially_available`, `missing_artifact`, `runtime_unqualified`, `training_required`,
+  `unsupported_hardware`) in `services/core/src/klyvaron/tiers.mjs`. Trains, evaluates, and
+  installs SHA-256-verified first-party checkpoints from random initialisation for
+  `aetheris-core-v1`, `aetheris-image-v1` (generation, editing, understanding),
+  `aetheris-video-v1` (short-clip multi-frame H.264 `.mp4` generation and temporal understanding),
+  and `aetheris-voice-v1` (16 kHz WAV speech transcription and synthesis), with persistent
+  component-keyed runtime qualification (`services/core/src/klyvaron/qualification.mjs`), separate
+  Pro and Max capability manifests, multimodal user-computer training/adapter engines, and 5-area
+  UI/API integration (`Chat`, `Image`, `Video`, `Plugins`, `MCP`).
+
+- **Klyvaron user-computer-first training architecture & first-party Pro/Max release verification.**
+  Adds `UserTrainingController` (`services/core/src/klyvaron/training-controller.mjs`), the
+  authenticated cross-platform local worker (`services/core/src/klyvaron/local-worker.mjs`,
+  `npm run worker`), first-party analytical LoRA / full-fine-tune / foundation engines
+  (`services/fabric/fabric/lm/adapter.py`), hot adapter activation & rollback in `KlyvaronRuntime`
+  and `NativeKlyvaronHost`, and `UserTrainingPanel` in Chat. Enforces `localWorkerConnected: false`
+  by default, single-use pairing + constant-time Bearer RPC auth, directory confinement, zero shell
+  execution, non-silent full-to-adapter downgrade approval, hard 120-second interactive adapter cap
+  including finalization (uncapped for separate foundation sessions), 9 separate release gate
+  fields, and live SHA-256-verified `klyvaron-pro-lm` (27.56M) and `klyvaron-max-lm` (92.08M)
+  int8 artifacts.
+
 - A 39-entry provider catalogue with a status per entry and **evidence per capability**: `ready`
   means a tested code path, `gateway_only` means the wire format is implemented and the vendor is
   not verified, `pending` means an adapter does not exist and selection refuses it by name.

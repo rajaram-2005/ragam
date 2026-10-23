@@ -38,8 +38,22 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
   // Same rule as the Image area: the server names the connection a request will use and the
   // controls that wire documents. An empty list means the adapter has no such input, so the
   // field is not rendered and no guessed value is sent.
+  const [videoAnalysisByJob, setVideoAnalysisByJob] = useState({})
+
   const connection = useMemo(() => {
-    const preferred = readiness?.media?.video?.connectionId
+    const mediaVideo = readiness?.media?.video
+    const preferred = mediaVideo?.connectionId
+    if (preferred === 'klyvaron-native' && mediaVideo?.models?.length) {
+      return {
+        id: 'klyvaron-native',
+        label: 'Klyvaron Native (first-party short-clip H.264 MP4)',
+        firstParty: true,
+        configured: true,
+        models: mediaVideo.models,
+        aspectRatios: mediaVideo.aspectRatios ?? ['16:9', '9:16', '1:1'],
+        resolutions: mediaVideo.resolutions ?? ['480p', '720p'],
+      }
+    }
     const candidates = provider?.connections ?? []
     return candidates.find((entry) => entry.id === preferred)
       ?? candidates.find((entry) => entry.modality === 'video' && entry.configured)
@@ -197,7 +211,22 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
             {!TERMINAL.has(job.state)
               ? <p className="small">Provider rendering… {job.stage ?? job.state} ({job.progress ?? 0}%). The clip is not shown until its bytes pass validation.</p>
               : null}
+            {videoAnalysisByJob[job.id]
+              ? <p className="small"><strong>Video temporal analysis ({videoAnalysisByJob[job.id].modelId}):</strong> {videoAnalysisByJob[job.id].description ?? videoAnalysisByJob[job.id].summary}{videoAnalysisByJob[job.id].motion ? ` · motion: ${videoAnalysisByJob[job.id].motion} (${(Number(videoAnalysisByJob[job.id].motionConfidence ?? 0) * 100).toFixed(1)}%) · env: ${videoAnalysisByJob[job.id].environment}` : ''}</p>
+              : null}
             <div className="row">
+              {job.state === 'succeeded' && job.artifact && readiness?.capabilities?.videoUnderstanding ? (
+                <Button disabled={busy} onClick={async () => {
+                  setBusy(true); setError(null)
+                  try {
+                    const res = await api.understandVideo({
+                      model: model.startsWith('klyvaron-') ? model : undefined,
+                      sourceJobId: job.id,
+                    })
+                    setVideoAnalysisByJob((prev) => ({ ...prev, [job.id]: res }))
+                  } catch (e) { setError(e) } finally { setBusy(false) }
+                }}>Understand video</Button>
+              ) : null}
               {job.artifact ? <a className="button" href={api.videoArtifactUrl(job.id)} download={`video-${job.id.slice(0, 8)}.${job.artifact.format === 'mp4' ? 'mp4' : job.artifact.format}`}>Download</a> : null}
               {!TERMINAL.has(job.state) ? <Button onClick={() => cancel(job.id)}>Cancel</Button> : null}
               <Button variant="danger" onClick={() => remove(job.id)}>Delete video and record</Button>

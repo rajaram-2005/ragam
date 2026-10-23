@@ -518,7 +518,7 @@ Stated plainly, because an unstated gap is worse than a stated one.
    declared range that permits a known-bad version is a defect in the declaration
    even when the installed copy happens to be safe. All 575 Fabric tests were
    verified green under pytest 9.1.1 before the floor moved. The current Fabric suite,
-   814 Fabric tests, was also run green under pytest 9.1.1 after the checkpoint change.
+   822 Fabric tests, was also run green under pytest 9.1.1 after the checkpoint change.
 
    **Scanning is now enforced in CI, not just run once by hand.** The `web` job
    executes two audits with deliberately different bars:
@@ -578,3 +578,15 @@ Stated plainly, because an unstated gap is worse than a stated one.
    refused rather than loaded — but an attacker who can rewrite both the manifest and
    the weights defeats a digest, and nothing here detects that. Signing the manifest is
    the missing control.
+
+---
+
+## 10. User-computer-first local worker & explicit learning security
+
+User-requested model adaptation and training enforce strict host, auth, filesystem, and consent boundaries (`services/core/src/klyvaron/local-worker.mjs`, `services/core/src/klyvaron/training-controller.mjs`, verified in `services/core/test/klyvaron-user-worker-e2e.test.mjs` and `services/fabric/tests/test_user_worker_architecture.py`):
+
+- **Never defaults to server/coding host:** `UserTrainingController` boots with `localWorkerConnected: false` and `codingAgentHostUsedByDefault: false`. Any neural training request while unpaired refuses with `409 worker_not_connected`.
+- **Single-use pairing + constant-time Bearer token:** `KlyvaronLocalWorkerServer` binds to loopback by default, consumes the pairing secret once (`403 pairing_code_used` on replay), and requires `crypto.timingSafeEqual` Bearer authorization on every `/rpc` request.
+- **Typed RPC allowlist, zero shell access, directory confinement:** Only the 8 typed worker operations (`capability.detect`, `model.inspect`, `job.create`, `job.progress`, `job.cancel`, `job.checkpoint`, `artifact.validate`, `model.infer`) exist. Arbitrary shell execution is absent (`shellExecutionEnabled: false`), and every path resolves through `realpathSync` inside authorized roots (`403 path_outside_authorized_root`).
+- **Explicit data & mode consent:** Ordinary chat messages never trigger weight updates, `includePrivateConversations: true` is refused (`403 private_chat_ingestion_prohibited`), full-model requests are never silently downgraded to LoRA adapters (`409 mode_change_approval_required`), and interactive adapter jobs enforce a hard `120,000 ms` wall-clock cap including finalization with atomic checkpointing and rollback.
+

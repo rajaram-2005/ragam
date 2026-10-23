@@ -1,0 +1,483 @@
+{
+  "schema": "aetheris-klyvaron-run-record/v1",
+  "id": "klyvaron-pro-lm",
+  "version": "0.1.0",
+  "tier": "pro",
+  "completedAt": "2026-10-23T15:05:18.783558+00:00",
+  "architecture": {
+    "age_buckets": 16,
+    "d_ff": 2048,
+    "d_model": 512,
+    "n_heads": 8,
+    "n_layers": 8,
+    "seq_len": 512,
+    "state_classes": 8,
+    "state_head": true,
+    "tie_embeddings": true,
+    "verdict_head": true,
+    "vocab_size": 4096
+  },
+  "architectureDigest": "302a4543119d3a380d4de8480a3bd9645a3b1aae4dc19dca82f87967fde98130",
+  "parameterCount": 27559946,
+  "fp32Artifact": {
+    "format": "klyvaron.artifact/1",
+    "weightsFile": "klyvaron-pro-lm-fp32-0.1.0.npz",
+    "bytes": 110262030,
+    "sha256": "06b4170baea6b86d933d85dcfea56be6ad043a53b75cda55b684d80faa21e5f2"
+  },
+  "installedInt8Artifact": {
+    "format": "klyvaron.artifact/2",
+    "manifestPath": ".aetheris-data/online/klyvaron/models/klyvaron-pro-lm/klyvaron-pro-lm.klyvaron.json",
+    "weightsFile": "klyvaron-pro-lm-0.1.0.npz",
+    "bytes": 22761831,
+    "residentBytes": 27612416,
+    "sha256": "23260d34ab8a939c84f9a48175fa4481d785bfce6b9a2895944ad34e6df2f97d"
+  },
+  "tokenizer": {
+    "kind": "byte-bpe",
+    "vocabSize": 4096,
+    "digest": "d82e8dd9042e492a48d1487cca2e7e84fd4f592ad6b6427540334322a6b1eee8"
+  },
+  "provenance": {
+    "codeRevision": "c9785ede9ffd73d70878c16cd96784159143a1fb",
+    "gitDirty": true,
+    "python": "3.11.2",
+    "numpy": "2.4.6",
+    "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+    "seed": {
+      "model": 20261022,
+      "data": 20261931,
+      "sft": 20261123
+    },
+    "parameterCount": 27559946,
+    "trainingFramework": "first-party TransformerLM (services/fabric NumPy + XLA lax.scan checkpointed backend, verified <1e-4 parity)"
+  },
+  "corpus": {
+    "manifestDigest": "2f949d27ba0a9a1a66687abd3f7eacb63a677303c31ca69f136d5a87c4ddb567",
+    "assemblyRecordSha256": "fc5775ead0df69c016b75ede697dad37080cfdbd2d7fdbb0c1c7429bbcb4e0d1",
+    "assembledRepositories": 0,
+    "refusedRepositories": 9,
+    "trainRepositories": [
+      "expressjs__express",
+      "facebook__react",
+      "freeCodeCamp__freeCodeCamp",
+      "kubernetes__kubernetes",
+      "laravel__framework",
+      "microsoft__ML-For-Beginners",
+      "microsoft__TypeScript",
+      "microsoft__vscode",
+      "pallets__flask",
+      "pandas-dev__pandas",
+      "pytest-dev__pytest",
+      "rajaram-2005__ragam",
+      "scikit-learn__scikit-learn",
+      "sveltejs__svelte",
+      "vuejs__core"
+    ],
+    "heldOutRepositories": [
+      "pallets__click",
+      "psf__requests"
+    ],
+    "trainCharacters": 127533843,
+    "validationCharacters": 1896977,
+    "trainTokens": 329296,
+    "validationTokens": 504374
+  },
+  "training": {
+    "pretrainSteps": 95,
+    "jointSteps": 65,
+    "totalSteps": 220,
+    "batchSize": 4,
+    "sequenceLength": 512,
+    "tokensSeen": 450560,
+    "estimatedTrainingFlops": 74504455618560,
+    "wallClockSeconds": 845.333,
+    "tokensPerSecond": 533.0,
+    "peakRssBytes": 1640402944,
+    "peakLearningRate": 0.0016,
+    "minLearningRate": 0.000192,
+    "lastAtomicCheckpointSha256": "3e3801f166fb4ebf1b7bbb52e5a1649466ed08d48028eff580795619a90aae68",
+    "parityMaxAbsError": {
+      "logits": 1.71661376953125e-05,
+      "verdictHead": 4.76837158203125e-07,
+      "stateHead": 4.76837158203125e-07
+    },
+    "history": [
+      {
+        "step": 1,
+        "phase": "pretrain",
+        "totalLoss": 11.3317,
+        "lmLoss": 8.83637,
+        "verdictLoss": 0.69315,
+        "stateLoss": 2.07944,
+        "gradNorm": 29.6282,
+        "lr": 0.0001231,
+        "tokensPerSecond": 322.7,
+        "rssMb": 1475.9
+      },
+      {
+        "step": 10,
+        "phase": "pretrain",
+        "totalLoss": 9.85649,
+        "lmLoss": 7.26159,
+        "verdictLoss": 0.7698,
+        "stateLoss": 2.13303,
+        "gradNorm": 14.7523,
+        "lr": 0.0012308,
+        "tokensPerSecond": 526.1,
+        "rssMb": 1486.7
+      },
+      {
+        "step": 20,
+        "phase": "pretrain",
+        "totalLoss": 11.72055,
+        "lmLoss": 7.35079,
+        "verdictLoss": 0.75182,
+        "stateLoss": 3.91866,
+        "gradNorm": 18.653,
+        "lr": 0.0015921,
+        "tokensPerSecond": 551.9,
+        "rssMb": 1486.7
+      },
+      {
+        "step": 30,
+        "phase": "pretrain",
+        "totalLoss": 9.62137,
+        "lmLoss": 7.25118,
+        "verdictLoss": 0.72575,
+        "stateLoss": 1.93473,
+        "gradNorm": 13.2603,
+        "lr": 0.001554,
+        "tokensPerSecond": 556.1,
+        "rssMb": 1486.9
+      },
+      {
+        "step": 40,
+        "phase": "pretrain",
+        "totalLoss": 9.48101,
+        "lmLoss": 7.36737,
+        "verdictLoss": 0.14783,
+        "stateLoss": 2.02494,
+        "gradNorm": 15.8951,
+        "lr": 0.001486,
+        "tokensPerSecond": 562.4,
+        "rssMb": 1487.8
+      },
+      {
+        "step": 50,
+        "phase": "pretrain",
+        "totalLoss": 9.50485,
+        "lmLoss": 6.65548,
+        "verdictLoss": 0.69437,
+        "stateLoss": 2.43275,
+        "gradNorm": 15.1259,
+        "lr": 0.0013911,
+        "tokensPerSecond": 558.4,
+        "rssMb": 1488.9
+      },
+      {
+        "step": 60,
+        "phase": "pretrain",
+        "totalLoss": 10.76047,
+        "lmLoss": 7.07362,
+        "verdictLoss": 2.30488,
+        "stateLoss": 2.30393,
+        "gradNorm": 26.8782,
+        "lr": 0.0012737,
+        "tokensPerSecond": 561.7,
+        "rssMb": 1488.9
+      },
+      {
+        "step": 70,
+        "phase": "pretrain",
+        "totalLoss": 9.62752,
+        "lmLoss": 7.12126,
+        "verdictLoss": 0.57693,
+        "stateLoss": 2.1601,
+        "gradNorm": 13.7107,
+        "lr": 0.0011391,
+        "tokensPerSecond": 562.4,
+        "rssMb": 1491.4
+      },
+      {
+        "step": 80,
+        "phase": "pretrain",
+        "totalLoss": 8.97629,
+        "lmLoss": 6.71156,
+        "verdictLoss": 0.10194,
+        "stateLoss": 2.20357,
+        "gradNorm": 13.6804,
+        "lr": 0.0009935,
+        "tokensPerSecond": 563.8,
+        "rssMb": 1491.4
+      },
+      {
+        "step": 90,
+        "phase": "pretrain",
+        "totalLoss": 8.7358,
+        "lmLoss": 6.9368,
+        "verdictLoss": 0.0669,
+        "stateLoss": 1.75886,
+        "gradNorm": 11.7224,
+        "lr": 0.0008434,
+        "tokensPerSecond": 557.2,
+        "rssMb": 1491.4
+      },
+      {
+        "step": 100,
+        "phase": "sft_heads",
+        "totalLoss": 8.38216,
+        "lmLoss": 7.04715,
+        "verdictLoss": 0.03605,
+        "stateLoss": 1.31338,
+        "gradNorm": 8.4538,
+        "lr": 0.0006957,
+        "tokensPerSecond": 555.8,
+        "rssMb": 1492.4
+      },
+      {
+        "step": 110,
+        "phase": "sft_heads",
+        "totalLoss": 9.04887,
+        "lmLoss": 6.76219,
+        "verdictLoss": 0.05395,
+        "stateLoss": 2.25431,
+        "gradNorm": 19.3919,
+        "lr": 0.0005571,
+        "tokensPerSecond": 555.1,
+        "rssMb": 1492.4
+      },
+      {
+        "step": 120,
+        "phase": "sft_heads",
+        "totalLoss": 9.53284,
+        "lmLoss": 6.89063,
+        "verdictLoss": 0.0987,
+        "stateLoss": 2.58299,
+        "gradNorm": 14.1753,
+        "lr": 0.0004339,
+        "tokensPerSecond": 557.0,
+        "rssMb": 1492.4
+      },
+      {
+        "step": 130,
+        "phase": "sft_heads",
+        "totalLoss": 8.66428,
+        "lmLoss": 6.53271,
+        "verdictLoss": 0.05399,
+        "stateLoss": 2.09918,
+        "gradNorm": 13.1851,
+        "lr": 0.0003318,
+        "tokensPerSecond": 558.2,
+        "rssMb": 1492.4
+      },
+      {
+        "step": 140,
+        "phase": "sft_heads",
+        "totalLoss": 9.0135,
+        "lmLoss": 6.89869,
+        "verdictLoss": 0.01406,
+        "stateLoss": 2.10637,
+        "gradNorm": 13.9365,
+        "lr": 0.0002553,
+        "tokensPerSecond": 559.9,
+        "rssMb": 1492.4
+      },
+      {
+        "step": 150,
+        "phase": "sft_heads",
+        "totalLoss": 8.37793,
+        "lmLoss": 6.68846,
+        "verdictLoss": 0.01157,
+        "stateLoss": 1.68253,
+        "gradNorm": 11.1371,
+        "lr": 0.000208,
+        "tokensPerSecond": 558.9,
+        "rssMb": 1492.4
+      },
+      {
+        "step": 160,
+        "phase": "sft_heads",
+        "totalLoss": 8.43495,
+        "lmLoss": 7.00554,
+        "verdictLoss": 0.00582,
+        "stateLoss": 1.42592,
+        "gradNorm": 11.9201,
+        "lr": 0.000192,
+        "tokensPerSecond": 559.7,
+        "rssMb": 1492.4
+      },
+      {
+        "step": 170,
+        "phase": "cooldown_r1",
+        "totalLoss": 8.23719,
+        "lmLoss": 6.42829,
+        "verdictLoss": 0.02694,
+        "stateLoss": 1.79273,
+        "gradNorm": 11.3623,
+        "lr": 0.000708,
+        "tokensPerSecond": 547.5,
+        "rssMb": 1558.1
+      },
+      {
+        "step": 180,
+        "phase": "cooldown_r1",
+        "totalLoss": 8.55831,
+        "lmLoss": 6.40676,
+        "verdictLoss": 0.03639,
+        "stateLoss": 2.12971,
+        "gradNorm": 7.9739,
+        "lr": 0.000364,
+        "tokensPerSecond": 547.9,
+        "rssMb": 1558.1
+      },
+      {
+        "step": 190,
+        "phase": "cooldown_r1",
+        "totalLoss": 8.00621,
+        "lmLoss": 6.45175,
+        "verdictLoss": 0.10964,
+        "stateLoss": 1.48867,
+        "gradNorm": 11.3105,
+        "lr": 0.000192,
+        "tokensPerSecond": 547.9,
+        "rssMb": 1563.6
+      },
+      {
+        "step": 200,
+        "phase": "cooldown_r2",
+        "totalLoss": 9.76933,
+        "lmLoss": 7.26982,
+        "verdictLoss": 0.00044,
+        "stateLoss": 2.49924,
+        "gradNorm": 16.5654,
+        "lr": 0.000408,
+        "tokensPerSecond": 539.8,
+        "rssMb": 1563.6
+      },
+      {
+        "step": 210,
+        "phase": "cooldown_r2",
+        "totalLoss": 7.97335,
+        "lmLoss": 6.55265,
+        "verdictLoss": 0.0195,
+        "stateLoss": 1.40899,
+        "gradNorm": 11.6551,
+        "lr": 0.000264,
+        "tokensPerSecond": 540.8,
+        "rssMb": 1563.8
+      },
+      {
+        "step": 220,
+        "phase": "cooldown_r2",
+        "totalLoss": 8.59724,
+        "lmLoss": 6.66338,
+        "verdictLoss": 0.01354,
+        "stateLoss": 1.92573,
+        "gradNorm": 13.2756,
+        "lr": 0.000192,
+        "tokensPerSecond": 542.3,
+        "rssMb": 1564.4
+      }
+    ]
+  },
+  "evaluation": {
+    "nllNatsPerToken": 6.979542751241743,
+    "perplexity": 1074.4269742601562,
+    "bitsPerToken": 10.069351714888974,
+    "bitsPerCharacter": 3.504168617178015,
+    "tokensEvaluated": 8192,
+    "charactersEvaluated": 23540,
+    "unknownRate": 0.0,
+    "baselines": [
+      {
+        "name": "uniform",
+        "description": "every token equally likely, ln(4096)",
+        "nllNatsPerToken": 8.317766166719343,
+        "perplexity": 4095.999999999997,
+        "bitsPerToken": 12.0
+      },
+      {
+        "name": "unigram",
+        "description": "training-set token frequencies, add-0.1 smoothing, no context",
+        "nllNatsPerToken": 6.877800606589317,
+        "perplexity": 970.4895225193924,
+        "bitsPerToken": 9.922568827349513
+      },
+      {
+        "name": "bigram",
+        "description": "P(next|prev) from training adjacencies, add-0.1 smoothing",
+        "nllNatsPerToken": 6.279313885482372,
+        "perplexity": 533.4225492865779,
+        "bitsPerToken": 9.059135002770626
+      }
+    ],
+    "bestBaseline": "bigram",
+    "perplexityVsBestBaseline": 2.0142136392567966,
+    "beatsAllBaselines": false,
+    "loss": 6.979542751241743,
+    "verdictAccuracyPrompt": 1.0,
+    "verdictAccuracyEnd": 1.0,
+    "stateAccuracyPrompt": 0.328125,
+    "stateAccuracyEnd": 0.328125,
+    "headExamplesEvaluated": 64
+  },
+  "quantization": {
+    "format": "klyvaron.quantization-evaluation/1",
+    "status": "passed",
+    "scheme": "symmetric-int8-per-tensor",
+    "failures": [],
+    "metrics": {
+      "tokensEvaluated": 2048,
+      "unknownRate": 0.0,
+      "sourceNll": 6.922096417622749,
+      "quantizedNll": 6.9214962649179075,
+      "nllIncrease": -0.0006001527048411504,
+      "perplexityRatio": 0.9994000273507713,
+      "greedyDisagreementRate": 0.0009765625,
+      "maxAbsoluteLogitError": 0.05708801746368408,
+      "protocol": "non-overlapping context windows; teacher-forced next-token cross entropy; natural logs",
+      "validationSha256": "754dc8447b42ae1a09d148d9341f3aec26b7be83dfc214bd9b6a7ce27285df8c",
+      "evaluatedPrefixSha256": "807a764e4e40380f0562095457e8c28bbdf98512aefb68853cddbc23bece8c08",
+      "independence": "caller-supplied text; disjointness from training is not verified by this converter"
+    },
+    "source": {
+      "id": "klyvaron-pro-lm-fp32",
+      "version": "0.1.0",
+      "weightsSha256": "06b4170baea6b86d933d85dcfea56be6ad043a53b75cda55b684d80faa21e5f2",
+      "manifestSha256": "6ba4712ec902e6b6f23b6276212591c9db0879c67da2149422fa336595b0ef12"
+    },
+    "thresholds": {
+      "maxNllIncrease": 0.08,
+      "maxGreedyDisagreement": 0.15,
+      "maxUnknownRate": 0.01
+    },
+    "sourceWeightBytes": 110262030,
+    "quantizedWeightBytes": 22761831,
+    "sourceResidentWeightBytes": 110239784,
+    "quantizedResidentWeightBytes": 27612416,
+    "quantizedWeightsSha256": "23260d34ab8a939c84f9a48175fa4481d785bfce6b9a2895944ad34e6df2f97d",
+    "limitation": "A relative quantization check is not assistant capability, native-device qualification or a release approval."
+  },
+  "samples": {
+    "grounded": {
+      "user": "What does architecture.md state about architecture?",
+      "context": "[source=architecture.md] Klyvaron Pro and Klyvaron Max use the first-party aetheris-core-v1 Transformer architecture with learned BPE tokens, age buckets, expressed-state conditioning, a grounding verdict head, and a state head.",
+      "reply": "",
+      "predictedVerdict": "grounded",
+      "predictedState": "summary_request",
+      "promptTokens": 134,
+      "completionTokens": 72
+    },
+    "abstain": {
+      "user": "What does secret_roadmap.md state about secret roadmap?",
+      "context": "none",
+      "reply": "context context.\n context.\n context.\n context.\n context.\n context context.\n context context context.\n context context context.\n context context.\n context.\n context context context.\n context context.\n context.\n context.\n context.\n context.\n context context context.\n context.\n context context context context.",
+      "predictedVerdict": "ungrounded",
+      "predictedState": "uncertain_or_ambiguous",
+      "promptTokens": 62,
+      "completionTokens": 72
+    }
+  },
+  "totalElapsedSeconds": 906.628
+}

@@ -95,6 +95,25 @@ export const api = {
   // weights of their own. Reading is available to any signed-in account; assigning is
   // owner-only and the server enforces that.
   klyvaron: () => request('GET', '/api/klyvaron'),
+  klyvaronManifests: () => request('GET', '/api/klyvaron/manifests'),
+  klyvaronQualification: () => request('GET', '/api/klyvaron/qualification'),
+  runKlyvaronQualification: (body) => request('POST', '/api/klyvaron/qualification/run', body),
+  klyvaronModels: () => request('GET', '/api/klyvaron/models'),
+  verifyKlyvaronModels: (id = null) => request('POST', '/api/klyvaron/models/verify', id ? { id } : {}),
+  trainingWorker: () => request('GET', '/api/klyvaron/worker'),
+  requestWorkerPairing: (deviceLabel = 'User Computer') => request('POST', '/api/klyvaron/worker/pair/request', { deviceLabel }),
+  completeWorkerPairing: (body) => request('POST', '/api/klyvaron/worker/pair/complete', body),
+  disconnectWorker: () => request('POST', '/api/klyvaron/worker/disconnect', {}),
+  evaluateTrainingRequest: (body) => request('POST', '/api/klyvaron/worker/evaluate', body),
+  executeTrainingRequest: (body) => request('POST', '/api/klyvaron/worker/execute', body),
+  workerJob: (jobId) => request('POST', '/api/klyvaron/worker/job', { jobId }),
+  cancelWorkerJob: (jobId) => request('POST', '/api/klyvaron/worker/job/cancel', { jobId }),
+  rollbackWorkerJob: (jobId) => request('POST', '/api/klyvaron/worker/job/rollback', { jobId }),
+  resumeWorkerJob: (jobId, body = {}) => request('POST', '/api/klyvaron/worker/job/resume', { jobId, ...body }),
+  planTrainingWorker: (body) => request('POST', '/api/klyvaron/worker/plan', body),
+  startTrainingWorker: (body) => request('POST', '/api/klyvaron/worker/start', body),
+  cancelTrainingWorker: (jobId) => request('POST', '/api/klyvaron/worker/cancel', { jobId }),
+  resumeTrainingWorker: (jobId, body) => request('POST', '/api/klyvaron/worker/resume', { jobId, ...body }),
   setKlyvaronPreset: (tier, body) => request('PUT', `/api/klyvaron/${encodeURIComponent(tier)}`, body),
   clearKlyvaronPreset: (tier, modality) => request('DELETE', `/api/klyvaron/${encodeURIComponent(tier)}/${encodeURIComponent(modality)}`, {}),
   selectModel: (model) => request('PUT', '/api/models/selection', { model }),
@@ -180,20 +199,26 @@ export const api = {
   // Generation is a job: the POST returns a record (202) and the area polls it. The bytes are
   // fetched from the job the Core validated, never from a provider-supplied URL.
   generateImage: (body) => request('POST', '/api/image/generate', body),
+  editImage: (body) => request('POST', '/api/image/edit', body),
+  understandImage: (body) => request('POST', '/api/image/understand', body),
   imageJobs: () => request('GET', '/api/image/jobs'),
   imageJob: (id) => request('GET', `/api/image/jobs/${encodeURIComponent(id)}`),
   deleteImageJob: (id) => request('DELETE', `/api/image/jobs/${encodeURIComponent(id)}`, {}),
   generateVideo: (body) => request('POST', '/api/video/generate', body),
+  understandVideo: (body) => request('POST', '/api/video/understand', body),
   videoJobs: () => request('GET', '/api/video/jobs'),
   videoJob: (id) => request('GET', `/api/video/jobs/${encodeURIComponent(id)}`),
   deleteVideoJob: (id) => request('DELETE', `/api/video/jobs/${encodeURIComponent(id)}`, {}),
+  synthesizeVoice: (body) => request('POST', '/api/voice/synthesize', body),
+  transcribeVoice: (body) => request('POST', '/api/voice/transcribe', body),
   cancelMediaJob: (jobId) => request('POST', `/api/media/jobs/${encodeURIComponent(jobId)}/cancel`, {}),
   cancelVideoJob: (jobId) => request('POST', `/api/video/jobs/${encodeURIComponent(jobId)}/cancel`, {}),
-  // Direct URLs for an <img>/<video> tag. Only valid for a succeeded job. Each is a literal
+  // Direct URLs for an <img>/<video>/<audio> tag. Only valid for a succeeded job. Each is a literal
   // route so the client-path check can see the endpoint it names.
   artifactUrl: (jobId) => `/api/image/jobs/${encodeURIComponent(jobId)}/content`,
   imageArtifactUrl: (jobId) => `/api/image/jobs/${encodeURIComponent(jobId)}/content`,
   videoArtifactUrl: (jobId) => `/api/video/jobs/${encodeURIComponent(jobId)}/content`,
+  mediaArtifactUrl: (jobId) => `/api/media/jobs/${encodeURIComponent(jobId)}/content`,
   // Unfiltered job list. /api/media/jobs does not filter by kind server-side; use
   // imageJobs/videoJobs for a filtered view.
   mediaJobs: (limit = 25) => request('GET', `/api/media/jobs?limit=${limit}`),

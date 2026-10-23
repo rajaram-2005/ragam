@@ -1,0 +1,172 @@
+{
+  "format": "aetheris-model-card/v1",
+  "generatedBy": "services/fabric/scripts/train_multimodal.py",
+  "reproduce": "python3 services/fabric/scripts/train_multimodal.py --modality video --preset max",
+  "runId": "229bbce13cf2",
+  "runStatus": "released",
+  "card": {
+    "name": "klyvaron-max-video",
+    "version": "0.1.0",
+    "identifier": "klyvaron-max-video@0.1.0",
+    "family": "klyvaron-max",
+    "licence": "MIT",
+    "weightsDigest": "229bbce13cf27b19204533558373bccdc4d540d0fd0cc8edacdd9a8a3ab5f705",
+    "baseCheckpoint": null,
+    "configDigest": "42009f8fa6a78c26270728067cee63742059737bf7e0bb3e3646c6e6fa167596",
+    "datasetDigest": "78d53968ccda73c670cfc272341aa44a835e17dda894fab4976605af7c55b1f3",
+    "parameterCount": 8134602,
+    "status": "released",
+    "metrics": {
+      "validationMotionAccuracy": 0.8229,
+      "uniformMotionBaseline": 0.1667,
+      "validationEnvironmentAccuracy": 0.9583,
+      "uniformEnvironmentBaseline": 0.25,
+      "generationMotionAlignmentAccuracy": 0.2083,
+      "generationEnvironmentAlignmentAccuracy": 0.0833,
+      "validationFrameL1": 0.1694,
+      "staticBaselineFrameL1": 0.1641,
+      "initialLoss": 7.604,
+      "finalLoss": 2.3111,
+      "lossImprovement": 5.2928,
+      "steps": 160.0,
+      "wallSeconds": 261.992,
+      "parameterCount": 8134602.0
+    },
+    "provenance": {
+      "subject": "klyvaron-max-video (from-scratch first-party aetheris-video-v1)",
+      "comparator": "held-out uniform/mean baseline for video",
+      "hardware": {
+        "machine": "x86_64",
+        "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+        "accelerator": "none (2-vCPU AVX-512 CPU host; GPU runtimes supported when user machine has hardware)"
+      },
+      "decoding": {
+        "mode": "deterministic",
+        "seed": 0
+      },
+      "context": {
+        "modality": "video",
+        "supportedTasks": [
+          "video.generate",
+          "video.understand"
+        ]
+      },
+      "quantization": null,
+      "prompts": [
+        "first-party video evaluation split"
+      ],
+      "datasetDigest": "78d53968ccda73c670cfc272341aa44a835e17dda894fab4976605af7c55b1f3",
+      "corpusSize": 160,
+      "queries": null,
+      "codeRevision": "c9785ede9ffd73d70878c16cd96784159143a1fb",
+      "seed": 20261202,
+      "limitations": [
+        "Trained on 6 physical motion trajectories x 4 visual environments (240 training clips, 96 held-out clips, 24 native frames).",
+        "Long-form multi-minute cinema synthesis, synchronized audio-video foley tracks, and photorealistic human acting are not supported.",
+        "Outputs are genuine H.264 ISO-BMFF MP4 clips verified for non-zero temporal motion and valid moov/mvhd duration."
+      ],
+      "status": "completed",
+      "measuredAt": 1792775845.4710424
+    },
+    "limitations": [
+      "Trained on 6 physical motion trajectories x 4 visual environments (240 training clips, 96 held-out clips, 24 native frames).",
+      "Long-form multi-minute cinema synthesis, synchronized audio-video foley tracks, and photorealistic human acting are not supported.",
+      "Outputs are genuine H.264 ISO-BMFF MP4 clips verified for non-zero temporal motion and valid moov/mvhd duration."
+    ],
+    "requirements": [
+      {
+        "metric": "validationMotionAccuracy",
+        "minimum": 0.7,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "validationEnvironmentAccuracy",
+        "minimum": 0.7,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "lossImprovement",
+        "minimum": 0.5,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      }
+    ],
+    "validation": {
+      "passed": [
+        "'validationMotionAccuracy' 0.8229 meets the requirement",
+        "'validationEnvironmentAccuracy' 0.9583 meets the requirement",
+        "'lossImprovement' 5.2928 meets the requirement"
+      ],
+      "hardFailures": [],
+      "softFailures": [],
+      "validatedAt": 1792775845.4711065,
+      "metrics": {
+        "validationMotionAccuracy": 0.8229,
+        "uniformMotionBaseline": 0.1667,
+        "validationEnvironmentAccuracy": 0.9583,
+        "uniformEnvironmentBaseline": 0.25,
+        "generationMotionAlignmentAccuracy": 0.2083,
+        "generationEnvironmentAlignmentAccuracy": 0.0833,
+        "validationFrameL1": 0.1694,
+        "staticBaselineFrameL1": 0.1641,
+        "initialLoss": 7.604,
+        "finalLoss": 2.3111,
+        "lossImprovement": 5.2928,
+        "steps": 160.0,
+        "wallSeconds": 261.992,
+        "parameterCount": 8134602.0
+      }
+    },
+    "artifacts": {
+      "filename": "weights.npz",
+      "fileDigest": "17c4c51f0db941d7c70b465da6e941049e6e3939b36303eb0f9ba9e6bb861dd3",
+      "bytes": 15035795,
+      "processorFile": "processor.json",
+      "processorDigest": "78d53968ccda73c670cfc272341aa44a835e17dda894fab4976605af7c55b1f3",
+      "modality": "video",
+      "supportedTasks": [
+        "video.generate",
+        "video.understand"
+      ],
+      "unsupportedTasks": [
+        "long_form_multi_minute_video_synthesis",
+        "synchronized_audio_video_foley_generation",
+        "photorealistic_human_character_acting",
+        "4k_60fps_cinematic_rendering"
+      ],
+      "trainer": "services/fabric/fabric/multimodal/video_model.py"
+    },
+    "parentVersion": null,
+    "createdAt": 1792775845.4710672,
+    "releasedAt": 1792775845.471121,
+    "supersededAt": null,
+    "retiredAt": null,
+    "history": [
+      {
+        "at": 1792775845.4710672,
+        "event": "registered",
+        "status": "candidate"
+      },
+      {
+        "at": 1792775845.4711099,
+        "event": "validated",
+        "passed": [
+          "'validationMotionAccuracy' 0.8229 meets the requirement",
+          "'validationEnvironmentAccuracy' 0.9583 meets the requirement",
+          "'lossImprovement' 5.2928 meets the requirement"
+        ]
+      },
+      {
+        "at": 1792775845.471121,
+        "event": "released",
+        "notes": "first-party klyvaron-max-video trained from random init (seed=20261202)",
+        "superseded": null
+      }
+    ]
+  }
+}

@@ -29,9 +29,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fabric.lm.export import (  # noqa: E402
     ARTIFACT_FORMAT,
+    load_tokenizer_manifest,
     parity_fixture as build_parity_fixture,
     export_artifact,
-    vocabulary_digest,
     write_json,
 )
 from fabric.lm.model import TransformerConfig  # noqa: E402
@@ -112,13 +112,18 @@ def verify(directory: Path) -> int:
         return 2
     manifest = json.loads(manifests[0].read_text(encoding="utf-8"))
     problems = []
-    from fabric.lm.quantize import QUANTIZED_ARTIFACT_FORMAT, load_quantized_reference
+    from fabric.lm.quantize import QUANTIZED_ARTIFACT_FORMAT, load_quantized_reference, load_source
     if manifest.get("format") == QUANTIZED_ARTIFACT_FORMAT:
         try:
             load_quantized_reference(directory)
         except (ValueError, KeyError, OSError) as error:
             problems.append(str(error))
-    elif manifest.get("format") != ARTIFACT_FORMAT:
+    elif manifest.get("format") == ARTIFACT_FORMAT:
+        try:
+            load_source(directory)
+        except (ValueError, KeyError, OSError) as error:
+            problems.append(str(error))
+    else:
         problems.append(f"format is {manifest.get('format')!r}, expected {ARTIFACT_FORMAT!r}")
     weights = directory / str(manifest.get("weights", {}).get("file"))
     if not weights.exists():
@@ -129,9 +134,12 @@ def verify(directory: Path) -> int:
             problems.append(f"weights hash to {digest}, the manifest says {manifest['weights']['sha256']}")
         if weights.stat().st_size != manifest["weights"]["bytes"]:
             problems.append(f"weights are {weights.stat().st_size} bytes, the manifest says {manifest['weights']['bytes']}")
-    actual_vocabulary = vocabulary_digest(manifest["tokenizer"]["characters"])
-    if actual_vocabulary != manifest["tokenizer"]["digest"]:
-        problems.append(f"vocabulary hashes to {actual_vocabulary}, the manifest says {manifest['tokenizer']['digest']}")
+    tokenizer_size = 0
+    try:
+        tok = load_tokenizer_manifest(manifest["tokenizer"])
+        tokenizer_size = tok.size
+    except (ValueError, KeyError, TypeError) as error:
+        problems.append(str(error))
     if not manifest.get("limitations"):
         problems.append("the manifest declares no limitations")
 
@@ -140,11 +148,12 @@ def verify(directory: Path) -> int:
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
+    tok_kind = manifest["tokenizer"].get("kind", "character")
     print(f"klyvaron-export: {manifest['id']} {manifest['version']} verified")
     print(f"  tier          {manifest['tier']}")
     print(f"  parameters    {manifest['provenance'].get('parameterCount')}")
     print(f"  architecture  {manifest['architecture']}")
-    print(f"  vocabulary    {len(manifest['tokenizer']['characters'])} characters, digest {manifest['tokenizer']['digest'][:16]}...")
+    print(f"  vocabulary    {tokenizer_size} tokens ({tok_kind}), digest {manifest['tokenizer']['digest'][:16]}...")
     print(f"  weights       {manifest['weights']['file']} {manifest['weights']['bytes']:,} bytes")
     return 0
 

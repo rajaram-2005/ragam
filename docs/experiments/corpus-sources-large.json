@@ -44,35 +44,35 @@
   "purpose": "The licence-checked public sources an assembled corpus is built from.",
   "refused": [
     {
-      "error": "numpy/numpy@8ecb569a8809 carries NOASSERTION, which is not on the allowlist; nothing was written",
+      "error": "numpy/numpy@ef046f8df8bd carries NOASSERTION, which is not on the allowlist; nothing was written",
       "repo": "numpy/numpy"
     },
     {
-      "error": "golang/go@74d597bb878d carries NOASSERTION, which is not on the allowlist; nothing was written (the API reports BSD-3-Clause for the default branch, so this is the SHA-scoped answer disagreeing with the ref-less one rather than a licence review of the project)",
+      "error": "golang/go@f1378e215ca6 carries NOASSERTION, which is not on the allowlist; nothing was written (the API reports BSD-3-Clause for the default branch, so this is the SHA-scoped answer disagreeing with the ref-less one rather than a licence review of the project)",
       "repo": "golang/go"
     },
     {
-      "error": "django/django@d430084791a6 carries NOASSERTION, which is not on the allowlist; nothing was written (the API reports BSD-3-Clause for the default branch, so this is the SHA-scoped answer disagreeing with the ref-less one rather than a licence review of the project)",
+      "error": "django/django@1b40abab06d2 carries NOASSERTION, which is not on the allowlist; nothing was written (the API reports BSD-3-Clause for the default branch, so this is the SHA-scoped answer disagreeing with the ref-less one rather than a licence review of the project)",
       "repo": "django/django"
     },
     {
-      "error": "rust-lang/rust@4ebd25825773 carries NOASSERTION, which is not on the allowlist; nothing was written (the API reports Apache-2.0 for the default branch, so this is the SHA-scoped answer disagreeing with the ref-less one rather than a licence review of the project)",
+      "error": "rust-lang/rust@fe2b43dd2127 carries NOASSERTION, which is not on the allowlist; nothing was written (the API reports Apache-2.0 for the default branch, so this is the SHA-scoped answer disagreeing with the ref-less one rather than a licence review of the project)",
       "repo": "rust-lang/rust"
     },
     {
-      "error": "godotengine/godot@4d10419cacd6 carries NOASSERTION, which is not on the allowlist; nothing was written (the API reports MIT for the default branch, so this is the SHA-scoped answer disagreeing with the ref-less one rather than a licence review of the project)",
+      "error": "godotengine/godot@c8256a8ecec0 carries NOASSERTION, which is not on the allowlist; nothing was written (the API reports MIT for the default branch, so this is the SHA-scoped answer disagreeing with the ref-less one rather than a licence review of the project)",
       "repo": "godotengine/godot"
     },
     {
-      "error": "github/docs@cb051611377a carries NOASSERTION, which is not on the allowlist; nothing was written (the API reports CC-BY-4.0 for the default branch, so this is the SHA-scoped answer disagreeing with the ref-less one rather than a licence review of the project)",
+      "error": "github/docs@205d63d65aa9 carries NOASSERTION, which is not on the allowlist; nothing was written (the API reports CC-BY-4.0 for the default branch, so this is the SHA-scoped answer disagreeing with the ref-less one rather than a licence review of the project)",
       "repo": "github/docs"
     },
     {
-      "error": "nodejs/node@1c90519c1a87 carries NOASSERTION, which is not on the allowlist; nothing was written",
+      "error": "nodejs/node@84f8e2f3a955 carries NOASSERTION, which is not on the allowlist; nothing was written",
       "repo": "nodejs/node"
     },
     {
-      "error": "python/cpython@fdec4df45ab6 carries NOASSERTION, which is not on the allowlist; nothing was written",
+      "error": "python/cpython@738d055b3710 carries NOASSERTION, which is not on the allowlist; nothing was written",
       "repo": "python/cpython"
     },
     {
@@ -82,11 +82,11 @@
   ],
   "sources": [
     {
-      "bytes": 4190960,
+      "bytes": 6376574,
       "capBytes": 12000000,
       "capped": false,
       "clean": false,
-      "commit": "e616bdc9863fa92588b389f7ff5ba0dc3a5dda6e-dirty",
+      "commit": "c9785ede9ffd73d70878c16cd96784159143a1fb-dirty",
       "expectedLicence": "first-party",
       "extensions": [
         ".py",
@@ -120,10 +120,10 @@
         ".pyx",
         ".ipynb"
       ],
-      "files": 289,
+      "files": 444,
       "licence": "first-party",
       "repo": "rajaram-2005/ragam",
-      "treeDigest": "4fdad181b30b4354fb97fd1a2458e4fa51c8954a6143936fedcb03d6ec24b85d",
+      "treeDigest": "5ed213108f5684b75c8a61f4f244fed5bf5deeaf97403d49cc7474457ddee2ed",
       "why": "This repository's own text: the one corpus source whose right to be trained on is not in question."
     },
     {
@@ -145,10 +145,10 @@
       "why": "A small, readable application framework: BSD-3-Clause, and small enough to be read in full."
     },
     {
-      "bytes": 685068,
+      "bytes": 685072,
       "capBytes": 2000000,
       "capped": false,
-      "commit": "a419aa7350389a275ab45fde2e849ed1f02449ef",
+      "commit": "0dee2c52c7c873498f8ed7d8ee4ddd0a04d3ada8",
       "expectedLicence": "MIT",
       "extensions": [
         ".js",
@@ -181,26 +181,26 @@
       "why": "Apache-2.0 is the licence the composed path would have allowed; the corpus allowlist is the same list, so the two paths agree about what may be used."
     },
     {
-      "bytes": 14239388,
+      "bytes": 14199608,
       "capBytes": 14000000,
       "capped": true,
-      "commit": "0e081d6fb33dde09e084154a0a4daada31fa5a41",
+      "commit": "a91e93821feafd081641f9f5d161eba626d0b2ce",
       "expectedLicence": "Apache-2.0",
       "extensions": [
         ".ts",
         ".md"
       ],
-      "files": 448,
+      "files": 412,
       "licence": "Apache-2.0",
       "licencePath": "LICENSE.txt",
       "repo": "microsoft/TypeScript",
       "why": "A second language at real scale. The cap was 4 MB while the corpus was 13.65 MB; a subword corpus needs orders of magnitude more text than that, so it is raised rather than kept as a souvenir of the smaller run."
     },
     {
-      "bytes": 6900564,
+      "bytes": 6903641,
       "capBytes": 8000000,
       "capped": false,
-      "commit": "c9c19f8e62c12834ad83193a1869cc82fe9c700e",
+      "commit": "4088e1a84ef1cb8ba80aac4e75449459fc092c12",
       "expectedLicence": "MIT",
       "extensions": [
         ".py",
@@ -208,7 +208,7 @@
         ".rst",
         ".txt"
       ],
-      "files": 640,
+      "files": 643,
       "licence": "MIT",
       "licencePath": "LICENSE",
       "repo": "pytest-dev/pytest",
@@ -233,10 +233,10 @@
       "why": "Documentation-heavy Python: mostly prose, which balances source code in the corpus."
     },
     {
-      "bytes": 25888715,
+      "bytes": 25919833,
       "capBytes": 25000000,
       "capped": true,
-      "commit": "5b4eea585f246824ce09b4afa4b1adabf277ba7d",
+      "commit": "fbd477a8bfe5631a43293b59aa4f8d0f941ca480",
       "expectedLicence": "Apache-2.0",
       "extensions": [
         ".go",
@@ -244,17 +244,17 @@
         ".yaml",
         ".yml"
       ],
-      "files": 1301,
+      "files": 1305,
       "licence": "Apache-2.0",
       "licencePath": "LICENSE",
       "repo": "kubernetes/kubernetes",
       "why": "The largest Apache-2.0 Go codebase in wide use, and its API reference is configuration documentation rather than prose about a library."
     },
     {
-      "bytes": 18010508,
+      "bytes": 18025331,
       "capBytes": 18000000,
       "capped": true,
-      "commit": "8eded316d50e33cc6e0e57bc596b4ba4d6923ff8",
+      "commit": "4e78ed1653e9968582ff26b2bf98ce224c67c25a",
       "expectedLicence": "BSD-3-Clause",
       "extensions": [
         ".py",
@@ -262,17 +262,17 @@
         ".md",
         ".rst"
       ],
-      "files": 860,
+      "files": 852,
       "licence": "BSD-3-Clause",
       "licencePath": "LICENSE",
       "repo": "pandas-dev/pandas",
       "why": "A second large BSD-3-Clause project, with Cython as well as Python, so the corpus is not one authoring style."
     },
     {
-      "bytes": 15026566,
+      "bytes": 15058349,
       "capBytes": 15000000,
       "capped": true,
-      "commit": "d0e22aee7bbef7b310a2f08227c214ff6df9a526",
+      "commit": "59106029d483678e79825f753bde67f8ade4332b",
       "expectedLicence": "BSD-3-Clause",
       "extensions": [
         ".py",
@@ -281,17 +281,17 @@
         ".rst",
         ".txt"
       ],
-      "files": 1033,
+      "files": 1036,
       "licence": "BSD-3-Clause",
       "licencePath": "COPYING",
       "repo": "scikit-learn/scikit-learn",
       "why": "Documentation-heavy numeric Python; its user guide is long-form explanation rather than API listing."
     },
     {
-      "bytes": 20002041,
+      "bytes": 20073717,
       "capBytes": 20000000,
       "capped": true,
-      "commit": "6756a7371ee8fb51d5a11f0b99cb889a0c5be9c4",
+      "commit": "f1ac359f0a99117bb2b147ac62a08c92ce97921e",
       "expectedLicence": "MIT",
       "extensions": [
         ".ts",
@@ -301,17 +301,17 @@
         ".json",
         ".css"
       ],
-      "files": 1587,
+      "files": 1601,
       "licence": "MIT",
       "licencePath": "LICENSE.txt",
       "repo": "microsoft/vscode",
       "why": "A large MIT TypeScript application: event-driven, message-passing code, which is structurally different from library code."
     },
     {
-      "bytes": 12014807,
+      "bytes": 12019251,
       "capBytes": 12000000,
       "capped": true,
-      "commit": "098d2e87a1f7142947418d15f63f975b58c4685b",
+      "commit": "a6b912fbe77f698ad43c922f206db0d4f4ad7485",
       "expectedLicence": "MIT",
       "extensions": [
         ".js",
@@ -320,17 +320,17 @@
         ".json",
         ".css"
       ],
-      "files": 4860,
+      "files": 4866,
       "licence": "MIT",
       "licencePath": "LICENSE",
       "repo": "facebook/react",
       "why": "MIT, and front-end code with a documentation site in the same repository."
     },
     {
-      "bytes": 5302427,
+      "bytes": 5306926,
       "capBytes": 12000000,
       "capped": false,
-      "commit": "bf5f0dd877dd3c23ce85c2cbc1dd771567e84c8c",
+      "commit": "0ff253bfba3ee8d3d65448bd44ad890fd01b0ecd",
       "expectedLicence": "MIT",
       "extensions": [
         ".ts",
@@ -346,10 +346,10 @@
       "why": "A second TypeScript application of a different shape from vscode's, under MIT rather than Apache-2.0."
     },
     {
-      "bytes": 6835508,
+      "bytes": 6849147,
       "capBytes": 10000000,
       "capped": false,
-      "commit": "40bb08482f4857d91221638dec544a532bc35389",
+      "commit": "356c8766a024d5982c276e898903fadaceaca960",
       "expectedLicence": "MIT",
       "extensions": [
         ".js",
@@ -360,24 +360,24 @@
         ".svelte",
         ".css"
       ],
-      "files": 8971,
+      "files": 8982,
       "licence": "MIT",
       "licencePath": "LICENSE.md",
       "repo": "sveltejs/svelte",
       "why": "A compiler rather than an application: code that generates code, which the corpus had none of."
     },
     {
-      "bytes": 7804981,
+      "bytes": 7828617,
       "capBytes": 12000000,
       "capped": false,
-      "commit": "fbc2b3e944782ccc3e7426299bc8c19703c03994",
+      "commit": "1de9acf2054cb360659200135e5c246320c7f330",
       "expectedLicence": "MIT",
       "extensions": [
         ".php",
         ".md",
         ".json"
       ],
-      "files": 1840,
+      "files": 1842,
       "licence": "MIT",
       "licencePath": "LICENSE.md",
       "repo": "laravel/framework",
@@ -402,10 +402,10 @@
       "why": "A taught curriculum: notebooks mix explanation with code, which is closer to the register of an assistant than any other source here."
     },
     {
-      "bytes": 20001358,
+      "bytes": 20001290,
       "capBytes": 20000000,
       "capped": true,
-      "commit": "85da3cd3be0b026e54a51a12d1054abdd48e6057",
+      "commit": "738244ca29d0a6eca75a5f8b7129d302c6a788d9",
       "expectedLicence": "BSD-3-Clause",
       "extensions": [
         ".md",
@@ -414,12 +414,12 @@
         ".json",
         ".css"
       ],
-      "files": 4964,
+      "files": 4932,
       "licence": "BSD-3-Clause",
       "licencePath": "LICENSE.md",
       "repo": "freeCodeCamp/freeCodeCamp",
       "why": "The largest BSD-3-Clause teaching corpus: instructional English in `blockquote` and challenge text, which is natural language rather than API reference."
     }
   ],
-  "totalBytes": 167938583
+  "totalBytes": 170283048
 }

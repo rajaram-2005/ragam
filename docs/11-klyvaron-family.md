@@ -25,8 +25,8 @@ is not automatically granted a family release label.
 | Tier | Hardware | Status | Capabilities available | Backing artifact |
 |---|---|---|---|---|
 | **Klyvaron Lite** | CPU-only computers and supported phones | **Partial** | 2 of 13 | `aetheris-lite-lm-0.1.1` |
-| **Klyvaron Pro** | GPU-qualified laptops and desktops | **Unbuilt** | 0 of 13 | none |
-| **Klyvaron Max** | Qualified high-performance GPU computers | **Unbuilt** | 0 of 11 | none |
+| **Klyvaron Pro** | GPU-qualified laptops and desktops (CPU execution supported) | **Partial** | 10 of 15 | `klyvaron-pro-lm-0.1.0`, `klyvaron-pro-image-0.1.0`, `klyvaron-pro-video-0.1.0`, `klyvaron-pro-voice-0.1.0` |
+| **Klyvaron Max** | Qualified high-performance GPU computers (CPU execution supported) | **Partial** | 10 of 14 | `klyvaron-max-lm-0.1.0`, `klyvaron-max-image-0.1.0`, `klyvaron-max-video-0.1.0`, `klyvaron-max-voice-0.1.0` |
 
 The two capabilities that were added to each tier are the ones this family exists for: knowing what is current (`trend.awareness`) and understanding what the user expressed across a session (`affect.history`). They are defined, refused and gated — see [22 — The family's purpose](22-klyvaron-differentiation.md) — and they are `unavailable` on every tier, because a mechanism is not a model artifact. They are also **parts of the model** now: `age_buckets` and the `verdict_head` for the present, `state_emb` and the `state_head` for the person, trained in the same loss as next-token prediction ([24 §6](24-own-models.md)), with a measured prototype and no artifact yet.
 

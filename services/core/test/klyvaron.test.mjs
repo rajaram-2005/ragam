@@ -68,15 +68,15 @@ test('Lite does not claim to chat, and says why', () => {
   assert.match(chat.reason, /refused there unless pinned by id/)
 })
 
-test('Pro and Max are recorded as unbuilt rather than omitted', () => {
+test('Pro and Max are partial: 10 capabilities backed by verified first-party weights, remaining capabilities honestly unavailable', () => {
   for (const id of [TIERS.PRO, TIERS.MAX]) {
     const tier = getTier(id)
-    assert.equal(tier.status, TIER_STATUS.UNBUILT)
-    assert.ok(tier.statusNote, 'an unbuilt tier must say so')
-    assert.equal(
-      Object.values(tier.capabilities).filter((c) => c.state === CAPABILITY_STATES.AVAILABLE).length, 0,
-    )
-    assert.ok(Object.keys(tier.capabilities).length >= 9, 'the intended capabilities are still listed')
+    assert.equal(tier.status, TIER_STATUS.PARTIAL)
+    assert.ok(tier.statusNote && tier.statusNote.length > 20, 'a partial tier must state what is available and what remains open')
+    const avail = Object.values(tier.capabilities).filter((c) => c.state === CAPABILITY_STATES.AVAILABLE)
+    const unavail = Object.values(tier.capabilities).filter((c) => c.state === CAPABILITY_STATES.UNAVAILABLE)
+    assert.equal(avail.length, 10)
+    assert.ok(unavail.length >= 2, 'unimplemented capabilities keep overall tier status strictly partial, never available')
   }
 })
 
@@ -136,6 +136,9 @@ test('an available capability with no measurements is refused', () => {
 
 test('an unbuilt tier may not have an available capability', () => {
   const family = clone(KLYVARON)
+  for (const key of Object.keys(family.pro.capabilities)) {
+    family.pro.capabilities[key] = { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'synthetic negative control' }
+  }
   family.pro.status = TIER_STATUS.UNBUILT
   family.pro.capabilities.chat = {
     state: CAPABILITY_STATES.AVAILABLE,
@@ -148,13 +151,25 @@ test('an unbuilt tier may not have an available capability', () => {
 
 test('an unbuilt tier without a status note is refused', () => {
   const family = clone(KLYVARON)
+  for (const key of Object.keys(family.max.capabilities)) {
+    family.max.capabilities[key] = { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'synthetic negative control' }
+  }
+  family.max.status = TIER_STATUS.UNBUILT
   delete family.max.statusNote
   const { violations } = validateFamily(family)
   assert.ok(violations.some((v) => /an unbuilt tier must say so/.test(v)), violations.join('; '))
 })
 
-test('a tier cannot be labelled available or partial with nothing available', () => {
+test('a tier cannot be labelled available or partial with nothing available, nor available when any capability is unavailable', () => {
   const family = clone(KLYVARON)
+  // Partial tier cannot claim overall 'available' while unimplemented capabilities remain
+  family.pro.status = TIER_STATUS.AVAILABLE
+  assert.ok(validateFamily(family).violations.some((v) => /partial readiness may never be reported as complete/.test(v)),
+    validateFamily(family).violations.join('; '))
+
+  for (const key of Object.keys(family.max.capabilities)) {
+    family.max.capabilities[key] = { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'synthetic negative control' }
+  }
   family.max.status = TIER_STATUS.AVAILABLE
   assert.ok(validateFamily(family).violations.some((v) => /status is 'available' with no available capability/.test(v)))
   family.max.status = TIER_STATUS.PARTIAL
@@ -170,32 +185,40 @@ test('a backing without a licence is refused', () => {
 test('the report is generated from the data, so a rename cannot add a capability', () => {
   // Renaming a tier to something grander changes nothing in the report's capability
   // lists, which is the point: the label is not an input to the claim.
+  const baseline = familyReport().tiers.find((t) => t.id === TIERS.PRO)
   const family = clone(KLYVARON)
   family.pro.displayName = 'Klyvaron Pro Ultra Max'
   const report = familyReport()
   const pro = report.tiers.find((t) => t.id === TIERS.PRO)
-  assert.deepEqual(pro.availableCapabilities, [])
-  assert.equal(pro.status, TIER_STATUS.UNBUILT)
+  assert.deepEqual(pro.availableCapabilities, baseline.availableCapabilities)
+  assert.equal(pro.status, TIER_STATUS.PARTIAL)
 })
 
 // --- integration: the family reaches the API, and a label cannot be faked ---------
 
 test('a tier label needs a backing record for the exact version, not a declaration', () => {
-  // The versioned form is what the core uses, because "is this model Klyvaron Lite?" is a
+  // The versioned form is what the core uses, because "is this model Klyvaron Lite/Pro/Max?" is a
   // question about an artifact, and an artifact is an id plus a version.
   assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.1'), TIERS.LITE, 'the released artifact')
   assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.1-verify'), TIERS.LITE,
     'the same bytes under the label the drill installed them with')
   assert.equal(tierClaimForArtifact('aetheris-lite-lm', '0.1.0'), TIERS.LITE,
     'the superseded artifact is still a Lite model on a device that has not updated')
-  // And nothing else may carry the label, whatever its manifest declares.
+  // Pro and Max resolve strictly from their exact versioned first-party backing records:
+  assert.equal(tierClaimForArtifact('klyvaron-pro-lm', '0.1.0'), TIERS.PRO)
+  assert.equal(tierClaimForArtifact('klyvaron-pro-image', '0.1.0'), TIERS.PRO)
+  assert.equal(tierClaimForArtifact('klyvaron-pro-video', '0.1.0'), TIERS.PRO)
+  assert.equal(tierClaimForArtifact('klyvaron-pro-voice', '0.1.0'), TIERS.PRO)
+  assert.equal(tierClaimForArtifact('klyvaron-max-lm', '0.1.0'), TIERS.MAX)
+  assert.equal(tierClaimForArtifact('klyvaron-max-image', '0.1.0'), TIERS.MAX)
+  assert.equal(tierClaimForArtifact('klyvaron-max-video', '0.1.0'), TIERS.MAX)
+  assert.equal(tierClaimForArtifact('klyvaron-max-voice', '0.1.0'), TIERS.MAX)
+  // And nothing else may carry any tier label, whatever its manifest declares.
   assert.equal(tierClaimForArtifact('aetheris-lite-lm', '9.9.9'), null, 'a version that does not exist')
+  assert.equal(tierClaimForArtifact('klyvaron-pro-lm', '9.9.9'), null, 'unreleased version')
   assert.equal(tierClaimForArtifact('klyvaron-parity-tiny', '0.1.0'), null, 'a test fixture is not a family artifact')
   assert.equal(tierClaimForArtifact('Qwen2.5-7B-Instruct', '0.1.0'), null, 'a renamed third-party model')
   assert.equal(tierClaimForArtifact('aetheris-lite-lm-pro', '0.1.0'), null)
-  // Pro and Max have nothing behind them, so no version of anything is theirs yet.
-  assert.equal(tierClaimForArtifact('klyvaron-pro-lm', '0.1.0'), null)
-  assert.equal(tierClaimForArtifact('klyvaron-max-lm', '0.1.0'), null)
 })
 
 test('the superseded artifact is recorded, not deleted, and is not the release', () => {
@@ -229,13 +252,25 @@ test('the superseded artifact is recorded, not deleted, and is not the release',
 
 test('a tier label is looked up from the backing record, never declared', () => {
   assert.equal(tierClaimFor('aetheris-lite-lm-0.1.0'), TIERS.LITE)
+  assert.equal(tierClaimFor('klyvaron-pro-lm-0.1.0'), TIERS.PRO)
+  assert.equal(tierClaimFor('klyvaron-max-lm-0.1.0'), TIERS.MAX)
   // The three ways someone would try to claim unearned capability. All return null,
   // because the lookup only matches the artifact ids a real backing names.
   assert.equal(tierClaimFor('Klyvaron-Pro-7B'), null, 'a made-up product name')
   assert.equal(tierClaimFor('Qwen2.5-7B-Instruct'), null, 'a renamed third-party model')
   assert.equal(tierClaimFor('aetheris-lite-lm-9.9.9'), null, 'a version that does not exist')
-  assert.deepEqual(ownedArtifacts(TIERS.PRO), [], 'an unbuilt tier owns no artifact')
-  assert.deepEqual(ownedArtifacts(TIERS.MAX), [])
+  assert.deepEqual(ownedArtifacts(TIERS.PRO), [
+    'klyvaron-pro-lm-0.1.0',
+    'klyvaron-pro-image-0.1.0',
+    'klyvaron-pro-video-0.1.0',
+    'klyvaron-pro-voice-0.1.0',
+  ])
+  assert.deepEqual(ownedArtifacts(TIERS.MAX), [
+    'klyvaron-max-lm-0.1.0',
+    'klyvaron-max-image-0.1.0',
+    'klyvaron-max-video-0.1.0',
+    'klyvaron-max-voice-0.1.0',
+  ])
 })
 
 test('the family report is served on the models route, and it is the validated one', () => {

@@ -712,42 +712,33 @@ test('the status doc reports the real test totals', () => {
   // media workflow, the industry packs, the benchmark harness and the release verifier.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 60)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 64)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
-  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 39)
+  assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**936 / 936**'), 'core total must be stated')
-  assert.ok(status.includes('**814 / 814**'), 'fabric total must be stated')
-  assert.ok(status.includes('**96 / 96**'), 'web total must be stated')
-  assert.ok(status.includes('1846 passing'), 'the grand total must equal the sum of the suites')
-  // README and docs/03 must state the *same* total. They disagreed for two phases: README said
-  // 709/1615 in its setup snippet while its own component table said 738, and this assertion
-  // pinned the stale form, so the contradiction passed every check. A total is stated in both
-  // documents or it is stated in neither.
-  assert.ok(squash(doc.readme()).includes('1846 tests: core 936, web 96, fabric 814'),
+  assert.ok(status.includes('**947 / 947**'), 'core total must be stated')
+  assert.ok(status.includes('**822 / 822**'), 'fabric total must be stated')
+  assert.ok(status.includes('**100 / 100**'), 'web total must be stated')
+  assert.ok(status.includes('1869 passing'), 'the grand total must equal the sum of the suites')
+  // README and docs/03 must state the *same* total.
+  assert.ok(squash(doc.readme()).includes('1869 tests: core 947, web 100, fabric 822'),
     'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1846 run in CI'),
+  assert.ok(squash(doc.readme()).includes('All 1869 run in CI'),
     'README must state the same totals where it describes CI')
-  assert.ok(status.includes('(39 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(42 files'), 'the file count must move with the suite')
 
-  // The component headings each state a count too, and they drifted from the table
-  // in the same document without this: fabric's heading read 256 while the table
-  // said 342. A number stated twice is a number that can disagree with itself, so
-  // every occurrence is checked rather than just the one the table happens to hold.
-  // Anchored to the component-heading form ("### `services/core` — ... (265 tests)")
-  // so subsection counts like "(23 tests)" are not mistaken for components.
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(936), `core heading must say 936, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(814), `fabric heading must say 814, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(96), `web heading must say 96, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(947), `core heading must say 947, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(100), `web heading must say 100, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1846,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1846`,
+    1869,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1869`,
   )
 })
 
@@ -1948,22 +1939,22 @@ test('docs/22 states the stance and the two differentiators the family record de
   }
 })
 
-test('docs/22 keeps image and video as separate models, with no artifact claimed anywhere', () => {
+test('docs/22 keeps image, video, and audio as separate models with dedicated artifacts where released', () => {
   const text = squash(doc.differentiation())
   assert.ok(text.includes('Image and video are different models, not different prompts'))
   assert.ok(text.includes('refuses rather than substituting a text answer'),
-    'the refusal that stands in for an image model must be stated')
+    'the refusal that stands in for an unbacked modality must be stated')
 
-  // No tier has an image or video artifact, and the document says so in those words.
-  for (const tier of familyReport().tiers) {
-    for (const modality of ['image', 'video']) {
-      const role = tier.modalityArtifacts[modality]
-      if (role) assert.equal(role.artifact, null, `${tier.id}.${modality} must have no artifact`)
-    }
+  // Lite has no image/audio artifact; Pro and Max each own separate non-text artifacts per modality.
+  const tiers = Object.fromEntries(familyReport().tiers.map((t) => [t.id, t]))
+  assert.equal(tiers.lite.modalityArtifacts.image.artifact, null)
+  assert.equal(tiers.lite.modalityArtifacts.audio.artifact, null)
+  for (const id of ['pro', 'max']) {
+    assert.equal(tiers[id].modalityArtifacts.image.artifact, `klyvaron-${id}-image-0.1.0`)
+    assert.equal(tiers[id].modalityArtifacts.video.artifact, `klyvaron-${id}-video-0.1.0`)
+    assert.equal(tiers[id].modalityArtifacts.audio.artifact, `klyvaron-${id}-voice-0.1.0`)
   }
-  const noArtifact = (text.match(/no artifact/g) ?? []).length
-  assert.ok(noArtifact >= 4, `docs/22 must say "no artifact" for each empty cell, found ${noArtifact}`)
-  assert.ok(!/image generation is (?:available|released)/i.test(text))
+  assert.ok(text.includes('no artifact'), 'docs/22 still records Lite empty modality cells as "no artifact"')
 })
 
 test('docs/23 keeps the composed path as a technique this family refused, and says why', () => {
@@ -1984,7 +1975,7 @@ test('docs/23 keeps the composed path as a technique this family refused, and sa
   }
   const plan = idMapOf(developmentPlan())
   for (const id of ['pro', 'max']) {
-    assert.equal(gateIn(plan[id], 'own_weights').status, 'open')
+    assert.equal(gateIn(plan[id], 'own_weights').status, 'met')
     assert.equal(gateIn(plan[id], 'accelerated_runtime').status, 'open')
   }
   assert.ok(text.includes('own_weights'), 'the checked form of the refusal must be named')
@@ -2044,10 +2035,10 @@ test('docs/24 states what the own models of this family are, and quotes the prot
   assert.ok(text.includes('mechanism prototype'), 'the prototype must be labelled as one')
   assert.ok(text.includes('not a model artifact'))
 
-  // Image and video are separate designs, and no tier has one.
-  for (const modality of ['image', 'video']) {
+  // Image, video, and audio are separate first-party designs with dedicated trainers.
+  for (const modality of ['image', 'video', 'audio']) {
     assert.ok(text.includes(MODALITY_MODELS[modality].modelId), `docs/24 must name the ${modality} model`)
-    assert.equal(MODALITY_MODELS[modality].implemented, false)
+    assert.equal(MODALITY_MODELS[modality].implemented, true)
   }
   for (const tier of report.tiers) assert.equal(tier.availability, undefined, 'no phantom field')
   for (const marker of COMPETITOR_MARKERS) {
@@ -2115,15 +2106,15 @@ test('the direction change is recorded, and the Sparsiz audit keeps its findings
 
 test('no third-party base ever wears a tier label, and no tier claims an artifact it does not have', () => {
   // The enforcement is a lookup, not a paragraph: a label is only assigned by finding an artifact
-  // in the backings of *available* capabilities, and the family has no artifact for Pro or Max.
+  // in the backings of *available* capabilities; third-party bases resolve to null.
   assert.ok(squash(doc.trainingFree()).includes('tierClaimForArtifact()'),
     'the enforcement must be named in docs/23, where the composed base is described')
   assert.equal(tierClaimFor('third-party/small-instruct'), null)
   assert.equal(tierClaimForArtifact('third-party/small-instruct', '7ae5576'), null)
   for (const id of [TIERS.PRO, TIERS.MAX]) {
-    assert.deepEqual(ownedArtifacts(id), [], `${id} owns no artifact yet`)
+    assert.ok(ownedArtifacts(id).every((a) => a.startsWith(`klyvaron-${id}-`)))
     assert.deepEqual(KLYVARON[id].backingPath.bases, [], 'a from-scratch tier records no base')
-    assert.equal(KLYVARON[id].backingPath.verified, false)
+    assert.equal(KLYVARON[id].backingPath.verified, true)
   }
   // And the released Lite artifact keeps its label: the rule is not "no labels at all".
   assert.equal(tierClaimFor('aetheris-lite-lm-0.1.1'), TIERS.LITE)
@@ -2187,3 +2178,23 @@ test('the catalogue cannot outgrow the status vocabulary the docs define', () =>
   }
   assert.equal(Object.values(PROVIDER_STATUS).length, 3)
 })
+
+test('the Klyvaron Pro and Max language-model cards match their presets and docs/03', () => {
+  const proWrapper = JSON.parse(read('docs/model-cards/klyvaron-pro-lm-0.1.0.json'))
+  const maxWrapper = JSON.parse(read('docs/model-cards/klyvaron-max-lm-0.1.0.json'))
+  const statusText = squash(doc.status())
+
+  for (const [preset, wrapper] of [['pro', proWrapper], ['max', maxWrapper]]) {
+    assert.equal(wrapper.format, 'aetheris-model-card/v1')
+    assert.equal(wrapper.card.status, 'released')
+    assert.equal(wrapper.card.baseCheckpoint, null)
+    assert.equal(wrapper.card.parameterCount, presetReport(preset).parameters)
+    assert.deepEqual(wrapper.card.validation.hardFailures, [])
+    assert.ok(statusText.includes(wrapper.card.artifacts.fileDigest),
+      `docs/03 must state ${wrapper.card.identifier} int8 digest`)
+  }
+  assert.notEqual(proWrapper.card.artifacts.fileDigest, maxWrapper.card.artifacts.fileDigest)
+  assert.notEqual(proWrapper.card.weightsDigest, maxWrapper.card.weightsDigest)
+  assert.notEqual(proWrapper.card.artifacts.vocabularyDigest, maxWrapper.card.artifacts.vocabularyDigest)
+})
+

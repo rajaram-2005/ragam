@@ -1,0 +1,177 @@
+{
+  "format": "aetheris-model-card/v1",
+  "generatedBy": "services/fabric/scripts/train_multimodal.py",
+  "reproduce": "python3 services/fabric/scripts/train_multimodal.py --modality voice --preset pro",
+  "runId": "5cced1f52816",
+  "runStatus": "released",
+  "card": {
+    "name": "klyvaron-pro-voice",
+    "version": "0.1.0",
+    "identifier": "klyvaron-pro-voice@0.1.0",
+    "family": "klyvaron-pro",
+    "licence": "MIT",
+    "weightsDigest": "5cced1f528162c0c65806a7a9c4740a7a059780ee954d8948f3267c35a5d3753",
+    "baseCheckpoint": null,
+    "configDigest": "e2868fcc87bd8e884a0db3af7dcdc296a6e1a428b55ee7275e488280914c16d3",
+    "datasetDigest": "e6f57b41688363ad9a091a51b5d9f1ba3fec3d237b654e8e58d8e5dbce7d2323",
+    "parameterCount": 3076311,
+    "status": "released",
+    "metrics": {
+      "validationUtteranceAccuracy": 1.0,
+      "uniformUtteranceBaseline": 0.0833,
+      "validationCharacterErrorRate": 0.159,
+      "roundTripTtsToAsrCer": 0.0549,
+      "validationTtsMelL1": 0.1695,
+      "meanSpectrumBaselineL1": 0.2487,
+      "initialLoss": 10.6513,
+      "finalLoss": 0.8219,
+      "lossImprovement": 9.8294,
+      "steps": 240.0,
+      "wallSeconds": 175.061,
+      "parameterCount": 3076311.0
+    },
+    "provenance": {
+      "subject": "klyvaron-pro-voice (from-scratch first-party aetheris-voice-v1)",
+      "comparator": "held-out uniform/mean baseline for voice",
+      "hardware": {
+        "machine": "x86_64",
+        "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+        "accelerator": "none (2-vCPU AVX-512 CPU host; GPU runtimes supported when user machine has hardware)"
+      },
+      "decoding": {
+        "mode": "deterministic",
+        "seed": 0
+      },
+      "context": {
+        "modality": "voice",
+        "supportedTasks": [
+          "speech.transcribe",
+          "speech.synthesize"
+        ]
+      },
+      "quantization": null,
+      "prompts": [
+        "first-party voice evaluation split"
+      ],
+      "datasetDigest": "e6f57b41688363ad9a091a51b5d9f1ba3fec3d237b654e8e58d8e5dbce7d2323",
+      "corpusSize": 240,
+      "queries": null,
+      "codeRevision": "c9785ede9ffd73d70878c16cd96784159143a1fb",
+      "seed": 20261301,
+      "limitations": [
+        "Trained on 16 kHz mono multi-formant speech (288 multi-pitch training utterances, 120 held-out unseen-speaker utterances across 12 phrase classes and 34-symbol character vocabulary).",
+        "Multi-speaker overlapping diarization, zero-shot voice cloning, and noisy far-field multilingual dictation are unsupported.",
+        "Both speech input (`speech.transcribe`) and speech output (`speech.synthesize`) are executed by first-party weights and evaluated with round-trip CER."
+      ],
+      "status": "completed",
+      "measuredAt": 1792776029.7230546
+    },
+    "limitations": [
+      "Trained on 16 kHz mono multi-formant speech (288 multi-pitch training utterances, 120 held-out unseen-speaker utterances across 12 phrase classes and 34-symbol character vocabulary).",
+      "Multi-speaker overlapping diarization, zero-shot voice cloning, and noisy far-field multilingual dictation are unsupported.",
+      "Both speech input (`speech.transcribe`) and speech output (`speech.synthesize`) are executed by first-party weights and evaluated with round-trip CER."
+    ],
+    "requirements": [
+      {
+        "metric": "validationUtteranceAccuracy",
+        "minimum": 0.75,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "validationCharacterErrorRate",
+        "minimum": null,
+        "maximum": 0.35,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "roundTripTtsToAsrCer",
+        "minimum": null,
+        "maximum": 0.35,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "lossImprovement",
+        "minimum": 0.5,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      }
+    ],
+    "validation": {
+      "passed": [
+        "'validationUtteranceAccuracy' 1.0000 meets the requirement",
+        "'validationCharacterErrorRate' 0.1590 meets the requirement",
+        "'roundTripTtsToAsrCer' 0.0549 meets the requirement",
+        "'lossImprovement' 9.8294 meets the requirement"
+      ],
+      "hardFailures": [],
+      "softFailures": [],
+      "validatedAt": 1792776029.7231205,
+      "metrics": {
+        "validationUtteranceAccuracy": 1.0,
+        "uniformUtteranceBaseline": 0.0833,
+        "validationCharacterErrorRate": 0.159,
+        "roundTripTtsToAsrCer": 0.0549,
+        "validationTtsMelL1": 0.1695,
+        "meanSpectrumBaselineL1": 0.2487,
+        "initialLoss": 10.6513,
+        "finalLoss": 0.8219,
+        "lossImprovement": 9.8294,
+        "steps": 240.0,
+        "wallSeconds": 175.061,
+        "parameterCount": 3076311.0
+      }
+    },
+    "artifacts": {
+      "filename": "weights.npz",
+      "fileDigest": "d50a346cce8c48f32d03bca0567a83c8654bf3f305082e073ef156381abee7db",
+      "bytes": 5699324,
+      "processorFile": "processor.json",
+      "processorDigest": "e6f57b41688363ad9a091a51b5d9f1ba3fec3d237b654e8e58d8e5dbce7d2323",
+      "modality": "voice",
+      "supportedTasks": [
+        "speech.transcribe",
+        "speech.synthesize"
+      ],
+      "unsupportedTasks": [
+        "multi_speaker_overlapping_diarization",
+        "zero_shot_voice_cloning",
+        "multilingual_far_field_noisy_dictation",
+        "full_duplex_sub_50ms_streaming_telephony"
+      ],
+      "trainer": "services/fabric/fabric/multimodal/voice_model.py"
+    },
+    "parentVersion": null,
+    "createdAt": 1792776029.7230818,
+    "releasedAt": 1792776029.7231348,
+    "supersededAt": null,
+    "retiredAt": null,
+    "history": [
+      {
+        "at": 1792776029.7230818,
+        "event": "registered",
+        "status": "candidate"
+      },
+      {
+        "at": 1792776029.7231228,
+        "event": "validated",
+        "passed": [
+          "'validationUtteranceAccuracy' 1.0000 meets the requirement",
+          "'validationCharacterErrorRate' 0.1590 meets the requirement",
+          "'roundTripTtsToAsrCer' 0.0549 meets the requirement",
+          "'lossImprovement' 9.8294 meets the requirement"
+        ]
+      },
+      {
+        "at": 1792776029.7231348,
+        "event": "released",
+        "notes": "first-party klyvaron-pro-voice trained from random init (seed=20261301)",
+        "superseded": null
+      }
+    ]
+  }
+}

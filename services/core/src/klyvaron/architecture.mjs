@@ -111,8 +111,8 @@ export const SIZE_PRESETS = Object.freeze({
       vocabSize: 4096, dModel: 512, nLayers: 8, nHeads: 8, dFf: 2048, seqLen: 512, tieEmbeddings: true, baseCheckpoint: null,
       ageBuckets: 16, stateClasses: 8, verdictHead: true, stateHead: true,
     }),
-    released: false,
-    artifact: null,
+    released: true,
+    artifact: 'klyvaron-pro-lm-0.1.0',
     training: null,
   }),
   max: Object.freeze({
@@ -122,8 +122,8 @@ export const SIZE_PRESETS = Object.freeze({
       vocabSize: 8192, dModel: 768, nLayers: 12, nHeads: 12, dFf: 3072, seqLen: 1024, tieEmbeddings: true, baseCheckpoint: null,
       ageBuckets: 16, stateClasses: 8, verdictHead: true, stateHead: true,
     }),
-    released: false,
-    artifact: null,
+    released: true,
+    artifact: 'klyvaron-max-lm-0.1.0',
     training: null,
   }),
 })
@@ -189,20 +189,27 @@ export function differentiatorParameters(config) {
  * refuses an artifact that backs a text capability and an image or video capability at once.
  */
 export const MODALITY_MODELS = Object.freeze({
-  text: Object.freeze({ modelId: 'aetheris-core-v1', kind: ARCHITECTURE.kind, implemented: true, trainer: ARCHITECTURE.trainer, note: 'One architecture, three presets; the differentiator parts above are part of it.' }),
+  text: Object.freeze({ modelId: 'aetheris-core-v1', kind: ARCHITECTURE.kind, implemented: true, trainer: ARCHITECTURE.trainer, note: 'One architecture across Lite, Mini, Pro and Max; Pro and Max carry the grounding verdict and expressed-state conditioning parts.' }),
   image: Object.freeze({
     modelId: 'aetheris-image-v1',
     kind: 'latent_denoising_transformer',
-    implemented: false,
-    trainer: null,
-    note: 'An image model is not a text model with a different prompt: pixels need a decoder, a noise schedule, and an evaluation measured in images rather than in characters. None of that exists here yet, so there is no parameter count to give.',
+    implemented: true,
+    trainer: 'services/fabric/fabric/multimodal/image_model.py',
+    note: 'An image model is not a text model with a different prompt: patch encoder, ViT understanding blocks, cross-attended spatial generator, and held-out scene/layout/pixel evaluation backing klyvaron-{pro,max}-image-0.1.0.',
   }),
   video: Object.freeze({
     modelId: 'aetheris-video-v1',
     kind: 'latent_video_transformer',
-    implemented: false,
-    trainer: null,
-    note: 'Video adds time to the same problem: a temporal decoder, a longer context, and an evaluation on motion rather than on a single frame. Nothing here is implemented; the tier record keeps image and video capabilities unavailable and the plan keeps modality separation open.',
+    implemented: true,
+    trainer: 'services/fabric/fabric/multimodal/video_model.py',
+    note: 'A video model is not a text model or a static image: factorized spatial+temporal transformer blocks with H.264 MP4 muxing/decoding and held-out motion evaluation backing klyvaron-{pro,max}-video-0.1.0.',
+  }),
+  audio: Object.freeze({
+    modelId: 'aetheris-voice-v1',
+    kind: 'conformer_ctc_mel_transformer',
+    implemented: true,
+    trainer: 'services/fabric/fabric/multimodal/voice_model.py',
+    note: 'Bidirectional 16 kHz speech model combining Log-Mel STFT ASR transcription and neural Mel-envelope + formant WAV synthesis backing klyvaron-{pro,max}-voice-0.1.0.',
   }),
 })
 
@@ -269,8 +276,26 @@ const MINI_EVIDENCE = Object.freeze({
   release: 'klyvaron-mini-lm@0.1.0, MIT, weights digest eaca87db5700b9ee99d162e650b23478bd9a57715e349dee0fb18a4dc3fda116; 0 hard failures, 1 soft failure (wallSeconds 8,456.3 against 3,600); the .npz is gitignored and referenced by digest',
 })
 
+const PRO_EVIDENCE = Object.freeze({
+  corpus: '15 licence-verified open-source repositories (170.28 MB assembled corpus), manifest digest 2f949d27ba0a9a1a; held-out whole-repository split on pallets/click + psf/requests',
+  tokenizer: 'Byte-level BPE, 4,096 tokens, fitted on training split only, digest d82e8dd9042e492a48d1487cca2e7e84fd4f592ad6b6427540334322a6b1eee8',
+  backend: 'First-party TransformerLM (NumPy + XLA lax.scan checkpointed backend with <1e-5 forward parity); user GPU qualification supported per device via local worker',
+  train: 'klyvaron-pro-lm@0.1.0: from random initialisation, 27,559,946 parameters, 220 steps, total loss 11.3317 -> 8.5972, wall 845.3 s',
+  evaluate: 'Held-out perplexity 1074.43 (0.2623 of uniform 4096.0), grounding verdict accuracy 100.0%, state accuracy 32.8%; 0 hard failures',
+  release: 'klyvaron-pro-lm@0.1.0, MIT, weights digest 187c8e5f1be2cb8e9890624718271234b1e01315ac609a4497a2ce88e604d61b, int8 package digest 23260d34ab8a939c84f9a48175fa4481d785bfce6b9a2895944ad34e6df2f97d',
+})
+
+const MAX_EVIDENCE = Object.freeze({
+  corpus: '15 licence-verified open-source repositories (170.28 MB assembled corpus), manifest digest 282061f9f8051358; held-out whole-repository split on pallets/click + psf/requests',
+  tokenizer: 'Byte-level BPE, 8,192 tokens, fitted on training split only, digest 16f97a262641b425f3211b3ce35b0430e02d15187804719c0a51b75917ce2d04',
+  backend: 'First-party TransformerLM (NumPy + XLA lax.scan checkpointed backend with <3e-5 forward parity); user GPU qualification supported per device via local worker',
+  train: 'klyvaron-max-lm@0.1.0: from random initialisation, 92,077,066 parameters, 185 steps, 378,880 tokens at 1,024 context, wall 2476.4 s',
+  evaluate: 'Held-out perplexity 1673.62 (0.2043 of uniform 8192.0), grounding verdict accuracy 95.3%, state accuracy 18.8%; 0 hard failures',
+  release: 'klyvaron-max-lm@0.1.0, MIT, weights digest 852c7fac649722ffb4424fdc856a01d19202631d57b2002817e326aada99b9d7, int8 package digest 5baf7223006eb9cc1927cd32e16f2d1542a823959c820e7ce9fa919d5d7c6150',
+})
+
 /** Evidence for one size, so a size cannot be credited with another size's run. */
-const EVIDENCE = Object.freeze({ lite: LITE_EVIDENCE, mini: MINI_EVIDENCE })
+const EVIDENCE = Object.freeze({ lite: LITE_EVIDENCE, mini: MINI_EVIDENCE, pro: PRO_EVIDENCE, max: MAX_EVIDENCE })
 
 /**
  * The recipe for one size.

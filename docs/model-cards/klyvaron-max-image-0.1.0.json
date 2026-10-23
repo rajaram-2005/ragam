@@ -1,0 +1,170 @@
+{
+  "format": "aetheris-model-card/v1",
+  "generatedBy": "services/fabric/scripts/train_multimodal.py",
+  "reproduce": "python3 services/fabric/scripts/train_multimodal.py --modality image --preset max",
+  "runId": "69a26b9be013",
+  "runStatus": "released",
+  "card": {
+    "name": "klyvaron-max-image",
+    "version": "0.1.0",
+    "identifier": "klyvaron-max-image@0.1.0",
+    "family": "klyvaron-max",
+    "licence": "MIT",
+    "weightsDigest": "69a26b9be0134aaa60d75fc4a9c57f6c7a690af3bd7cd301fe410f5afa5eb9b1",
+    "baseCheckpoint": null,
+    "configDigest": "037fcd32b70b51bb8ddb3b02f4b2f10759cf0b846d3abf2a560388f83ad43822",
+    "datasetDigest": "e3e153d7fa923389222f795998f917d23e7f85d878de758d96a56884562ee6d3",
+    "parameterCount": 13662960,
+    "status": "released",
+    "metrics": {
+      "validationSceneAccuracy": 0.9844,
+      "uniformSceneBaseline": 0.125,
+      "validationLayoutAccuracy": 1.0,
+      "generationPromptAlignmentAccuracy": 0.9375,
+      "validationPixelL1": 0.1669,
+      "meanPixelBaselineL1": 0.2577,
+      "initialLoss": 5.3609,
+      "finalLoss": 0.5976,
+      "lossImprovement": 4.7633,
+      "steps": 160.0,
+      "wallSeconds": 363.528,
+      "parameterCount": 13662960.0
+    },
+    "provenance": {
+      "subject": "klyvaron-max-image (from-scratch first-party aetheris-image-v1)",
+      "comparator": "held-out uniform/mean baseline for image",
+      "hardware": {
+        "machine": "x86_64",
+        "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+        "accelerator": "none (2-vCPU AVX-512 CPU host; GPU runtimes supported when user machine has hardware)"
+      },
+      "decoding": {
+        "mode": "deterministic",
+        "seed": 0
+      },
+      "context": {
+        "modality": "image",
+        "supportedTasks": [
+          "image.generate",
+          "image.edit",
+          "vision.understand"
+        ]
+      },
+      "quantization": null,
+      "prompts": [
+        "first-party image evaluation split"
+      ],
+      "datasetDigest": "e3e153d7fa923389222f795998f917d23e7f85d878de758d96a56884562ee6d3",
+      "corpusSize": 160,
+      "queries": null,
+      "codeRevision": "c9785ede9ffd73d70878c16cd96784159143a1fb",
+      "seed": 20261102,
+      "limitations": [
+        "Trained on 8 structured visual scene families (384 training images, 128 held-out validation images) at 64x64 native latent resolution with bicubic upsampling to requested PNG dimensions.",
+        "Open-world photorealistic megapixel synthesis, typographic text rendering inside images, and multi-subject identity locking remain unsupported without large GPU image corpora.",
+        "Every claim is restricted to measured held-out accuracy, pixel L1 vs mean-image baseline, and verified PNG container output."
+      ],
+      "status": "completed",
+      "measuredAt": 1792775462.5509949
+    },
+    "limitations": [
+      "Trained on 8 structured visual scene families (384 training images, 128 held-out validation images) at 64x64 native latent resolution with bicubic upsampling to requested PNG dimensions.",
+      "Open-world photorealistic megapixel synthesis, typographic text rendering inside images, and multi-subject identity locking remain unsupported without large GPU image corpora.",
+      "Every claim is restricted to measured held-out accuracy, pixel L1 vs mean-image baseline, and verified PNG container output."
+    ],
+    "requirements": [
+      {
+        "metric": "validationSceneAccuracy",
+        "minimum": 0.7,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "generationPromptAlignmentAccuracy",
+        "minimum": 0.7,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "lossImprovement",
+        "minimum": 0.5,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      }
+    ],
+    "validation": {
+      "passed": [
+        "'validationSceneAccuracy' 0.9844 meets the requirement",
+        "'generationPromptAlignmentAccuracy' 0.9375 meets the requirement",
+        "'lossImprovement' 4.7633 meets the requirement"
+      ],
+      "hardFailures": [],
+      "softFailures": [],
+      "validatedAt": 1792775462.55106,
+      "metrics": {
+        "validationSceneAccuracy": 0.9844,
+        "uniformSceneBaseline": 0.125,
+        "validationLayoutAccuracy": 1.0,
+        "generationPromptAlignmentAccuracy": 0.9375,
+        "validationPixelL1": 0.1669,
+        "meanPixelBaselineL1": 0.2577,
+        "initialLoss": 5.3609,
+        "finalLoss": 0.5976,
+        "lossImprovement": 4.7633,
+        "steps": 160.0,
+        "wallSeconds": 363.528,
+        "parameterCount": 13662960.0
+      }
+    },
+    "artifacts": {
+      "filename": "weights.npz",
+      "fileDigest": "ce5e12c6ac7bb897c34248191ee149d2e3ae31cc8c856688ace6827f46c4781b",
+      "bytes": 25238266,
+      "processorFile": "processor.json",
+      "processorDigest": "e3e153d7fa923389222f795998f917d23e7f85d878de758d96a56884562ee6d3",
+      "modality": "image",
+      "supportedTasks": [
+        "image.generate",
+        "image.edit",
+        "vision.understand"
+      ],
+      "unsupportedTasks": [
+        "photorealistic_megapixel_open_world_synthesis",
+        "typographic_text_rendering_in_images",
+        "multi_subject_identity_preservation",
+        "inpainting_with_arbitrary_polygon_masks"
+      ],
+      "trainer": "services/fabric/fabric/multimodal/image_model.py"
+    },
+    "parentVersion": null,
+    "createdAt": 1792775462.551022,
+    "releasedAt": 1792775462.551075,
+    "supersededAt": null,
+    "retiredAt": null,
+    "history": [
+      {
+        "at": 1792775462.551022,
+        "event": "registered",
+        "status": "candidate"
+      },
+      {
+        "at": 1792775462.5510628,
+        "event": "validated",
+        "passed": [
+          "'validationSceneAccuracy' 0.9844 meets the requirement",
+          "'generationPromptAlignmentAccuracy' 0.9375 meets the requirement",
+          "'lossImprovement' 4.7633 meets the requirement"
+        ]
+      },
+      {
+        "at": 1792775462.551075,
+        "event": "released",
+        "notes": "first-party klyvaron-max-image trained from random init (seed=20261102)",
+        "superseded": null
+      }
+    ]
+  }
+}

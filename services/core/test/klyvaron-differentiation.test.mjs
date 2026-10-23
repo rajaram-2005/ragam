@@ -96,16 +96,19 @@ test('image and video are separate modalities, and never the text artifact under
       assert.notEqual(modalityOf(name), undefined)
     }
   }
-  assert.deepEqual([...SEPARATE_MODALITIES], ['image', 'video'])
+  assert.deepEqual([...SEPARATE_MODALITIES], ['image', 'video', 'audio'])
 
-  // Lite's only artifact is a text model. Its image row exists because it claims image
-  // understanding, and that row carries no artifact.
+  // Lite's only artifact is a text model. Its image and audio rows carry no artifact.
   const lite = modalityArtifacts(KLYVARON[TIERS.LITE])
   assert.equal(lite.text.artifact, 'aetheris-lite-lm-0.1.1')
   assert.equal(lite.image.artifact, null)
+  assert.equal(lite.audio.artifact, null)
   const pro = modalityArtifacts(KLYVARON[TIERS.PRO])
-  assert.deepEqual(Object.keys(pro).sort(), ['image', 'text', 'video'])
-  for (const modality of SEPARATE_MODALITIES) assert.equal(pro[modality].artifact, null)
+  assert.deepEqual(Object.keys(pro).sort(), ['audio', 'image', 'text', 'video'])
+  assert.equal(pro.text.artifact, 'klyvaron-pro-lm-0.1.0')
+  assert.equal(pro.image.artifact, 'klyvaron-pro-image-0.1.0')
+  assert.equal(pro.video.artifact, 'klyvaron-pro-video-0.1.0')
+  assert.equal(pro.audio.artifact, 'klyvaron-pro-voice-0.1.0')
 
   // The refusal itself. A fixture that backs image generation with the text artifact is
   // invalid -- this is the check that makes "a text model is not an image model" a rule.

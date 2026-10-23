@@ -194,9 +194,9 @@ test('a fit that fails keeps the plan blocked and names the accelerator and the 
 
 test('the third-party base never wears the tier label', () => {
   // Directive §5A, enforced by the same lookup the core uses: a label exists only when a backing
-  // record of an *available* capability names the artifact, and a composed tier has none.
-  assert.deepEqual(ownedArtifacts(TIERS.PRO), [])
-  assert.deepEqual(ownedArtifacts(TIERS.MAX), [])
+  // record of an *available* capability names the artifact; third-party bases never resolve to any tier.
+  assert.ok(ownedArtifacts(TIERS.PRO).every((a) => a.startsWith('klyvaron-pro-')))
+  assert.ok(ownedArtifacts(TIERS.MAX).every((a) => a.startsWith('klyvaron-max-')))
   assert.equal(tierClaimFor('third-party/small-instruct'), null)
   assert.equal(tierClaimForArtifact('third-party/small-instruct', '7ae5576'), null)
   assert.equal(tierClaimFor('aetheris-lite-lm-0.1.1'), TIERS.LITE, 'the trained artifact still carries its tier')
@@ -266,16 +266,15 @@ test('the own-weights gate is derived: a released artifact meets it, an architec
   assert.equal(lite.status, GATE_STATES.MET)
   assert.match(lite.evidence, /random initialisation/)
 
-  // Pro and Max do not: the architecture is recorded and the weights are not.
+  // Pro and Max now carry their own trained first-party weights (`own_weights` met), while
+  // `accelerated_runtime` stays open until a runtime probe measures a GPU/accelerator.
   for (const id of [TIERS.PRO, TIERS.MAX]) {
     const own = gateOf(plan[id], GATES.OWN_WEIGHTS)
-    assert.equal(own.status, GATE_STATES.OPEN)
-    assert.match(own.reason, /architecture and the exact config are recorded/)
-    assert.match(own.reason, /An architecture is not an artifact/)
+    assert.equal(own.status, GATE_STATES.MET)
+    assert.match(own.evidence, /random initialisation/)
     const accelerated = gateOf(plan[id], GATES.ACCELERATED)
     assert.equal(accelerated.status, GATE_STATES.OPEN)
-    assert.match(accelerated.reason, /there is nothing to run yet/)
-    assert.match(accelerated.reason, /runtime probe .* is what confirms an accelerator/)
+    assert.match(accelerated.reason, /no accelerator has been measured running it/)
   }
 
   // The composed path can never satisfy it, whatever else it satisfies.

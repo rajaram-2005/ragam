@@ -34,10 +34,10 @@ export class MediaJobQueue {
    * @param {number} [options.concurrency] max simultaneous jobs (video is heavy: default 1)
    * @param {(e:object)=>void} [options.onEvent]
    * @param {object} [options.ledger]      audit ledger
-   * @param {string} [options.statePath]   JSON file for durable job records (optional)
    */
-  constructor({ storageDir, concurrency = 1, onEvent = () => {}, ledger = null, statePath = null }) {
+  constructor({ storageDir, concurrency = 1, onEvent = () => {}, ledger = null, statePath = null, kinds = VALID_KINDS }) {
     if (!storageDir) throw new TypeError('MediaJobQueue requires a storageDir')
+    this.validKinds = new Set(kinds)
     this.storageDir = resolve(storageDir)
     this.concurrency = Math.max(1, concurrency)
     this.onEvent = onEvent
@@ -101,7 +101,7 @@ export class MediaJobQueue {
    * @param {string} [spec.subject]  audit subject (e.g. conversation id)
    */
   enqueue({ kind, run, params = {}, timeoutMs = 600_000, subject = null, filenameHint = null }) {
-    if (!VALID_KINDS.has(kind)) throw new TypeError(`invalid media kind '${kind}'`)
+    if (!this.validKinds.has(kind)) throw new TypeError(`invalid media kind '${kind}'`)
     if (typeof run !== 'function') throw new TypeError('job requires a run() function')
 
     const id = randomUUID()
@@ -274,7 +274,7 @@ export class MediaJobQueue {
   }
 
   async #finalize(job, result, filenameHint) {
-    const expectedKind = job.kind === MEDIA_KINDS.VIDEO ? MEDIA_KINDS.VIDEO : MEDIA_KINDS.IMAGE
+    const expectedKind = job.kind
     const bytes = this.#extractBytes(result, job.kind)
 
     if (!bytes) {
@@ -345,7 +345,11 @@ export class MediaJobQueue {
 
   #extractBytes(result, kind) {
     if (!result) return null
-    if (kind === MEDIA_KINDS.VIDEO) return result.video ? toUint8(result.video) : null
+    if (kind === MEDIA_KINDS.VIDEO) {
+      if (result.video) return toUint8(result.video)
+      if (result.bytes) return toUint8(result.bytes)
+      return null
+    }
     if (result.bytes) return toUint8(result.bytes)
     const entries = Array.isArray(result.images) ? result.images : []
     for (const entry of entries) {

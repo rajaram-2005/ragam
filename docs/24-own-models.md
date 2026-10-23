@@ -365,13 +365,17 @@ capability's gate. `no base checkpoint` is not a promise here either: the parts 
 random initialisation of this repository's own model class, exactly like the pretrained base they
 sit in.
 
-## 8. Image and video are separate designs
+## 8. Image, video and voice are separate first-party designs
 
-`MODALITY_MODELS` records three models, not one model with three prompts: `aetheris-core-v1` for
-text, `aetheris-image-v1` (a latent denoising transformer) and `aetheris-video-v1` (a latent video
-transformer). The last two are `implemented: false` with no trainer and no parameter count, because
-a number nobody can train is a wish rather than an architecture. The family validator independently
-refuses an artifact that backs a text capability and an image or video capability at once
+`MODALITY_MODELS` records four separate first-party architectures, never one text model wearing
+different prompts: `aetheris-core-v1` for text (`klyvaron-{pro,max}-lm`), `aetheris-image-v1` for
+image generation, editing, and vision understanding (`klyvaron-{pro,max}-image`),
+`aetheris-video-v1` for short-clip MP4 video generation and temporal video understanding
+(`klyvaron-{pro,max}-video`), and `aetheris-voice-v1` for 16 kHz WAV speech transcription and
+synthesis (`klyvaron-{pro,max}-voice`). Each has its own trainer in `services/fabric/fabric/multimodal/`,
+its own released Pro and Max checkpoints trained from random initialisation, and its own committed
+model cards and evaluation records. The family validator independently refuses an artifact that
+backs a text capability and an image, video, or audio capability at once
 ([22 §4](22-klyvaron-differentiation.md)).
 
 ## 9. What is claimed, and what is not

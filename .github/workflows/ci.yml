@@ -43,6 +43,24 @@ jobs:
         with:
           node-version: '22'
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install multimodal runtime dependencies and verified first-party weights
+        run: |
+          python -m pip install --upgrade pip && pip install numpy jax av Pillow
+          mkdir -p .aetheris-data/online/klyvaron/models
+          curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40 \
+            | tar -xz --strip-components=1 -C .aetheris-data/online/klyvaron/models
+          (
+            cd .aetheris-data/online/klyvaron/models
+            cat klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part* > klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz
+            rm -f klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part*
+            sha256sum -c SHA256SUMS
+            rm -f SHA256SUMS
+          )
+
       - name: Verify the zero-dependency property
         run: |
           # This is a load-bearing property, not a stylistic one: it is what keeps the
@@ -78,8 +96,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install NumPy and pytest only
-        run: python -m pip install --upgrade pip && pip install numpy pytest
+      - name: Install NumPy, multimodal packages, and pytest (never torch)
+        run: python -m pip install --upgrade pip && pip install numpy jax av Pillow pytest
 
       - name: Confirm no GPU is assumed
         run: |
@@ -250,6 +268,20 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install multimodal runtime dependencies and verified first-party weights
+        run: |
+          python -m pip install --upgrade pip > /dev/null && pip install numpy jax av Pillow pytest
+          mkdir -p .aetheris-data/online/klyvaron/models
+          curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40 \
+            | tar -xz --strip-components=1 -C .aetheris-data/online/klyvaron/models
+          (
+            cd .aetheris-data/online/klyvaron/models
+            cat klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part* > klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz
+            rm -f klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part*
+            sha256sum -c SHA256SUMS
+            rm -f SHA256SUMS
+          )
+
       # The release check compares the totals the documentation states with the totals the
       # suites produced, so the suites have to run here. Reading the numbers out of docs/03 and
       # then checking docs/03 against them would verify nothing.
@@ -289,7 +321,6 @@ jobs:
       - name: Fabric suite, counted
         working-directory: services/fabric
         run: |
-          python -m pip install --upgrade pip > /dev/null && pip install numpy pytest
           set +e
           # Not `-q`: in pytest 9 the summary line ("814 passed") is suppressed when
           # stdout is a file, and the summary is exactly what this step counts.

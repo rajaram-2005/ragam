@@ -92,6 +92,7 @@ async function loadComponents() {
     "export { default as ProviderSettings } from '../../src/components/ProviderSettings.jsx'",
     "export { default as ProviderCatalogue } from '../../src/components/ProviderCatalogue.jsx'",
     "export { default as KlyvaronTiers } from '../../src/components/KlyvaronTiers.jsx'",
+    "export { default as UserTrainingPanel } from '../../src/components/UserTrainingPanel.jsx'",
     "export { default as App } from '../../src/App.jsx'",
     "export { default as SignInPage } from '../../src/pages/SignInPage.jsx'",
     "export { default as SignUpPage } from '../../src/pages/SignUpPage.jsx'",
@@ -632,3 +633,122 @@ test('Provider Settings offers LiteLLM, Ollama and llama.cpp, and calls the loca
   assert.match(chat, /Connect your online provider/)
   assert.match(chat, /Ollama/)
 })
+
+test('ChatArea gates first-party Klyvaron models strictly on real inference verification and separates gateway models', () => {
+  const proSha = '11'.repeat(32)
+  const readiness = {
+    status: 'configured',
+    policy: 'online_only',
+    provider: { selectedModel: 'klyvaron-pro-lm' },
+    firstPartyModels: {
+      readyCount: 1,
+      totalFirstParty: 2,
+      models: [
+        {
+          id: 'klyvaron-pro-lm',
+          label: 'Klyvaron Pro',
+          displayName: 'Klyvaron Pro (first-party · 27.6M)',
+          status: 'ready',
+          selectorEnabled: true,
+          parameters: 27_559_946,
+          weightsSha256: proSha,
+        },
+        {
+          id: 'klyvaron-max-lm',
+          label: 'Klyvaron Max',
+          displayName: 'Klyvaron Max (first-party · 92.1M)',
+          status: 'missing',
+          selectorEnabled: false,
+          parameters: 92_077_066,
+          weightsSha256: null,
+        },
+      ],
+    },
+  }
+  const chat = render('ChatArea (first-party Pro verified, Max missing)', React.createElement(components.ChatArea, {
+    provider: { kind: 'litellm', name: 'LiteLLM', configured: true, models: ['gpt-external-demo'], selectedModel: '' },
+    readiness,
+  }))
+  // Verified Pro is selectable without disabled attribute; unverified Max is disabled; gateway model stays distinct.
+  assert.match(chat, /<option value="klyvaron-pro-lm"[^>]*>Klyvaron Pro \(first-party · 27\.6M\)<\/option>/)
+  assert.match(chat, /<option value="klyvaron-max-lm"[^>]*disabled[^>]*>Klyvaron Max \(klyvaron-max-lm\) — missing<\/option>/)
+  assert.match(chat, /<option value="gpt-external-demo">gpt-external-demo<\/option>/)
+  assert.match(chat, /Klyvaron Native/)
+  assert.doesNotMatch(chat, /Connect your online provider/)
+})
+
+test('KlyvaronTiers keeps product routing tiers separate from first-party model identities', () => {
+  const panel = render('KlyvaronTiers (initial)', React.createElement(components.KlyvaronTiers, {
+    providers: { connections: [] },
+    owner: true,
+    onChanged: noop,
+  }))
+  assert.match(panel, /Klyvaron product tiers/)
+})
+
+test('UserTrainingPanel defaults to unpaired user-computer-first mode and never claims server-host execution', () => {
+  const unpaired = render('UserTrainingPanel (unpaired)', React.createElement(components.UserTrainingPanel, {
+    readiness: READINESS_DEGRADED,
+    refreshReadiness: noop,
+  }))
+  assert.match(unpaired, /No local worker is paired\. Your computer is not connected/)
+  assert.match(unpaired, /never runs neural weight training silently from ordinary chat messages/)
+  assert.match(unpaired, /max 120s including finalization/)
+})
+
+test('UserTrainingPanel discloses real paired worker hardware, mode-downgrade approval gate, and rollback control', () => {
+  const paired = render('UserTrainingPanel (paired + downgrade gate)', React.createElement(components.UserTrainingPanel, {
+    readiness: READINESS_READY,
+    refreshReadiness: noop,
+    initialStatus: {
+      localWorkerConnected: true,
+      releaseGates: {
+        'klyvaron-pro-lm': {
+          modelId: 'klyvaron-pro-lm',
+          gates: { architectureImplemented: true, localWorkerConnected: true, availableInRagamChat: true },
+        },
+      },
+      worker: {
+        capabilities: {
+          platform: 'darwin',
+          arch: 'arm64',
+          cpu: { logicalCores: 8 },
+          memory: { availableRamBytes: 1_600_000_000 },
+          gpu: { available: false, devices: [] },
+          software: { supportedBackends: ['python-numpy-cpu'] },
+        },
+      },
+    },
+    initialPlan: {
+      disclosureDigest: 'sha256-demo-digest',
+      readyToExecute: false,
+      blockers: ['Full weight training exceeds 1.6 GB available RAM.'],
+      spec: {
+        selectedMode: 'full_fine_tune',
+        stoppingCriteria: { maxSteps: 4, maxDurationMs: null },
+        resourceEstimate: { selectedBackend: 'python-numpy-cpu', requiredRamBytes: 2_800_000_000 },
+        dataProvenance: { datasetSha256: '0123456789abcdef0123456789abcdef' },
+        modeDowngradeProposal: {
+          requestedMode: 'full_fine_tune',
+          proposedMode: 'lightweight_adapter',
+          approvedByUser: false,
+          differenceExplanation: 'Full fine-tuning updates all 92.1M parameters; rank-8 LoRA updates only adapter matrices.',
+        },
+      },
+    },
+    initialJob: {
+      jobId: 'job-rollback-demo',
+      state: 'completed',
+      promotedToChat: true,
+      workerJob: { progress: { step: 4, totalSteps: 4, trainLoss: 4.91 }, result: { elapsedMs: 1850 } },
+    },
+  }))
+  assert.match(paired, /darwin\/arm64/)
+  assert.match(paired, /uncapped \(foundation session\)/)
+  assert.match(paired, /Full fine-tuning updates all 92\.1M parameters/)
+  assert.match(paired, /Approve switching from full_fine_tune to lightweight_adapter/)
+  assert.match(paired, /Roll back weights/)
+  assert.match(paired, /Klyvaron Pro &amp; Max release gate matrix \(9 separate checks\)/)
+})
+
+

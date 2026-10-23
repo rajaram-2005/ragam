@@ -6,49 +6,25 @@
 // truncated, does not crash — it generates worse text, and worse text is attributed to
 // the model rather than to the loader. So the format carries integrity data and this
 // module refuses to hand back a model that does not match it.
-//
-// TWO FILES, ONE ARTIFACT
-//
-//   <id>.klyvaron.json   the manifest: architecture, vocabulary, digests, provenance,
-//                        measurements and limitations. Human-readable, diffable, and
-//                        what a model card is generated from.
-//   <id>.npz             the weights, written by `numpy.savez`. Read here without a
-//                        NumPy dependency: an .npz is a ZIP of .npy files, and both
-//                        containers are documented formats this module parses directly.
-//
-// WHY NOT REQUIRE NUMPY-COMPATIBLE NAMES ONLY
-//
-// The exporter writes the parameter names the Python training code uses
-// (`L0.wq`, `lnf_gain`, ...) and this module recomputes the *expected* name set from the
-// architecture. A checkpoint that has a parameter the architecture does not describe is
-// rejected rather than ignored: ignoring it is exactly how a config/weight mismatch
-// survives review.
-//
-// DIGEST SPECIFICATION
-//
-// `weights.sha256` is the SHA-256 of the .npz file's bytes, so it is trivially checkable
-// here and in any other language. `tokenizer.digest` is a domain-separated hash of the
-// vocabulary, defined by this repository so that Python and Node compute the same value
-// rather than one reimplementing the other's JSON serialiser:
-//
-//     sha256( "klyvaron.tokenizer.character/1\n"
-//             + concat( json.dumps(character, ensure_ascii=False) + "\n" for character ) )
-//
-// The character is JSON-quoted on its own line because the vocabulary contains newlines,
-// quotes and backslashes — every one of which would make an unescaped join ambiguous.
 
 import { createHash } from 'node:crypto'
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
+import { endianness } from 'node:os'
 import { join, basename } from 'node:path'
 import { inflateRawSync } from 'node:zlib'
 import { memorySnapshot } from '../hardware/detect.mjs'
 
 export const ARTIFACT_FORMAT = 'klyvaron.artifact/1'
 export const QUANTIZED_ARTIFACT_FORMAT = 'klyvaron.artifact/2'
+export const ADAPTER_FORMAT = 'klyvaron.adapter/1'
 export const INT8_SCHEME = 'symmetric-int8-per-tensor'
 export const MANIFEST_SUFFIX = '.klyvaron.json'
 export const TOKENIZER_FORMAT = 'klyvaron.tokenizer.character/1'
+export const BYTE_BPE_FORMAT = 'klyvaron.tokenizer.byte-bpe/1'
+export const BASE_BYTE_VOCAB = 256
 export const UNK_CHARACTER = '\ufffd'
+
+const IS_LITTLE_ENDIAN = endianness() === 'LE'
 
 export class ArtifactError extends Error {
   constructor(message, { code = 'artifact_error', detail = {} } = {}) {
@@ -67,15 +43,8 @@ const EOCD_SIGNATURE = 0x06054b50
 const CENTRAL_SIGNATURE = 0x02014b50
 const LOCAL_SIGNATURE = 0x04034b50
 const ZIP64_EXTRA_ID = 0x0001
-//: ZIP64's "the real value is in the extra field" marker for a 32-bit size or offset.
 const ZIP64_SENTINEL = 0xffffffff
 
-/**
- * Find one extra field by id, or null.
- *
- * Extra fields are a flat list of `(id, length, data)` records. Returning null rather than
- * throwing lets the caller say which sources it looked in.
- */
 function findExtraField(buffer, start, length, id) {
   const end = Math.min(start + length, buffer.length)
   let cursor = start
@@ -88,21 +57,6 @@ function findExtraField(buffer, start, length, id) {
   return null
 }
 
-/**
- * A member's real sizes when the 32-bit fields say "the value is in the extra field".
- *
- * ZIP64 replaces a size or an offset with `0xffffffff` and carries the 64-bit values in an
- * extra field (id `0x0001`), in a fixed order — uncompressed size, compressed size, header
- * offset, disk number — including only the fields that overflowed. That framing is not
- * exotic for this project: CPython's `zipfile` writes *every* member that way on some patch
- * releases of the same interpreter (version-needed 45, both sizes sentinelled) and writes
- * the sizes inline beside a ZIP64 extra field on others, for the same weights. An artifact
- * is bytes; the interpreter that wrote it is not recorded in them, so both have to read.
- *
- * The central directory is the index and is consulted first. The local header is consulted
- * as well because a writer that put the values beside the data is not wrong, only
- * unhelpful — and a reader that refuses it would be refusing an artifact it can read.
- */
 function resolveZip64Sizes(buffer, {
   centralExtraStart, centralExtraLength, localExtraStart, localExtraLength,
   compressedSize, uncompressedSize, name,
@@ -114,7 +68,7 @@ function resolveZip64Sizes(buffer, {
     ['the central directory', centralExtraStart, centralExtraLength],
     ['the local header', localExtraStart, localExtraLength],
   ]
-  for (const [where, start, length] of sources) {
+  for (const [, start, length] of sources) {
     const field = findExtraField(buffer, start, length, ZIP64_EXTRA_ID)
     if (!field) continue
     let cursor = 0
@@ -137,17 +91,6 @@ function resolveZip64Sizes(buffer, {
   )
 }
 
-/**
- * Read every member of a ZIP archive held in memory.
- *
- * Walks the central directory rather than scanning for local headers, because the
- * central directory is the index and a scan would also match signatures appearing
- * inside compressed data. `numpy.savez` writes stored (method 0) entries;
- * `savez_compressed` writes deflated ones, and both are handled so an exporter that
- * changes its mind does not silently produce an unreadable artifact. ZIP64 framing is
- * handled too — see `resolveZip64Sizes` for why the same interpreter writes it for the
- * same weights on different patch releases.
- */
 export function readZipEntries(buffer, { maxUncompressedBytes = Infinity } = {}) {
   let expandedBytes = 0
   const eocd = findEndOfCentralDirectory(buffer)
@@ -203,8 +146,7 @@ export function readZipEntries(buffer, { maxUncompressedBytes = Infinity } = {})
     else if (method === 8) {
       try { data = inflateRawSync(raw, { maxOutputLength: Math.max(1, uncompressed) }) }
       catch { throw new ArtifactError(`'${name}' has invalid or oversized compressed data`, { code: 'corrupt_zip' }) }
-    }
-    else throw new ArtifactError(`'${name}' uses unsupported compression method ${method}`, { code: 'unsupported_compression' })
+    } else throw new ArtifactError(`'${name}' uses unsupported compression method ${method}`, { code: 'unsupported_compression' })
     if (data.length !== uncompressed) {
       throw new ArtifactError(`'${name}' is ${data.length} bytes, the directory says ${uncompressed}`, { code: 'corrupt_zip' })
     }
@@ -215,7 +157,6 @@ export function readZipEntries(buffer, { maxUncompressedBytes = Infinity } = {})
 }
 
 function findEndOfCentralDirectory(buffer) {
-  // The record is at most 22 + 65535 bytes from the end; scan back from the end.
   const minimum = Math.max(0, buffer.length - (22 + 0xffff))
   for (let i = buffer.length - 22; i >= minimum; i -= 1) {
     if (buffer.readUInt32LE(i) === EOCD_SIGNATURE) return i
@@ -232,13 +173,6 @@ const DTYPE_READERS = {
   '|u1': { bytes: 1, read: (buffer, offset) => buffer.readUInt8(offset), array: Uint8Array },
 }
 
-/**
- * Parse one `.npy` member.
- *
- * Only the header fields that matter are read: `descr` (dtype), `fortran_order` and
- * `shape`. Fortran order is refused rather than transposed, because silently
- * transposing a weight matrix produces a model that runs and is wrong.
- */
 export function readNpy(buffer, allowFortran = false) {
   if (buffer.length < 10) throw new ArtifactError('a .npy member is too short to hold a header', { code: 'corrupt_npy' })
   const magic = buffer.toString('latin1', 0, 6)
@@ -284,8 +218,19 @@ export function readNpy(buffer, allowFortran = false) {
       { code: 'corrupt_npy' },
     )
   }
-  const out = new reader.array(count)
-  for (let i = 0; i < count; i += 1) out[i] = reader.read(buffer, start + i * reader.bytes)
+  let out
+  if (IS_LITTLE_ENDIAN) {
+    const byteOffset = buffer.byteOffset + start
+    if (byteOffset % reader.bytes === 0) {
+      out = new reader.array(buffer.buffer, byteOffset, count).slice()
+    } else {
+      const aligned = Buffer.from(buffer.subarray(start, start + expected))
+      out = new reader.array(aligned.buffer, aligned.byteOffset, count)
+    }
+  } else {
+    out = new reader.array(count)
+    for (let i = 0; i < count; i += 1) out[i] = reader.read(buffer, start + i * reader.bytes)
+  }
   return { dtype: descr, shape, data: out, fortranOrder: fortran === 'True' }
 }
 
@@ -304,7 +249,7 @@ export function readNpz(buffer, options = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// The vocabulary digest, computed identically in Python and here
+// Vocabulary digests, computed identically in Python (`export.py`) and here
 // ---------------------------------------------------------------------------
 
 export function vocabularyDigest(characters) {
@@ -314,8 +259,17 @@ export function vocabularyDigest(characters) {
   return hash.digest('hex')
 }
 
+export function bpeDigest(merges, baseVocabSize = BASE_BYTE_VOCAB) {
+  const hash = createHash('sha256')
+  hash.update(`${BYTE_BPE_FORMAT}\n${baseVocabSize}\n`, 'utf8')
+  for (const [left, right] of merges) hash.update(`${left},${right}\n`, 'utf8')
+  return hash.digest('hex')
+}
+
+export { bpeDigest as byteBpeDigest }
+
 // ---------------------------------------------------------------------------
-// Manifest validation
+// Manifest validation (supporting trunk-only and full `aetheris-core-v1`)
 // ---------------------------------------------------------------------------
 
 const REQUIRED_MANIFEST_FIELDS = [
@@ -336,15 +290,25 @@ export function expectedParameterNames(architecture) {
   }
   names.push('lnf_gain', 'lnf_bias')
   if (!architecture.tie_embeddings) names.push('head')
+  if ((architecture.age_buckets ?? 0) > 0) names.push('age_emb')
+  if ((architecture.state_classes ?? 0) > 0) names.push('state_emb')
+  if (architecture.verdict_head === true) names.push('verdict_w', 'verdict_b')
+  if (architecture.state_head === true) names.push('state_head_w', 'state_head_b')
   return names
 }
 
-/** Parameter count for a decoder-only pre-LayerNorm transformer with this config. */
+/** Parameter count for a decoder-only pre-LayerNorm transformer with optional differentiators. */
 export function parameterCount(architecture) {
   const { d_model: d, d_ff: ff, vocab_size: v, n_layers: L, seq_len } = architecture
   const embedding = v * d
   const perLayer = 4 * d * d + 2 * d * ff + 4 * d
-  return embedding + seq_len * d + L * perLayer + 2 * d + (architecture.tie_embeddings ? 0 : v * d)
+  const ageBuckets = architecture.age_buckets ?? 0
+  const stateClasses = architecture.state_classes ?? 0
+  const differentiators = (ageBuckets > 0 ? ageBuckets * d : 0)
+    + (stateClasses > 0 ? stateClasses * d : 0)
+    + (architecture.verdict_head === true ? 2 * d + 2 : 0)
+    + (architecture.state_head === true ? stateClasses * d + stateClasses : 0)
+  return embedding + seq_len * d + L * perLayer + 2 * d + (architecture.tie_embeddings ? 0 : v * d) + differentiators
 }
 
 function requireField(container, field, where) {
@@ -355,12 +319,6 @@ function requireField(container, field, where) {
   return value
 }
 
-/**
- * Validate a parsed manifest object.
- *
- * Strict on purpose: every field here is one a consumer acts on, and a manifest that
- * omits a limitation is indistinguishable from a model that has none.
- */
 export function validateManifest(manifest) {
   if (![ARTIFACT_FORMAT, QUANTIZED_ARTIFACT_FORMAT].includes(manifest?.format)) {
     throw new ArtifactError(
@@ -384,6 +342,19 @@ export function validateManifest(manifest) {
       throw new ArtifactError(`architecture.${field} must be a positive safe integer`, { code: 'invalid_manifest' })
     }
   }
+  for (const field of ['age_buckets', 'state_classes']) {
+    if (arch[field] !== undefined && (!Number.isSafeInteger(arch[field]) || arch[field] < 0)) {
+      throw new ArtifactError(`architecture.${field} must be a non-negative integer`, { code: 'invalid_manifest' })
+    }
+  }
+  for (const field of ['verdict_head', 'state_head']) {
+    if (arch[field] !== undefined && typeof arch[field] !== 'boolean') {
+      throw new ArtifactError(`architecture.${field} must be a boolean`, { code: 'invalid_manifest' })
+    }
+  }
+  if (arch.state_head === true && !(arch.state_classes > 0)) {
+    throw new ArtifactError('architecture.state_head requires state_classes > 0', { code: 'invalid_manifest' })
+  }
   if (typeof arch.tie_embeddings !== 'boolean' || !Number.isSafeInteger(parameterCount(arch))) {
     throw new ArtifactError('invalid architecture or overflowing parameter count', { code: 'invalid_manifest' })
   }
@@ -394,35 +365,74 @@ export function validateManifest(manifest) {
   }
 
   const tokenizer = manifest.tokenizer
-  if (tokenizer.kind !== 'character') {
+  if (tokenizer.kind === 'character') {
+    if (tokenizer.unkChar !== UNK_CHARACTER) {
+      throw new ArtifactError(`the unknown character must be ${JSON.stringify(UNK_CHARACTER)}, got ${JSON.stringify(tokenizer.unkChar)}`, {
+        code: 'invalid_manifest',
+      })
+    }
+    if (!Array.isArray(tokenizer.characters) || !tokenizer.characters.length) {
+      throw new ArtifactError('the tokenizer must carry its vocabulary', { code: 'invalid_manifest' })
+    }
+    if (new Set(tokenizer.characters).size !== tokenizer.characters.length) {
+      throw new ArtifactError('the vocabulary contains duplicate characters', { code: 'invalid_manifest' })
+    }
+    if (tokenizer.characters.includes(UNK_CHARACTER)) {
+      throw new ArtifactError('the vocabulary must not contain the reserved unknown character', { code: 'invalid_manifest' })
+    }
+    const computed = vocabularyDigest(tokenizer.characters)
+    if (tokenizer.digest !== computed) {
+      throw new ArtifactError(
+        `vocabulary digest is ${tokenizer.digest}, the characters hash to ${computed}`,
+        { code: 'vocabulary_mismatch' },
+      )
+    }
+    if (tokenizer.characters.length + 1 !== arch.vocab_size) {
+      throw new ArtifactError(
+        `vocabulary has ${tokenizer.characters.length} characters but the architecture expects ${arch.vocab_size - 1}`,
+        { code: 'invalid_manifest' },
+      )
+    }
+  } else if (tokenizer.kind === 'byte-bpe') {
+    const baseSize = tokenizer.baseVocabSize ?? BASE_BYTE_VOCAB
+    if (baseSize !== BASE_BYTE_VOCAB) {
+      throw new ArtifactError(`byte-bpe requires baseVocabSize ${BASE_BYTE_VOCAB}`, { code: 'invalid_manifest' })
+    }
+    if (!Array.isArray(tokenizer.merges) || !tokenizer.merges.length) {
+      throw new ArtifactError('byte-bpe tokenizer must declare non-empty merges', { code: 'invalid_manifest' })
+    }
+    const seenPairs = new Set()
+    for (let i = 0; i < tokenizer.merges.length; i += 1) {
+      const pair = tokenizer.merges[i]
+      if (!Array.isArray(pair) || pair.length !== 2) {
+        throw new ArtifactError(`merge ${i} must be a [left, right] pair`, { code: 'invalid_manifest' })
+      }
+      const [left, right] = pair
+      if (!Number.isSafeInteger(left) || !Number.isSafeInteger(right)
+        || left < 0 || left >= BASE_BYTE_VOCAB + i || right < 0 || right >= BASE_BYTE_VOCAB + i) {
+        throw new ArtifactError(`merge ${i} references invalid token id`, { code: 'invalid_manifest' })
+      }
+      const key = `${left},${right}`
+      if (seenPairs.has(key)) {
+        throw new ArtifactError(`duplicate merge pair '${key}'`, { code: 'invalid_manifest' })
+      }
+      seenPairs.add(key)
+    }
+    const computed = bpeDigest(tokenizer.merges, baseSize)
+    if (tokenizer.digest !== computed) {
+      throw new ArtifactError(
+        `vocabulary digest is ${tokenizer.digest}, the merges hash to ${computed}`,
+        { code: 'vocabulary_mismatch' },
+      )
+    }
+    if (baseSize + tokenizer.merges.length !== arch.vocab_size) {
+      throw new ArtifactError(
+        `byte-bpe vocabulary has ${baseSize + tokenizer.merges.length} tokens, architecture expects ${arch.vocab_size}`,
+        { code: 'invalid_manifest' },
+      )
+    }
+  } else {
     throw new ArtifactError(`unsupported tokenizer kind '${tokenizer.kind}'`, { code: 'unsupported_tokenizer' })
-  }
-  if (tokenizer.unkChar !== UNK_CHARACTER) {
-    throw new ArtifactError(`the unknown character must be ${JSON.stringify(UNK_CHARACTER)}, got ${JSON.stringify(tokenizer.unkChar)}`, {
-      code: 'invalid_manifest',
-    })
-  }
-  if (!Array.isArray(tokenizer.characters) || !tokenizer.characters.length) {
-    throw new ArtifactError('the tokenizer must carry its vocabulary', { code: 'invalid_manifest' })
-  }
-  if (new Set(tokenizer.characters).size !== tokenizer.characters.length) {
-    throw new ArtifactError('the vocabulary contains duplicate characters', { code: 'invalid_manifest' })
-  }
-  if (tokenizer.characters.includes(UNK_CHARACTER)) {
-    throw new ArtifactError('the vocabulary must not contain the reserved unknown character', { code: 'invalid_manifest' })
-  }
-  const computed = vocabularyDigest(tokenizer.characters)
-  if (tokenizer.digest !== computed) {
-    throw new ArtifactError(
-      `vocabulary digest is ${tokenizer.digest}, the characters hash to ${computed}`,
-      { code: 'vocabulary_mismatch' },
-    )
-  }
-  if (tokenizer.characters.length + 1 !== arch.vocab_size) {
-    throw new ArtifactError(
-      `vocabulary has ${tokenizer.characters.length} characters but the architecture expects ${arch.vocab_size - 1}`,
-      { code: 'invalid_manifest' },
-    )
   }
 
   const weights = manifest.weights
@@ -434,14 +444,18 @@ export function validateManifest(manifest) {
     throw new ArtifactError('weights require a safe NPZ basename and positive byte count', { code: 'invalid_manifest' })
   }
   if (!/^[0-9a-f]{64}$/.test(weights.sha256)) {
-    throw new ArtifactError("weights.sha256 must be a lowercase hex sha256", { code: 'invalid_manifest' })
+    throw new ArtifactError('weights.sha256 must be a lowercase hex sha256', { code: 'invalid_manifest' })
   }
   if (!Array.isArray(weights.names) || new Set(weights.names).size !== weights.names.length) {
     throw new ArtifactError('weights.names must be a unique list', { code: 'name_mismatch' })
   }
-  // Check the supplied list length before materialising names for every layer.
-  // A tiny malicious manifest must not induce a billion-iteration validation loop.
-  if (weights.names.length !== 10 * arch.n_layers + 4 + (arch.tie_embeddings ? 0 : 1)) {
+  const expectedCount = 10 * arch.n_layers + 4
+    + (arch.tie_embeddings ? 0 : 1)
+    + ((arch.age_buckets ?? 0) > 0 ? 1 : 0)
+    + ((arch.state_classes ?? 0) > 0 ? 1 : 0)
+    + (arch.verdict_head === true ? 2 : 0)
+    + (arch.state_head === true ? 2 : 0)
+  if (weights.names.length !== expectedCount) {
     throw new ArtifactError('the weight list and the architecture disagree on parameter count', { code: 'name_mismatch' })
   }
   const expected = expectedParameterNames(arch)
@@ -465,7 +479,6 @@ export function validateManifest(manifest) {
   }
 
   if (!Array.isArray(manifest.limitations) || !manifest.limitations.length) {
-    // A model with no declared limitations is a claim, not an artifact.
     throw new ArtifactError('the manifest must declare at least one limitation', { code: 'invalid_manifest' })
   }
   return manifest
@@ -475,7 +488,6 @@ export function validateManifest(manifest) {
 // Loading a directory
 // ---------------------------------------------------------------------------
 
-/** Find the manifest in a directory. Exactly one is expected. */
 export function findManifest(directory) {
   if (!existsSync(directory)) {
     throw new ArtifactError(`no such model directory: ${directory}`, { code: 'not_installed' })
@@ -493,15 +505,6 @@ export function findManifest(directory) {
   return join(directory, candidates[0])
 }
 
-/**
- * Load and verify an artifact directory.
- *
- * Order matters: the manifest is validated first, then the weights file is hashed and
- * parsed, then the arrays are checked against the architecture. Every failure names
- * what disagreed, because "failed to load the model" is not actionable.
- *
- * @returns {{ manifest: object, weights: Map<string, {shape:number[], data:TypedArray, dtype:string}>, directory: string, manifestPath: string, weightsPath: string, sha256: string }}
- */
 export function loadArtifact(directory, { verify = true, availableMemory = () => memorySnapshot().availableRamBytes } = {}) {
   const manifestPath = findManifest(directory)
   let manifest
@@ -523,7 +526,6 @@ export function loadArtifact(directory, { verify = true, availableMemory = () =>
   if (!Number.isSafeInteger(allocation.loadBytes) || !Number.isFinite(available) || available < allocation.loadBytes) {
     throw new ArtifactError('insufficient available RAM to load weights; keep the task and select a smaller model', { code: 'needs_hardware' })
   }
-  // Even a forged manifest cannot make us read a much larger file before checking.
   if (statSync(weightsPath).size !== manifest.weights.bytes) {
     throw new ArtifactError('weights file size differs from the manifest before loading', { code: 'size_mismatch' })
   }
@@ -560,7 +562,7 @@ export function loadArtifact(directory, { verify = true, availableMemory = () =>
       code: 'weights_unexpected',
     })
   }
-  for (const [name, expectedShape] of Object.entries(shapeMap(manifest.architecture))) {
+  for (const [name, expectedShape] of Object.entries(shapes)) {
     const found = weights.get(name).shape
     if (found.join('x') !== expectedShape.join('x')) {
       throw new ArtifactError(
@@ -574,31 +576,39 @@ export function loadArtifact(directory, { verify = true, availableMemory = () =>
     if (quantized && shape.length === 2) {
       const scale = weights.get(`${name}.scale`)
       if (!(entry.data instanceof Int8Array) || !scale || scale.dtype !== '<f4'
-        || scale.shape.join('x') !== '1' || !Number.isFinite(scale.data[0]) || scale.data[0] <= 0
-        || entry.data.some((n) => n === -128 || !Number.isFinite(Math.fround(n * scale.data[0])))) {
+        || scale.shape.join('x') !== '1' || !Number.isFinite(scale.data[0]) || scale.data[0] <= 0) {
+        throw new ArtifactError(`invalid int8 tensor or scale for '${name}'`, { code: 'invalid_quantization' })
+      }
+      const s0 = scale.data[0]
+      let minVal = 0
+      for (let i = 0; i < entry.data.length; i += 1) {
+        const v = entry.data[i]
+        if (v < minVal) minVal = v
+      }
+      if (minVal === -128 || !Number.isFinite(Math.fround(127 * s0))) {
         throw new ArtifactError(`invalid int8 tensor or scale for '${name}'`, { code: 'invalid_quantization' })
       }
       entry.scale = scale.data
-      // The scale is part of the digest-bound NPZ, but not a learned parameter.
       weights.delete(`${name}.scale`)
-    } else if (!(entry.data instanceof Float32Array || (!quantized && entry.data instanceof Float64Array))
-      || entry.data.some((n) => !Number.isFinite(n))) {
+    } else if (!(entry.data instanceof Float32Array || (!quantized && entry.data instanceof Float64Array))) {
       throw new ArtifactError(`'${name}' must contain finite floating-point weights`, { code: 'unsupported_dtype' })
+    } else {
+      for (let i = 0; i < entry.data.length; i += 1) {
+        if (!Number.isFinite(entry.data[i])) {
+          throw new ArtifactError(`'${name}' must contain finite floating-point weights`, { code: 'unsupported_dtype' })
+        }
+      }
     }
   }
   return { manifest, weights, directory, manifestPath, weightsPath, sha256 }
 }
 
-/** Conservative allocation envelope, not a hardware benchmark. No full float
- * expansion of int8 matrices is budgeted or performed by the inference loader. */
 export function artifactAllocation(manifest) {
   const quantized = manifest.format === QUANTIZED_ARTIFACT_FORMAT
   const shapes = Object.values(shapeMap(manifest.architecture))
   const scales = quantized ? shapes.filter((shape) => shape.length === 2).length : 0
   const tensorBytes = shapes.reduce((sum, shape) => sum + shape.reduce((a, b) => a * b, 1)
     * (quantized ? shape.length === 2 ? 1 : 4 : 8), 0) + scales * 4
-  // Header ceiling is a parser limit, not a model minimum. Expanded ZIP members
-  // and parsed typed arrays coexist while loading, plus the original archive.
   const expandedBytes = tensorBytes + 4096 * (shapes.length + scales)
   return { tensorBytes, expandedBytes, loadBytes: manifest.weights.bytes + 2 * expandedBytes }
 }
@@ -618,5 +628,94 @@ export function shapeMap(architecture) {
   shapes.lnf_gain = [d]
   shapes.lnf_bias = [d]
   if (!architecture.tie_embeddings) shapes.head = [v, d]
+  if ((architecture.age_buckets ?? 0) > 0) shapes.age_emb = [architecture.age_buckets, d]
+  if ((architecture.state_classes ?? 0) > 0) shapes.state_emb = [architecture.state_classes, d]
+  if (architecture.verdict_head === true) {
+    shapes.verdict_w = [d, 2]
+    shapes.verdict_b = [2]
+  }
+  if (architecture.state_head === true) {
+    shapes.state_head_w = [d, architecture.state_classes]
+    shapes.state_head_b = [architecture.state_classes]
+  }
   return shapes
+}
+
+/** Load and SHA-256-verify a `klyvaron.adapter/1` low-rank adapter directory. */
+export function loadAdapterArtifact(directory, { expectedBaseManifest = null } = {}) {
+  if (!existsSync(directory)) {
+    throw new ArtifactError(`adapter directory '${directory}' does not exist`, { code: 'adapter_missing' })
+  }
+  const readyPath = join(directory, '.ready')
+  if (!existsSync(readyPath)) {
+    throw new ArtifactError(`adapter directory '${directory}' is missing its .ready marker`, { code: 'adapter_unfinalized' })
+  }
+  const manifests = readdirSync(directory).filter((entry) => entry.endsWith('.klyvaron.json')).sort()
+  if (manifests.length !== 1) {
+    throw new ArtifactError(`adapter directory '${directory}' must contain exactly one *.klyvaron.json manifest`, {
+      code: 'adapter_manifest_invalid',
+    })
+  }
+  const manifestPath = join(directory, manifests[0])
+  let manifest
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  } catch (cause) {
+    throw new ArtifactError(`adapter manifest '${manifestPath}' is invalid JSON: ${cause.message}`, {
+      code: 'adapter_manifest_invalid',
+    })
+  }
+  if (manifest?.format !== ADAPTER_FORMAT) {
+    throw new ArtifactError(`unsupported adapter format '${manifest?.format}'`, { code: 'adapter_format_unsupported' })
+  }
+  if (expectedBaseManifest) {
+    const bm = manifest.baseModel ?? {}
+    if (bm.id !== expectedBaseManifest.id) {
+      throw new ArtifactError(
+        `adapter targets '${bm.id}', cannot load onto '${expectedBaseManifest.id}'`,
+        { code: 'adapter_base_mismatch' },
+      )
+    }
+    if (bm.weightsSha256 !== expectedBaseManifest.weights?.sha256) {
+      throw new ArtifactError(
+        `adapter baseWeightsSha256 (${bm.weightsSha256}) disagrees with loaded weights (${expectedBaseManifest.weights?.sha256})`,
+        { code: 'adapter_base_mismatch' },
+      )
+    }
+    if (bm.tokenizerDigest !== expectedBaseManifest.tokenizer?.digest) {
+      throw new ArtifactError('adapter tokenizerDigest disagrees with loaded base tokenizer', {
+        code: 'adapter_base_mismatch',
+      })
+    }
+  }
+  const weightsPath = join(directory, String(manifest.weights?.file ?? ''))
+  if (!existsSync(weightsPath)) {
+    throw new ArtifactError(`adapter weights file '${weightsPath}' is missing`, { code: 'adapter_weights_missing' })
+  }
+  const bytes = readFileSync(weightsPath)
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  if (sha256 !== manifest.weights?.sha256) {
+    throw new ArtifactError(
+      `adapter SHA-256 mismatch: manifest declares ${manifest.weights?.sha256}, file hashes to ${sha256}`,
+      { code: 'adapter_digest_mismatch' },
+    )
+  }
+  const rank = Number(manifest.lora?.rank)
+  const alpha = Number(manifest.lora?.alpha)
+  const targets = Array.isArray(manifest.lora?.targets) ? manifest.lora.targets : []
+  if (!Number.isInteger(rank) || rank < 1 || !Number.isFinite(alpha) || alpha <= 0 || targets.length === 0) {
+    throw new ArtifactError('adapter LoRA metadata is invalid', { code: 'adapter_manifest_invalid' })
+  }
+  const tensors = readNpz(bytes, { maxUncompressedBytes: Math.max(bytes.byteLength * 8 + 1_048_576, 67_108_864) })
+  for (const [name, entry] of tensors.entries()) {
+    if (!(entry.data instanceof Float32Array)) {
+      throw new ArtifactError(`adapter tensor '${name}' must be float32`, { code: 'unsupported_dtype' })
+    }
+    for (let i = 0; i < entry.data.length; i += 1) {
+      if (!Number.isFinite(entry.data[i])) {
+        throw new ArtifactError(`adapter tensor '${name}' contains non-finite values`, { code: 'unsupported_dtype' })
+      }
+    }
+  }
+  return { manifest, tensors, directory, sha256, rank, alpha, scale: alpha / rank, targets }
 }

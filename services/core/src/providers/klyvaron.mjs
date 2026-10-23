@@ -1,57 +1,86 @@
 // The Klyvaron provider: a first-party model served from this process.
 //
-// Unlike every other adapter in this directory, nothing here crosses the network. The
-// weights are local files, the forward pass is local computation, and the only reason
-// this still implements `BaseProvider` is so the router, the audit ledger and the chat
-// path treat it exactly like any other model — no special case, and therefore no
-// special case that can drift.
-//
-// THE HONESTY RULES THIS ADAPTER FOLLOWS
-//
-//  §5A  A base model must not be presented as an assistant. `instructionTuned` comes
-//       from the artifact manifest, and when it is false the response says so and the
-//       router will not select this model for a conversational request unless the user
-//       explicitly pinned it.
-//  §9   Token budgets are enforced, not documented. `maxTokens` is clamped by the
-//       manifest and the context window; a request cannot ask for more than the model
-//       can produce.
-//  §10  No quality adjective is attached to a tier label. The descriptor carries
-//       measured facts (parameters, context, tokens/second) and the artifact's own
-//       declared limitations, and nothing else.
+// Nothing here crosses the network. Weights are local verified artifacts, inference
+// runs locally inside `LocalCpuExecutor` (or cooperative in-memory mode for unit tests),
+// and instruction-tuned `klyvaron-chat-v1` models (`klyvaron-pro-lm`, `klyvaron-max-lm`)
+// render conversation turns + retrieved freshness ages cleanly while base completion
+// models (`aetheris-lite-lm`) retain verbatim text continuation semantics.
 
 import { BaseProvider, OPERATIONS, ProviderError } from './base.mjs'
 import { AVAILABILITY } from '../router/registry.mjs'
-import { KlyvaronRuntime } from '../klyvaron/runtime.mjs'
+import { KlyvaronRuntime, buildTokenizerFromManifest } from '../klyvaron/runtime.mjs'
 import { ArtifactError } from '../klyvaron/format.mjs'
 import { createHash } from 'node:crypto'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 
+const DEFAULT_CHAT_SYSTEM = 'Klyvaron first-party language model. Answer directly from available context and state clearly when supporting evidence is absent.'
+
+function extractContextFromSystemMessages(messages) {
+  const sysParts = messages.filter((m) => m?.role === 'system' && typeof m.content === 'string').map((m) => m.content.trim()).filter(Boolean)
+  for (const text of sysParts) {
+    if (/context material|retrieved|\[source=/i.test(text)) {
+      return text.slice(0, 700)
+    }
+  }
+  return 'none'
+}
+
 export class KlyvaronProvider extends BaseProvider {
   static operations = [OPERATIONS.CHAT, OPERATIONS.CHAT_STREAM]
 
-  /**
-   * @param {object} options
-   * @param {KlyvaronRuntime} options.runtime  a verified, loaded artifact
-   * @param {object} options.guard             required by BaseProvider; never used here
-   * @param {number} [options.timeoutMs]       wall-clock ceiling for one completion
-   */
   constructor({ runtime, guard, onEvent, timeoutMs = 120_000, loadMs = null, executor = null }) {
     super({ name: 'klyvaron', guard, onEvent, timeoutMs })
     if (!(runtime instanceof KlyvaronRuntime)) throw new TypeError('KlyvaronProvider requires a loaded KlyvaronRuntime')
     this.executor = executor
-    // The app retains verified metadata, not a second copy of every model's arrays.
     this.runtime = executor ? Object.freeze({
-      manifest: structuredClone(runtime.manifest), directory: runtime.directory,
-      parameterCount: runtime.parameterCount, contextTokens: runtime.contextTokens,
-      instructionTuned: runtime.instructionTuned, sha256: runtime.sha256,
-      quantization: runtime.quantization, residentWeightBytes: runtime.residentWeightBytes,
+      manifest: structuredClone(runtime.manifest),
+      directory: runtime.directory,
+      parameterCount: runtime.parameterCount,
+      contextTokens: runtime.contextTokens,
+      instructionTuned: runtime.instructionTuned,
+      sha256: runtime.sha256,
+      quantization: runtime.quantization,
+      residentWeightBytes: runtime.residentWeightBytes,
     }) : runtime
-    this.expected = { weightsSha256: runtime.sha256,
-      manifestSha256: createHash('sha256').update(JSON.stringify(runtime.manifest)).digest('hex') }
+    this.#promptTokenizer = runtime.manifest.tokenizer?.kind === 'byte-bpe'
+      ? buildTokenizerFromManifest(runtime.manifest.tokenizer)
+      : null
+    this.expected = {
+      weightsSha256: runtime.sha256,
+      manifestSha256: createHash('sha256').update(JSON.stringify(runtime.manifest)).digest('hex'),
+      ...(runtime.activeAdapter ? { adapterDir: runtime.activeAdapter.directory, adapterSha256: runtime.activeAdapter.sha256 } : {}),
+    }
+    this.activeAdapter = runtime.activeAdapter ?? null
     this.loadMs = loadMs
     this.#measurements = { completions: 0, generatedTokens: 0, totalMs: 0 }
   }
 
+  attachAdapter(adapterDirectory) {
+    if (!this.executor) {
+      this.activeAdapter = this.runtime.attachAdapter(adapterDirectory)
+    } else {
+      const probe = KlyvaronRuntime.load(this.runtime.directory)
+      this.activeAdapter = probe.attachAdapter(adapterDirectory)
+    }
+    this.expected = {
+      weightsSha256: this.expected.weightsSha256,
+      manifestSha256: this.expected.manifestSha256,
+      adapterDir: this.activeAdapter.directory,
+      adapterSha256: this.activeAdapter.sha256,
+    }
+    return this.activeAdapter
+  }
+
+  detachAdapter() {
+    if (!this.executor) this.runtime.detachAdapter()
+    this.activeAdapter = null
+    this.expected = {
+      weightsSha256: this.expected.weightsSha256,
+      manifestSha256: this.expected.manifestSha256,
+    }
+  }
+
+  #promptTokenizer
   #measurements
   #busy = false
 
@@ -59,7 +88,6 @@ export class KlyvaronProvider extends BaseProvider {
     return this.runtime.instructionTuned
   }
 
-  /** Redacted descriptor for health responses. Nothing here is secret, but the shape matches. */
   safeDescriptor() {
     const resident = !this.executor || (this.executor.resident?.directory === this.runtime.directory
       && JSON.stringify(this.executor.resident.expected) === JSON.stringify(this.expected))
@@ -77,14 +105,11 @@ export class KlyvaronProvider extends BaseProvider {
       contextTokens: this.runtime.contextTokens,
       instructionTuned: this.instructionTuned,
       weightsSha256: this.runtime.sha256,
-      // The artifact's own words, verbatim. A provider that summarises its limitations
-      // is a provider that can soften them.
       limitations: [...this.runtime.manifest.limitations],
       measurement: this.measurement(),
     }
   }
 
-  /** Measured, not estimated: how fast this model actually generates on this host. */
   measurement() {
     const { completions, generatedTokens, totalMs } = this.#measurements
     return {
@@ -96,9 +121,6 @@ export class KlyvaronProvider extends BaseProvider {
   }
 
   async probe() {
-    // Startup verification established eligibility, not permanent RAM residency.
-    // Worker loading independently rechecks bytes and the pinned manifest identity.
-    // In-memory library users have cooperative execution, not worker isolation.
     return {
       availability: AVAILABILITY.READY,
       detail: {
@@ -115,7 +137,6 @@ export class KlyvaronProvider extends BaseProvider {
     }
   }
 
-  /** Clamp a requested token budget to what the manifest and context allow. */
   #tokenBudget(requested) {
     const manifestLimit = this.runtime.manifest.generation?.maxNewTokens ?? 64
     const ceiling = Math.min(manifestLimit, this.runtime.contextTokens)
@@ -125,20 +146,67 @@ export class KlyvaronProvider extends BaseProvider {
     return Math.min(value, ceiling)
   }
 
-  #promptFrom(request) {
-    // A base completion model continues text. The prompt is the last message's content;
-    // roles are ignored deliberately rather than rendered into a pseudo-transcript the
-    // model was never trained on.
+  #buildInput(request) {
     const messages = Array.isArray(request.messages) ? request.messages : []
     const last = messages.length ? messages[messages.length - 1] : null
-    const prompt = typeof last?.content === 'string' ? last.content : typeof request.prompt === 'string' ? request.prompt : ''
-    if (!prompt.trim()) throw new ProviderError('a prompt is required', { code: 'invalid_request', status: 400 })
-    return prompt
+    const rawText = typeof last?.content === 'string' ? last.content : typeof request.prompt === 'string' ? request.prompt : ''
+    if (!rawText.trim()) throw new ProviderError('a prompt is required', { code: 'invalid_request', status: 400 })
+
+    const chatTemplate = this.runtime.manifest.chatTemplate
+    if (!this.instructionTuned || chatTemplate?.format !== 'klyvaron-chat-v1' || rawText.startsWith('<|system|>\n')) {
+      return {
+        prompt: rawText,
+        ages: request.ages ?? null,
+        stop: Array.isArray(request.stop) && request.stop.length
+          ? request.stop
+          : (this.runtime.manifest.generation?.stop ?? []),
+      }
+    }
+
+    const systemPrompt = chatTemplate.systemPrompt || DEFAULT_CHAT_SYSTEM
+    const context = typeof request.context === 'string' && request.context.trim()
+      ? request.context.trim()
+      : extractContextFromSystemMessages(messages)
+    const recentTurns = messages
+      .filter((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+      .slice(-5)
+
+    const beforeCtx = `<|system|>\n${systemPrompt}\n<|context|>\n`
+    let afterCtx = '\n'
+    for (let i = 0; i < recentTurns.length; i += 1) {
+      const turn = recentTurns[i]
+      if (turn.role === 'user') {
+        afterCtx += `<|user|>\n${turn.content.trim()}\n`
+      } else {
+        afterCtx += `<|assistant|>\n${turn.content.trim()}<|end|>\n`
+      }
+    }
+    if (!afterCtx.endsWith('\n') || recentTurns[recentTurns.length - 1]?.role !== 'user') {
+      afterCtx += `<|user|>\n${rawText.trim()}\n`
+    }
+    afterCtx += '<|assistant|>\n'
+
+    const prompt = `${beforeCtx}${context}${afterCtx}`
+    let ages = request.ages ?? null
+    if (!ages && this.#promptTokenizer && (this.runtime.manifest.architecture.age_buckets ?? 0) > 0) {
+      const tBefore = this.#promptTokenizer.encode(beforeCtx)
+      const tCtx = this.#promptTokenizer.encode(context)
+      const tAfter = this.#promptTokenizer.encode(afterCtx)
+      const ctxAge = Number.isInteger(request.contextAgeBucket)
+        ? request.contextAgeBucket
+        : (context === 'none' ? 15 : 1)
+      const ageArr = new Int32Array(tBefore.length + tCtx.length + tAfter.length)
+      ageArr.fill(ctxAge, tBefore.length, tBefore.length + tCtx.length)
+      ages = Array.from(ageArr)
+    }
+
+    const mergedStop = Array.isArray(request.stop) && request.stop.length
+      ? request.stop
+      : (this.runtime.manifest.generation?.stop ?? chatTemplate.stop ?? [])
+    return { prompt, ages, stop: mergedStop }
   }
 
   async *#cooperative(generation, signal) {
-    // Library/test use can supply an in-memory runtime without an artifact directory.
-    // The application uses the worker executor instead, including mid-pass cancellation.
     if (this.#busy) throw new ProviderError('local runtime is busy', { code: 'local_busy', status: 503 })
     this.#busy = true
     const deadline = performance.now() + this.timeoutMs
@@ -157,14 +225,17 @@ export class KlyvaronProvider extends BaseProvider {
 
   async *#iterate(request) {
     const started = performance.now()
-    const prompt = this.#promptFrom(request)
+    const { prompt, ages, stop } = this.#buildInput(request)
     const budget = this.#tokenBudget(request.maxTokens ?? request.max_new_tokens)
     const generation = {
-      prompt, maxNewTokens: budget,
+      prompt,
+      ages,
+      state: Number.isInteger(request.state) ? request.state : null,
+      maxNewTokens: budget,
       temperature: Number.isFinite(request.temperature) ? request.temperature : 0,
       topK: Number.isFinite(request.topK) ? request.topK : 40,
       seed: Number.isFinite(request.seed) ? request.seed : 0,
-      stop: Array.isArray(request.stop) ? request.stop : [],
+      stop,
     }
     let result = null
     try {
@@ -196,10 +267,14 @@ export class KlyvaronProvider extends BaseProvider {
       version: this.runtime.manifest.version,
       doneReason: result.stoppedBy,
       provider: this.name,
+      differentiators: result.differentiators ?? null,
       limitation: this.instructionTuned ? null
         : 'Klyvaron Lite is a base completion model: it continues the text you give it. It does not follow instructions and its output is not an answer.',
-      usage: { promptTokens: result.promptTokens, completionTokens: result.generatedTokens,
-        totalTokens: result.promptTokens + result.generatedTokens },
+      usage: {
+        promptTokens: result.promptTokens,
+        completionTokens: result.generatedTokens,
+        totalTokens: result.promptTokens + result.generatedTokens,
+      },
       timingMs: elapsed,
       tokensPerSecond: Number(((result.generatedTokens / elapsed) * 1000).toFixed(2)),
     }

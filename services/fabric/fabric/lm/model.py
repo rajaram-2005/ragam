@@ -518,17 +518,8 @@ class TransformerLM:
         # input embedding and positions
         rows = inputs.reshape(-1).astype(np.int64)
         d_flat = d_hidden.reshape(-1, c.d_model)
-        onehot = np.zeros((rows.size, c.vocab_size), dtype=self.dtype)
-        onehot[np.arange(rows.size), rows] = 1.0
-        grads["emb"] += onehot.T @ d_flat
-        # `d_flat` is row-major over (B, T), so its row j is (b, t) = divmod(j, T)
-        # and the position index for that row is j % T. Building this as a one-hot
-        # and multiplying keeps the scatter as a matmul rather than an `add.at`,
-        # which is an order of magnitude slower for the same result.
-        columns = np.arange(B * T)
-        pos_onehot = np.zeros((T, B * T), dtype=self.dtype)
-        pos_onehot[columns % T, columns] = 1.0
-        grads["pos"][:T] += pos_onehot @ d_flat
+        np.add.at(grads["emb"], rows, d_flat)
+        grads["pos"][:T] += d_hidden.sum(axis=0)
 
         # The differentiator inputs, each accumulated into the row it selected. `d_flat` is
         # row-major over (B, T), which is the order `ages.reshape(-1)` is in; the state row was
@@ -536,13 +527,9 @@ class TransformerLM:
         ages, states = cache.get("ages"), cache.get("states")
         if ages is not None and "age_emb" in grads:
             flat_ages = ages.reshape(-1).astype(np.int64)
-            age_onehot = np.zeros((flat_ages.size, c.age_buckets), dtype=self.dtype)
-            age_onehot[np.arange(flat_ages.size), flat_ages] = 1.0
-            grads["age_emb"] += age_onehot.T @ d_flat
+            np.add.at(grads["age_emb"], flat_ages, d_flat)
         if states is not None and "state_emb" in grads:
-            state_onehot = np.zeros((B, c.state_classes), dtype=self.dtype)
-            state_onehot[np.arange(B), states.astype(np.int64)] = 1.0
-            grads["state_emb"] += state_onehot.T @ d_hidden.sum(axis=1)
+            np.add.at(grads["state_emb"], states.astype(np.int64), d_hidden.sum(axis=1))
 
         return grads
 

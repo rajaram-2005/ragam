@@ -131,21 +131,21 @@ video capability is backed by the artifact that backs the text capabilities, and
 `MODALITY_ROLES` makes "which modality is this capability?" a question with an answer for every
 capability the family names.
 
-| Tier | Text | Image | Video |
-| --- | --- | --- | --- |
-| Lite | `aetheris-lite-lm-0.1.1` (completion and extraction only) | no artifact; `vision.understand` is `unavailable` | not named at this tier |
-| Pro | no artifact | no artifact | no artifact |
-| Max | no artifact | no artifact | no artifact |
+| Tier | Text | Image | Video | Audio |
+| --- | --- | --- | --- | --- |
+| Lite | `aetheris-lite-lm-0.1.1` (completion and extraction only) | no artifact; `vision.understand` is `unavailable` | not named at this tier | no artifact; `speech.transcribe` and `speech.synthesize` are `unavailable` |
+| Pro | `klyvaron-pro-lm-0.1.0` | `klyvaron-pro-image-0.1.0` | `klyvaron-pro-video-0.1.0` | `klyvaron-pro-voice-0.1.0` |
+| Max | `klyvaron-max-lm-0.1.0` | `klyvaron-max-image-0.1.0` | `klyvaron-max-video-0.1.0` | `klyvaron-max-voice-0.1.0` |
 
-The consequence a reader should take from the table is the empty cells, not the filled one. Until an
-image artifact exists with its own provenance, licence, card and measurements, image generation is
-`unavailable` at every tier, and `/api/image` refuses rather than substituting a text answer.
+Where a modality cell has no artifact (such as Lite image and audio), the capability remains
+`unavailable` and the route refuses rather than substituting a text answer.
 
 The architecture record says the same thing in the terms a build needs: `MODALITY_MODELS` names
-`aetheris-image-v1` (a latent denoising transformer) and `aetheris-video-v1` (a latent video
-transformer) as **separate designs**, with `implemented: false` and no trainer, alongside the text
-architecture the three tiers are presets of. They are not configurations of the text model, and the
-core will not accept an image capability backed by a text preset
+`aetheris-image-v1` (a patch-latent conditional denoising transformer), `aetheris-video-v1` (a
+factorised spatial-temporal video transformer), and `aetheris-voice-v1` (a bidirectional mel/CTC +
+neural spectrogram voice transformer) as **separate designs** with their own trainers and checkpoints,
+alongside the text architecture `aetheris-core-v1`. They are not configurations of the text model,
+and the core refuses an image, video, or audio capability backed by a text preset
 ([24 §8](24-own-models.md)).
 
 ## 5. The tiers
@@ -153,8 +153,8 @@ core will not accept an image capability backed by a text preset
 | Tier | Hardware | Status | Backed capabilities | What it would take to move |
 | --- | --- | --- | --- | --- |
 | **Klyvaron Lite** | CPU-only computers and supported phones | **Partial** | 2 of 13 | An instruction-tuned artifact (chat), a vision or speech artifact where it claims one, and an artifact behind each differentiator |
-| **Klyvaron Pro** | GPU-qualified laptops and desktops | **Unbuilt** | 0 of 13 | No weights: `klyvaron-pro-lm`, trained from random initialisation on `aetheris-core-v1` on the user's own accelerator, plus separate image and video models ([24](24-own-models.md)) |
-| **Klyvaron Max** | Qualified high-performance GPU computers | **Unbuilt** | 0 of 11 | The same architecture's largest preset, `klyvaron-max-lm`, on a higher measured compatibility profile |
+| **Klyvaron Pro** | GPU-qualified laptops and desktops | **Partial** | 10 of 15 | Full real-world differentiator benchmarks (`trend.awareness`, `affect.history`), GPU accelerator runtime qualification, and open workflow/multilingual capabilities |
+| **Klyvaron Max** | Qualified high-performance GPU computers | **Partial** | 10 of 14 | Full real-world differentiator benchmarks (`trend.awareness`, `affect.history`), GPU accelerator runtime qualification, and open workflow/long-horizon capabilities |
 
 Nothing in this repository trains Pro or Max. The path recorded for them needs **no training at
 all**: an unmodified, licence-checked third-party base, running on the user's own accelerator

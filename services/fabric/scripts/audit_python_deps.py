@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -43,10 +44,9 @@ except ImportError:  # pragma: no cover - depends on the caller's environment
 
 API = "https://api.github.com/advisories"
 
-# The Python packages this project actually installs. services/fabric has exactly one
-# runtime dependency; the rest are test tooling and are checked anyway, because a
-# vulnerable test runner on a shared build host is still a vulnerable test runner.
-RUNTIME_PACKAGES = ("numpy",)
+# The Python packages this project actually installs. services/fabric checks both
+# numerical/multimodal runtime libraries and test tooling against GitHub Advisories.
+RUNTIME_PACKAGES = ("numpy", "jax", "av", "Pillow")
 TEST_PACKAGES = ("pytest", "pluggy", "iniconfig", "packaging")
 
 
@@ -104,8 +104,9 @@ def matching_vulnerabilities(advisory: dict, package: str, version: Version) -> 
         raw_range = (vulnerability.get("vulnerable_version_range") or "").strip()
         if not raw_range:
             continue
+        normalized_range = re.sub(r"(?<![<>!=~])=\s*([0-9])", r"== \1", raw_range)
         try:
-            if version in SpecifierSet(raw_range):
+            if version in SpecifierSet(normalized_range):
                 hits.append(
                     {
                         "ghsa": advisory.get("ghsa_id"),
