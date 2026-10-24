@@ -72,7 +72,7 @@ applies — and, for the training service,
 **Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
 
 ```bash
-npm test          # 1846 tests: core 936, web 96, fabric 814
+npm test          # 1874 tests: core 952, web 100, fabric 822
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -87,7 +87,7 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1846 run in CI on every push and pull request
+All 1874 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as five jobs — one per
 component, plus one that fails if this documentation stops matching the code, plus one
 that counts what the suites reported and verifies the release against those counts. The
@@ -149,9 +149,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 30,393 | 22,478 | **zero npm packages** | 936 |
-| `services/fabric` | Python 3.11 | 12,655 | 9,995 | NumPy only | 814 |
-| `apps/web` | React 18 + Vite | 3,716 | 1,903 | react, react-dom | 96 |
+| `services/core` | Node 22 ESM | 36,942 | 24,229 | **zero npm packages** | 952 |
+| `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
+| `apps/web` | React 18 + Vite | 4,318 | 2,023 | react, react-dom | 100 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

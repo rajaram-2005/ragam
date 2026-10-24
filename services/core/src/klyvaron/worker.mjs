@@ -22,6 +22,12 @@ parentPort.on('message', ({ directory, expected, generation, controlBuffer }) =>
       if (loaded.sha256 !== expected.weightsSha256 || manifestSha256 !== expected.manifestSha256) {
         throw Object.assign(new Error('installed artifact changed since verification; re-open the library before using it'), { code: 'artifact_changed' })
       }
+      if (expected.adapterDir) {
+        const attached = loaded.attachAdapter(expected.adapterDir)
+        if (expected.adapterSha256 && attached.sha256 !== expected.adapterSha256) {
+          throw Object.assign(new Error('installed adapter digest changed since verification'), { code: 'artifact_changed' })
+        }
+      }
       runtime = loaded
       identity = key
       send({ type: 'loaded', loadMs: performance.now() - started, residentWeightPayloadBytes: runtime.residentWeightBytes })

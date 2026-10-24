@@ -37,8 +37,22 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
   // controls that wire documents. Reading both from the readiness record means this area
   // cannot disagree with the route: an adapter that offers no size control simply gets no
   // size field, rather than sending a value the provider never defined.
+  const [analysisByJob, setAnalysisByJob] = useState({})
+  const [editPromptByJob, setEditPromptByJob] = useState({})
+
   const connection = useMemo(() => {
-    const preferred = readiness?.media?.image?.connectionId
+    const mediaImage = readiness?.media?.image
+    const preferred = mediaImage?.connectionId
+    if (preferred === 'klyvaron-native' && mediaImage?.models?.length) {
+      return {
+        id: 'klyvaron-native',
+        label: 'Klyvaron Native (first-party verified weights)',
+        firstParty: true,
+        configured: true,
+        models: mediaImage.models,
+        sizes: mediaImage.sizes ?? ['256x256', '512x512', '768x512', '512x768'],
+      }
+    }
     const candidates = provider?.connections ?? []
     return candidates.find((entry) => entry.id === preferred)
       ?? candidates.find((entry) => entry.modality === 'image' && entry.configured)
@@ -170,6 +184,40 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
             {!TERMINAL.has(job.state)
               ? <p className="small">Waiting for the provider… {job.stage ?? job.state}. The image is not shown until its bytes pass validation.</p>
               : null}
+            {analysisByJob[job.id]
+              ? <p className="small"><strong>Vision analysis ({analysisByJob[job.id].modelId}):</strong> {analysisByJob[job.id].description ?? analysisByJob[job.id].summary}{analysisByJob[job.id].scene ? ` · scene: ${analysisByJob[job.id].scene} (${(Number(analysisByJob[job.id].confidence ?? 0) * 100).toFixed(1)}%) · layout: ${analysisByJob[job.id].layout}` : ''}</p>
+              : null}
+            {job.state === 'succeeded' && job.artifact && readiness?.capabilities?.imageEditing ? (
+              <div className="row" style={{ gap: 8, marginTop: 6 }}>
+                <input
+                  className="input"
+                  value={editPromptByJob[job.id] ?? ''}
+                  placeholder="Edit prompt (e.g. cobalt ocean waves)…"
+                  onChange={(e) => setEditPromptByJob((prev) => ({ ...prev, [job.id]: e.target.value }))}
+                />
+                <Button disabled={busy || !(editPromptByJob[job.id] ?? '').trim()} onClick={async () => {
+                  setBusy(true); setError(null)
+                  try {
+                    const editedJob = await api.editImage({
+                      model: model.startsWith('klyvaron-') ? model : undefined,
+                      sourceJobId: job.id,
+                      prompt: editPromptByJob[job.id].trim(),
+                    })
+                    setJobs((current) => [editedJob, ...current])
+                  } catch (e) { setError(e) } finally { setBusy(false) }
+                }}>Edit image</Button>
+                <Button disabled={busy} onClick={async () => {
+                  setBusy(true); setError(null)
+                  try {
+                    const res = await api.understandImage({
+                      model: model.startsWith('klyvaron-') ? model : undefined,
+                      sourceJobId: job.id,
+                    })
+                    setAnalysisByJob((prev) => ({ ...prev, [job.id]: res }))
+                  } catch (e) { setError(e) } finally { setBusy(false) }
+                }}>Understand image</Button>
+              </div>
+            ) : null}
             <div className="row">
               {job.artifact ? <a className="button" href={api.imageArtifactUrl(job.id)} download={`image-${job.id.slice(0, 8)}.${job.artifact.format === 'jpeg' ? 'jpg' : job.artifact.format}`}>Download</a> : null}
               <Button variant="danger" onClick={() => remove(job.id)}>Delete image and record</Button>

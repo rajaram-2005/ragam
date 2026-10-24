@@ -98,7 +98,7 @@ npm install          # 62 packages, ~12 s
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 92 tests
+npm test             # 100 tests
 ```
 
 | Variable | Default | Purpose |
@@ -231,10 +231,10 @@ limitations.
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1846 tests)
-npm run test:core         # 936
-npm run test:web          # 96
-npm run test:fabric       # 814 — needs numpy + pytest on the interpreter
+npm test                  # all three suites (1874 tests)
+npm run test:core         # 952
+npm run test:web          # 100
+npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
 
 Beyond the suites, one check is run by hand rather than by CI, because it costs nine suite
@@ -287,10 +287,10 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 936 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
-| **Fabric** | 814 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 96 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
-| **Docs** | The 48-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
+| **Core service** | 952 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
+| **Web app** | `npm ci`, 100 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Docs** | The 49-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |
 
 The Fabric job's release-gate step is the one worth reading, because it asserts the
@@ -490,6 +490,19 @@ it can never disagree with the database.
 Deleting `$AETHERIS_DATA_DIR` removes all indexed company data. Document deletion
 through the API (`purgeDocument`) is preferable: it keeps an auditable deletion
 record rather than leaving an unexplained gap.
+
+### User-computer-first local worker (`npm run worker`)
+
+RAGAM never assumes a server or coding host is the user's computer, never triggers weight training from ordinary chat messages, and never auto-ingests private conversations. To execute authorized local adaptation or foundation runs on your own machine:
+
+```bash
+# Start the authenticated local worker on loopback (Linux, macOS, Windows):
+npm run worker -- --workspace ./.aetheris-data/worker-workspace --pairing-secret "<single-use-secret>"
+```
+
+1. In Chat → **User-computer local worker & explicit learning**, click **Generate pairing code** to mint a short-lived single-use `pairingSecret`.
+2. Start `npm run worker` on your machine and complete mutual Bearer token pairing (`POST /api/klyvaron/worker/pair/complete`).
+3. Inspect hardware & plan (`POST /api/klyvaron/worker/evaluate`): single corrections prefer `memory_or_retrieval`; multi-example interactive LoRA adapters enforce a hard **120-second wall-clock ceiling including finalization** (`120,000 ms`); full fine-tuning / foundation pretraining are never silently downgraded to adapters without explicit user approval.
 
 ---
 

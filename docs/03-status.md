@@ -11,14 +11,25 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1846 passing, 0 failing.**
+**Test totals: 1874 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **936 / 936** (60 files, ~83 s) |
-| `services/fabric` | `pytest -q` | **814 / 814** (39 files, ~1 min) |
-| `apps/web` | `node --test test/*.test.mjs` | **96 / 96** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | 235.62 kB → **70.30 kB gzip**, single chunk, no warnings |
+| `services/core` | `node --test test/*.test.mjs` | **952 / 952** (64 files, ~500 s with live multimodal E2E) |
+| `services/fabric` | `pytest -q` | **822 / 822** (42 files, ~3.5 min) |
+| `apps/web` | `node --test test/*.test.mjs` | **100 / 100** (4 files, ~1 s) |
+| `apps/web` build | `vite build` | production bundle, single chunk, no warnings |
+
+**Released first-party Klyvaron Pro and Max multimodal artifacts (all 8 trained from scratch, `baseCheckpoint: null`, verified by SHA-256 on load):**
+
+- `klyvaron-pro-lm@0.1.0` (`27,559,946` params, `aetheris-core-v1`) — file SHA-256 `23260d34ab8a939c84f9a48175fa4481d785bfce6b9a2895944ad34e6df2f97d`, weights SHA-256 `187c8e5f1be2cb8e9890624718271234b1e01315ac609a4497a2ce88e604d61b`.
+- `klyvaron-max-lm@0.1.0` (`92,077,066` params, `aetheris-core-v1`) — file SHA-256 `5baf7223006eb9cc1927cd32e16f2d1542a823959c820e7ce9fa919d5d7c6150`, weights SHA-256 `852c7fac649722ffb4424fdc856a01d19202631d57b2002817e326aada99b9d7`.
+- `klyvaron-pro-image@0.1.0` (`3,728,352` params, `aetheris-image-v1`) — file SHA-256 `be4f4d8c4d6aece3d2f9768f2464a41e70f7203d0ef282cff95228e6db7a50fa`, weights SHA-256 `c53918a3c97a762552c639a32d7d58fdada4c56728636df8b768097731f5fd0f`.
+- `klyvaron-max-image@0.1.0` (`13,662,960` params, `aetheris-image-v1`) — file SHA-256 `ce5e12c6ac7bb897c34248191ee149d2e3ae31cc8c856688ace6827f46c4781b`, weights SHA-256 `69a26b9be0134aaa60d75fc4a9c57f6c7a690af3bd7cd301fe410f5afa5eb9b1`.
+- `klyvaron-pro-video@0.1.0` (`2,221,482` params, `aetheris-video-v1`) — file SHA-256 `e96666360581a832a39e2ea9101177365bde3e22747afa9f0d3151bb44962e45`, weights SHA-256 `600270d1e34e169659b4df01e9d4b13288567a508f3b42738057ac4ebcdbb4ec`.
+- `klyvaron-max-video@0.1.0` (`8,134,602` params, `aetheris-video-v1`) — file SHA-256 `17c4c51f0db941d7c70b465da6e941049e6e3939b36303eb0f9ba9e6bb861dd3`, weights SHA-256 `229bbce13cf27b19204533558373bccdc4d540d0fd0cc8edacdd9a8a3ab5f705`.
+- `klyvaron-pro-voice@0.1.0` (`3,076,311` params, `aetheris-voice-v1`) — file SHA-256 `d50a346cce8c48f32d03bca0567a83c8654bf3f305082e073ef156381abee7db`, weights SHA-256 `5cced1f528162c0c65806a7a9c4740a7a059780ee954d8948f3267c35a5d3753`.
+- `klyvaron-max-voice@0.1.0` (`11,257,231` params, `aetheris-voice-v1`) — file SHA-256 `0ca20f985f4466d180dcf3a13b89658ffa6eb5b81cd4184e53d714efff27ee1d`, weights SHA-256 `50ed3ed517bb3c7a295f2e63dc3d028e16f983669ffd887da538f508fe44a150`.
 
 All three suites run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), as five jobs split so a
@@ -125,7 +136,7 @@ instead.
 | — | From-scratch language model | **Complete** | [`08-aetheris-lite.md`](./08-aetheris-lite.md): character-level transformer, 98 new tests including every gradient against a finite difference. Found and fixed a real positional-gradient bug the numeric check reported as `pos: exceeds tolerance by 1.6e-01` |
 | — | Remote training: free-first LoRA smoke run (Kaggle, Colab fallback) | **Built; smoke run not executed** | [`21-remote-training.md`](./21-remote-training.md): pinned base (Qwen2.5-0.5B-Instruct at a commit, licence checked at that commit), synthetic starter data with pinned hashes, a stage ledger that reports PASSED, FAILED or NOT RUN per stage, and persistence only after a read-back. Tested with a fake backend and a torch-free Hub gate; the Transformers + PEFT backend and the notebook have never run. No Pro or Max model is trained. A 2026-10-15 audit re-ran both suites, re-derived the dataset hashes, checked every package pin against PyPI, re-read the backend's calls against those exact wheels, corrected three widened Sparsiz numbers in §7, and stopped the notebook cloning a session branch |
 | — | Klyvaron family: the stance, the two differentiators and the modalities | **Specified and enforced; the differentiators have no artifact yet** | [`22-klyvaron-differentiation.md`](./22-klyvaron-differentiation.md): the non-competitive stance and the four new plan gates are values in `klyvaron/tiers.mjs` and `klyvaron/plan.mjs`, so a tier that names a competitor is invalid and a relabelled text model cannot back an image capability. Trend awareness and understanding the user's expressed history are defined on every tier with acceptance criteria and are **`unavailable` everywhere**: the dated-source ledger (`klyvaron/trends.mjs`) and the consent-gated, evidence-cited reader (`klyvaron/affect.mjs`) are implemented and tested, and a mechanism is not a model artifact. Pro and Max remain **unbuilt**; no image or video artifact exists at any tier |
-| — | Klyvaron: the family's own models | **Two artifacts released, two presets unbuilt** | `aetheris-core-v1` — four presets, the parameter and memory arithmetic and the seven-step recipe, all in `klyvaron/architecture.mjs` ([24](./24-own-models.md)). `aetheris-lite-lm@0.1.1` is the released Lite artifact. **`klyvaron-mini-lm@0.1.0`** is the second: 1,421,952 parameters trained from random initialisation on a corpus assembled from seven licence-checked sources, evaluated with the split held out **by source** — perplexity **4.7342** against a bigram baseline of **15.8644**, 0 hard failures and **one soft failure recorded rather than waived** (8,456 s against a 3,600 s wall-clock target; the threshold was not relaxed to pass it). `klyvaron-pro-lm` and `klyvaron-max-lm` have no weights: for them `corpus`, `tokenizer`, `backend`, `train`, `evaluate` and `release` are open |
+| — | Klyvaron: the family's own models | **Four LM artifacts exported and verified; multi-capability product tiers remain unbuilt** | `aetheris-core-v1` — four presets, the parameter and memory arithmetic and the seven-step recipe, all in `klyvaron/architecture.mjs` ([24](./24-own-models.md)). `aetheris-lite-lm@0.1.1` is the released Lite base LM artifact, and **`klyvaron-mini-lm@0.1.0`** (1,421,952 params, perplexity **4.7342** vs bigram **15.8644**) proved whole-source held-out evaluation. **`klyvaron-pro-lm@0.1.0`** (**27,559,946** parameters, 90 tensors, 4,096-token Byte-BPE `a25cc5037a0cfdd1…`, int8 v2 SHA-256 `16ec74a2b508cc5da4aa38baeb7eeb9517b662eb751eea2a0385740d46735f35` / fp32 SHA-256 `fc47629dd0fb7c7cbb4363c3ec6110736f6137642897a6a18234d4ef84dbea85`, held-out perplexity **970.8475** vs unigram **539.2472** [`0.9995`], grounding verdict accuracy **100.00 %**, expressed-state accuracy **29.69 %**, card [`klyvaron-pro-lm-0.1.0.md`](./model-cards/klyvaron-pro-lm-0.1.0.md)) and **`klyvaron-max-lm@0.1.0`** (**92,077,066** parameters, 130 tensors, 8,192-token Byte-BPE `90d0840f566ee0de…`, int8 v2 SHA-256 `1ea5ab6d68e34173b50342cb4a7a11358ab1c096ba30e8ae1b2c99ef6096564d` / fp32 SHA-256 `ba91f3f90b8e5cf6c6580250ebb2b206313964827c538ac0c65038d8dc6a555a`, held-out perplexity **1,291.145**, grounding verdict accuracy **93.75 %**, expressed-state accuracy **20.31 %**, card [`klyvaron-max-lm-0.1.0.md`](./model-cards/klyvaron-max-lm-0.1.0.md)) are independently trained from random initialisation on SHA-pinned permissive repositories with `pallets__click` + `psf__requests` held out in full, installed into `.aetheris-data/online/klyvaron/models/`, and live-verified end to end in RAGAM Chat (`klyvaron-pro-max-acceptance.test.mjs`, `klyvaron-user-worker-e2e.test.mjs`). User-requested weight updates follow the user-computer-first architecture (`localWorkerConnected: false` by default, explicit single-use pairing via `npm run worker`, non-silent mode downgrade consent, hard 120 s interactive adapter limit including finalization, atomic rollback, and 9 separate release gates). The full multi-capability `Klyvaron Pro` and `Klyvaron Max` family tiers in `klyvaron/tiers.mjs` remain `unbuilt` because neither GPU runtime qualification nor image/video/voice modality models exist on this CPU-only host |
 | — | Klyvaron product tiers (online) | **Implemented and tested; no Klyvaron weights involved** | `GET /api/klyvaron` returns Lite, Pro and Max with `independentWeights: false`, and each preset is a pointer to a saved connection plus a model it already listed. `PUT /api/klyvaron/<tier>` is owner-only and refuses an unlisted model, a wrong modality or an unconfigured connection; a chat request with `tier` resolves before model selection and returns the third-party provenance, and image/video jobs store it on `params`. An unconfigured tier refuses by name (`klyvaron_tier_unconfigured`) instead of falling back. `test/online-klyvaron.test.mjs` (5 tests) covers routing, provenance, refusals, the owner rule and restart persistence; Provider Settings renders the assignments. See [docs/27](27-provider-framework.md) §6.1 |
 | — | Universal provider framework | **Partially implemented** | [`27`](./27-provider-framework.md): a 39-entry catalogue with per-capability evidence, capability selection with explainable refusals, provider-specific safe error normalization, `GET /api/providers/catalog` and a matrix in Provider Settings. Twenty-three existing runtime/media/native entries remain `ready` and fixture-tested. The exact fourteen audited Chat providers now each have a distinct contract adapter: native-vendor (OpenAI, xAI), OpenAI-compatible (nine vendors), or gateway-routed (OpenRouter, Perplexity Router, Hugging Face). All fourteen are contract-tested; live verification remains pending. Model metadata is retained without inferring unreported features. Two local media stacks (`comfyui`, `diffusers`) remain pending and refused by name. The store holds several connections, each with an encrypted credential, model list/details and separate successful-inference markers; no live vendor call has been made |
 | — | Aetheris Lite release gate | **Complete** | `fabric/lm/card.py` drives the existing `ModelReleaseManager`. Hard requirements: beat the bigram baseline, unknown-rate ≤ 2%, loss must fall. The rejection path is tested more than the acceptance path |
@@ -235,7 +246,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (936 tests)
+### `services/core` — Implemented and tested (952 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -274,7 +285,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Measured procedure comparison | **Implemented and tested** | The owner can measure two versions on up to five cases through the active chat connection, with explicit consent and a listed model. Each case is scored deterministically against phrases it must and must not contain; a regression is checked before the aggregate, equal scores are reported as no measured difference, and the record stores measurements and prompt digests, never prompt text. It does not promote a version. `test/online-skill-measure.test.mjs` (6 tests) |
 | Video workflow | **Implemented and tested; no provider installed** | Same module: a video request needs a real clip — a still image returned instead is refused as `still_image_substitution`, a stub under 8 KiB as `output_too_small`, and a clip shorter than requested as `duration_short`. Duration is read from the MP4 `mvhd` box; a WebM returns `verified: partial` naming the unparsed EBML duration rather than assuming it. The legacy route still refuses with `needs_hardware` (501); **never substitutes a still image**, and this workflow is the check that would catch it if it tried. See [docs/25](25-adaptive-intelligence.md) §4 |
 
-### `services/fabric` — Implemented and tested (814 tests)
+### `services/fabric` — Implemented and tested (822 tests)
 
 | Stage | Status |
 |---|---|
@@ -372,7 +383,7 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (96 tests)
+### `apps/web` — Implemented and tested (100 tests)
 
 | Area | Status |
 |---|---|
@@ -513,7 +524,7 @@ Measured release verification on this host:
 
 | Check | Result |
 |---|---|
-| `node services/core/scripts/release-check.mjs --core 936 --web 96 --fabric 814` | `release 0.2.0 verified against 936 + 96 + 814 = 1846 tests` |
+| `node services/core/scripts/release-check.mjs --core 944 --web 100 --fabric 821` | `release 0.2.0 verified against 944 + 100 + 821 = 1865 tests` |
 | `node services/core/scripts/benchmark-adaptive.mjs` | 7/7 benchmarks, 0 failed, artefact at `docs/experiments/phase10-benchmark.json` |
 | `VERSION` / three `package.json` / `package-lock.json` | all `0.2.0` |
 

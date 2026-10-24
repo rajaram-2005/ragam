@@ -55,7 +55,10 @@ function normaliseKlyvaron(raw) {
     }
     if (Object.keys(presets).length) tiers[tier] = presets
   }
-  return { tiers }
+  const selectedModel = typeof raw?.selectedModel === 'string' && raw.selectedModel.length <= 200
+    ? raw.selectedModel
+    : ''
+  return { tiers, selectedModel }
 }
 
 /**
@@ -205,6 +208,17 @@ export class OnlineStore {
     return preset ? { ...preset } : null
   }
 
+  /** Currently selected first-party Klyvaron model id (independent of external gateways). */
+  get selectedNativeModel() {
+    return this.data.klyvaron.selectedModel || ''
+  }
+
+  selectNativeModel(model) {
+    this.data.klyvaron.selectedModel = typeof model === 'string' ? model : ''
+    this.#persist()
+    return this.public()
+  }
+
   /**
    * Point a Klyvaron tier at a saved connection and a listed model.
    *
@@ -216,9 +230,11 @@ export class OnlineStore {
   saveKlyvaronPreset(tier, modality, { connectionId, model }) {
     if (!KLYVARON_TIERS.includes(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
     if (!KLYVARON_MODALITIES.includes(modality)) throw failure('invalid_modality', 'A tier preset is for chat, image or video.', 400)
-    if (!this.#record(connectionId)) throw failure('connection_not_found', `No saved connection '${connectionId}'.`, 404)
-    const record = this.#record(connectionId)
-    if (!record.models.includes(model)) throw failure('model_unlisted', 'Test the connection and choose a model it lists.', 409)
+    if (connectionId !== 'klyvaron-native') {
+      if (!this.#record(connectionId)) throw failure('connection_not_found', `No saved connection '${connectionId}'.`, 404)
+      const record = this.#record(connectionId)
+      if (!record.models.includes(model)) throw failure('model_unlisted', 'Test the connection and choose a model it lists.', 409)
+    }
     this.data.klyvaron.tiers[tier] ??= {}
     this.data.klyvaron.tiers[tier][modality] = { connectionId, model }
     this.data.revision += 1

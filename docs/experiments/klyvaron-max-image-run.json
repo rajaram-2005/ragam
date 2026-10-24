@@ -1,0 +1,75 @@
+{
+  "schema": "klyvaron-multimodal-training-run/1",
+  "recordedAt": "2026-10-23T17:11:02.551796+00:00",
+  "modelId": "klyvaron-max-image@0.1.0",
+  "modality": "image",
+  "tier": "max",
+  "architecture": {
+    "id": "aetheris-image-v1",
+    "config": {
+      "vocab_size": 512,
+      "max_text_len": 24,
+      "image_size": 64,
+      "patch_size": 8,
+      "d_model": 304,
+      "n_heads": 8,
+      "d_ff": 832,
+      "n_text_layers": 3,
+      "n_enc_layers": 6,
+      "n_denoise_steps": 6,
+      "n_dec_blocks": 6,
+      "n_scenes": 8,
+      "n_layouts": 4
+    },
+    "configDigest": "037fcd32b70b51bb8ddb3b02f4b2f10759cf0b846d3abf2a560388f83ad43822"
+  },
+  "parameterCount": 13662960,
+  "provenance": {
+    "origin": "first_party_trained_from_scratch",
+    "licence": "MIT",
+    "baseModel": null,
+    "dataset": "klyvaron-procedural-scenes-v1 (seed=20261202, heldOutSeed=20262101, 8 scene classes)",
+    "trainer": "services/fabric/fabric/multimodal/image_model.py",
+    "seed": 20261102
+  },
+  "supportedTasks": [
+    "image.generate",
+    "image.edit",
+    "vision.understand"
+  ],
+  "unsupportedTasks": [
+    "photorealistic_megapixel_open_world_synthesis",
+    "typographic_text_rendering_in_images",
+    "multi_subject_identity_preservation",
+    "inpainting_with_arbitrary_polygon_masks"
+  ],
+  "weights": {
+    "file": "weights.npz",
+    "sha256": "ce5e12c6ac7bb897c34248191ee149d2e3ae31cc8c856688ace6827f46c4781b",
+    "weightsSha256": "69a26b9be0134aaa60d75fc4a9c57f6c7a690af3bd7cd301fe410f5afa5eb9b1",
+    "bytes": 25238266
+  },
+  "processor": {
+    "file": "processor.json",
+    "sha256": "e3e153d7fa923389222f795998f917d23e7f85d878de758d96a56884562ee6d3"
+  },
+  "metrics": {
+    "validationSceneAccuracy": 0.9844,
+    "uniformSceneBaseline": 0.125,
+    "validationLayoutAccuracy": 1.0,
+    "generationPromptAlignmentAccuracy": 0.9375,
+    "validationPixelL1": 0.1669,
+    "meanPixelBaselineL1": 0.2577,
+    "initialLoss": 5.3609,
+    "finalLoss": 0.5976,
+    "lossImprovement": 4.7633,
+    "steps": 160,
+    "wallSeconds": 363.528,
+    "parameterCount": 13662960
+  },
+  "limitations": [
+    "Trained on 8 structured visual scene families (384 training images, 128 held-out validation images) at 64x64 native latent resolution with bicubic upsampling to requested PNG dimensions.",
+    "Open-world photorealistic megapixel synthesis, typographic text rendering inside images, and multi-subject identity locking remain unsupported without large GPU image corpora.",
+    "Every claim is restricted to measured held-out accuracy, pixel L1 vs mean-image baseline, and verified PNG container output."
+  ]
+}

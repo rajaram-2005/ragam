@@ -90,12 +90,13 @@ def bigram_baseline(train_ids: np.ndarray, eval_ids: np.ndarray, *, vocab_size: 
     counts = np.zeros((vocab_size, vocab_size), dtype=np.float64)
     np.add.at(counts, (prev, nxt), 1.0)
     row_totals = counts.sum(axis=1, keepdims=True)
-    probs = (counts + smoothing) / (row_totals + smoothing * vocab_size)
+    counts += smoothing
+    counts /= row_totals + smoothing * vocab_size
 
     prev_eval, next_eval = eval_ids[:-1].astype(np.int64), eval_ids[1:].astype(np.int64)
     return Baseline(
         name="bigram",
-        nll_nats_per_token=_cross_entropy(probs[prev_eval, next_eval]),
+        nll_nats_per_token=_cross_entropy(counts[prev_eval, next_eval]),
         description=f"P(next|prev) from training adjacencies, add-{smoothing} smoothing",
     )
 

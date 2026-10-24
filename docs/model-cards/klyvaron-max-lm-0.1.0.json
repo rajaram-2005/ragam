@@ -1,0 +1,211 @@
+{
+  "format": "aetheris-model-card/v1",
+  "generatedBy": "services/fabric/scripts/train_klyvaron.py",
+  "reproduce": "python3 services/fabric/scripts/train_klyvaron.py --preset max",
+  "runId": "852c7fac6497",
+  "runStatus": "partial",
+  "note": "Trained from random initialisation (seed=20261023, no pretrained base) on 15 SHA-pinned permissive repositories with whole-repository holdout (pallets__click, psf__requests). GPU runtime acceleration and target-device hardware qualification remain open on this CPU-only host.",
+  "card": {
+    "name": "klyvaron-max-lm",
+    "version": "0.1.0",
+    "identifier": "klyvaron-max-lm@0.1.0",
+    "family": "klyvaron-max",
+    "licence": "MIT",
+    "weightsDigest": "852c7fac649722ffb4424fdc856a01d19202631d57b2002817e326aada99b9d7",
+    "baseCheckpoint": null,
+    "configDigest": "942a6ad887c1e32cf834ee76005f933534a09edd3efacf0c341c8ffb85b38554",
+    "datasetDigest": "282061f9f80513583c4cd423f0ea8c31c3e601adfa7b1e8d6b903b88d004d6a9",
+    "parameterCount": 92077066,
+    "status": "released",
+    "metrics": {
+      "validationPerplexity": 1673.6162885459546,
+      "bitsPerToken": 10.708753082522412,
+      "bitsPerCharacter": 3.422656363467036,
+      "perplexityVsUniform": 0.204298863347895,
+      "perplexityVsUnigram": 1.4581840100497048,
+      "perplexityVsBestBaseline": 1.4581840100497048,
+      "bestBaselinePerplexity": 1147.7401185388849,
+      "validationUnknownRate": 0.0,
+      "validationTokens": 8192.0,
+      "verdictAccuracy": 0.953125,
+      "stateAccuracy": 0.1875,
+      "quantizationNllIncrease": 0.00027504658717258934,
+      "lossImprovement": 3.0254199999999996,
+      "finalLoss": 8.99267,
+      "parameterCount": 92077066.0,
+      "wallSeconds": 2476.449
+    },
+    "provenance": {
+      "subject": "klyvaron-max-lm (from-scratch, first-party TransformerLM)",
+      "comparator": "unigram baseline on identical held-out tokens (pallets__click, psf__requests)",
+      "hardware": {
+        "machine": "x86_64",
+        "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+        "accelerator": "none (2-vCPU AVX-512 CPU only)",
+        "peakMemoryMb": 3272.8
+      },
+      "decoding": {
+        "temperature": 0.0,
+        "topK": 0,
+        "note": "held-out perplexity and head accuracy evaluated deterministically"
+      },
+      "context": {
+        "seqLen": 1024,
+        "window": "sliding, non-overlapping, stride = seqLen"
+      },
+      "quantization": "symmetric-int8-per-tensor (klyvaron.artifact/2, verified against float32 v1)",
+      "prompts": [
+        "What does architecture.md state about architecture?",
+        "What does secret_roadmap.md state about secret roadmap?"
+      ],
+      "datasetDigest": "282061f9f80513583c4cd423f0ea8c31c3e601adfa7b1e8d6b903b88d004d6a9",
+      "corpusSize": 127687591,
+      "queries": null,
+      "codeRevision": "c9785ede9ffd73d70878c16cd96784159143a1fb",
+      "seed": 20261023,
+      "limitations": [
+        "klyvaron-max-lm was trained on 378,880 tokens (95 steps, CPU host without GPU); the published Chinchilla compute-optimal target is 1,841,541,320 tokens, so open-domain world knowledge and long-form fluency remain far narrower than a frontier GPU-trained assistant.",
+        "Grounding verdict and expressed-state heads are trained on structured repository passages and must be treated as runtime signals rather than infallible truth.",
+        "All training data came from 15 permissive open-source software/documentation repositories (MIT, Apache-2.0, BSD-3-Clause, PSF-2.0); non-software domains are out of distribution.",
+        "This host has no GPU, so GPU accelerated runtime execution and target-device hardware qualification remain open.",
+        "'perplexityVsUnigram' 1.4582 exceeds the allowed maximum 1.0000",
+        "'perplexityVsBestBaseline' 1.4582 exceeds the allowed maximum 1.0000"
+      ],
+      "status": "completed",
+      "measuredAt": 1792782413.11819
+    },
+    "limitations": [
+      "klyvaron-max-lm was trained on 378,880 tokens (95 steps, CPU host without GPU); the published Chinchilla compute-optimal target is 1,841,541,320 tokens, so open-domain world knowledge and long-form fluency remain far narrower than a frontier GPU-trained assistant.",
+      "Grounding verdict and expressed-state heads are trained on structured repository passages and must be treated as runtime signals rather than infallible truth.",
+      "All training data came from 15 permissive open-source software/documentation repositories (MIT, Apache-2.0, BSD-3-Clause, PSF-2.0); non-software domains are out of distribution.",
+      "This host has no GPU, so GPU accelerated runtime execution and target-device hardware qualification remain open.",
+      "'perplexityVsUnigram' 1.4582 exceeds the allowed maximum 1.0000",
+      "'perplexityVsBestBaseline' 1.4582 exceeds the allowed maximum 1.0000"
+    ],
+    "requirements": [
+      {
+        "metric": "perplexityVsUniform",
+        "minimum": null,
+        "maximum": 1.0,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "perplexityVsUnigram",
+        "minimum": null,
+        "maximum": 1.0,
+        "category": null,
+        "hard": false
+      },
+      {
+        "metric": "perplexityVsBestBaseline",
+        "minimum": null,
+        "maximum": 1.0,
+        "category": null,
+        "hard": false
+      },
+      {
+        "metric": "validationUnknownRate",
+        "minimum": null,
+        "maximum": 0.02,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "verdictAccuracy",
+        "minimum": 0.62,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "stateAccuracy",
+        "minimum": 0.14,
+        "maximum": null,
+        "category": null,
+        "hard": true
+      },
+      {
+        "metric": "quantizationNllIncrease",
+        "minimum": null,
+        "maximum": 0.08,
+        "category": null,
+        "hard": true
+      }
+    ],
+    "validation": {
+      "passed": [
+        "'perplexityVsUniform' 0.2043 meets the requirement",
+        "'validationUnknownRate' 0.0000 meets the requirement",
+        "'verdictAccuracy' 0.9531 meets the requirement",
+        "'stateAccuracy' 0.1875 meets the requirement",
+        "'quantizationNllIncrease' 0.0003 meets the requirement"
+      ],
+      "hardFailures": [],
+      "softFailures": [
+        "'perplexityVsUnigram' 1.4582 exceeds the allowed maximum 1.0000",
+        "'perplexityVsBestBaseline' 1.4582 exceeds the allowed maximum 1.0000"
+      ],
+      "validatedAt": 1792782413.118296,
+      "metrics": {
+        "validationPerplexity": 1673.6162885459546,
+        "bitsPerToken": 10.708753082522412,
+        "bitsPerCharacter": 3.422656363467036,
+        "perplexityVsUniform": 0.204298863347895,
+        "perplexityVsUnigram": 1.4581840100497048,
+        "perplexityVsBestBaseline": 1.4581840100497048,
+        "bestBaselinePerplexity": 1147.7401185388849,
+        "validationUnknownRate": 0.0,
+        "validationTokens": 8192.0,
+        "verdictAccuracy": 0.953125,
+        "stateAccuracy": 0.1875,
+        "quantizationNllIncrease": 0.00027504658717258934,
+        "lossImprovement": 3.0254199999999996,
+        "finalLoss": 8.99267,
+        "parameterCount": 92077066.0,
+        "wallSeconds": 2476.449
+      }
+    },
+    "artifacts": {
+      "filename": "klyvaron-max-lm-0.1.0.npz",
+      "fileDigest": "5baf7223006eb9cc1927cd32e16f2d1542a823959c820e7ce9fa919d5d7c6150",
+      "bytes": 76765951,
+      "fp32Filename": "klyvaron-max-lm-fp32-0.1.0.npz",
+      "fp32FileDigest": "f677b1a49235c415e8e629335e52f4d615205a72dc72929f8c09a2950954a560",
+      "fp32Bytes": 368340422,
+      "strongestBaseline": "unigram",
+      "vocabularyDigest": "16f97a262641b425f3211b3ce35b0430e02d15187804719c0a51b75917ce2d04",
+      "corpusManifest": "282061f9f80513583c4cd423f0ea8c31c3e601adfa7b1e8d6b903b88d004d6a9",
+      "trainer": "services/fabric/scripts/train_klyvaron.py"
+    },
+    "parentVersion": null,
+    "createdAt": 1792782413.1182313,
+    "releasedAt": 1792782413.118314,
+    "supersededAt": null,
+    "retiredAt": null,
+    "history": [
+      {
+        "at": 1792782413.1182313,
+        "event": "registered",
+        "status": "candidate"
+      },
+      {
+        "at": 1792782413.1183007,
+        "event": "validated",
+        "passed": [
+          "'perplexityVsUniform' 0.2043 meets the requirement",
+          "'validationUnknownRate' 0.0000 meets the requirement",
+          "'verdictAccuracy' 0.9531 meets the requirement",
+          "'stateAccuracy' 0.1875 meets the requirement",
+          "'quantizationNllIncrease' 0.0003 meets the requirement"
+        ]
+      },
+      {
+        "at": 1792782413.118314,
+        "event": "released",
+        "notes": "first-party klyvaron-max-lm trained from random init (seed=20261023) on 15 license-verified repos",
+        "superseded": null
+      }
+    ]
+  }
+}

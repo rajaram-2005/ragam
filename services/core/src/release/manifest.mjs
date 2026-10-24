@@ -41,6 +41,22 @@ export const RELEASE_ARTEFACTS = Object.freeze([
   // The benchmark is evidence for a claim in the release note, so its absence is a release
   // problem rather than a missing convenience file.
   'docs/experiments/phase10-benchmark.json',
+  'docs/model-cards/klyvaron-pro-lm-0.1.0.json',
+  'docs/model-cards/klyvaron-max-lm-0.1.0.json',
+  'docs/model-cards/klyvaron-pro-image-0.1.0.json',
+  'docs/model-cards/klyvaron-max-image-0.1.0.json',
+  'docs/model-cards/klyvaron-pro-video-0.1.0.json',
+  'docs/model-cards/klyvaron-max-video-0.1.0.json',
+  'docs/model-cards/klyvaron-pro-voice-0.1.0.json',
+  'docs/model-cards/klyvaron-max-voice-0.1.0.json',
+  'docs/experiments/klyvaron-pro-lm-run.json',
+  'docs/experiments/klyvaron-max-lm-run.json',
+  'docs/experiments/klyvaron-pro-image-run.json',
+  'docs/experiments/klyvaron-max-image-run.json',
+  'docs/experiments/klyvaron-pro-video-run.json',
+  'docs/experiments/klyvaron-max-video-run.json',
+  'docs/experiments/klyvaron-pro-voice-run.json',
+  'docs/experiments/klyvaron-max-voice-run.json',
   'third-party/NOTICES.md',
 ])
 

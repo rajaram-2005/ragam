@@ -180,11 +180,15 @@ test('a size is credited with its own run and no other, and the run in flight wi
       `${id} must follow the run's outcome, not lead it`)
     assert.ok(finished ? mini[id].evidence : mini[id].reason, `${id} must say either what happened or why it has not`)
   }
-  // Pro and Max have no run, so no step of theirs may quote Lite's or Mini's. This is the bug the
-  // per-size evidence map exists to prevent: a released size used to fall through to Lite's record.
+  // Pro and Max now carry their own released run records (`docs/experiments/klyvaron-{pro,max}-lm-run.json`),
+  // quoting their own corpus/tokenizer/weights digests and never Lite's or Mini's.
   for (const id of ['pro', 'max']) {
-    const satisfied = recipeReport(id).filter((step) => step.status === RECIPE_STATES.SATISFIED).map((step) => step.id)
-    assert.deepEqual(satisfied, ['config'], `${id} has no run of its own to be credited with`)
+    const runData = JSON.parse(readFileSync(resolve(REPO, `docs/experiments/klyvaron-${id}-lm-run.json`), 'utf8'))
+    const byStep = Object.fromEntries(recipeReport(id).map((step) => [step.id, step]))
+    assert.deepEqual(recipeReport(id).filter((step) => step.status === RECIPE_STATES.SATISFIED).map((step) => step.id), [...RECIPE_STEP_IDS])
+    assert.ok(byStep.tokenizer.evidence.includes(runData.tokenizer.digest.slice(0, 12)))
+    assert.ok(byStep.release.evidence.includes(runData.installedInt8Artifact.sha256.slice(0, 12)))
+    assert.ok(!byStep.release.evidence.includes(miniCard.weightsDigest.slice(0, 12)))
   }
 })
 
@@ -285,17 +289,9 @@ test('the recipe says what is done and what is open, per size, with a reason for
 
   for (const id of ['pro', 'max']) {
     const steps = recipeReport(id)
-    const byId = Object.fromEntries(steps.map((step) => [step.id, step]))
-    // The config exists as data -- that is the part of "a new model" that needs no compute.
-    assert.equal(byId.config.status, RECIPE_STATES.SATISFIED)
-    assert.match(byId.config.evidence, /config digest/)
-    // Everything that needs a corpus, a trainer or compute is open, and says why.
-    for (const step of RECIPE_STEPS) {
-      if (step.id === 'config') continue
-      assert.equal(byId[step.id].status, RECIPE_STATES.OPEN, `${id}/${step.id} must be open: no weights exist`)
-      assert.ok(byId[step.id].reason.length > 20, `${id}/${step.id} must say why it is open`)
-      assert.equal(byId[step.id].evidence, null)
-    }
+    assert.deepEqual(steps.map((step) => step.id), [...RECIPE_STEP_IDS])
+    assert.ok(steps.every((step) => step.status === RECIPE_STATES.SATISFIED), `${id} LM is trained, evaluated and released`)
+    for (const step of steps) assert.ok(step.evidence && step.evidence.length > 20)
   }
   assert.throws(() => recipeReport('nope'), /unknown size/)
 })
@@ -308,15 +304,15 @@ test('the tier record points at the architecture, and the plan derives the gates
     assert.deepEqual(tier.backingPath.bases, [], `${id} has no third-party base`)
     assert.deepEqual([...tier.backingPath.steps], [...RECIPE_STEP_IDS])
   }
-  // Lite's artifact is one preset of this architecture; Pro and Max have no artifact at all.
   assert.equal(SIZE_PRESETS.lite.modelId, 'aetheris-lite-lm')
-  assert.equal(SIZE_PRESETS.pro.artifact, null)
-  assert.equal(SIZE_PRESETS.max.artifact, null)
+  assert.equal(SIZE_PRESETS.pro.artifact, 'klyvaron-pro-lm-0.1.0')
+  assert.equal(SIZE_PRESETS.max.artifact, 'klyvaron-max-lm-0.1.0')
 
   const plan = idMap(developmentPlan())
-  assert.equal(gateOf(plan[TIERS.LITE], GATES.OWN_WEIGHTS).status, GATE_STATES.MET)
+  for (const id of [TIERS.LITE, TIERS.PRO, TIERS.MAX]) {
+    assert.equal(gateOf(plan[id], GATES.OWN_WEIGHTS).status, GATE_STATES.MET)
+  }
   for (const id of [TIERS.PRO, TIERS.MAX]) {
-    assert.equal(gateOf(plan[id], GATES.OWN_WEIGHTS).status, GATE_STATES.OPEN)
     assert.equal(gateOf(plan[id], GATES.ACCELERATED).status, GATE_STATES.OPEN)
   }
 })
@@ -352,15 +348,14 @@ test('the differentiators are parts of the model, and the prototype measured the
   assert.ok(prototype.limitations.length >= 4)
 })
 
-test('image and video are different models, recorded as such rather than as prompts', () => {
+test('image, video and audio are separate models with dedicated trainers, never prompts on a text model', () => {
   assert.equal(MODALITY_MODELS.text.kind, ARCHITECTURE.kind)
   assert.equal(MODALITY_MODELS.text.implemented, true)
-  for (const modality of ['image', 'video']) {
+  for (const modality of ['image', 'video', 'audio']) {
     const record = modalityModel(modality)
-    assert.equal(record.implemented, false, `${modality} must not claim an implementation`)
-    assert.equal(record.trainer, null)
-    const note = record.note.toLowerCase()
-    assert.ok(note.includes('not a text model with a different prompt') || note.includes('nothing here is implemented'))
+    assert.equal(record.implemented, true, `${modality} has a real first-party implementation`)
+    assert.ok(record.trainer && record.trainer.endsWith('.py'))
+    assert.notEqual(record.modelId, ARCHITECTURE.id)
     assert.notEqual(record.modelId, SIZE_PRESETS.pro.modelId)
   }
   assert.throws(() => modalityModel('smell'), /unknown modality/)

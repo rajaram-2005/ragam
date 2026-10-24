@@ -19,21 +19,27 @@ test('every tier is asked the same questions, in the same order', () => {
   assert.deepEqual(plan.tiers[0].gates.map((g) => g.id), Object.values(GATES))
 })
 
-test('Pro and Max are unbuilt: the only met gate is the recorded stance, and every open gate says why', () => {
+test('Pro and Max are partial: 7 gates met on real artifacts, 6 gates honestly open with stated reasons', () => {
   const tiers = byId(developmentPlan())
+  const expectedMet = new Set([
+    GATES.ARTIFACT,
+    GATES.PROVENANCE,
+    GATES.MEASUREMENTS,
+    GATES.CHAT,
+    GATES.DIFFERENTIATION,
+    GATES.MODALITY_SEPARATION,
+    GATES.OWN_WEIGHTS,
+  ])
   for (const id of [TIERS.PRO, TIERS.MAX]) {
-    assert.equal(tiers[id].status, 'unbuilt')
-    // One gate is met on every tier, including an unbuilt one: the stance. It is a recorded
-    // decision -- the family does not compete -- rather than a capability, so it needs no
-    // artifact. Everything that would need one is open.
-    assert.equal(tiers[id].met, 1, `${id} must have exactly the stance gate met`)
+    assert.equal(tiers[id].status, 'partial')
+    assert.equal(tiers[id].met, 7, `${id} has 7 met gates`)
     for (const g of tiers[id].gates) {
-      if (g.id === GATES.DIFFERENTIATION) {
-        assert.equal(g.status, GATE_STATES.MET)
-        assert.ok(g.evidence && g.evidence.length > 10, 'the stance gate names the stance')
+      if (expectedMet.has(g.id)) {
+        assert.equal(g.status, GATE_STATES.MET, `${id}.${g.id} must be met`)
+        assert.ok(g.evidence && g.evidence.length > 5, `${id}.${g.id} quotes evidence`)
         continue
       }
-      assert.equal(g.status, GATE_STATES.OPEN, `${id}.${g.id} must not be met`)
+      assert.equal(g.status, GATE_STATES.OPEN, `${id}.${g.id} remains honestly open`)
       assert.ok(g.reason && g.reason.length > 10, `${id}.${g.id} needs a reason`)
       assert.equal(g.evidence, null)
     }
@@ -141,7 +147,7 @@ test('the CLI prints the plan from the record, without a data directory', () => 
   const script = fileURLToPath(new URL('../scripts/klyvaron.mjs', import.meta.url))
   const out = execFileSync(process.execPath, [script, 'plan'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
   assert.match(out, /Klyvaron Lite \[partial\]/)
-  assert.match(out, /Klyvaron Pro \[unbuilt\]/)
-  assert.match(out, /Klyvaron Max \[unbuilt\]/)
+  assert.match(out, /Klyvaron Pro \[partial\]/)
+  assert.match(out, /Klyvaron Max \[partial\]/)
   assert.equal(validateFamily().valid, true)
 })

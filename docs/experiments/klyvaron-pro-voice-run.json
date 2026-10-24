@@ -1,0 +1,71 @@
+{
+  "schema": "klyvaron-multimodal-training-run/1",
+  "recordedAt": "2026-10-23T17:20:29.723750+00:00",
+  "modelId": "klyvaron-pro-voice@0.1.0",
+  "modality": "voice",
+  "tier": "pro",
+  "architecture": {
+    "id": "aetheris-voice-v1",
+    "config": {
+      "vocab_size": 34,
+      "max_chars": 32,
+      "audio_frames": 96,
+      "n_mels": 40,
+      "d_model": 192,
+      "n_heads": 4,
+      "d_ff": 512,
+      "n_enc_layers": 4,
+      "n_dec_layers": 4,
+      "n_utterances": 12
+    },
+    "configDigest": "e2868fcc87bd8e884a0db3af7dcdc296a6e1a428b55ee7275e488280914c16d3"
+  },
+  "parameterCount": 3076311,
+  "provenance": {
+    "origin": "first_party_trained_from_scratch",
+    "licence": "MIT",
+    "baseModel": null,
+    "dataset": "klyvaron-articulatory-speech-v1 (seed=20261401, heldOutSeed=20262300, 16kHz PCM)",
+    "trainer": "services/fabric/fabric/multimodal/voice_model.py",
+    "seed": 20261301
+  },
+  "supportedTasks": [
+    "speech.transcribe",
+    "speech.synthesize"
+  ],
+  "unsupportedTasks": [
+    "multi_speaker_overlapping_diarization",
+    "zero_shot_voice_cloning",
+    "multilingual_far_field_noisy_dictation",
+    "full_duplex_sub_50ms_streaming_telephony"
+  ],
+  "weights": {
+    "file": "weights.npz",
+    "sha256": "d50a346cce8c48f32d03bca0567a83c8654bf3f305082e073ef156381abee7db",
+    "weightsSha256": "5cced1f528162c0c65806a7a9c4740a7a059780ee954d8948f3267c35a5d3753",
+    "bytes": 5699324
+  },
+  "processor": {
+    "file": "processor.json",
+    "sha256": "e6f57b41688363ad9a091a51b5d9f1ba3fec3d237b654e8e58d8e5dbce7d2323"
+  },
+  "metrics": {
+    "validationUtteranceAccuracy": 1.0,
+    "uniformUtteranceBaseline": 0.0833,
+    "validationCharacterErrorRate": 0.159,
+    "roundTripTtsToAsrCer": 0.0549,
+    "validationTtsMelL1": 0.1695,
+    "meanSpectrumBaselineL1": 0.2487,
+    "initialLoss": 10.6513,
+    "finalLoss": 0.8219,
+    "lossImprovement": 9.8294,
+    "steps": 240,
+    "wallSeconds": 175.061,
+    "parameterCount": 3076311
+  },
+  "limitations": [
+    "Trained on 16 kHz mono multi-formant speech (288 multi-pitch training utterances, 120 held-out unseen-speaker utterances across 12 phrase classes and 34-symbol character vocabulary).",
+    "Multi-speaker overlapping diarization, zero-shot voice cloning, and noisy far-field multilingual dictation are unsupported.",
+    "Both speech input (`speech.transcribe`) and speech output (`speech.synthesize`) are executed by first-party weights and evaluated with round-trip CER."
+  ]
+}

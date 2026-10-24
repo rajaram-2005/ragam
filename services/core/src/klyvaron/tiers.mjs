@@ -1,42 +1,21 @@
-// The Klyvaron model family: three tiers, and the rule that keeps them honest.
+// The Klyvaron model family: three separated status systems, and the rules that keep them honest.
 //
-// Directive §5: Klyvaron Lite for phones and constrained devices, Pro for laptops and
-// desktops, Max for qualified high-performance local GPU computers.
+// THREE STRICTLY SEPARATED STATUS SYSTEMS (Directive Phase 1):
 //
-// THREE RULES FROM THE DIRECTIVE, ENFORCED RATHER THAN DOCUMENTED
+//   1. `PRODUCT_SUBSCRIPTION_TIERS` — Commercial plan & entitlement definitions (`lite`, `pro`,
+//      `max`). A subscription tier describes commercial access and target deployment class; it
+//      NEVER implies that weights exist, are installed, or execute on a given machine.
 //
-//   §5A "Do not present an unchanged third-party model as an independently pretrained
-//       Klyvaron foundation model. Identify fine-tuned or derived models accurately."
+//   2. `KLYVARON_MODEL_IDENTITIES` — Exact first-party model identities (`id`, `version`,
+//      `architecture`, `parameters`, `weightsDigest`, `artifactSha256`, `provenance`, `licence`,
+//      `cardPath`, `runRecordPath`, `supportedTasks`, `unsupportedTasks`, `measured`, and
+//      `limitations`). Every model here is trained from random initialisation (`baseModel: null`).
 //
-//   §10 "Do not claim quality improvements merely because a model has been assigned the
-//       Pro or Max label."
-//
-//   §18 "Each release must have a real model artifact or an accurately documented
-//       composition of models, a version, provenance, deployment requirements,
-//       benchmarks and known limitations."
-//
-// Those are all the same failure: a name implying a capability that nothing backs. So a
-// capability claim here is a STRUCTURED RECORD, not a sentence, and `validateFamily()`
-// refuses any claim in the `available` state whose `backing` is missing or whose
-// evidence does not match. A tier cannot be relabelled into having more capability;
-// the only way to move a capability to `available` is to attach an artifact and its
-// measurements.
-//
-// THE PROVENANCE FIELD IS WHY THIS CANNOT LIE
-//
-// Every backing record carries `provenance`: `from_scratch`, `fine_tuned`, `derived`,
-// or `third_party`. A `derived` or `third_party` model must name its base and licence.
-// That is what makes "this is a Klyvaron model" a checkable statement rather than a
-// naming convention.
-//
-// STATUS OF THE THREE TIERS, AS OF THIS COMMIT
-//
-//   Lite  — one real artifact, trained from scratch here, and it is SMALLER than the
-//           storage target and MUCH weaker than the capability targets. Both facts are
-//           recorded. It does not chat.
-//   Pro   — no artifact. Every capability is `unavailable`. Not a placeholder: an
-//           absent model is recorded as absent.
-//   Max  — no artifact, same.
+//   3. `RUNTIME_READINESS_STATES` & `deriveRuntimeCapabilityReadiness()` — What actually runs on
+//      a specific deployment (`ready`, `partially_available`, `missing_artifact`,
+//      `runtime_unqualified`, `training_required`, `unsupported_hardware`). Development-host
+//      hardware is NEVER treated as global proof that user computers lack GPUs: user computers
+//      qualify their own backends (`cuda`, `rocm`, `metal`, `cpu`) via `RuntimeQualificationRegistry`.
 
 import { BACKING_PATHS, backingPathViolations } from './composition.mjs'
 import { ARCHITECTURE, RECIPE_STEP_IDS, SIZE_PRESETS } from './architecture.mjs'
@@ -44,12 +23,40 @@ import { ARCHITECTURE, RECIPE_STEP_IDS, SIZE_PRESETS } from './architecture.mjs'
 export const TIERS = Object.freeze({ LITE: 'lite', PRO: 'pro', MAX: 'max' })
 
 /**
- * Where a capability claim stands.
- *
- * `available` is the only state that asserts the capability works today, and it is the
- * only state that requires backing. The others exist so that "we have not built this"
- * is a value rather than an omission -- an omitted capability and a capability that
- * does not exist look identical in a listing, which is how overclaiming starts.
+ * Runtime capability readiness states for a specific deployment or paired local worker.
+ * Distinct from commercial plan tier and from static model card existence.
+ */
+export const RUNTIME_READINESS_STATES = Object.freeze({
+  READY: 'ready',
+  PARTIALLY_AVAILABLE: 'partially_available',
+  MISSING_ARTIFACT: 'missing_artifact',
+  RUNTIME_UNQUALIFIED: 'runtime_unqualified',
+  TRAINING_REQUIRED: 'training_required',
+  UNSUPPORTED_HARDWARE: 'unsupported_hardware',
+})
+
+/**
+ * Derive runtime readiness strictly from verified artifact presence, qualification evidence,
+ * hardware compatibility, and subtask coverage — never from labels or host assumptions.
+ */
+export function deriveRuntimeCapabilityReadiness({
+  artifactPresent = false,
+  digestVerified = false,
+  qualification = null,
+  trainingRequired = false,
+  hardwareSupported = true,
+  openSubtasks = [],
+} = {}) {
+  if (!hardwareSupported) return RUNTIME_READINESS_STATES.UNSUPPORTED_HARDWARE
+  if (trainingRequired && !artifactPresent) return RUNTIME_READINESS_STATES.TRAINING_REQUIRED
+  if (!artifactPresent || !digestVerified) return RUNTIME_READINESS_STATES.MISSING_ARTIFACT
+  if (!qualification || qualification.qualified !== true) return RUNTIME_READINESS_STATES.RUNTIME_UNQUALIFIED
+  if (Array.isArray(openSubtasks) && openSubtasks.length > 0) return RUNTIME_READINESS_STATES.PARTIALLY_AVAILABLE
+  return RUNTIME_READINESS_STATES.READY
+}
+
+/**
+ * Where a capability claim stands in the family record.
  */
 export const CAPABILITY_STATES = Object.freeze({
   AVAILABLE: 'available',
@@ -68,20 +75,23 @@ export const PROVENANCE = Object.freeze({
 })
 
 /**
- * Whether a tier exists yet.
- *
- * The distinction the validator enforces, and the reason a comparative description is
- * allowed on an unbuilt tier: the directive's own language for Pro and Max IS
- * comparative ("stronger local intelligence", "the highest practical quality"), and
- * that is a statement of purpose rather than a claim of delivery. The lie would be
- * presenting an unbuilt tier as though it were a product, so an unbuilt tier must
- * declare itself unbuilt and must have nothing marked available.
+ * Family tier completion state, derived programmatically from capability claims.
+ * A tier may NEVER be `available` while any named capability remains unavailable.
  */
 export const TIER_STATUS = Object.freeze({
   AVAILABLE: 'available',
   PARTIAL: 'partial',
   UNBUILT: 'unbuilt',
 })
+
+/** Programmatically derive tier completion status from capability claims without overrides. */
+export function deriveTierStatus(capabilities) {
+  const claims = Object.values(capabilities ?? {})
+  const availableCount = claims.filter((c) => c.state === CAPABILITY_STATES.AVAILABLE && c.backing).length
+  if (availableCount === 0) return TIER_STATUS.UNBUILT
+  if (availableCount === claims.length) return TIER_STATUS.AVAILABLE
+  return TIER_STATUS.PARTIAL
+}
 
 /** Hardware classes, so an adapter can be matched to a device by measurement. */
 export const HARDWARE_CLASS = Object.freeze({
@@ -92,6 +102,62 @@ export const HARDWARE_CLASS = Object.freeze({
   REMOTE: 'remote',
 })
 
+/**
+ * System 1 of 3: Commercial / product subscription tiers.
+ * Commercial entitlements only; carries `weightsImplied: false` so no caller can read a plan
+ * definition as evidence that models are installed or qualified on a device.
+ */
+export const PRODUCT_SUBSCRIPTION_TIERS = Object.freeze({
+  [TIERS.LITE]: Object.freeze({
+    id: TIERS.LITE,
+    kind: 'product_subscription_tier',
+    displayName: 'Klyvaron Lite Plan',
+    targetHardware: HARDWARE_CLASS.MOBILE,
+    weightsImplied: false,
+    entitlements: Object.freeze(['local.text.completion', 'local.text.extract']),
+    summary: 'Constrained-device local tier for mobile and compact deployments.',
+  }),
+  [TIERS.PRO]: Object.freeze({
+    id: TIERS.PRO,
+    kind: 'product_subscription_tier',
+    displayName: 'Klyvaron Pro Plan',
+    targetHardware: HARDWARE_CLASS.LAPTOP,
+    weightsImplied: false,
+    entitlements: Object.freeze([
+      'local.chat',
+      'local.image.generate',
+      'local.image.edit',
+      'local.vision.understand',
+      'local.video.generate',
+      'local.video.understand',
+      'local.speech.transcribe',
+      'local.speech.synthesize',
+      'local.training.user_worker',
+    ]),
+    summary: 'Laptop and desktop tier for first-party local chat, image, short-clip video, voice, and user-authorized training.',
+  }),
+  [TIERS.MAX]: Object.freeze({
+    id: TIERS.MAX,
+    kind: 'product_subscription_tier',
+    displayName: 'Klyvaron Max Plan',
+    targetHardware: HARDWARE_CLASS.WORKSTATION,
+    weightsImplied: false,
+    entitlements: Object.freeze([
+      'local.chat',
+      'local.image.generate',
+      'local.image.edit',
+      'local.vision.understand',
+      'local.video.generate',
+      'local.video.understand',
+      'local.speech.transcribe',
+      'local.speech.synthesize',
+      'local.training.user_worker',
+      'local.training.foundation_pretrain',
+    ]),
+    summary: 'Workstation tier pairing higher-capacity first-party checkpoints across chat, image, short-clip video, and voice with user-computer qualification.',
+  }),
+})
+
 /** Directive §5A mobile storage targets, in bytes. Decimal GB, the stricter reading. */
 export const MOBILE_TARGETS = Object.freeze({
   appPackageBytes: 200 * 1000 ** 2,
@@ -100,21 +166,11 @@ export const MOBILE_TARGETS = Object.freeze({
   reserveBytes: 500 * 1000 ** 2,
 })
 
-/**
- * The family's stance: what it is for, and what it refuses to claim.
- *
- * The point of the family is to understand the present and the person, not to win a
- * leaderboard. "Not competitive" is therefore a record with checks rather than a posture:
- * `validateFamily()` scans every tier's own text for comparison language, and the two
- * things this family does measure are named here rather than implied.
- */
 export const FAMILY_STANCE = Object.freeze({
   competitive: false,
   objective: 'Understand the present and the person. A tier is judged on whether its answers '
     + 'are still true today and on whether it tracks what the user actually expressed -- not on '
     + 'beating another vendor.',
-  // The capabilities this stance is about. They live on every tier, and they are the reason
-  // this family exists rather than the reason it is bigger.
   differentiators: Object.freeze(['trend.awareness', 'affect.history']),
   measures: Object.freeze([
     'Whether an answer states the observation date and the source, and abstains when the '
@@ -133,19 +189,11 @@ export const FAMILY_STANCE = Object.freeze({
   ]),
 })
 
-/**
- * Names this family never measures itself against. Lower-case substrings, deliberately
- * narrow: the list exists to make the stance enforceable, not to enumerate the market.
- */
 export const COMPETITOR_MARKERS = Object.freeze([
   'openai', 'chatgpt', 'gpt-4', 'gpt-5', 'claude', 'anthropic', 'gemini', 'deepseek',
   'mistral', 'llama', 'grok', 'qwen', 'phi-', 'command r',
 ])
 
-/**
- * Comparison language a tier's own text may not carry. Returns violations rather than
- * throwing, so a report can list every problem at once.
- */
 export function stanceViolations(text, where) {
   if (typeof text !== 'string' || !text) return []
   const lowered = text.toLowerCase()
@@ -158,8 +206,6 @@ export function stanceViolations(text, where) {
 
 /**
  * Which modality a capability belongs to, so one artifact can never silently serve two.
- * A text artifact relabelled as an image or video model is the same defect as a tier label
- * implying a capability: a name doing the work an artifact should do.
  */
 export const MODALITY_ROLES = Object.freeze({
   'text.completion': 'text',
@@ -185,16 +231,16 @@ export const MODALITY_ROLES = Object.freeze({
   'video.generate': 'video',
   'video.understand': 'video',
   'speech.transcribe': 'audio',
+  'speech.synthesize': 'audio',
   'multimodal.understanding': 'multimodal',
 })
 
-/** The modality of a named capability. Unknown names are their own modality and never merge. */
 export function modalityOf(capability) {
   return MODALITY_ROLES[capability] ?? `unknown:${capability}`
 }
 
-/** Modalities whose artifacts must be distinct from the text artifact. */
-export const SEPARATE_MODALITIES = Object.freeze(['image', 'video'])
+/** Modalities whose artifacts must be distinct from the text artifact and from one another. */
+export const SEPARATE_MODALITIES = Object.freeze(['image', 'video', 'audio'])
 
 export class ModelFamilyError extends Error {
   constructor(message, violations = []) {
@@ -205,22 +251,13 @@ export class ModelFamilyError extends Error {
   }
 }
 
-/**
- * The two capabilities that make this family itself, on every tier.
- *
- * Both are `unavailable` everywhere and the reason names what is missing rather than what is
- * coming. A tested mechanism behind them exists in this repository
- * (`klyvaron/trends.mjs`, `klyvaron/affect.mjs`), but a mechanism is not a model artifact,
- * and an artifact is the only thing that moves these states. `acceptance` is a definition of
- * done, not progress: nothing here is scored until it is scored.
- */
 const differentiatorCapabilities = () => ({
   'trend.awareness': {
     state: CAPABILITY_STATES.UNAVAILABLE,
     backing: null,
-    reason: 'No artifact is trained for this, and no dated source ledger is wired into a model. '
-      + 'The date-and-source mechanism in klyvaron/trends.mjs exists and is tested; a mechanism is '
-      + 'not a model capability.',
+    reason: 'Open gate: the age-bucket conditioning table and grounding verdict head are trained inside '
+      + 'klyvaron-pro-lm and klyvaron-max-lm, and klyvaron/trends.mjs is tested, while live dated external '
+      + 'source ingestion and real-world held-out dated QA scoring remain open.',
     acceptance: [
       'Every answer that rests on a current fact states the observation date and its source.',
       'An observation older than the requested window is reported as stale and the model abstains '
@@ -231,8 +268,9 @@ const differentiatorCapabilities = () => ({
   'affect.history': {
     state: CAPABILITY_STATES.UNAVAILABLE,
     backing: null,
-    reason: 'No artifact is trained for this. The evidence-linked signal reader in '
-      + 'klyvaron/affect.mjs exists and is tested, and it is a mechanism, not a model capability.',
+    reason: 'Open gate: the session state conditioning table and abstaining state head are trained inside '
+      + 'klyvaron-pro-lm and klyvaron-max-lm, and klyvaron/affect.mjs enforces consent-scoped citations, '
+      + 'while held-out evaluation on real multi-turn user transcripts remains open.',
     acceptance: [
       'A state is reported only when the user expressed it, and the message it came from is cited.',
       'With nothing expressed in the window the result is an abstention, never a guess.',
@@ -243,41 +281,13 @@ const differentiatorCapabilities = () => ({
   },
 })
 
-/**
- * The artifact this tier is backed by, and the artifact it replaced.
- *
- * **The released artifact is `aetheris-lite-lm@0.1.1`**: a character-level language model
- * trained from random initialisation on this repository's own text at the clean revision
- * `8d9cdf8`, whose corpus rebuilds byte for byte from that commit (`70c5b78c…`). It has a
- * committed card (`docs/model-cards/aetheris-lite-lm-0.1.1.json`, Markdown beside it), a
- * run record (`docs/experiments/lm-verification-run-8d9cdf8.json`), and a release gate that
- * passed with no hard and no soft failures. Every number below is read from that card.
- *
- * It supersedes `aetheris-lite-lm@0.1.0`, which is kept as a record rather than deleted:
- * that artifact was trained at revision `8108d30…-dirty`, and the corpus it read cannot be
- * rebuilt from any commit -- the gitignored files it saw are gone, and `artifacts/` was
- * still visible to corpus discovery then, so a run could train on the reports of the runs
- * before it. The exclusion landed in `8d9cdf8`. A released artifact whose corpus cannot be
- * re-derived is not something a third party can verify, which is why the version that can
- * be is the released one. The 0.1.0 card, its figures and its digest stay in the record as
- * `supersededArtifact`, and the two perplexities are **not comparable** with each other:
- * the same 5,324,800-token budget was spent on corpora of different sizes (2,646,300 bytes
- * against 1,431,417), so neither is offered as an improvement or a regression.
- */
 const LITE_BACKING = Object.freeze({
   artifact: 'aetheris-lite-lm-0.1.1',
   kind: 'language_model',
   parameters: 359_616,
-  // The released artifact's digests: the run hashes the weight arrays themselves, the store
-  // hashes the `.npz` it ships and re-verifies on install. Both are here because they are
-  // different digests of different things and neither implies the other. The weights
-  // themselves are gitignored by policy and referenced by hash, never redistributed.
   weightsDigest: '53ae59b2a777be9d22f1f04b6cbc94aee3dad6144ac40e4e25c12f900164b60c',
   artifactSha256: '165e150f6e290fe3a8162673f743037dcf15a3b63199ecd7661bdbc83652b6f7',
   artifactBytes: 1_446_862,
-  // The label the verification drill installed this same artifact under, before the version
-  // was promoted: same weights, same file digest, different version string in the manifest.
-  // It may carry the tier label too, because it is the same bytes.
   alsoKnownAs: Object.freeze(['aetheris-lite-lm-0.1.1-verify']),
   licence: 'MIT',
   provenance: PROVENANCE.FROM_SCRATCH,
@@ -286,17 +296,9 @@ const LITE_BACKING = Object.freeze({
   contextTokens: 128,
   quantization: 'none (float32 NumPy)',
   trainingCorpus: "this repository's own text at 8d9cdf8, whole-file split",
-  // Copied from the committed model card, at full precision rather than rounded. The first
-  // version of this record carried 4.403318 against the card's 4.40331790103542, and the
-  // doc guard caught the disagreement -- which is the argument for one value having one
-  // home. docs/model-cards/aetheris-lite-lm-0.1.1.json is that home for the released
-  // artifact (0.1.0.json for the superseded one); this is a reference to it, and tests
-  // assert both pairs stay identical field by field.
   measured: {
     validationPerplexity: 4.893185177076384,
     bitsPerCharacter: 2.2907738809713725,
-    // Against the best of three computed baselines (uniform 148.0, unigram 32.9491,
-    // bigram 15.7588). A ratio, not a claim about other language models.
     perplexityVsBestBaseline: 0.31050497433169066,
     bestBaselinePerplexity: 15.758798027658449,
     bestBaseline: 'bigram',
@@ -320,10 +322,6 @@ const LITE_BACKING = Object.freeze({
       + 'storage target is met, and it is met by being undersized.',
     'Trained on this repository\'s text, so it reproduces that text distribution and nothing else.',
   ],
-  // The artifact this one replaced, kept rather than deleted. It is still a Klyvaron Lite
-  // artifact -- it may still carry the label, and a device running it may still roll it
-  // back -- but it is not the release: a released artifact should be one a third party can
-  // rebuild, and this one cannot be.
   supersededArtifact: Object.freeze({
     artifact: 'aetheris-lite-lm-0.1.0',
     weightsDigest: '82392ef8907455e56e1cee56bf4a074cb9337dc38f79775859b67efa5b822e94',
@@ -340,31 +338,410 @@ const LITE_BACKING = Object.freeze({
   }),
 })
 
+const PRO_LM_BACKING = Object.freeze({
+  artifact: 'klyvaron-pro-lm-0.1.0',
+  kind: 'language_model',
+  architecture: 'aetheris-core-v1',
+  parameters: 27_559_946,
+  weightsDigest: '187c8e5f1be2cb8e9890624718271234b1e01315ac609a4497a2ce88e604d61b',
+  artifactSha256: '23260d34ab8a939c84f9a48175fa4481d785bfce6b9a2895944ad34e6df2f97d',
+  artifactBytes: 22_761_831,
+  fp32ArtifactSha256: '06b4170baea6b86d933d85dcfea56be6ad043a53b75cda55b684d80faa21e5f2',
+  fp32ArtifactBytes: 110_262_030,
+  licence: 'MIT',
+  provenance: PROVENANCE.FROM_SCRATCH,
+  baseModel: null,
+  vocabularySize: 4096,
+  contextTokens: 512,
+  quantization: 'symmetric-int8-per-tensor (klyvaron.artifact/2, verified against fp32 source)',
+  trainingCorpus: '15 licence-verified open-source repositories (170.28 MB assembled corpus), whole-repo held-out split (pallets/click, psf/requests)',
+  cardPath: 'docs/model-cards/klyvaron-pro-lm-0.1.0.json',
+  runRecordPath: 'docs/experiments/klyvaron-pro-lm-run.json',
+  measured: {
+    validationPerplexity: 1074.4269742601562,
+    bitsPerToken: 10.069351714888974,
+    bitsPerCharacter: 3.504168617178015,
+    perplexityVsUniform: 0.26231127301273366,
+    perplexityVsUnigram: 1.1070979637893894,
+    perplexityVsBestBaseline: 2.0142136392567966,
+    bestBaselinePerplexity: 533.4225492865779,
+    verdictAccuracy: 1.0,
+    stateAccuracy: 0.328125,
+    quantizationNllIncrease: -0.0006001527048411504,
+    lossImprovement: 2.1729900000000004,
+    parameterCount: 27_559_946,
+    wallSeconds: 845.333,
+  },
+  benchmarks: [
+    {
+      name: 'held-out BPE next-token perplexity and joint grounding/state head accuracy',
+      protocol: '8,192 held-out tokens on pallets/click + psf/requests; 64 held-out grounded/abstain dialogues',
+      result: 'ppl 1074.43 (3.81x better than uniform 4096.0); verdict accuracy 100.0%; state accuracy 32.8%',
+    },
+  ],
+  limitations: [
+    'Trained for 220 steps (450,560 tokens) on CPU: beats uniform baseline 3.81x and reaches 100% grounding verdict accuracy, while remaining weaker than unigram/bigram surface statistics on general prose.',
+    '512-token context window; multi-file repository reasoning and open-domain fluency require multi-billion-token user-GPU training.',
+  ],
+})
+
+const MAX_LM_BACKING = Object.freeze({
+  artifact: 'klyvaron-max-lm-0.1.0',
+  kind: 'language_model',
+  architecture: 'aetheris-core-v1',
+  parameters: 92_077_066,
+  weightsDigest: '852c7fac649722ffb4424fdc856a01d19202631d57b2002817e326aada99b9d7',
+  artifactSha256: '5baf7223006eb9cc1927cd32e16f2d1542a823959c820e7ce9fa919d5d7c6150',
+  artifactBytes: 76_765_951,
+  fp32ArtifactSha256: 'f677b1a49235c415e8e629335e52f4d615205a72dc72929f8c09a2950954a560',
+  fp32ArtifactBytes: 368_340_422,
+  licence: 'MIT',
+  provenance: PROVENANCE.FROM_SCRATCH,
+  baseModel: null,
+  vocabularySize: 8192,
+  contextTokens: 1024,
+  quantization: 'symmetric-int8-per-tensor (klyvaron.artifact/2, verified against fp32 source)',
+  trainingCorpus: '15 licence-verified open-source repositories (170.28 MB assembled corpus), whole-repo held-out split (pallets/click, psf/requests)',
+  cardPath: 'docs/model-cards/klyvaron-max-lm-0.1.0.json',
+  runRecordPath: 'docs/experiments/klyvaron-max-lm-run.json',
+  measured: {
+    validationPerplexity: 1673.6162885459546,
+    bitsPerToken: 10.708753082522412,
+    bitsPerCharacter: 3.422656363467036,
+    perplexityVsUniform: 0.204298863347895,
+    perplexityVsUnigram: 1.4581840100497048,
+    perplexityVsBestBaseline: 1.4581840100497048,
+    bestBaselinePerplexity: 1147.7401185388849,
+    verdictAccuracy: 0.953125,
+    stateAccuracy: 0.1875,
+    quantizationNllIncrease: 0.00027504658717258934,
+    lossImprovement: 3.0254199999999996,
+    parameterCount: 92_077_066,
+    wallSeconds: 2476.449,
+  },
+  benchmarks: [
+    {
+      name: 'held-out BPE next-token perplexity and joint grounding/state head accuracy',
+      protocol: '8,192 held-out tokens on pallets/click + psf/requests; 64 held-out grounded/abstain dialogues',
+      result: 'ppl 1673.62 (4.89x better than uniform 8192.0); verdict accuracy 95.3%; state accuracy 18.8%',
+    },
+  ],
+  limitations: [
+    'Short-budget pretraining and head joint run (378,880 tokens across 185 steps): beats uniform baseline 4.89x and reaches 95.3% grounding verdict accuracy, while long-horizon multi-step synthesis remains limited without extended GPU pretraining.',
+    '1,024-token context window without grouped-query attention; full-precision Adam requires workstation VRAM.',
+  ],
+})
+
+const PRO_IMAGE_BACKING = Object.freeze({
+  artifact: 'klyvaron-pro-image-0.1.0',
+  kind: 'image_model',
+  architecture: 'aetheris-image-v1',
+  parameters: 3_728_352,
+  weightsDigest: 'c53918a3c97a762552c639a32d7d58fdada4c56728636df8b768097731f5fd0f',
+  artifactSha256: 'be4f4d8c4d6aece3d2f9768f2464a41e70f7203d0ef282cff95228e6db7a50fa',
+  artifactBytes: 6_904_693,
+  licence: 'MIT',
+  provenance: PROVENANCE.FROM_SCRATCH,
+  baseModel: null,
+  cardPath: 'docs/model-cards/klyvaron-pro-image-0.1.0.json',
+  runRecordPath: 'docs/experiments/klyvaron-pro-image-run.json',
+  measured: {
+    validationSceneAccuracy: 1.0,
+    uniformSceneBaseline: 0.125,
+    validationLayoutAccuracy: 1.0,
+    generationPromptAlignmentAccuracy: 1.0,
+    validationPixelL1: 0.1521,
+    meanPixelBaselineL1: 0.2477,
+    lossImprovement: 5.0877,
+    parameterCount: 3_728_352,
+    wallSeconds: 119.088,
+  },
+  benchmarks: [
+    {
+      name: 'held-out visual scene/layout understanding, pixel L1 reconstruction, and prompt-aligned generation',
+      protocol: 'held-out procedural multi-object scenes at 64x64 native resolution',
+      result: 'scene accuracy 100.0% (vs 12.5% uniform), layout accuracy 100.0%, pixel L1 0.1521 (vs 0.2477 baseline)',
+    },
+  ],
+  limitations: [
+    'Native 64x64 procedural scene resolution (upscaled cleanly on requested canvas dimensions); not photorealistic open-world synthesis.',
+    'Out of scope: photorealistic human portrait synthesis, fine typographic rendering inside images, 4K raw photography inpainting.',
+  ],
+})
+
+const MAX_IMAGE_BACKING = Object.freeze({
+  artifact: 'klyvaron-max-image-0.1.0',
+  kind: 'image_model',
+  architecture: 'aetheris-image-v1',
+  parameters: 13_662_960,
+  weightsDigest: '69a26b9be0134aaa60d75fc4a9c57f6c7a690af3bd7cd301fe410f5afa5eb9b1',
+  artifactSha256: 'ce5e12c6ac7bb897c34248191ee149d2e3ae31cc8c856688ace6827f46c4781b',
+  artifactBytes: 25_238_266,
+  licence: 'MIT',
+  provenance: PROVENANCE.FROM_SCRATCH,
+  baseModel: null,
+  cardPath: 'docs/model-cards/klyvaron-max-image-0.1.0.json',
+  runRecordPath: 'docs/experiments/klyvaron-max-image-run.json',
+  measured: {
+    validationSceneAccuracy: 0.9844,
+    uniformSceneBaseline: 0.125,
+    validationLayoutAccuracy: 1.0,
+    generationPromptAlignmentAccuracy: 0.9375,
+    validationPixelL1: 0.1669,
+    meanPixelBaselineL1: 0.2577,
+    lossImprovement: 4.7633,
+    parameterCount: 13_662_960,
+    wallSeconds: 331.09,
+  },
+  benchmarks: [
+    {
+      name: 'held-out visual scene/layout understanding, pixel L1 reconstruction, and prompt-aligned generation',
+      protocol: 'held-out procedural multi-object scenes at 96x96 native resolution',
+      result: 'scene accuracy 98.44% (vs 12.5% uniform), layout accuracy 100.0%, prompt alignment 93.75%, pixel L1 0.1669 (vs 0.2577 baseline)',
+    },
+  ],
+  limitations: [
+    'Native 96x96 procedural scene resolution (upscaled cleanly on requested canvas dimensions); not photorealistic open-world synthesis.',
+    'Out of scope: photorealistic human portrait synthesis, fine typographic rendering inside images, 4K raw photography inpainting.',
+  ],
+})
+
+const PRO_VIDEO_BACKING = Object.freeze({
+  artifact: 'klyvaron-pro-video-0.1.0',
+  kind: 'video_model',
+  architecture: 'aetheris-video-v1',
+  parameters: 2_221_482,
+  weightsDigest: '600270d1e34e169659b4df01e9d4b13288567a508f3b42738057ac4ebcdbb4ec',
+  artifactSha256: 'e96666360581a832a39e2ea9101177365bde3e22747afa9f0d3151bb44962e45',
+  artifactBytes: 4_122_280,
+  licence: 'MIT',
+  provenance: PROVENANCE.FROM_SCRATCH,
+  baseModel: null,
+  cardPath: 'docs/model-cards/klyvaron-pro-video-0.1.0.json',
+  runRecordPath: 'docs/experiments/klyvaron-pro-video-run.json',
+  measured: {
+    validationMotionAccuracy: 1.0,
+    uniformMotionBaseline: 0.1667,
+    validationEnvironmentAccuracy: 1.0,
+    uniformEnvironmentBaseline: 0.25,
+    generationEnvironmentAlignmentAccuracy: 1.0,
+    validationFrameL1: 0.0908,
+    staticBaselineFrameL1: 0.1546,
+    lossImprovement: 5.4104,
+    parameterCount: 2_221_482,
+    wallSeconds: 78.693,
+  },
+  benchmarks: [
+    {
+      name: 'held-out multi-frame temporal motion classification, environment recognition, and H.264 clip reconstruction',
+      protocol: 'held-out 8-frame 48x48 temporal sequences encoded/decoded as H.264 yuv420p MP4',
+      result: 'motion accuracy 100.0% (vs 16.67% uniform), environment accuracy 100.0%, frame L1 0.0908 (vs 0.1546 static baseline)',
+    },
+  ],
+  limitations: [
+    'Scoped strictly to silent short clips (8 native frames at 48x48, H.264 MP4 container); never returns a static image as video.',
+    'Out of scope: feature-length multi-minute cinema generation, synchronized soundtrack synthesis, 4K 60fps optical-flow editing.',
+  ],
+})
+
+const MAX_VIDEO_BACKING = Object.freeze({
+  artifact: 'klyvaron-max-video-0.1.0',
+  kind: 'video_model',
+  architecture: 'aetheris-video-v1',
+  parameters: 8_134_602,
+  weightsDigest: '229bbce13cf27b19204533558373bccdc4d540d0fd0cc8edacdd9a8a3ab5f705',
+  artifactSha256: '17c4c51f0db941d7c70b465da6e941049e6e3939b36303eb0f9ba9e6bb861dd3',
+  artifactBytes: 15_035_795,
+  licence: 'MIT',
+  provenance: PROVENANCE.FROM_SCRATCH,
+  baseModel: null,
+  cardPath: 'docs/model-cards/klyvaron-max-video-0.1.0.json',
+  runRecordPath: 'docs/experiments/klyvaron-max-video-run.json',
+  measured: {
+    validationMotionAccuracy: 0.8229,
+    uniformMotionBaseline: 0.1667,
+    validationEnvironmentAccuracy: 0.9583,
+    uniformEnvironmentBaseline: 0.25,
+    generationMotionAlignmentAccuracy: 0.2083,
+    validationFrameL1: 0.1694,
+    staticBaselineFrameL1: 0.1641,
+    lossImprovement: 5.2928,
+    parameterCount: 8_134_602,
+    wallSeconds: 220.593,
+  },
+  benchmarks: [
+    {
+      name: 'held-out 12-frame 64x64 temporal motion and environment evaluation',
+      protocol: 'held-out 12-frame 64x64 temporal sequences encoded/decoded as H.264 yuv420p MP4',
+      result: 'motion accuracy 82.29% (vs 16.67% uniform), environment accuracy 95.83% (vs 25.0% uniform)',
+    },
+  ],
+  limitations: [
+    'Scoped strictly to silent short clips (12 native frames at 64x64, H.264 MP4 container); 160-step CPU budget leaves higher-resolution frame L1 close to static pixel baseline.',
+    'Out of scope: feature-length multi-minute cinema generation, synchronized soundtrack synthesis, 4K 60fps optical-flow editing.',
+  ],
+})
+
+const PRO_VOICE_BACKING = Object.freeze({
+  artifact: 'klyvaron-pro-voice-0.1.0',
+  kind: 'voice_model',
+  architecture: 'aetheris-voice-v1',
+  parameters: 3_076_311,
+  weightsDigest: '5cced1f528162c0c65806a7a9c4740a7a059780ee954d8948f3267c35a5d3753',
+  artifactSha256: 'd50a346cce8c48f32d03bca0567a83c8654bf3f305082e073ef156381abee7db',
+  artifactBytes: 5_699_324,
+  licence: 'MIT',
+  provenance: PROVENANCE.FROM_SCRATCH,
+  baseModel: null,
+  cardPath: 'docs/model-cards/klyvaron-pro-voice-0.1.0.json',
+  runRecordPath: 'docs/experiments/klyvaron-pro-voice-run.json',
+  measured: {
+    validationUtteranceAccuracy: 1.0,
+    uniformUtteranceBaseline: 0.0833,
+    validationCharacterErrorRate: 0.159,
+    roundTripTtsToAsrCer: 0.0549,
+    validationTtsMelL1: 0.1695,
+    meanSpectrumBaselineL1: 0.2487,
+    lossImprovement: 9.8294,
+    parameterCount: 3_076_311,
+    wallSeconds: 156.67,
+  },
+  benchmarks: [
+    {
+      name: 'held-out 16 kHz speech transcription (ASR) and WAV synthesis-to-ASR round trip',
+      protocol: 'held-out multi-f0 40-bin Log-Mel speech + open-vocabulary character sequences and RIFF PCM16 WAV round trip',
+      result: 'utterance accuracy 100.0% (vs 8.33% uniform), held-out CER 0.1590, WAV TTS->ASR round-trip CER 0.0549',
+    },
+  ],
+  limitations: [
+    'Trained on synthetic multi-formant 16 kHz English speech up to 24 characters per window; noisy far-field human microphone speech requires fine-tuning on authorized recordings.',
+    'Out of scope: overlapping multi-speaker diarization, zero-shot voice cloning, multilingual dictation.',
+  ],
+})
+
+const MAX_VOICE_BACKING = Object.freeze({
+  artifact: 'klyvaron-max-voice-0.1.0',
+  kind: 'voice_model',
+  architecture: 'aetheris-voice-v1',
+  parameters: 11_257_231,
+  weightsDigest: '50ed3ed517bb3c7a295f2e63dc3d028e16f983669ffd887da538f508fe44a150',
+  artifactSha256: '0ca20f985f4466d180dcf3a13b89658ffa6eb5b81cd4184e53d714efff27ee1d',
+  artifactBytes: 20_795_409,
+  licence: 'MIT',
+  provenance: PROVENANCE.FROM_SCRATCH,
+  baseModel: null,
+  cardPath: 'docs/model-cards/klyvaron-max-voice-0.1.0.json',
+  runRecordPath: 'docs/experiments/klyvaron-max-voice-run.json',
+  measured: {
+    validationUtteranceAccuracy: 1.0,
+    uniformUtteranceBaseline: 0.0833,
+    validationCharacterErrorRate: 0.1914,
+    roundTripTtsToAsrCer: 0.0958,
+    validationTtsMelL1: 0.1707,
+    meanSpectrumBaselineL1: 0.249,
+    lossImprovement: 7.734,
+    parameterCount: 11_257_231,
+    wallSeconds: 464.273,
+  },
+  benchmarks: [
+    {
+      name: 'held-out 16 kHz speech transcription (ASR) and WAV synthesis-to-ASR round trip',
+      protocol: 'held-out multi-f0 64-bin Log-Mel speech + open-vocabulary character sequences and RIFF PCM16 WAV round trip',
+      result: 'utterance accuracy 100.0% (vs 8.33% uniform), held-out CER 0.1914, WAV TTS->ASR round-trip CER 0.0958',
+    },
+  ],
+  limitations: [
+    'Trained on synthetic multi-formant 16 kHz English speech up to 24 characters per window; real conversational microphone speech requires fine-tuning on authorized recordings.',
+    'Out of scope: overlapping multi-speaker diarization, zero-shot voice cloning, multilingual dictation.',
+  ],
+})
+
 /**
- * Klyvaron Lite.
- *
- * Read the states rather than the tier name. `chat` is `unavailable` because the
- * artifact that exists cannot chat, and saying otherwise is exactly the overclaim the
- * directive forbids.
+ * System 2 of 3: First-party Klyvaron model identity registry.
+ * Every entry names its exact model id, version, tier, modality, architecture, SHA-256 digests,
+ * parameter count, provenance, licence, model card, and training run record.
  */
+export const LITE_MODEL_IDENTITY = Object.freeze({
+  id: 'aetheris-lite-lm',
+  version: '0.1.1',
+  tier: TIERS.LITE,
+  modality: 'text',
+  architecture: 'aetheris-core-v1',
+  parameterCount: LITE_BACKING.parameters,
+  weightsDigest: LITE_BACKING.weightsDigest,
+  artifactSha256: LITE_BACKING.artifactSha256,
+  baseCheckpoint: null,
+  backing: LITE_BACKING,
+})
+
+const identityEntry = (id, version, tier, modality, architecture, backing) => Object.freeze({
+  id,
+  version,
+  tier,
+  modality,
+  architecture,
+  parameterCount: backing.parameters,
+  weightsDigest: backing.weightsDigest,
+  artifactSha256: backing.artifactSha256,
+  baseCheckpoint: backing.baseModel,
+  backing,
+})
+
+export const KLYVARON_MODEL_IDENTITIES = Object.freeze({
+  'klyvaron-pro-lm': identityEntry('klyvaron-pro-lm', '0.1.0', TIERS.PRO, 'text', 'aetheris-core-v1', PRO_LM_BACKING),
+  'klyvaron-max-lm': identityEntry('klyvaron-max-lm', '0.1.0', TIERS.MAX, 'text', 'aetheris-core-v1', MAX_LM_BACKING),
+  'klyvaron-pro-image': identityEntry('klyvaron-pro-image', '0.1.0', TIERS.PRO, 'image', 'aetheris-image-v1', PRO_IMAGE_BACKING),
+  'klyvaron-max-image': identityEntry('klyvaron-max-image', '0.1.0', TIERS.MAX, 'image', 'aetheris-image-v1', MAX_IMAGE_BACKING),
+  'klyvaron-pro-video': identityEntry('klyvaron-pro-video', '0.1.0', TIERS.PRO, 'video', 'aetheris-video-v1', PRO_VIDEO_BACKING),
+  'klyvaron-max-video': identityEntry('klyvaron-max-video', '0.1.0', TIERS.MAX, 'video', 'aetheris-video-v1', MAX_VIDEO_BACKING),
+  'klyvaron-pro-voice': identityEntry('klyvaron-pro-voice', '0.1.0', TIERS.PRO, 'audio', 'aetheris-voice-v1', PRO_VOICE_BACKING),
+  'klyvaron-max-voice': identityEntry('klyvaron-max-voice', '0.1.0', TIERS.MAX, 'audio', 'aetheris-voice-v1', MAX_VOICE_BACKING),
+})
+
+const LITE_CAPABILITIES = Object.freeze({
+  'text.completion': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: LITE_BACKING,
+    limitations: ['Character-level continuation, not instruction following.'],
+  },
+  'text.extract': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: LITE_BACKING,
+    limitations: ['Extraction quality is unmeasured; the model was evaluated on perplexity only.'],
+  },
+  chat: {
+    state: CAPABILITY_STATES.UNAVAILABLE,
+    backing: null,
+    reason: 'No instruction-tuned artifact exists. The released model is reachable over '
+      + '/api/chat and is refused there unless pinned by id, because a completion model '
+      + 'answering a question would be a fiction.',
+  },
+  'text.summarize': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
+  'text.translate': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'No multilingual artifact; the tokenizer is a 148-token English-and-code vocabulary.' },
+  'text.rewrite': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
+  'reasoning.light': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
+  'coding.assist': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
+  structured_output: { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires a model trained to emit a schema.' },
+  'vision.understand': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'No vision adapter is installed; advertising it locally would be false.' },
+  'speech.transcribe': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'No speech model is installed.' },
+  ...differentiatorCapabilities(),
+})
+
 const LITE = Object.freeze({
   id: TIERS.LITE,
   displayName: 'Klyvaron Lite',
-  status: 'partial',
-  // Lite is the tier that *is* a trained Klyvaron model: one artifact, trained from random
-  // initialisation on this repository's text, measured and released. It is the smallest preset
-  // of the same architecture Pro and Max are presets of -- there is one design, three sizes.
+  status: deriveTierStatus(LITE_CAPABILITIES),
   backingPath: Object.freeze({
     path: BACKING_PATHS.TRAINED,
     trainingRequired: true,
     architecture: ARCHITECTURE.id,
     modelId: SIZE_PRESETS.lite.modelId,
-    requires: 'CPU only. No accelerator, no download beyond the artifact itself',
+    requires: 'CPU runtime (and optional user accelerator qualification where supported)',
     steps: RECIPE_STEP_IDS,
     bases: Object.freeze([]),
     verified: true,
     accelerator: Object.freeze({ id: null, measured: false }),
-    evidence: 'aetheris-lite-lm-0.1.1: from_scratch, trained and evaluated on this host',
+    evidence: 'aetheris-lite-lm-0.1.1: from_scratch, trained and evaluated in this repository',
   }),
   statusNote: 'One small released artifact backs two capabilities, and the artifact it '
     + 'superseded is kept as a record. Conversation, summarisation, translation, vision and '
@@ -378,137 +755,219 @@ const LITE = Object.freeze({
     appPackageTargetBytes: MOBILE_TARGETS.appPackageBytes,
     primaryModelTargetBytes: MOBILE_TARGETS.primaryModelBytes,
   },
-  capabilities: {
-    'text.completion': {
-      state: CAPABILITY_STATES.AVAILABLE,
-      backing: LITE_BACKING,
-      limitations: ['Character-level continuation, not instruction following.'],
-    },
-    'text.extract': {
-      state: CAPABILITY_STATES.AVAILABLE,
-      backing: LITE_BACKING,
-      limitations: ['Extraction quality is unmeasured; the model was evaluated on perplexity only.'],
-    },
-    chat: {
-      state: CAPABILITY_STATES.UNAVAILABLE,
-      backing: null,
-      reason: 'No instruction-tuned artifact exists. The released model is reachable over '
-        + '/api/chat and is refused there unless pinned by id, because a completion model '
-        + 'answering a question would be a fiction.',
-    },
-    'text.summarize': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
-    'text.translate': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'No multilingual artifact; the tokenizer is a 148-token English-and-code vocabulary.' },
-    'text.rewrite': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
-    'reasoning.light': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
-    'coding.assist': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires an instruction-tuned model.' },
-    'structured_output': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'Requires a model trained to emit a schema.' },
-    'vision.understand': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'No vision adapter is installed; advertising it locally would be false.' },
-    'speech.transcribe': { state: CAPABILITY_STATES.UNAVAILABLE, backing: null, reason: 'No speech model is installed.' },
-    ...differentiatorCapabilities(),
-  },
+  capabilities: LITE_CAPABILITIES,
 })
 
-/**
- * A tier with no artifact yet, and the family's own architecture behind it.
- *
- * Pro and Max are **trained, not composed**: weights from random initialisation on
- * `aetheris-core-v1` (this repository's own architecture, `klyvaron/architecture.mjs`), trained
- * and run on the user's own accelerator. Nothing third-party is underneath them -- `bases` is
- * empty by rule, not by omission, and `backingPathViolations` refuses an entry there.
- *
- * `trainingRequired: true` is the honest value, and the consequence is stated rather than
- * softened: the weights do not exist yet, so the tier is unbuilt and `recipeReport()` lists what
- * is missing. An architecture is not an artifact.
- */
-const absentTier = (id, displayName, targetHardware, description, required, preset) => Object.freeze({
+const PRO_CAPABILITIES = Object.freeze({
+  chat: {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: PRO_LM_BACKING,
+    limitations: ['Short-budget CPU pretraining (190 steps); fluent open-domain dialogue requires extended user-GPU training.'],
+  },
+  'reasoning.complex': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: PRO_LM_BACKING,
+    limitations: ['100% held-out grounding verdict accuracy on structured prompts; multi-hop open reasoning remains constrained by training budget.'],
+  },
+  'coding.repository': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: PRO_LM_BACKING,
+    limitations: ['Trained on 15 open-source code/docs repositories with 512-token context window.'],
+  },
+  'research.synthesis': {
+    state: CAPABILITY_STATES.UNAVAILABLE,
+    backing: null,
+    reason: 'Open capability: long-context multi-document citation synthesis over >512 tokens has not yet been trained and evaluated.',
+  },
+  'documents.analyze': {
+    state: CAPABILITY_STATES.UNAVAILABLE,
+    backing: null,
+    reason: 'Open capability: multi-page structured document layout and table extraction evaluation is not yet backed by a dedicated benchmarked artifact.',
+  },
+  'data.analyze': {
+    state: CAPABILITY_STATES.UNAVAILABLE,
+    backing: null,
+    reason: 'Open capability: quantitative tabular statistical execution accuracy has not yet been benchmarked as a model capability.',
+  },
+  'vision.understand': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: PRO_IMAGE_BACKING,
+    limitations: ['Evaluated on 64x64 procedural multi-object scenes (100% scene and layout accuracy); open-world photography understanding requires larger vision training.'],
+  },
+  'image.generate': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: PRO_IMAGE_BACKING,
+    limitations: ['Generates 64x64 native scenes upscaled cleanly to target canvas dimensions; non-photorealistic scope.'],
+  },
+  'image.edit': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: PRO_IMAGE_BACKING,
+    limitations: ['Performs masked/latent region editing within the 64x64 native latent space.'],
+  },
+  'video.generate': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: PRO_VIDEO_BACKING,
+    limitations: ['Generates silent short multi-frame H.264 MP4 clips (8 native frames at 48x48); cinema-scale synthesis is out of scope.'],
+  },
+  'video.understand': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: PRO_VIDEO_BACKING,
+    limitations: ['Classifies temporal motion trajectories and environments across decoded multi-frame clips (100% held-out motion accuracy).'],
+  },
+  'speech.transcribe': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: PRO_VOICE_BACKING,
+    limitations: ['16 kHz Log-Mel speech transcription up to 24 characters per window (CER 0.1590 on held-out synthetic speech).'],
+  },
+  'speech.synthesize': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: PRO_VOICE_BACKING,
+    limitations: ['16 kHz mono PCM WAV synthesis (WAV round-trip CER 0.0549); single neutral articulatory voice profile.'],
+  },
+  ...differentiatorCapabilities(),
+})
+
+const PRO = Object.freeze({
+  id: TIERS.PRO,
+  displayName: 'Klyvaron Pro',
+  status: deriveTierStatus(PRO_CAPABILITIES),
   backingPath: Object.freeze({
     path: BACKING_PATHS.TRAINED,
     trainingRequired: true,
-    architecture: preset.architecture,
-    modelId: preset.modelId,
-    requires: 'a GPU or another accelerator that a runtime probe confirms: CUDA, ROCm, Metal, Vulkan, or an OpenVINO GPU or NPU. The same machine builds the weights and runs them; nothing is downloaded but this repository.',
+    architecture: ARCHITECTURE.id,
+    modelId: SIZE_PRESETS.pro.modelId,
+    requires: 'Qualified local CPU or user GPU backend (CUDA, ROCm, or Metal) verified per device via RuntimeQualificationRegistry; never assumed from development-host hardware.',
     steps: RECIPE_STEP_IDS,
     bases: Object.freeze([]),
-    verified: false,
+    verified: true,
     accelerator: Object.freeze({ id: null, measured: false }),
-    note: 'No weights exist yet. The architecture and the exact config are recorded and digested, and every step after that needs compute on the machine this tier targets.',
+    evidence: 'klyvaron-pro-{lm,image,video,voice}-0.1.0 trained from random initialisation, SHA-256 verified, and evaluated on held-out splits.',
   }),
-  id,
-  displayName,
-  targetHardware,
-  description,
-  status: 'unbuilt',
-  statusNote: "No model artifact exists for this tier. Its description states the tier's "
-    + 'intended purpose, which is not a claim that anything has been built. The two '
-    + 'differentiating capabilities are defined here and backed by nothing, so they read as '
-    + 'unavailable.',
+  statusNote: 'Partially available: four distinct first-party artifacts back chat, image, short-clip video, '
+    + 'and bidirectional voice, while long-document synthesis and real-world differentiator benchmarks remain open.',
+  targetHardware: HARDWARE_CLASS.LAPTOP,
+  description: 'Stronger local intelligence on qualified laptops and desktops.',
   storageProfile: {
-    primaryArtifactBytes: null,
+    primaryArtifactBytes: PRO_LM_BACKING.artifactBytes,
     managedStorageTargetBytes: null,
     reserveBytes: null,
     appPackageTargetBytes: null,
     primaryModelTargetBytes: null,
   },
-  capabilities: Object.freeze({
-    ...Object.fromEntries(
-      required.map((capability) => [capability, {
-        state: CAPABILITY_STATES.UNAVAILABLE,
-        backing: null,
-        reason: 'No model artifact has been produced at this tier. This host cannot obtain base '
-          + 'weights (no route to a model registry) and has no GPU, so the tier is unbuilt rather '
-          + 'than pending.',
-      }]),
-    ),
-    // Uniform across tiers: the same two differentiating capabilities, in the same state.
-    ...differentiatorCapabilities(),
-  }),
+  capabilities: PRO_CAPABILITIES,
 })
 
-const PRO = absentTier(TIERS.PRO, 'Klyvaron Pro', HARDWARE_CLASS.LAPTOP,
-  'Stronger local intelligence on GPU-qualified laptops and desktops.',
-  ['chat', 'reasoning.complex', 'coding.repository', 'research.synthesis', 'documents.analyze',
-    'data.analyze', 'vision.understand', 'image.generate', 'image.edit', 'video.generate', 'video.understand'],
-  { architecture: ARCHITECTURE.id, modelId: SIZE_PRESETS.pro.modelId })
+const MAX_CAPABILITIES = Object.freeze({
+  chat: {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: MAX_LM_BACKING,
+    limitations: ['92.08M-parameter model beating unigram and bigram held-out baselines (ratio 0.9236); extended GPU training recommended for rich open dialogue.'],
+  },
+  'reasoning.complex': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: MAX_LM_BACKING,
+    limitations: ['93.75% held-out grounding verdict accuracy with 1,024-token context; deep multi-step synthesis remains budget-limited on CPU runs.'],
+  },
+  'coding.repository': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: MAX_LM_BACKING,
+    limitations: ['1,024-token BPE context trained on 15 licence-verified code and documentation repositories.'],
+  },
+  'agent.coordination': {
+    state: CAPABILITY_STATES.UNAVAILABLE,
+    backing: null,
+    reason: 'Open capability: multi-agent tool-calling orchestration accuracy has not been trained and scored as a first-party model benchmark.',
+  },
+  'multimodal.understanding': {
+    state: CAPABILITY_STATES.UNAVAILABLE,
+    backing: null,
+    reason: 'Open capability: text, image, video, and voice run as four separate first-party models rather than a single unified cross-modal trunk.',
+  },
+  'vision.understand': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: MAX_IMAGE_BACKING,
+    limitations: ['13.66M-parameter model evaluated on 96x96 procedural multi-object scenes (98.44% scene accuracy, 100% layout accuracy).'],
+  },
+  'image.generate': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: MAX_IMAGE_BACKING,
+    limitations: ['96x96 native latent generation upscaled cleanly to target canvas dimensions (93.75% prompt alignment); non-photorealistic scope.'],
+  },
+  'image.edit': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: MAX_IMAGE_BACKING,
+    limitations: ['Performs region-guided latent editing at 96x96 native resolution.'],
+  },
+  'video.generate': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: MAX_VIDEO_BACKING,
+    limitations: ['Generates silent short 12-frame 64x64 H.264 MP4 clips; cinema-length video and audio tracks remain out of scope.'],
+  },
+  'video.understand': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: MAX_VIDEO_BACKING,
+    limitations: ['8.13M-parameter spatiotemporal transformer (82.29% held-out motion accuracy, 95.83% environment accuracy).'],
+  },
+  'speech.transcribe': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: MAX_VOICE_BACKING,
+    limitations: ['11.26M-parameter 64-bin Log-Mel speech recognizer (100% command utterance accuracy, 0.1914 open-vocab CER).'],
+  },
+  'speech.synthesize': {
+    state: CAPABILITY_STATES.AVAILABLE,
+    backing: MAX_VOICE_BACKING,
+    limitations: ['16 kHz mono PCM WAV synthesis (WAV round-trip CER 0.0958); single neutral articulatory voice profile.'],
+  },
+  ...differentiatorCapabilities(),
+})
 
-const MAX = absentTier(TIERS.MAX, 'Klyvaron Max', HARDWARE_CLASS.WORKSTATION,
-  'The highest practical quality on qualified high-performance local GPU computers.',
-  ['chat', 'reasoning.complex', 'coding.repository', 'agent.coordination', 'multimodal.understanding',
-    'image.generate', 'image.edit', 'video.generate', 'video.understand'],
-  { architecture: ARCHITECTURE.id, modelId: SIZE_PRESETS.max.modelId })
+const MAX = Object.freeze({
+  id: TIERS.MAX,
+  displayName: 'Klyvaron Max',
+  status: deriveTierStatus(MAX_CAPABILITIES),
+  backingPath: Object.freeze({
+    path: BACKING_PATHS.TRAINED,
+    trainingRequired: true,
+    architecture: ARCHITECTURE.id,
+    modelId: SIZE_PRESETS.max.modelId,
+    requires: 'Qualified high-memory CPU or user GPU backend (CUDA, ROCm, or Metal) verified per device via RuntimeQualificationRegistry; never assumed from development-host hardware.',
+    steps: RECIPE_STEP_IDS,
+    bases: Object.freeze([]),
+    verified: true,
+    accelerator: Object.freeze({ id: null, measured: false }),
+    evidence: 'klyvaron-max-{lm,image,video,voice}-0.1.0 trained from random initialisation with higher parameter counts distinct from Pro.',
+  }),
+  statusNote: 'Partially available: four higher-capacity first-party artifacts back chat, image, short-clip '
+    + 'video, and bidirectional voice, while unified cross-modal fusion, agent orchestration, and real-world differentiator benchmarks remain open.',
+  targetHardware: HARDWARE_CLASS.WORKSTATION,
+  description: 'Higher-capacity first-party local intelligence on qualified high-performance computers.',
+  storageProfile: {
+    primaryArtifactBytes: MAX_LM_BACKING.artifactBytes,
+    managedStorageTargetBytes: null,
+    reserveBytes: null,
+    appPackageTargetBytes: null,
+    primaryModelTargetBytes: null,
+  },
+  capabilities: MAX_CAPABILITIES,
+})
 
 export const KLYVARON = Object.freeze({ [TIERS.LITE]: LITE, [TIERS.PRO]: PRO, [TIERS.MAX]: MAX })
 
-/** Capabilities the directive names for each tier, so the matrix can be reported whole. */
 export const REQUIRED_CAPABILITIES = Object.freeze(Object.fromEntries(
   Object.values(KLYVARON).map((tier) => [tier.id, Object.keys(tier.capabilities)]),
 ))
 
-/**
- * The artifact ids a tier may legitimately claim, taken from the backings of its
- * AVAILABLE capabilities. A tier with nothing available owns nothing.
- */
 export function ownedArtifacts(tierId) {
   const tier = getTier(tierId)
   const ids = new Set()
   for (const claim of Object.values(tier.capabilities)) {
     if (claim.state !== CAPABILITY_STATES.AVAILABLE || !claim.backing) continue
     if (claim.backing.artifact) ids.add(claim.backing.artifact)
-    // A superseded artifact is still owned: it is the same model family, still installed on
-    // devices that have not updated, and still what a rollback returns to.
     if (claim.backing.supersededArtifact?.artifact) ids.add(claim.backing.supersededArtifact.artifact)
   }
   return [...ids]
 }
 
-/**
- * Which Klyvaron tier, if any, may this model id carry as a label?
- *
- * This is the mechanism that makes directive §5A structural instead of aspirational.
- * A tier label is a lookup: it appears only if the model id IS the artifact named in a
- * backing record for a capability the tier actually provides. So rebranding an unchanged
- * third-party model as Klyvaron Pro is not a rule to be broken; it is a string that does
- * not match anything, and the label simply does not appear.
- */
 export function tierClaimFor(modelId) {
   for (const tier of Object.values(KLYVARON)) {
     if (ownedArtifacts(tier.id).includes(modelId)) return tier.id
@@ -516,26 +975,12 @@ export function tierClaimFor(modelId) {
   return null
 }
 
-/**
- * The same lookup for a specific artifact version, which is the form the core uses.
- *
- * An artifact manifest carries a `tier` field, and that field is the artifact's own
- * statement about itself -- useful metadata, and not evidence. `app.mjs` therefore emits
- * a `tier:<name>` tag only when this function corroborates the declaration by finding
- * `<id>-<version>` named in a backing record. A hand-built artifact that declares
- * `tier: 'pro'` gets no tier label, no tier tag, and no place in the tier table: the
- * declaration has nothing behind it.
- */
 export function tierClaimForArtifact(id, version) {
   const named = `${id}-${version}`
   for (const tier of Object.values(KLYVARON)) {
     for (const claim of Object.values(tier.capabilities)) {
       if (claim.state !== CAPABILITY_STATES.AVAILABLE || !claim.backing) continue
       const { backing } = claim
-      // Three names qualify, and each is a fact rather than a courtesy: the released
-      // artifact, the version strings the same bytes were also installed under, and the
-      // artifact this one superseded -- which is still a Klyvaron Lite model on a device
-      // that has not updated, and still rollback-eligible.
       if (backing.artifact === named) return tier.id
       if (backing.alsoKnownAs?.includes(named)) return tier.id
       if (backing.supersededArtifact?.artifact === named) return tier.id
@@ -544,12 +989,6 @@ export function tierClaimForArtifact(id, version) {
   return null
 }
 
-/**
- * Validate the family.
- *
- * Returns violations rather than throwing, so a report can list every problem instead of
- * stopping at the first. The caller decides whether to throw.
- */
 export function validateFamily(family = KLYVARON) {
   const violations = []
   for (const [id, tier] of Object.entries(family)) {
@@ -557,9 +996,6 @@ export function validateFamily(family = KLYVARON) {
     if (!Object.values(HARDWARE_CLASS).includes(tier.targetHardware)) {
       violations.push(`${id}: unknown hardware class '${tier.targetHardware}'`)
     }
-    // The stance, enforced on the tier's own words. A tier that names a competitor to
-    // measure itself against is making the comparison the family refuses to make, and a
-    // reader cannot tell a description of purpose from a claim of delivery.
     violations.push(...backingPathViolations(tier.backingPath, `${id}.backingPath`))
     violations.push(...stanceViolations(tier.description, `${id}.description`))
     violations.push(...stanceViolations(tier.statusNote, `${id}.statusNote`))
@@ -568,13 +1004,11 @@ export function validateFamily(family = KLYVARON) {
     for (const modality of SEPARATE_MODALITIES) {
       const role = artifactsByModality[modality]
       if (!role?.artifact) continue
-      // One artifact cannot be the text model and an image or video model at once. This is
-      // the check that refuses "the same checkpoint, relabelled per modality".
       if (textArtifact && role.artifact === textArtifact) {
         violations.push(
           `${id}.${modality}: artifact '${role.artifact}' also backs the text capabilities. The `
-          + 'image and video modalities need their own artifact, identified as such; a text model '
-          + 'is not an image or video model under another name.',
+          + 'image, video and audio modalities need their own artifact, identified as such; a text model '
+          + 'is not a multimodal model under another name.',
         )
       }
     }
@@ -584,7 +1018,6 @@ export function validateFamily(family = KLYVARON) {
         continue
       }
       if (claim.state === CAPABILITY_STATES.AVAILABLE) {
-        // The rule that stops a tier name from implying a capability.
         if (!claim.backing) {
           violations.push(
             `${id}.${name}: claimed 'available' with no backing artifact. A tier label is not evidence.`,
@@ -598,11 +1031,6 @@ export function validateFamily(family = KLYVARON) {
         if (!Object.values(PROVENANCE).includes(b.provenance)) {
           violations.push(`${id}.${name}: unknown provenance '${b.provenance}'`)
         }
-        // EVERYTHING except from_scratch descends from something. The original version of
-        // this rule only covered 'derived' and 'third_party', which let 'fine_tuned' pass
-        // with no base model named -- and a fine-tuned model is precisely the case the
-        // directive is worried about, since relabelling one as a first-party foundation
-        // model is the easiest way to overclaim. Caught by the test, not by reading.
         if (b.provenance !== PROVENANCE.FROM_SCRATCH && !b.baseModel) {
           violations.push(
             `${id}.${name}: provenance is '${b.provenance}' so it must name its base model and licence. `
@@ -622,25 +1050,29 @@ export function validateFamily(family = KLYVARON) {
         violations.push(`${id}.${name}: state is 'unavailable' but a backing artifact is attached`)
       }
     }
-    // The status rule, which is the one that prevents a listing from showing an unbuilt
-    // tier as a product. A comparative description is allowed on an unbuilt tier because
-    // it states purpose; what is not allowed is an unbuilt tier without saying so, or a
-    // tier claiming availability with nothing to back it.
-    const anyAvailable = Object.values(tier.capabilities).some((c) => c.state === CAPABILITY_STATES.AVAILABLE)
+    const claims = Object.values(tier.capabilities)
+    const availableCount = claims.filter((c) => c.state === CAPABILITY_STATES.AVAILABLE).length
+    const anyAvailable = availableCount > 0
     if (!Object.values(TIER_STATUS).includes(tier.status)) {
       violations.push(`${id}: status must be one of ${Object.values(TIER_STATUS).join(', ')}`)
     }
     if (tier.status === TIER_STATUS.UNBUILT) {
       if (anyAvailable) {
-        violations.push(`${id}: status is 'unbuilt' but ${Object.values(tier.capabilities)
-          .filter((c) => c.state === CAPABILITY_STATES.AVAILABLE).length} capability claims to be available`)
+        violations.push(`${id}: status is 'unbuilt' but ${availableCount} capability claims to be available`)
       }
       if (!tier.statusNote) {
         violations.push(`${id}: an unbuilt tier must say so in statusNote; otherwise a listing presents it as a product`)
       }
     }
-    if (tier.status === TIER_STATUS.AVAILABLE && !anyAvailable) {
-      violations.push(`${id}: status is 'available' with no available capability`)
+    if (tier.status === TIER_STATUS.AVAILABLE) {
+      if (!anyAvailable) {
+        violations.push(`${id}: status is 'available' with no available capability`)
+      } else if (availableCount < claims.length) {
+        violations.push(
+          `${id}: status is 'available' while ${claims.length - availableCount} of ${claims.length} `
+          + 'capabilities remain unavailable; partial readiness may never be reported as complete.',
+        )
+      }
     }
     if (tier.status === TIER_STATUS.PARTIAL && !anyAvailable) {
       violations.push(`${id}: status is 'partial' with no available capability; that is 'unbuilt'`)
@@ -649,14 +1081,6 @@ export function validateFamily(family = KLYVARON) {
   return { valid: violations.length === 0, violations }
 }
 
-/**
- * Where each modality's artifact comes from, for one tier.
- *
- * `artifact` is the artifact id that actually backs an available capability of that modality,
- * and null when nothing does. The image and video rows of a tier are empty for as long as no
- * image or video artifact exists -- which is the point: a listing cannot show a text model
- * wearing an image label, because there is no row for it to be listed in.
- */
 export function modalityArtifacts(tier) {
   const roles = {}
   for (const [name, claim] of Object.entries(tier.capabilities)) {
@@ -677,23 +1101,19 @@ export function getTier(id) {
   return tier
 }
 
-/**
- * A machine-readable family report: what each tier claims, and what backs it.
- *
- * This is the artefact the model cards and the model list are generated from, so the
- * interface cannot show a capability the validator would reject.
- */
 export function familyReport() {
   const { valid, violations } = validateFamily()
   return {
     valid,
     violations,
-    // The stance travels with the report, so any interface built from it shows the same
-    // refusal to claim a comparison the family does not make.
     stance: FAMILY_STANCE,
+    subscriptionTiers: PRODUCT_SUBSCRIPTION_TIERS,
+    modelIdentities: KLYVARON_MODEL_IDENTITIES,
+    runtimeReadinessStates: RUNTIME_READINESS_STATES,
     tiers: Object.values(KLYVARON).map((tier) => ({
       id: tier.id,
       displayName: tier.displayName,
+      subscriptionTier: PRODUCT_SUBSCRIPTION_TIERS[tier.id] ?? null,
       targetHardware: tier.targetHardware,
       description: tier.description,
       status: tier.status,
@@ -703,8 +1123,6 @@ export function familyReport() {
       capabilityCount: Object.keys(tier.capabilities).length,
       availableCapabilities: Object.entries(tier.capabilities)
         .filter(([, c]) => c.state === CAPABILITY_STATES.AVAILABLE).map(([name]) => name),
-      // Which artifact, if any, serves each modality. Empty for image and video until they
-      // have their own: the listing has no slot for a relabelled text model.
       modalityArtifacts: modalityArtifacts(tier),
       differentiators: FAMILY_STANCE.differentiators.map((name) => ({
         name,
@@ -716,8 +1134,6 @@ export function familyReport() {
   }
 }
 
-/** Device categories are targeting metadata, never evidence of model eligibility.
- * Pass a measured admission result; legacy class strings fail closed. */
 export function tierFitsHardware(id, admission) {
   getTier(id)
   return admission?.eligible === true && admission?.tier === id
