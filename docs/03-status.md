@@ -11,11 +11,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1869 passing, 0 failing.**
+**Test totals: 1874 passing, 0 failing.**
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **947 / 947** (64 files, ~500 s with live multimodal E2E) |
+| `services/core` | `node --test test/*.test.mjs` | **952 / 952** (64 files, ~500 s with live multimodal E2E) |
 | `services/fabric` | `pytest -q` | **822 / 822** (42 files, ~3.5 min) |
 | `apps/web` | `node --test test/*.test.mjs` | **100 / 100** (4 files, ~1 s) |
 | `apps/web` build | `vite build` | production bundle, single chunk, no warnings |
@@ -246,7 +246,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (947 tests)
+### `services/core` — Implemented and tested (952 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|

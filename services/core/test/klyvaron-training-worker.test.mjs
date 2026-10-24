@@ -136,7 +136,7 @@ test('training worker supports live progress, SIGTERM atomic checkpoint cancella
   const plan = manager.prepareSetupPlan(req)
   const started = manager.startJob({
     planRequest: req,
-    consent: { confirmed: true, disclosureDigest: plan.disclosureDigest },
+    consent: { confirmed: true, disclosureDigest: plan.disclosureDigest, createdAt: Date.now() },
     actor: 'owner-1',
   })
   assert.equal(started.state, 'running')
@@ -165,7 +165,7 @@ test('training worker supports live progress, SIGTERM atomic checkpoint cancella
   const resumed = reloadedManager.startJob({
     planRequest: req,
     resumeFromJobId: started.id,
-    consent: { confirmed: true, disclosureDigest: plan2.disclosureDigest },
+    consent: { confirmed: true, disclosureDigest: plan2.disclosureDigest, createdAt: Date.now() },
     actor: 'owner-1',
   })
   for (let i = 0; i < 60 && reloadedManager.getJob(resumed.id).state === 'running'; i += 1) {
@@ -175,4 +175,214 @@ test('training worker supports live progress, SIGTERM atomic checkpoint cancella
   assert.equal(finished.state, 'completed')
   assert.equal(finished.progress.step, 12)
   reloadedManager.close()
+})
+
+// ── Regression: stable preflight snapshot & live-resource separation ──────
+
+test('regression: valid consented preflight starts despite harmless free-disk variation', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'klyvaron-reg-disk-'))
+  const ledger = new AuditLedger(join(root, 'audit.sqlite'))
+  const { corpusDir, recordPath } = createApprovedCorpusFixture(root)
+
+  const mockTrainer = join(root, 'mock_trainer.py')
+  writeFileSync(mockTrainer, [
+    'import argparse, os, signal, sys, time',
+    'from pathlib import Path',
+    'p = argparse.ArgumentParser()',
+    'p.add_argument("--preset")',
+    'p.add_argument("--work-dir", type=Path)',
+    'p.add_argument("--install-root", type=Path)',
+    'p.add_argument("--corpus-dir", type=Path)',
+    'p.add_argument("--corpus-record", type=Path)',
+    'p.add_argument("--pretrain-steps", type=int)',
+    'p.add_argument("--joint-steps", type=int)',
+    'p.add_argument("--batch-size", type=int)',
+    'p.add_argument("--checkpoint-every", type=int)',
+    'p.add_argument("--keep-checkpoint", action="store_true")',
+    'p.add_argument("--skip-cards", action="store_true")',
+    'p.add_argument("--resume", action="store_true")',
+    'args = p.parse_args()',
+    'aid = "klyvaron-pro-lm" if args.preset == "pro" else "klyvaron-max-lm"',
+    'rdir = args.work_dir / f"{aid}-run"',
+    'rdir.mkdir(parents=True, exist_ok=True)',
+    'ckpt = rdir / f"{aid}.checkpoint.npz"',
+    'stop = False',
+    'def handler(sig, frm):',
+    '    global stop; stop = True',
+    'signal.signal(signal.SIGTERM, handler)',
+    'total = args.pretrain_steps + args.joint_steps',
+    'start = int(ckpt.read_text()) if (args.resume and ckpt.exists()) else 0',
+    'for step in range(start + 1, total + 1):',
+    '    print(f"[{aid}] step {step:3d}/{total} (pretrain ) | loss=6.1234 | gnorm=1.500 | 500 tok/s | rss=256MB", flush=True)',
+    '    if stop:',
+    '        tmp = rdir / ".tmp.ckpt"',
+    '        tmp.write_text(str(step))',
+    '        os.replace(tmp, ckpt)',
+    '        print(f"[{aid}] atomic checkpoint saved at step {step}", flush=True)',
+    '        sys.exit(130)',
+    '    time.sleep(0.05)',
+    'ckpt.unlink(missing_ok=True)',
+    'print(f"[{aid}] COMPLETE", flush=True)',
+  ].join('\n'))
+
+  const manager = new LocalTrainingWorkerManager({ root, ledger, trainScript: mockTrainer })
+  t.after(() => { manager.close(); ledger.close(); rmSync(root, { recursive: true, force: true }) })
+
+  const req = { preset: 'pro', mode: 'foundation_training', pretrainSteps: 3, jointSteps: 3, corpusDir, corpusRecord: recordPath }
+
+  // Two prepareSetupPlan calls with the same params must produce the same disclosureDigest
+  const plan1 = manager.prepareSetupPlan(req)
+  const plan2 = manager.prepareSetupPlan(req)
+  assert.equal(plan1.disclosureDigest, plan2.disclosureDigest, 'disclosureDigest must be stable across calls with identical plan parameters')
+
+  // Consent from plan1 must start the job even though liveFreeDiskBytes may differ
+  const started = manager.startJob({
+    planRequest: req,
+    consent: { confirmed: true, disclosureDigest: plan1.disclosureDigest, createdAt: Date.now() },
+    actor: 'owner-1',
+  })
+  assert.equal(started.state, 'running')
+
+  // Wait for completion
+  for (let i = 0; i < 60 && manager.getJob(started.id).state === 'running'; i += 1) {
+    await delay(50)
+  }
+  const finished = manager.getJob(started.id)
+  assert.equal(finished.state, 'completed')
+})
+
+test('regression: consent rejected when material plan parameters change', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'klyvaron-reg-change-'))
+  const ledger = new AuditLedger(join(root, 'audit.sqlite'))
+  const { corpusDir, recordPath } = createApprovedCorpusFixture(root)
+
+  const manager = new LocalTrainingWorkerManager({ root, ledger })
+  t.after(() => { manager.close(); ledger.close(); rmSync(root, { recursive: true, force: true }) })
+
+  // Base plan
+  const basePlan = manager.prepareSetupPlan({
+    preset: 'pro', mode: 'foundation_training', pretrainSteps: 10, jointSteps: 10, corpusDir, corpusRecord: recordPath,
+  })
+
+  // Each material change must produce a different disclosureDigest
+  // All variants use parameters that pass preflight (no ceiling violation, corpus exists)
+  const variantCorpusDir = join(root, 'corpus-variant')
+  mkdirSync(join(variantCorpusDir, 'mit_sample'), { recursive: true })
+  writeFileSync(join(variantCorpusDir, 'mit_sample', 'sample.txt'), 'Permissive MIT training sample text.\n'.repeat(20))
+  const variantRecord = join(root, 'corpus-record-variant.json')
+  writeFileSync(variantRecord, JSON.stringify({
+    clean: true,
+    assembled: [{ repo: 'example/mit_sample', sha: '2'.repeat(40), license: 'MIT' }],
+    refused: [],
+  }))
+
+  const variants = [
+    { preset: 'max', mode: 'foundation_training', pretrainSteps: 10, jointSteps: 10, corpusDir, corpusRecord: recordPath },
+    { preset: 'pro', mode: 'interactive_adaptation', pretrainSteps: 2, jointSteps: 2, corpusDir, corpusRecord: recordPath },
+    { preset: 'pro', mode: 'foundation_training', pretrainSteps: 11, jointSteps: 10, corpusDir, corpusRecord: recordPath },
+    { preset: 'pro', mode: 'foundation_training', pretrainSteps: 10, jointSteps: 11, corpusDir, corpusRecord: recordPath },
+    { preset: 'pro', mode: 'foundation_training', pretrainSteps: 10, jointSteps: 10, corpusDir: variantCorpusDir, corpusRecord: variantRecord },
+  ]
+
+  for (const variant of variants) {
+    const variantPlan = manager.prepareSetupPlan(variant)
+    assert.notEqual(variantPlan.disclosureDigest, basePlan.disclosureDigest,
+      `Changing material parameters must change the disclosureDigest`)
+
+    // Consent from base plan must be rejected for the variant
+    assert.throws(() => manager.startJob({
+      planRequest: variant,
+      consent: { confirmed: true, disclosureDigest: basePlan.disclosureDigest, createdAt: Date.now() },
+    }), { code: 'training_consent_required' })
+  }
+})
+
+test('regression: missing, false, expired, and invalid consent are all rejected', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'klyvaron-reg-consent-'))
+  const ledger = new AuditLedger(join(root, 'audit.sqlite'))
+  const { corpusDir, recordPath } = createApprovedCorpusFixture(root)
+
+  const manager = new LocalTrainingWorkerManager({ root, ledger })
+  t.after(() => { manager.close(); ledger.close(); rmSync(root, { recursive: true, force: true }) })
+
+  const req = { preset: 'pro', mode: 'foundation_training', pretrainSteps: 5, jointSteps: 5, corpusDir, corpusRecord: recordPath }
+  const plan = manager.prepareSetupPlan(req)
+
+  // Missing consent
+  assert.throws(() => manager.startJob({ planRequest: req, consent: null }), { code: 'training_consent_required' })
+
+  // False consent
+  assert.throws(() => manager.startJob({
+    planRequest: req,
+    consent: { confirmed: false, disclosureDigest: plan.disclosureDigest, createdAt: Date.now() },
+  }), { code: 'training_consent_required' })
+
+  // Expired consent (createdAt in the past beyond PREFLIGHT_EXPIRY_MS)
+  const expiredAt = Date.now() - 31 * 60 * 1000 // 31 minutes ago
+  assert.throws(() => manager.startJob({
+    planRequest: req,
+    consent: { confirmed: true, disclosureDigest: plan.disclosureDigest, createdAt: expiredAt },
+  }), { code: 'consent_expired' })
+
+  // Invalid digest (wrong hash)
+  assert.throws(() => manager.startJob({
+    planRequest: req,
+    consent: { confirmed: true, disclosureDigest: 'f'.repeat(64), createdAt: Date.now() },
+  }), { code: 'training_consent_required' })
+
+  // Missing createdAt timestamp
+  assert.throws(() => manager.startJob({
+    planRequest: req,
+    consent: { confirmed: true, disclosureDigest: plan.disclosureDigest },
+  }), { code: 'consent_expired' })
+})
+
+test('regression: insufficient current resources block job even with valid prior consent', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'klyvaron-reg-resource-'))
+  const ledger = new AuditLedger(join(root, 'audit.sqlite'))
+  const { corpusDir, recordPath } = createApprovedCorpusFixture(root)
+
+  const manager = new LocalTrainingWorkerManager({ root, ledger })
+  t.after(() => { manager.close(); ledger.close(); rmSync(root, { recursive: true, force: true }) })
+
+  const req = { preset: 'pro', mode: 'foundation_training', pretrainSteps: 5, jointSteps: 5, corpusDir, corpusRecord: recordPath }
+
+  // prepareSetupPlan succeeds with a valid corpus
+  const plan = manager.prepareSetupPlan(req)
+  assert.equal(plan.readyToAuthorize, true)
+
+  // Delete the corpus directory to simulate it disappearing between plan and job start
+  rmSync(corpusDir, { recursive: true, force: true })
+
+  // startJob should fail the live recheck because the corpus directory no longer exists
+  assert.throws(() => manager.startJob({
+    planRequest: req,
+    consent: { confirmed: true, disclosureDigest: plan.disclosureDigest, createdAt: Date.now() },
+  }), { code: 'preflight_failed' })
+})
+
+test('regression: resume requires valid authorization and verified checkpoint', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'klyvaron-reg-resume-'))
+  const ledger = new AuditLedger(join(root, 'audit.sqlite'))
+  const { corpusDir, recordPath } = createApprovedCorpusFixture(root)
+
+  const manager = new LocalTrainingWorkerManager({ root, ledger })
+  t.after(() => { manager.close(); ledger.close(); rmSync(root, { recursive: true, force: true }) })
+
+  const req = { preset: 'pro', mode: 'foundation_training', pretrainSteps: 5, jointSteps: 5, corpusDir, corpusRecord: recordPath }
+  const plan = manager.prepareSetupPlan(req)
+
+  // Resume without a valid consent is rejected
+  assert.throws(() => manager.startJob({
+    planRequest: req,
+    resumeFromJobId: 'nonexistent-job-id',
+    consent: null,
+  }), { code: 'training_consent_required' })
+
+  // Resume with valid consent but no checkpoint file is rejected
+  assert.throws(() => manager.startJob({
+    planRequest: req,
+    resumeFromJobId: 'nonexistent-job-id',
+    consent: { confirmed: true, disclosureDigest: plan.disclosureDigest, createdAt: Date.now() },
+  }), { code: 'checkpoint_missing' })
 })

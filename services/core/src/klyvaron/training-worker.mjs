@@ -23,6 +23,8 @@ import { SIZE_PRESETS, configDigest, parameterCount } from './architecture.mjs'
 
 export const INTERACTIVE_ADAPTATION_LIMIT_MS = 120_000
 export const DEFAULT_MIN_FREE_DISK_BYTES = 1_000_000_000 // 1 GB safety floor
+export const MIN_AVAILABLE_RAM_BYTES = 1_400_000_000 // 1.4 GB: host floor for NumPy/JAX training
+export const PREFLIGHT_EXPIRY_MS = 30 * 60 * 1000 // 30 minutes: consent bound to a stable snapshot, not live resources
 export const APPROVED_CORPUS_LICENCES = Object.freeze(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'PSF-2.0', 'ISC', 'CC0-1.0'])
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url))
@@ -258,7 +260,12 @@ export class LocalTrainingWorkerManager {
         }
       : null
 
-    const disclosureCore = {
+    // Stable preflight snapshot: bound to consent, never contains live measurements
+    // that fluctuate between prepareSetupPlan() and startJob(). Live resource
+    // re-checks happen at job start and do not require digest equality.
+    const snapshotCreatedAt = Date.now()
+    const preflightSnapshot = {
+      snapshotId: `preflight-${preset}-${archDigest}-${stepsPre}-${stepsJoint}-${effectiveBatch}-${resolve(corpusDir)}-${resolve(corpusRecord)}-${mode}`,
       preset,
       artifactId: `klyvaron-${preset}-lm`,
       mode,
@@ -299,7 +306,6 @@ export class LocalTrainingWorkerManager {
           atomicCheckpointBytes: checkpointBytes,
           exportedArtifactsBytes,
           requiredFreeDiskBytes: requiredDiskBytes,
-          currentFreeDiskBytes: env.hardware.freeDiskBytes,
         },
         energyAndThermal: {
           sustainedPowerWattsEstimate: estimatedWatts,
@@ -309,19 +315,30 @@ export class LocalTrainingWorkerManager {
       },
     }
 
+    // Live measurements (NOT in the consent digest): re-checked at job start.
+    const liveMeasurements = {
+      currentFreeDiskBytes: env.hardware.freeDiskBytes,
+      currentAvailableRamBytes: env.hardware.availableRamBytes,
+      currentLogicalCpus: env.hardware.logicalCpus,
+      measuredAt: new Date().toISOString(),
+    }
+
+    // Consent binds to the stable snapshot, not to live resource fluctuations.
     const disclosureDigest = createHash('sha256')
-      .update(JSON.stringify(disclosureCore))
+      .update(JSON.stringify(preflightSnapshot))
       .digest('hex')
 
     return {
       readyToAuthorize: blockers.length === 0,
       blockers,
       environment: env,
-      plan: disclosureCore,
+      plan: preflightSnapshot,
+      snapshotCreatedAt,
+      liveMeasurements,
       externalExecutionNote,
       disclosureDigest,
       consentRequirement: {
-        requiredFields: ['confirmed', 'disclosureDigest'],
+        requiredFields: ['confirmed', 'disclosureDigest', 'createdAt'],
         statement: 'I understand the compute load, dataset licence policy, storage footprint, and energy impact above, and authorize running this local Klyvaron training worker on this host.',
       },
     }
@@ -344,6 +361,17 @@ export class LocalTrainingWorkerManager {
         detail: { blockers: prepared.blockers },
       })
     }
+
+    // Consent verification: bind to the stable preflight snapshot, not to live
+    // resource measurements that fluctuate between prepareSetupPlan() and startJob().
+    // The disclosureDigest now covers only stable plan identity (model, mode, arch,
+    // steps, corpus, licence scope, resource limits, backend). Live resource
+    // re-checks happen below and do not require digest equality.
+    //
+    // Consent expiry: the caller includes `createdAt` (epoch ms) in the consent
+    // object. Consent older than PREFLIGHT_EXPIRY_MS is rejected as stale, even
+    // if the disclosureDigest matches — a matching digest from a stale snapshot
+    // must not be silently reused.
     if (consent?.confirmed !== true || consent?.disclosureDigest !== prepared.disclosureDigest) {
       throw new TrainingWorkerError(
         'Explicit user consent matching the current preflight disclosureDigest is required before starting a local training worker.',
@@ -351,6 +379,35 @@ export class LocalTrainingWorkerManager {
           code: 'training_consent_required',
           status: 403,
           detail: { expectedDisclosureDigest: prepared.disclosureDigest },
+        },
+      )
+    }
+    if (typeof consent.createdAt !== 'number' || (Date.now() - consent.createdAt) > PREFLIGHT_EXPIRY_MS) {
+      throw new TrainingWorkerError(
+        'Consent is expired or missing a createdAt timestamp. A fresh consent matching the current preflight disclosureDigest is required.',
+        {
+          code: 'consent_expired',
+          status: 403,
+          detail: {
+            createdAt: consent.createdAt ?? null,
+            ageMs: typeof consent.createdAt === 'number' ? Date.now() - consent.createdAt : null,
+            maxAgeMs: PREFLIGHT_EXPIRY_MS,
+          },
+        },
+      )
+    }
+
+    // Re-check live resources at job start. Harmless fluctuation in live
+    // measurements is permitted as long as the original disclosed training
+    // plan remains valid and current resource checks pass.
+    const liveRecheck = this.#recheckLiveResources(prepared)
+    if (!liveRecheck.passed) {
+      throw new TrainingWorkerError(
+        `Local training worker live resource recheck failed: ${liveRecheck.blockers.join(' ')}`,
+        {
+          code: 'preflight_failed',
+          status: 409,
+          detail: { blockers: liveRecheck.blockers },
         },
       )
     }
@@ -511,6 +568,71 @@ export class LocalTrainingWorkerManager {
 
   listJobs() {
     return [...this.jobs.keys()].map((id) => this.getJob(id))
+  }
+
+  /**
+   * Re-check live resources at job start. The original consent binds to the
+   * stable preflight snapshot (model, arch, steps, corpus, licence, backend,
+   * resource limits) — not to live measurements. This method verifies that
+   * current disk, RAM, backend availability, dataset integrity, and safety
+   * thresholds still hold. Harmless fluctuation in live measurements is
+   * permitted as long as the disclosed training plan remains valid.
+   */
+  #recheckLiveResources(prepared) {
+    const blockers = []
+    const env = this.inspectEnvironment()
+    const plan = prepared.plan
+
+    // 1. Current free disk must still meet the requirement.
+    const requiredDisk = plan.disclosures.storage.requiredFreeDiskBytes
+    if (env.hardware.freeDiskBytes < requiredDisk) {
+      blockers.push(
+        `Insufficient free disk: ${env.hardware.freeDiskBytes} bytes available, ` +
+        `${requiredDisk} bytes required.`
+      )
+    }
+
+    // 2. Current available RAM must meet the minimum requirement.
+    const requiredRam = plan.preset === 'pro' ? 2_200_000_000 : 2_600_000_000
+    const minRamBytes = Math.min(requiredRam, MIN_AVAILABLE_RAM_BYTES)
+    if (env.hardware.availableRamBytes < minRamBytes) {
+      blockers.push(
+        `Insufficient available RAM: ${env.hardware.availableRamBytes} bytes available, ` +
+        `${minRamBytes} bytes required.`
+      )
+    }
+
+    // 3. Backend must still be available (Python + NumPy).
+    if (!env.software.pythonAvailable || !env.software.numpyVersion) {
+      blockers.push(
+        `Backend unavailable: Python=${env.software.pythonAvailable}, ` +
+        `NumPy=${env.software.numpyVersion ?? 'not available'}.`
+      )
+    }
+
+    // 4. Dataset integrity: corpus directory and record must still exist.
+    if (!existsSync(plan.corpusDir)) {
+      blockers.push(`Corpus directory not found: ${plan.corpusDir}`)
+    }
+    if (plan.corpusRecord && !existsSync(plan.corpusRecord)) {
+      blockers.push(`Corpus record not found: ${plan.corpusRecord}`)
+    }
+
+    // 5. Training script must still exist.
+    if (!existsSync(this.trainScript)) {
+      blockers.push(`Training script not found: ${this.trainScript}`)
+    }
+
+    return {
+      passed: blockers.length === 0,
+      blockers,
+      current: {
+        freeDiskBytes: env.hardware.freeDiskBytes,
+        availableRamBytes: env.hardware.availableRamBytes,
+        logicalCpus: env.hardware.logicalCpus,
+        measuredAt: new Date().toISOString(),
+      },
+    }
   }
 
   close() {
