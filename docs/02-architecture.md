@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 36,942 source lines, 24,229 test lines
+### `services/core` — 36,964 source lines, 24,229 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -95,7 +95,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `klyvaron/runtime.mjs` | 1,045 | First-party `aetheris-core-v1` Transformer inference in plain JavaScript across Lite/Pro/Max: Byte-BPE + character tokenizers, int8 LUT dequantization, incremental KV-cache parity, age/state conditioning, verdict/state heads, and cancellation |
 | `klyvaron/multimodal-host.mjs` | 677 | First-party multimodal host for Klyvaron Image, Video, and Voice (`pro` & `max`): SHA-256 verification, native Python runtime execution, PNG/MP4/WAV output validation, and runtime qualification |
 | `klyvaron/qualification.mjs` | 257 | Persistent runtime qualification registry keyed by hardware signature, backend, runtime version, model version, and SHA-256 digest with automatic staleness invalidation |
-| `klyvaron/training-worker.mjs` | 652 | Consent-gated local training worker setup and execution manager: hardware/software inspection, stable preflight snapshot with live-resource separation, compute/license/storage/energy pre-consent disclosure, expiry-bound consent, resource re-checks, atomic checkpointing, cancellation, and recovery |
+| `klyvaron/training-worker.mjs` | 674 | Consent-gated local training worker setup and execution manager: hardware/software inspection, stable preflight snapshot with live-resource separation, compute/license/storage/energy pre-consent disclosure, expiry-bound consent, resource re-checks, atomic checkpointing, cancellation, and recovery |
 | `klyvaron/training-controller.mjs` | 1,155 | User-computer-first training & adaptation controller: unpaired fail-closed default, 5-mode resource-aware planner across all 8 models, non-silent downgrade approval gate, 7-field training specification + disclosure consent, 120s interactive ceiling vs unbounded foundation pretraining, and hot rollback |
 | `klyvaron/local-worker.mjs` | 1,161 | Authenticated cross-platform local worker HTTP RPC server: single-use pairing handshake, constant-time Bearer token verification, realpath directory confinement, zero shell execution, and 9 typed local inference/qualification/training operations |
 | `providers/local.mjs` | 329 | Ollama and OpenAI-compatible local providers |
@@ -221,7 +221,7 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 4,318 source lines, 2,023 test lines
+### `apps/web` — 5,595 source lines, 2,023 test lines
 
 Five area components, three sign-in pages (sign in, create account, reset
 password), the account card and the Klyvaron tier panel, a shell, shared primitives,
