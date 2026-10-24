@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api, streamChat } from '../api.js'
-import { Banner, Button, Field, Panel } from '../components/ui.jsx'
+import { Banner, Button, CopyButton, Field, Panel } from '../components/ui.jsx'
 import { KnowledgePanel, MemoryPanel, HistoryPanel, SkillsPanel } from '../components/ContextPanels.jsx'
 import UserTrainingPanel from '../components/UserTrainingPanel.jsx'
 
@@ -77,6 +77,14 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     } finally { abort.current = null; setBusy(false); refreshReadiness?.() }
   }
 
+  const retry = async (index) => {
+    // Find the failed user message and resend it
+    const failedUser = messages[index]
+    if (!failedUser || failedUser.role !== 'user') return
+    setMessages((old) => old.filter((_, i) => i !== index && i !== index + 1))
+    setPrompt(failedUser.content)
+  }
+
   return <div className="online-chat">
     {!provider?.configured && firstPartyReady.length === 0 ? <Banner tone="info" title="Connect your online provider"><p>Add an online gateway (LiteLLM, or an Ollama or llama.cpp server on this Core host) to start chatting. Requests are sent to that endpoint, so none of them stay on this machine.</p><Button onClick={onSettings}>Open Provider Settings</Button></Banner> : null}
     <Panel title="Conversation" actions={<Button disabled={busy} onClick={() => { setMessages([]); setSessionId(null); setError(null) }}>New conversation</Button>}>
@@ -99,21 +107,65 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
           ? `First-party weights ${selectedFirstParty.id} (${selectedFirstParty.parameters.toLocaleString('en-US')} params · SHA-256 ${selectedFirstParty.weightsSha256.slice(0, 16)}…) · verified in-host without external transfer.`
           : `${provider?.baseUrl || 'No gateway configured'} · Listed models are not inference-verified until a request succeeds.`}
       </p>
-      <div className="thread" ref={thread} aria-live="polite">{messages.length ? messages.map((m, i) => <div className={`message ${m.role}`} data-role={m.role} key={i}><strong className="message-role">{m.role === 'user' ? 'You' : m.meta?.modelId ?? model}</strong><div className="message-body message-text" style={{ whiteSpace: 'pre-wrap' }}>{m.content || (m.pending ? (selectedFirstParty ? 'Generating with verified first-party weights…' : 'Waiting for the gateway…') : 'No completed response.')}</div>{m.failed ? <small>Not completed</small> : null}{m.meta ? (m.meta.firstPartyWeights ? <small>Served by verified first-party Klyvaron weights ({m.meta.modelId} · SHA-256 {m.meta.weightsSha256?.slice(0, 12)}… · {m.meta.tokensPerSecond} tok/s · sentExternally: false){m.meta.differentiators ? ` · verdict: ${m.meta.differentiators.verdict} · state: ${m.meta.differentiators.state}` : ''}</small> : <small>Executed online via {m.meta.provider ?? provider?.name ?? 'the gateway'}{m.meta.redaction?.findings?.length ? ' · credentials redacted' : ''}</small>) : null}{typeof m.meta?.providerModel === 'string' && m.meta.providerModel !== m.meta.modelId ? <small>Reported model: {m.meta.providerModel}</small> : null}{m.meta?.skill ? <small>Procedure used: {m.meta.skill.name} v{m.meta.skill.version}</small> : null}{m.meta?.styleAudit && !m.meta.styleAudit.ok ? <small>Style check: {m.meta.styleAudit.violations.join(', ')}. The answer is shown unchanged; it was not rewritten.</small> : null}{m.meta?.grounding?.citations?.length ? <details><summary>File references sent with this request</summary><ul>{m.meta.grounding.citations.map((c, index) => <li key={index}>{c.ref} · {c.title ?? c.documentId}</li>)}</ul></details> : null}</div>) : <p className="muted">Choose a model and start a conversation.</p>}</div>
+      <div className="thread" ref={thread} aria-live="polite">
+        {messages.length ? messages.map((m, i) => (
+          <div className={`message ${m.role}`} data-role={m.role} key={i}>
+            <div className="message-head">
+              <strong className="message-role">{m.role === 'user' ? 'You' : m.meta?.modelId ?? model}</strong>
+              {m.content ? <div className="message-actions" style={{ marginLeft: 'auto' }}>
+                <CopyButton text={m.content} label="Copy" className="ghost small" />
+              </div> : null}
+            </div>
+            <div className="message-body message-text" style={{ whiteSpace: 'pre-wrap' }}>{m.content || (m.pending ? (selectedFirstParty ? 'Generating with verified first-party weights…' : 'Waiting for the gateway…') : 'No completed response.')}</div>
+            {m.failed ? <small>Not completed {m.role === 'user' ? <Button className="ghost small" onClick={() => retry(i)}>Retry</Button> : null}</small> : null}
+            {m.meta ? (m.meta.firstPartyWeights ? <small>Served by verified first-party Klyvaron weights ({m.meta.modelId} · SHA-256 {m.meta.weightsSha256?.slice(0, 12)}… · {m.meta.tokensPerSecond} tok/s · sentExternally: false){m.meta.differentiators ? ` · verdict: ${m.meta.differentiators.verdict} · state: ${m.meta.differentiators.state}` : ''}</small> : <small>Executed online via {m.meta.provider ?? provider?.name ?? 'the gateway'}{m.meta.redaction?.findings?.length ? ' · credentials redacted' : ''}</small>) : null}
+            {typeof m.meta?.providerModel === 'string' && m.meta.providerModel !== m.meta.modelId ? <small>Reported model: {m.meta.providerModel}</small> : null}
+            {m.meta?.skill ? <small>Procedure used: {m.meta.skill.name} v{m.meta.skill.version}</small> : null}
+            {m.meta?.styleAudit && !m.meta.styleAudit.ok ? <small>Style check: {m.meta.styleAudit.violations.join(', ')}. The answer is shown unchanged; it was not rewritten.</small> : null}
+            {m.meta?.grounding?.citations?.length ? <details><summary>File references sent with this request</summary><ul>{m.meta.grounding.citations.map((c, index) => <li key={index}>{c.ref} · {c.title ?? c.documentId}</li>)}</ul></details> : null}
+          </div>
+        )) : <p className="muted">Choose a model and start a conversation.</p>}
+      </div>
       {error ? <Banner tone="bad" title={error.message} /> : null}
-      <form onSubmit={send}><Field label="Message"><textarea className="textarea" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Ask your selected model…" maxLength={100000} /></Field>
-        <details><summary>Context & generation options</summary><div className="row" style={{ marginTop: 12 }}><Field label="Temperature"><input className="input" type="number" min="0" max="2" step="0.1" value={temperature} onChange={(e) => setTemperature(e.target.value)} /></Field><Field label="Max output tokens"><input className="input" type="number" min="1" max="8192" value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} /></Field></div>
-          <label className="checkbox"><input type="checkbox" checked={useKnowledge} onChange={(e) => setUseKnowledge(e.target.checked)} />Send matching file excerpts to this gateway</label>
-          <label className="checkbox"><input type="checkbox" checked={useMemory} onChange={(e) => setUseMemory(e.target.checked)} />Send matching approved memories to this gateway</label>
-          <label className="checkbox"><input type="checkbox" checked={allowSensitive} onChange={(e) => setAllowSensitive(e.target.checked)} />I authorize sensitive content in this request and selected context to be sent to this gateway (one request)</label>
-          <Field label="Response style" hint="A preference you set. It changes how an answer is phrased, not the facts or the result; the server checks the reply and never rewrites it.">
-            <select aria-label="Response style" className="select" value={style} disabled={busy} onChange={async (event) => { const next = event.target.value; setStyle(next); try { await api.setStyle(next || null) } catch (err) { setError(err) } }}>
-              <option value="">No style instruction</option>
-              {styles.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-            </select>
-          </Field>
-        </details><p className="small">{selectedFirstParty ? 'First-party Klyvaron weights process this conversation on this Core host with zero third-party network transfer or fallback.' : 'Send transmits this conversation and any selected context to the gateway and its configured upstream provider. Provider charges and retention policies apply.'}</p>
-        {busy ? <Button variant="danger" onClick={() => abort.current?.abort()}>Stop generation</Button> : <Button type="submit" variant="primary" disabled={saving || !model || !prompt.trim()}>Send</Button>}
+      <form onSubmit={send}>
+        <div className="composer">
+          <div className="composer-row">
+            <textarea
+              className="textarea"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Ask your selected model…"
+              maxLength={100000}
+              disabled={busy}
+              rows={1}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e) }
+              }}
+            />
+          </div>
+          <div className="composer-actions">
+            <details style={{ display: 'inline-block' }}>
+              <summary style={{ listStyle: 'none', cursor: 'pointer', fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Context & options</summary>
+              <div style={{ padding: '10px 0 4px' }}>
+                <div className="row" style={{ marginBottom: 8 }}>
+                  <Field label="Temperature"><input className="input" type="number" min="0" max="2" step="0.1" value={temperature} onChange={(e) => setTemperature(e.target.value)} style={{ width: 90 }} /></Field>
+                  <Field label="Max tokens"><input className="input" type="number" min="1" max="8192" value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} style={{ width: 90 }} /></Field>
+                </div>
+                <label className="checkbox"><input type="checkbox" checked={useKnowledge} onChange={(e) => setUseKnowledge(e.target.checked)} />Send matching file excerpts to this gateway</label>
+                <label className="checkbox"><input type="checkbox" checked={useMemory} onChange={(e) => setUseMemory(e.target.checked)} />Send matching approved memories to this gateway</label>
+                <label className="checkbox"><input type="checkbox" checked={allowSensitive} onChange={(e) => setAllowSensitive(e.target.checked)} />I authorize sensitive content in this request and selected context to be sent to this gateway (one request)</label>
+                <Field label="Response style" hint="A preference you set. It changes how an answer is phrased, not the facts or the result; the server checks the reply and never rewrites it.">
+                  <select aria-label="Response style" className="select" value={style} disabled={busy} onChange={async (event) => { const next = event.target.value; setStyle(next); try { await api.setStyle(next || null) } catch (err) { setError(err) } }}>
+                    <option value="">No style instruction</option>
+                    {styles.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                  </select>
+                </Field>
+              </div>
+            </details>
+            {busy ? <Button variant="danger" onClick={() => abort.current?.abort()}>Stop generation</Button> : <Button type="submit" variant="primary" disabled={saving || !model || !prompt.trim()}>Send</Button>}
+          </div>
+        </div>
+        <p className="small" style={{ marginTop: 8 }}>{selectedFirstParty ? 'First-party Klyvaron weights process this conversation on this Core host with zero third-party network transfer or fallback.' : 'Send transmits this conversation and any selected context to the gateway and its configured upstream provider. Provider charges and retention policies apply.'}</p>
       </form>
     </Panel>
     <details className="context-section">

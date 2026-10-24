@@ -354,13 +354,6 @@ export class LocalTrainingWorkerManager {
     }
 
     const prepared = this.prepareSetupPlan(planRequest)
-    if (!prepared.readyToAuthorize) {
-      throw new TrainingWorkerError(`Local training worker preflight blocked: ${prepared.blockers.join(' ')}`, {
-        code: 'preflight_failed',
-        status: 409,
-        detail: { blockers: prepared.blockers },
-      })
-    }
 
     // Consent verification: bind to the stable preflight snapshot, not to live
     // resource measurements that fluctuate between prepareSetupPlan() and startJob().
@@ -372,7 +365,16 @@ export class LocalTrainingWorkerManager {
     // object. Consent older than PREFLIGHT_EXPIRY_MS is rejected as stale, even
     // if the disclosureDigest matches — a matching digest from a stale snapshot
     // must not be silently reused.
-    if (consent?.confirmed !== true || consent?.disclosureDigest !== prepared.disclosureDigest) {
+    //
+    // Both consent checks (confirmed flag and disclosureDigest match) run BEFORE
+    // the preflight gate so that a missing or mismatched consent is reported as
+    // `training_consent_required` rather than `preflight_failed`. This ordering
+    // matters when the host lacks the training runtime: the user must authorize
+    // the operation before being told the environment cannot run it. The
+    // disclosureDigest is available from prepareSetupPlan() even when the
+    // preflight gate would block the job, because the digest covers stable plan
+    // identity, not live resource measurements.
+    if (consent?.confirmed !== true) {
       throw new TrainingWorkerError(
         'Explicit user consent matching the current preflight disclosureDigest is required before starting a local training worker.',
         {
@@ -382,6 +384,26 @@ export class LocalTrainingWorkerManager {
         },
       )
     }
+
+    if (consent?.disclosureDigest !== prepared.disclosureDigest) {
+      throw new TrainingWorkerError(
+        'Explicit user consent matching the current preflight disclosureDigest is required before starting a local training worker.',
+        {
+          code: 'training_consent_required',
+          status: 403,
+          detail: { expectedDisclosureDigest: prepared.disclosureDigest },
+        },
+      )
+    }
+
+    if (!prepared.readyToAuthorize) {
+      throw new TrainingWorkerError(`Local training worker preflight blocked: ${prepared.blockers.join(' ')}`, {
+        code: 'preflight_failed',
+        status: 409,
+        detail: { blockers: prepared.blockers },
+      })
+    }
+
     if (typeof consent.createdAt !== 'number' || (Date.now() - consent.createdAt) > PREFLIGHT_EXPIRY_MS) {
       throw new TrainingWorkerError(
         'Consent is expired or missing a createdAt timestamp. A fresh consent matching the current preflight disclosureDigest is required.',

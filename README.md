@@ -149,9 +149,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 36,942 | 24,229 | **zero npm packages** | 952 |
+| `services/core` | Node 22 ESM | 36,964 | 24,229 | **zero npm packages** | 952 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 4,318 | 2,023 | react, react-dom | 100 |
+| `apps/web` | React 18 + Vite | 5,595 | 2,023 | react, react-dom | 100 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

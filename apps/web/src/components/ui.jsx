@@ -1,7 +1,7 @@
-import React from 'react'
-import { toneFor, formatValue } from '../format.js'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { toneFor, formatValue, clip, shortId } from '../format.js'
 
-export { toneFor, formatValue }
+export { toneFor, formatValue, clip, shortId }
 
 // ---------------------------------------------------------------------------
 // Shared UI primitives.
@@ -266,5 +266,136 @@ export function Table({ columns, rows, empty }) {
         </tbody>
       </table>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// NEW: SearchInput — text input with a leading search icon
+// ---------------------------------------------------------------------------
+
+export function SearchInput({ value, onChange, placeholder = 'Search…', type = 'text', ...rest }) {
+  return (
+    <div className="search-input">
+      <span className="search-icon" aria-hidden="true">⌕</span>
+      <input
+        className="input"
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={onChange}
+        {...rest}
+      />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// NEW: SegmentedControl — mutually exclusive options
+// ---------------------------------------------------------------------------
+
+export function SegmentedControl({ options, value, onChange, label }) {
+  return (
+    <div>
+      {label ? <span className="panel-eyebrow">{label}</span> : null}
+      <div className="segmented" role="group" aria-label={label}>
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={value === option.value ? 'active' : ''}
+            onClick={() => onChange(option.value)}
+            aria-pressed={value === option.value}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// NEW: Skeleton — loading placeholder
+// ---------------------------------------------------------------------------
+
+export function Skeleton({ lines = 3, short = false }) {
+  return (
+    <div className="skeleton" aria-hidden="true">
+      {Array.from({ length: lines }, (_, i) => (
+        <div
+          key={i}
+          className={`skeleton-line ${short ? 'short' : i === lines - 1 ? 'medium' : ''}`}
+          style={{ height: i === lines - 1 ? '12px' : '12px' }}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// NEW: CopyButton — copies text to clipboard, shows "Copied" feedback
+// ---------------------------------------------------------------------------
+
+export function CopyButton({ text, label = 'Copy', copiedLabel = 'Copied', ...rest }) {
+  const [copied, setCopied] = useState(false)
+  const timer = useRef(null)
+
+  useEffect(() => () => clearTimeout(timer.current), [])
+
+  const copy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      // Fallback for non-secure contexts
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try { document.execCommand('copy') } catch {}
+      document.body.removeChild(ta)
+    }
+    setCopied(true)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => setCopied(false), 1600)
+  }, [text])
+
+  return <Button onClick={copy} {...rest}>{copied ? copiedLabel : label}</Button>
+}
+
+// ---------------------------------------------------------------------------
+// NEW: Tabs — accessible tab list
+// ---------------------------------------------------------------------------
+
+export function Tabs({ tabs, active, onChange }) {
+  return (
+    <div className="tabs" role="tablist">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          className={`tab${active === tab.id ? ' active' : ''}`}
+          aria-selected={active === tab.id}
+          onClick={() => onChange(tab.id)}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// NEW: StatusIndicator — dot with optional pulse for live states
+// ---------------------------------------------------------------------------
+
+export function StatusIndicator({ tone = 'info', pulse = false, label }) {
+  return (
+    <span className="status-indicator" data-tone={tone}>
+      <i className={`dot${pulse ? ' pulse' : ''}`} />
+      {label ? <span>{label}</span> : null}
+    </span>
   )
 }

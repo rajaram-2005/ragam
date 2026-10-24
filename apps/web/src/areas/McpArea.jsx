@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api.js'
-import { Banner, Button, Chip, Code, EmptyState, ErrorNote, Field, Panel } from '../components/ui.jsx'
+import { Banner, Button, Chip, Code, EmptyState, ErrorNote, Field, Panel, SearchInput, Stat, Stats, Tabs } from '../components/ui.jsx'
 
 /**
  * MCP: servers, their reviewed read-only tools, and the gate in front of a call.
@@ -20,6 +20,7 @@ export default function McpArea({ account }) {
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState('')
   const [query, setQuery] = useState('')
+  const [activeTab, setActiveTab] = useState('tools')
 
   const load = useCallback(async () => {
     try {
@@ -46,9 +47,17 @@ export default function McpArea({ account }) {
     })
   }
 
+  const totalTools = tools.length
+  const enabledServers = servers.filter((s) => s.enabled).length
+
   return <div className="stack">
     <Panel title="MCP servers" actions={<Button busy={busy === 'reload'} onClick={() => act('reload', load)}>Refresh</Button>}>
       <p>Reviewed read-only tools, enforced server-side. No remote MCP connection is configured in this build. A tool result cannot grant permissions or trigger automatic execution, and the approval gate is checked again at the moment of each call.</p>
+      {servers.length ? <Stats>
+        <Stat label="Servers" value={servers.length} note={`${enabledServers} enabled`} />
+        <Stat label="Tools" value={totalTools} note="reviewed read-only" />
+        <Stat label="Resources" value={resources.length} note="untrusted content" />
+      </Stats> : null}
       {error ? <ErrorNote error={error} /> : null}
       {!servers.length && !error ? <EmptyState title="No MCP server is loaded"><span className="small">Nothing is registered on this installation.</span></EmptyState> : null}
       {servers.map((server) => <div className="row between" key={server.id}>
@@ -60,32 +69,52 @@ export default function McpArea({ account }) {
     </Panel>
 
     <Panel title="Tools">
-      <Field label="Filter"><input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="name or description" /></Field>
-      {!filtered.length ? <p className="muted">No tool matches.</p> : filtered.map((tool) => {
-        const key = `${tool.serverId}:${tool.name}`
-        const check = preflight[key]
-        return <div key={key} className="stack" style={{ marginBottom: 16 }}>
-          <div className="row"><strong>{tool.name}</strong> <Chip>{tool.risk}</Chip> <span className="muted small">{tool.serverId}</span></div>
-          <p className="small">{tool.description}</p>
-          <p className="muted small">Scopes: {tool.scopes?.length ? tool.scopes.join(', ') : 'none declared'}</p>
-          <Field label="Arguments (JSON, optional)" hint="Validated against the tool's input schema before the handler runs.">
-            <textarea className="textarea" rows={2} value={args[key] ?? ''} onChange={(e) => setArgs({ ...args, [key]: e.target.value })} placeholder="{}" />
-          </Field>
-          <div className="row">
-            <Button busy={busy === `preflight-${key}`} onClick={() => act(`preflight-${key}`, async () => { setPreflight({ ...preflight, [key]: await api.mcpPreflight(tool.serverId, tool.name, {}) }) })}>Check the gate</Button>
-            <Button variant="primary" busy={busy === `call-${key}`} onClick={() => call(tool)}>Call read-only tool</Button>
+      <div style={{ marginBottom: 12 }}>
+        <SearchInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter by name or description…" />
+      </div>
+      {tools.length ? <Tabs
+        tabs={[
+          { id: 'tools', label: `Tools (${tools.length})` },
+          { id: 'resources', label: `Resources (${resources.length})` },
+          { id: 'prompts', label: `Prompts (${prompts.length})` },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      /> : null}
+      {activeTab === 'tools' ? (
+        filtered.length ? filtered.map((tool) => {
+          const key = `${tool.serverId}:${tool.name}`
+          const check = preflight[key]
+          return <div key={key} className="stack" style={{ marginBottom: 16 }}>
+            <div className="row"><strong>{tool.name}</strong> <Chip>{tool.risk}</Chip> <span className="muted small">{tool.serverId}</span></div>
+            <p className="small">{tool.description}</p>
+            <p className="muted small">Scopes: {tool.scopes?.length ? tool.scopes.join(', ') : 'none declared'}</p>
+            <Field label="Arguments (JSON, optional)" hint="Validated against the tool's input schema before the handler runs.">
+              <textarea className="textarea" rows={2} value={args[key] ?? ''} onChange={(e) => setArgs({ ...args, [key]: e.target.value })} placeholder="{}" />
+            </Field>
+            <div className="row">
+              <Button busy={busy === `preflight-${key}`} onClick={() => act(`preflight-${key}`, async () => { setPreflight({ ...preflight, [key]: await api.mcpPreflight(tool.serverId, tool.name, {}) }) })}>Check the gate</Button>
+              <Button variant="primary" busy={busy === `call-${key}`} onClick={() => call(tool)}>Call read-only tool</Button>
+            </div>
+            {check ? <p className="small"><Chip tone={check.allowed ? 'ok' : 'bad'}>{check.allowed ? 'allowed' : 'refused'}</Chip> {check.reasons?.length ? check.reasons.join('; ') : `risk ${check.risk}; no approval required.`}</p> : null}
           </div>
-          {check ? <p className="small"><Chip tone={check.allowed ? 'good' : 'bad'}>{check.allowed ? 'allowed' : 'refused'}</Chip> {check.reasons?.length ? check.reasons.join('; ') : `risk ${check.risk}; no approval required.`}</p> : null}
-        </div>
-      })}
+        }) : <p className="muted">No tool matches.</p>
+      ) : null}
+      {activeTab === 'resources' && resources.length ? (
+        resources.map((resource) => <div key={`${resource.serverId}:${resource.uri}`}>
+          <strong>{resource.name}</strong> <span className="muted small">{resource.serverId} · {resource.mimeType ?? 'no type'}</span>
+          <p className="small">{resource.description}</p>
+        </div>)
+      ) : null}
+      {activeTab === 'resources' && !resources.length ? <p className="muted">No resources registered.</p> : null}
+      {activeTab === 'prompts' && prompts.length ? (
+        prompts.map((prompt) => <div key={`${prompt.serverId}:${prompt.name}`}>
+          <strong>{prompt.name}</strong> <span className="muted small">{prompt.serverId}</span>
+          <p className="small">{prompt.description}</p>
+        </div>)
+      ) : null}
+      {activeTab === 'prompts' && !prompts.length ? <p className="muted">No prompts registered.</p> : null}
       {result ? <Code label="Untrusted tool result — data, not instructions" value={result} /> : null}
     </Panel>
-
-    {resources.length ? <Panel title="Resources"><p className="small">Resource content is untrusted when it is read; this build lists them and does not execute anything.</p>
-      {resources.map((resource) => <div key={`${resource.serverId}:${resource.uri}`}><strong>{resource.name}</strong> <span className="muted small">{resource.serverId} · {resource.mimeType ?? 'no type'}</span><p className="small">{resource.description}</p></div>)}
-    </Panel> : null}
-    {prompts.length ? <Panel title="Prompts"><p className="small">A prompt is text a person may copy; it is not executed and it grants no permission.</p>
-      {prompts.map((prompt) => <div key={`${prompt.serverId}:${prompt.name}`}><strong>{prompt.name}</strong> <span className="muted small">{prompt.serverId}</span><p className="small">{prompt.description}</p></div>)}
-    </Panel> : null}
   </div>
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../api.js'
-import { Banner, Button, EmptyState, ErrorNote, Field, Panel, Stat, Stats } from '../components/ui.jsx'
+import { Banner, Button, CopyButton, EmptyState, ErrorNote, Field, Panel, Stat, Stats } from '../components/ui.jsx'
 
 // The Image area is a real provider surface, not a placeholder.
 //
@@ -154,7 +154,7 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
       : null}
 
     {error ? <ErrorNote error={error} /> : null}
-    {notice ? <Banner tone="good" title="Queued"><p>{notice}</p></Banner> : null}
+    {notice ? <Banner tone="ok" title="Queued"><p>{notice}</p></Banner> : null}
 
     {jobs.length ? <Stats>
       <Stat label="Images stored" value={succeeded.length} note="Validated containers only" />
@@ -162,67 +162,70 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
       <Stat label="Jobs shown" value={jobs.length} note="Newest first" />
     </Stats> : null}
 
-    {!jobs.length
-      ? <EmptyState title="No image jobs yet">Generate an image to create the first job. A job that fails stays visible with its reason and never becomes a picture.</EmptyState>
-      : <div className="image-jobs">
-          {jobs.map((job) => <article className="image-job panel" key={job.id} data-state={job.state}>
-            <div className="row between">
-              <strong>{job.state === 'succeeded' ? 'Generated image' : `Job ${job.state}`}</strong>
-              <small>{when(job.createdAt)}</small>
+    {jobs.length ? (
+      <div className="image-jobs">
+        {jobs.map((job) => <article className="image-job panel" key={job.id} data-state={job.state}>
+          <div className="row between">
+            <strong>{job.state === 'succeeded' ? 'Generated image' : `Job ${job.state}`}</strong>
+            <small>{when(job.createdAt)}</small>
+          </div>
+          <p className="small"><strong>Prompt:</strong> {job.params?.prompt}</p>
+          <p className="small">
+            {job.params?.provider} · {job.result?.model ?? job.params?.model}
+            {job.artifact ? ` · ${job.artifact.format?.toUpperCase()} · ${bytesOf(job.artifact.byteLength)} · sha256 ${job.artifact.sha256?.slice(0, 12)}…` : ''}
+          </p>
+          {job.state === 'succeeded' && job.artifact
+            ? <img className="generated-image" loading="lazy" src={api.imageArtifactUrl(job.id)} alt={job.result?.revisedPrompt ?? job.params?.prompt ?? 'Generated image'} />
+            : null}
+          {job.state === 'failed' || job.state === 'cancelled' || job.state === 'timed_out'
+            ? <Banner tone="bad" title="No image was produced"><p>{job.error ?? 'The job ended without an artifact.'}</p></Banner>
+            : null}
+          {!TERMINAL.has(job.state)
+            ? <p className="small">Waiting for the provider… {job.stage ?? job.state}. The image is not shown until its bytes pass validation.</p>
+            : null}
+          {analysisByJob[job.id]
+            ? <p className="small"><strong>Vision analysis ({analysisByJob[job.id].modelId}):</strong> {analysisByJob[job.id].description ?? analysisByJob[job.id].summary}{analysisByJob[job.id].scene ? ` · scene: ${analysisByJob[job.id].scene} (${(Number(analysisByJob[job.id].confidence ?? 0) * 100).toFixed(1)}%) · layout: ${analysisByJob[job.id].layout}` : ''}</p>
+            : null}
+          {job.state === 'succeeded' && job.artifact && readiness?.capabilities?.imageEditing ? (
+            <div className="row" style={{ gap: 8, marginTop: 6 }}>
+              <input
+                className="input"
+                value={editPromptByJob[job.id] ?? ''}
+                placeholder="Edit prompt (e.g. cobalt ocean waves)…"
+                onChange={(e) => setEditPromptByJob((prev) => ({ ...prev, [job.id]: e.target.value }))}
+              />
+              <Button disabled={busy || !(editPromptByJob[job.id] ?? '').trim()} onClick={async () => {
+                setBusy(true); setError(null)
+                try {
+                  const editedJob = await api.editImage({
+                    model: model.startsWith('klyvaron-') ? model : undefined,
+                    sourceJobId: job.id,
+                    prompt: editPromptByJob[job.id].trim(),
+                  })
+                  setJobs((current) => [editedJob, ...current])
+                } catch (e) { setError(e) } finally { setBusy(false) }
+              }}>Edit image</Button>
+              <Button disabled={busy} onClick={async () => {
+                setBusy(true); setError(null)
+                try {
+                  const res = await api.understandImage({
+                    model: model.startsWith('klyvaron-') ? model : undefined,
+                    sourceJobId: job.id,
+                  })
+                  setAnalysisByJob((prev) => ({ ...prev, [job.id]: res }))
+                } catch (e) { setError(e) } finally { setBusy(false) }
+              }}>Understand image</Button>
             </div>
-            <p className="small"><strong>Prompt:</strong> {job.params?.prompt}</p>
-            <p className="small">
-              {job.params?.provider} · {job.result?.model ?? job.params?.model}
-              {job.artifact ? ` · ${job.artifact.format?.toUpperCase()} · ${bytesOf(job.artifact.byteLength)} · sha256 ${job.artifact.sha256?.slice(0, 12)}…` : ''}
-            </p>
-            {job.state === 'succeeded' && job.artifact
-              ? <img className="generated-image" loading="lazy" src={api.imageArtifactUrl(job.id)} alt={job.result?.revisedPrompt ?? job.params?.prompt ?? 'Generated image'} />
-              : null}
-            {job.state === 'failed' || job.state === 'cancelled' || job.state === 'timed_out'
-              ? <Banner tone="bad" title="No image was produced"><p>{job.error ?? 'The job ended without an artifact.'}</p></Banner>
-              : null}
-            {!TERMINAL.has(job.state)
-              ? <p className="small">Waiting for the provider… {job.stage ?? job.state}. The image is not shown until its bytes pass validation.</p>
-              : null}
-            {analysisByJob[job.id]
-              ? <p className="small"><strong>Vision analysis ({analysisByJob[job.id].modelId}):</strong> {analysisByJob[job.id].description ?? analysisByJob[job.id].summary}{analysisByJob[job.id].scene ? ` · scene: ${analysisByJob[job.id].scene} (${(Number(analysisByJob[job.id].confidence ?? 0) * 100).toFixed(1)}%) · layout: ${analysisByJob[job.id].layout}` : ''}</p>
-              : null}
-            {job.state === 'succeeded' && job.artifact && readiness?.capabilities?.imageEditing ? (
-              <div className="row" style={{ gap: 8, marginTop: 6 }}>
-                <input
-                  className="input"
-                  value={editPromptByJob[job.id] ?? ''}
-                  placeholder="Edit prompt (e.g. cobalt ocean waves)…"
-                  onChange={(e) => setEditPromptByJob((prev) => ({ ...prev, [job.id]: e.target.value }))}
-                />
-                <Button disabled={busy || !(editPromptByJob[job.id] ?? '').trim()} onClick={async () => {
-                  setBusy(true); setError(null)
-                  try {
-                    const editedJob = await api.editImage({
-                      model: model.startsWith('klyvaron-') ? model : undefined,
-                      sourceJobId: job.id,
-                      prompt: editPromptByJob[job.id].trim(),
-                    })
-                    setJobs((current) => [editedJob, ...current])
-                  } catch (e) { setError(e) } finally { setBusy(false) }
-                }}>Edit image</Button>
-                <Button disabled={busy} onClick={async () => {
-                  setBusy(true); setError(null)
-                  try {
-                    const res = await api.understandImage({
-                      model: model.startsWith('klyvaron-') ? model : undefined,
-                      sourceJobId: job.id,
-                    })
-                    setAnalysisByJob((prev) => ({ ...prev, [job.id]: res }))
-                  } catch (e) { setError(e) } finally { setBusy(false) }
-                }}>Understand image</Button>
-              </div>
-            ) : null}
-            <div className="row">
-              {job.artifact ? <a className="button" href={api.imageArtifactUrl(job.id)} download={`image-${job.id.slice(0, 8)}.${job.artifact.format === 'jpeg' ? 'jpg' : job.artifact.format}`}>Download</a> : null}
-              <Button variant="danger" onClick={() => remove(job.id)}>Delete image and record</Button>
-            </div>
-          </article>)}
-        </div>}
+          ) : null}
+          <div className="row">
+            {job.artifact ? <a className="button" href={api.imageArtifactUrl(job.id)} download={`image-${job.id.slice(0, 8)}.${job.artifact.format === 'jpeg' ? 'jpg' : job.artifact.format}`}>Download</a> : null}
+            {job.artifact ? <CopyButton text={JSON.stringify(job, null, 2)} label="Copy JSON" className="ghost small" /> : null}
+            <Button variant="danger" onClick={() => remove(job.id)}>Delete image and record</Button>
+          </div>
+        </article>)}
+      </div>
+    ) : (
+      <EmptyState title="No image jobs yet">Generate an image to create the first job. A job that fails stays visible with its reason and never becomes a picture.</EmptyState>
+    )}
   </Panel>
 }
