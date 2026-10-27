@@ -334,6 +334,32 @@ test('cancelling an already-terminal job is a no-op, not an error', async () => 
   })
 })
 
+test('cancelling while the result is being finalized keeps the job cancelled, with no artifact', async () => {
+  // The window between the provider returning bytes and the queue finishing
+  // validation/storage. onEvent fires synchronously inside the VALIDATING
+  // transition, which is exactly that window: cancel() reports success there,
+  // so the finalize path must not overwrite the cancellation with SUCCEEDED.
+  const ref = { queue: null, target: null, cancelResult: null }
+  const onEvent = (event) => {
+    if (event.type === 'job_state' && event.state === JOB_STATES.VALIDATING && event.jobId === ref.target) {
+      ref.cancelResult = ref.queue.cancel(ref.target, 'cancelled during finalize')
+    }
+  }
+  await withQueue(async ({ queue, dir }) => {
+    ref.queue = queue
+    const job = queue.enqueue({ kind: MEDIA_KINDS.IMAGE, run: async () => ({ bytes: fakePng(4096), contentType: 'image/png' }) })
+    ref.target = job.id
+    const finished = await queue.waitFor(job.id, { timeoutMs: 5000 })
+    assert.equal(ref.cancelResult?.cancelled, true, 'the cancel landed inside the finalize window')
+    assert.equal(finished.state, JOB_STATES.CANCELLED, 'a terminal state is final; finalize must not resurrect the job')
+    assert.equal(finished.artifact, null, 'a job cancelled during finalize must not produce an artifact')
+    assert.ok(!finished.history.some((entry) => entry.state === JOB_STATES.SUCCEEDED), 'the history must not claim success')
+    const { readdir } = await import('node:fs/promises')
+    const stored = await readdir(join(dir, MEDIA_KINDS.IMAGE)).catch(() => [])
+    assert.deepEqual(stored, [], 'no artifact file may remain for the cancelled job')
+  }, { onEvent })
+})
+
 test('a job that exceeds its timeout is marked timed_out', async () => {
   await withQueue(async ({ queue }) => {
     const job = queue.enqueue({

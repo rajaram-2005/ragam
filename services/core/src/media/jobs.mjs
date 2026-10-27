@@ -274,6 +274,9 @@ export class MediaJobQueue {
   }
 
   async #finalize(job, result, filenameHint) {
+    // Cancelled or timed out after the provider returned but before validation:
+    // the job is already terminal, so store nothing and claim nothing.
+    if (TERMINAL.has(job.state)) return
     const expectedKind = job.kind
     const bytes = this.#extractBytes(result, job.kind)
 
@@ -326,7 +329,14 @@ export class MediaJobQueue {
           platform: text(result.platform),
         }
       : null
-    this.#transition(job, JOB_STATES.SUCCEEDED, { stage: 'complete', progress: 100, artifact, validation, result: resultMeta, finishedAt: Date.now() })
+    const applied = this.#transition(job, JOB_STATES.SUCCEEDED, { stage: 'complete', progress: 100, artifact, validation, result: resultMeta, finishedAt: Date.now() })
+    if (!applied) {
+      // A cancel or timeout landed while the artifact was being stored. The job
+      // stays in the terminal state the caller was already told about, and the
+      // bytes stored for it are removed so a cancelled job carries no output.
+      await unlink(this.#safePath(artifact.path)).catch(() => {})
+      return
+    }
     this.#audit(
       `succeed:${job.kind}`,
       'success',
@@ -390,12 +400,19 @@ export class MediaJobQueue {
   }
 
   #transition(job, state, extra = {}) {
+    // A terminal state is final. Without this guard, a cancel (or timeout) that
+    // lands while #finalize is storing the artifact is silently overwritten by
+    // the SUCCEEDED transition at the end of #finalize — cancel() has already
+    // reported {cancelled: true} by then, so the record would contradict the
+    // answer the caller was given. Refused transitions return false.
+    if (TERMINAL.has(job.state) && job.state !== state) return false
     job.state = state
     Object.assign(job, extra)
     job.history.push({ at: Date.now(), state, stage: job.stage, progress: job.progress })
     // Durability is per state change, not per progress tick: the states are what a restart needs.
     if (TERMINAL.has(state)) this.#persist()
     this.onEvent({ type: 'job_state', jobId: job.id, state, stage: job.stage, progress: job.progress })
+    return true
   }
 
   #audit(action, outcome, detail, subject) {

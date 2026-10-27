@@ -227,8 +227,6 @@ export const api = {
   styles: () => request('GET', '/api/styles'),
   setStyle: (style) => request('PUT', '/api/styles', { style }),
 
-  // --- skills -------------------------------------------------------------
-  skills: () => request('GET', '/api/skills'),
   skill: (name) => request('GET', `/api/skills/${encodeURIComponent(name)}`),
   installSkill: (body) => request('POST', '/api/skills', body),
   validateSkill: (name) => request('POST', `/api/skills/${encodeURIComponent(name)}/validate`, {}),

@@ -526,3 +526,16 @@ test('gateway models are selected explicitly and remote refresh requires an acti
   assert.doesNotMatch(chat,/router decides|ModelCatalog|ExecutionMode/)
 
 })
+
+test('training-worker consent carries the createdAt timestamp the server requires', () => {
+  // Regression: the panel sent {confirmed, disclosureDigest} only, and the
+  // worker refused every start/resume with 403 consent_expired.
+  const tiers = read('components/KlyvaronTiers.jsx')
+  const stamps = tiers.match(/createdAt: Date\.now\(\)/g) ?? []
+  assert.equal(stamps.length, 2, 'both authorize and resume consents must be timestamped')
+})
+
+test('the tier panel offers a voice preset row like the other modalities', () => {
+  const tiers = read('components/KlyvaronTiers.jsx')
+  assert.match(tiers, /const MODALITIES = \['chat', 'image', 'video', 'voice'\]/)
+})

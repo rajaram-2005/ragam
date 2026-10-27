@@ -4,7 +4,7 @@
 
 ## Current product
 
-Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog and an explicit persistent model picker. Inference is online-only; there are no active local-runtime, hardware-tier, training or task-diagnostic panels. Optional history, approved memory, text-file knowledge and reviewed procedures remain.
+Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog and an explicit persistent model picker. Inference goes to the gateway connection you configure, or — once installed with `npm run install:klyvaron-models` — to the first-party Klyvaron Pro/Max weights served locally (chat in-process; image, video and voice through the Fabric Python worker). Nothing is downloaded or substituted automatically: a model that is not configured or not verified is refused by name. There are no hardware-tier or task-diagnostic panels; training lives in Provider Settings as explicit, consent-gated panels. Optional history, approved memory, text-file knowledge and reviewed procedures remain.
 
 Run `npm run core` and `npm run web`, then **create an account** at `#/signup` and sign in with it at `#/signin`. Sign-in is traditional — an email address and a password, on three pages (sign in, create account, reset password) — and it is the only way in: the operator access-token file and its login route have been removed. The first account created owns the installation and is the only one that can change the gateway connection; later accounts are members with their own history, memory and knowledge. Then open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. On HTTP-only local development, start Core with `AETHERIS_COOKIE_SECURE=false`; keep secure cookies enabled for HTTPS deployments. If the web app is served inside another site's iframe, also start Core with `AETHERIS_COOKIE_SAMESITE=none` — a strict session cookie is never sent cross-site, so sign-in would appear to work and every request after it would be a `401`. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md).
 
@@ -20,9 +20,9 @@ The following documents the earlier research foundation. Its local/offline capab
 An **online-first** AI platform built by integrating two repositories into one system:
 [`Aetheris-`](https://github.com/rajaram-2005/Aetheris-) (application and
 orchestration) and [`sparsiz`](https://github.com/rajaram-2005/sparsiz) (research and
-compute optimisation). The active product is online-only: chat, image and video requests go to
-the provider connection you configure, and an internet connection is required for AI
-functionality. Local runtimes (Ollama, llama.cpp, vLLM, LocalAI) remain optional developer and
+compute optimisation). The active product is gateway-first: chat, image and video requests go to
+the provider connection you configure (or, once installed, to the local first-party
+Klyvaron weights — see Current product above). Local runtimes (Ollama, llama.cpp, vLLM, LocalAI) remain optional developer and
 self-hosted integrations and do not dictate the architecture. Optional catalog metadata refresh
 is separate from inference consent.
 
@@ -69,10 +69,12 @@ cd apps/web && npm install && npm run dev # UI, proxies /api to core
 Requirements: **Node ≥ 22.12** — the core service needs ≥ 22.5 for `node:sqlite`
 and the web app's build tooling (Vite 8) needs ≥ 22.12, so the higher bound
 applies — and, for the training service,
-**Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
+**Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded automatically;
+the first-party weights are one explicit step — `npm run install:klyvaron-models`
+([docs/04 §2b](docs/04-setup.md)).
 
 ```bash
-npm test          # 1874 tests: core 952, web 100, fabric 822
+npm test          # 1898 tests: core 973, web 102, fabric 823
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -87,7 +89,7 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1874 run in CI on every push and pull request
+All 1898 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as five jobs — one per
 component, plus one that fails if this documentation stops matching the code, plus one
 that counts what the suites reported and verifies the release against those counts. The
@@ -149,9 +151,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 36,964 | 24,229 | **zero npm packages** | 952 |
-| `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 5,595 | 2,023 | react, react-dom | 100 |
+| `services/core` | Node 22 ESM | 37,336 | 24,935 | **zero npm packages** | 973 |
+| `services/fabric` | Python 3.11 | 17,259 | 10,583 | NumPy only | 823 |
+| `apps/web` | React 18 + Vite | 5,599 | 2,036 | react, react-dom | 102 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web
@@ -171,7 +173,7 @@ Three first-party artifacts exist, and all three are real.
 
 **`aetheris-lite-lm@0.1.1`** — a **359,616-parameter character-level transformer**
 trained from random initialisation, in pure NumPy, on this repository's own text.
-No pretrained weights, no PyTorch, no GPU, no downloads. It supersedes
+No pretrained weights, no PyTorch, no GPU. It supersedes
 `@0.1.0` (359,136 parameters), whose figures stay published as a superseded record.
 
 This exists because every route to *fine-tuning someone else's* model was blocked —
@@ -205,7 +207,15 @@ code rather than in a disclaimer. Pro and Max are **unbuilt** and **this family'
 models**: presets of `aetheris-core-v1` trained from random initialisation, with the two
 differentiators as parts of the model rather than wrappers around it, on the user's own
 accelerator (CUDA, ROCm, Metal, Vulkan, an OpenVINO GPU or NPU). No third-party weights are
-involved anywhere in the plan — and no weights exist yet. See
+involved anywhere in the plan — and no weights exist yet.
+
+*Erratum (2026-10-25): the paragraph above predates the Pro/Max training runs.
+`klyvaron-pro-lm@0.1.0` (27,559,946 parameters) and `klyvaron-max-lm@0.1.0`
+(92,077,066), plus the Pro/Max image, video and voice models, have since been
+trained from random initialisation and released; their cards are in
+[`docs/model-cards/`](docs/model-cards/), their digests are pinned in
+`services/core/src/klyvaron/release-pins.mjs`, and they install with
+`npm run install:klyvaron-models`. The plan text is kept as written. See
 [`docs/22-klyvaron-differentiation.md`](docs/22-klyvaron-differentiation.md) and
 [`docs/23-training-free-tiers.md`](docs/23-training-free-tiers.md) — and
 [`docs/24-own-models.md`](docs/24-own-models.md), which records the decision that Pro and Max are
@@ -259,14 +269,18 @@ models remain release gates. See [the policy and acceptance matrix](docs/13-hard
 
 ### The retriever
 
-**`aetheris-lite-retriever@0.1.0`**, a 18,784-parameter dual encoder trained from
+**`aetheris-lite-retriever@0.1.1`**, a 18,928-parameter dual encoder trained from
 scratch by a hand-written NumPy Adam loop whose five parameter gradients all match
 central finite differences to ~3e-10. Trained from scratch, not a fine-tune:
 `baseCheckpoint: null`.
 
-On held-out queries at low lexical overlap it scores **MRR 0.8497 against BM25's
-0.3352** (+153.5%), with an untrained control at 0.0500. The experiment ledger
-verdict is `accept`.
+On held-out queries at low lexical overlap it scores **MRR 0.7873 against BM25's
+0.3352** (+134.9%), with an untrained control at 0.0583. The experiment ledger
+verdict is `accept`. It supersedes `0.1.0` (MRR 0.8497, +153.5%, control 0.0500):
+a 2026-10-25 tokenizer correction changed the token stream this model trains on,
+the same configuration re-measured lower, and the card was re-issued rather than
+edited — 0.1.0's card stands as the record of those weights. See the erratum in
+[docs/07](docs/07-improvement-cycle.md) and the two model cards.
 
 > **This is not a claim that Aetheris beats Mistral, Qwen, Llama, Gemma or
 > DeepSeek.** None of those could be installed on this host, so no such comparison
@@ -281,7 +295,8 @@ guard metric doing its job.
 
 Full numbers, conditions, fairness controls and reproduction commands:
 [`docs/06-benchmarks.md`](docs/06-benchmarks.md).
-Model card: [`docs/model-cards/aetheris-lite-retriever-0.1.0.md`](docs/model-cards/aetheris-lite-retriever-0.1.0.md).
+Model card: [`docs/model-cards/aetheris-lite-retriever-0.1.1.md`](docs/model-cards/aetheris-lite-retriever-0.1.1.md)
+(superseding 0.1.0, whose card stands as the record of those weights).
 
 Three of eight pipeline stages are **blocked** on this host — SFT, preference
 optimization and distillation all need weights, and the first and third need a GPU.

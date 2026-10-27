@@ -306,7 +306,7 @@ export class UserTrainingController {
     renameSync(tmp, this.statePath)
   }
 
-  async #workerRpc(op, params = {}) {
+  async #workerRpc(op, params = {}, { signal = null } = {}) {
     if (!this.workerConnection) {
       throw new UserTrainingControllerError(
         'No authenticated local worker is connected on the user computer. Start `klyvaron-local-worker` and complete pairing first.',
@@ -328,9 +328,17 @@ export class UserTrainingController {
           authorization: `Bearer ${this.workerConnection.sessionToken}`,
         },
         body: JSON.stringify({ op, params }),
-        signal: AbortSignal.timeout(125_000),
+        // A caller cancelling its job must stop waiting on the worker too;
+        // the 125s ceiling still applies whichever fires first.
+        signal: signal ? AbortSignal.any([AbortSignal.timeout(125_000), signal]) : AbortSignal.timeout(125_000),
       })
     } catch (cause) {
+      if (signal?.aborted) {
+        // The caller cancelled; the worker may be perfectly healthy.
+        const err = new Error(`worker operation '${op}' was cancelled by the caller`)
+        err.code = 'aborted'
+        throw err
+      }
       this.workerConnection.reachable = false
       throw new UserTrainingControllerError(
         `Paired local worker at ${this.workerConnection.endpoint} is unreachable: ${cause.message}`,
@@ -535,8 +543,8 @@ export class UserTrainingController {
   }
 
   /** Run inference directly on the connected local worker and measure loss/latency/memory. */
-  async runWorkerInference(params = {}) {
-    const out = await this.#workerRpc('model.infer', params)
+  async runWorkerInference(params = {}, { signal = null } = {}) {
+    const out = await this.#workerRpc('model.infer', params, { signal })
     const hist = this.modelGateHistory.get(out.modelId) ?? {}
     hist.nativeInferencePassed = true
     this.modelGateHistory.set(out.modelId, hist)

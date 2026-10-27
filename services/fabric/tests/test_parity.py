@@ -40,6 +40,20 @@ def fixture() -> dict:
     return json.loads(FIXTURE_PATH.read_text())
 
 
+def test_hyphenated_identifiers_are_findable_by_their_parts():
+    # Regression (mirrors the Node test of the same name): the tokenizer
+    # keeps `zephyr-9` as one token, so a part-only query used to miss the
+    # document entirely. stem_tokens now indexes the parts too.
+    index = Bm25Index()
+    index.add("memo", "The E2E project codename is ZEPHYR-9.")
+    index.add("other", "Unrelated notes about gardening tools and soil.")
+    assert [hit["docId"] for hit in index.search("ZEPHYR")] == ["memo"]
+    assert [hit["docId"] for hit in index.search("zephyr-9")] == ["memo"]
+    assert stem_tokens("klyvaron-pro-lm") == ["klyvaron-pro-lm", "klyvaron", "pro", "lm"]
+    # tokenize() itself is unchanged: offsets still see whole tokens.
+    assert tokenize("ZEPHYR-9") == ["zephyr-9"]
+
+
 def test_the_fixture_records_where_it_came_from(fixture):
     assert fixture["source"] == "services/core/src/knowledge/{text,bm25}.mjs"
     assert len(fixture["texts"]) == len(fixture["tokenize"])

@@ -175,7 +175,7 @@ def test_models_and_current_release(client):
 
     status, _, body = call("GET", "/models/current")
     assert status == 200
-    assert body["identifier"] == "aetheris-lite-retriever@0.1.0"
+    assert body["identifier"] == "aetheris-lite-retriever@0.1.1"
     assert body["licence"] == "MIT"
     assert body["provenance"]["hardware"]["gpuDetected"] is False
     assert body["limitations"], "a released card must carry its limitations"

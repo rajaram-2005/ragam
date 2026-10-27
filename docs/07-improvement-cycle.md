@@ -372,10 +372,12 @@ control: the dense retriever must still be rejected, and for the same reason.
 | Selection protocol fix | `services/fabric/fabric/pipeline.py` (`base_selection`) | Implemented and tested; artifact unchanged |
 
 The fusion is **not** wired into the released model artifact as a replacement for
-it. `aetheris-lite-retriever@0.1.0` remains the released retriever and its recorded
+it. `aetheris-lite-retriever@0.1.0` remained the released retriever and its recorded
 digests are unchanged; this pass produced an accepted *candidate* improvement and
 the regression cases that guard it. Promoting it would be a separate, versioned
-release decision — see [`docs/model-cards/`](./model-cards/).
+release decision — see [`docs/model-cards/`](./model-cards/). (0.1.0 has since been
+superseded by `0.1.1` for the tokenizer correction in the erratum below; the fusion
+remains unpromoted.)
 
 ## 9. L4: does the lesson generalise across task families?
 
@@ -519,3 +521,47 @@ the notes. `tests/test_transfer.py` pins the decision procedure, including the c
 where it must *refuse* a conclusion — a lesson that reverses in one seed must not
 become one, target data must not reach selection, and observations must never be
 labelled as transfers.
+
+## Erratum (2026-10-25): tokenizer correction re-baselines this cycle
+
+The stemmers (Python `fabric/text.py`, JavaScript `knowledge/text.mjs`) previously
+dropped the parts of a hyphenated term from the stemmed token stream, so an
+untrained compound was entirely out of vocabulary. Both now emit the stemmed parts
+alongside the compound — a correctness fix for retrieval, pinned by a cross-language
+parity fixture. Every measurement in §§4–5 above was taken under the old token
+stream and is left as recorded history; the current pipeline measures differently:
+
+- The released configuration now measures **MRR 0.787269** (was 0.849702) at `low`
+  overlap. The retriever model card records this as a dated correction: the card is
+  the record of the released weights at their training revision, and the current
+  pipeline no longer reproduces them bit-for-bit.
+- On `high`, the dense retriever alone now measures MRR 0.9074 with recall@5
+  0.9583 against BM25's 1.0000 — a regression of 0.0417, **inside** the ledger's
+  5% tolerance, where the historical run measured 0.9167 and was rejected. The
+  ledger therefore **accepts** the dense-alone experiment on this condition today.
+  The §4 negative control is not weakened by this: the ledger's recall enforcement
+  is pinned at the mechanism level (`test_experiments.py` — a target gain that
+  regresses a guarded metric is rejected) and end-to-end by the forced-verdict
+  release gate (`test_pipeline.py`). What changed is the benchmark outcome, not
+  the rule. One of the two captured failures on `high` no longer occurs.
+- §5.2's "not robust" verdict on the fusion's `mrr` gain no longer holds on
+  `high`: the mean paired gain is now +0.0277 against a dense-MRR seed stdev of
+  0.0263, positive on all six seeds — a gain that exceeds the seed spread, but
+  only just. The robust half of §5.2 is unchanged: fused recall@5 is never below
+  dense. The dense ranker now regresses against BM25's perfect recall on 6 of 6
+  seeds and the fused ranker on 5 of 6 (was 5 and 4).
+
+Re-running `scripts/sparsiz_cycle.py` and `scripts/robustness.py` reproduces the
+new figures deterministically; the recorded-outcome tests in
+`tests/test_sparsiz_cycle.py` and `tests/test_robustness.py` were re-baselined to
+them with this note as the reason. Nothing in the ledger's rules, tolerances or
+release floors changed.
+
+**Addendum (2026-10-27).** The card has been re-issued as
+[`aetheris-lite-retriever@0.1.1`](./model-cards/aetheris-lite-retriever-0.1.1.md),
+generated at `00dcb35` — the first committed revision containing the tokenizer
+correction, so its recorded `codeRevision` is a revision from which the weights
+actually reproduce. The pipeline's default `model_version` is now `0.1.1`. The
+0.1.1 card reports the same configuration's lower ordering scores and a worse
+held-out-topic result (MRR 0.012346 against 0.1.0's 0.093673); both are printed
+on the card, not summarised away.

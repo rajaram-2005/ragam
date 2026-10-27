@@ -1,0 +1,144 @@
+{
+  "format": "aetheris-model-card/1",
+  "generatedBy": "services/fabric Pipeline(PipelineConfig(epochs=25, model_version=\"0.1.1\")).run()",
+  "reproduce": "cd services/fabric && python -c \"from fabric.pipeline import Pipeline, PipelineConfig; import json; p=Pipeline(PipelineConfig(epochs=25, model_version='0.1.1')); p.run(); print(json.dumps(p.registry.current().to_dict(), indent=2, default=str))\"",
+  "runId": "run-1793104869473-11592",
+  "runStatus": "partial",
+  "note": "Deterministic apart from latencyMs, which is wall-clock measured and varies run to run; this run observed 0.0334 ms, far inside the 1.0 ms noise floor and the 25 ms hard ceiling. Generated at the first revision whose stemmers emit the parts of hyphenated terms (see the 0.1.0 card correction); supersedes aetheris-lite-retriever@0.1.0, whose recorded measurements were taken under the previous token stream.",
+  "card": {
+    "name": "aetheris-lite-retriever",
+    "version": "0.1.1",
+    "identifier": "aetheris-lite-retriever@0.1.1",
+    "family": "aetheris-lite-dual-encoder",
+    "licence": "MIT",
+    "weightsDigest": "8eabd7fb164af88a8449fc0ceae7b57b46e76503a1c6b78d5fe543790cc8657b",
+    "baseCheckpoint": null,
+    "configDigest": "8bb457b2d65626de",
+    "datasetDigest": "64e7e42ebd0ae7174d7d9044ac407971dd00e0e748980f7595a5ccdaafd40fe4",
+    "parameterCount": 18928,
+    "status": "released",
+    "metrics": {
+      "mrr": 0.787269,
+      "recall@1": 0.708333,
+      "latencyMs": 0.0334
+    },
+    "provenance": {
+      "subject": "aetheris-lite-retriever@0.1.1",
+      "comparator": "BM25 (k1=1.5, b=0.75) over the same corpus with the same tokeniser",
+      "hardware": {
+        "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+        "python": "3.11.2",
+        "processor": null,
+        "cpuCount": 2,
+        "gpuDetected": false,
+        "gpuNote": "no GPU detection performed; no vendor tooling available on this host",
+        "addressSpaceLimitBytes": null,
+        "numpy": "2.4.6"
+      },
+      "decoding": {
+        "topK": 10
+      },
+      "context": {
+        "maxTokens": 96,
+        "pooling": "mean"
+      },
+      "quantization": null,
+      "prompts": [
+        "what is the requirement for disconnect and response regarding contactor",
+        "explain insulation including measurement regarding isolation",
+        "where is heat with degrees specified",
+        "explain drain including level regarding cell",
+        "explain percentage including gauge regarding estimation",
+        "explain condition including deterioration regarding state",
+        "where is limiter with surge specified",
+        "where is current with limit specified"
+      ],
+      "datasetDigest": "64e7e42ebd0ae7174d7d9044ac407971dd00e0e748980f7595a5ccdaafd40fe4",
+      "corpusSize": 96,
+      "queries": 24,
+      "codeRevision": "00dcb35ecfa036d6de595f017b7f45ade2eb2eb7",
+      "seed": 7,
+      "limitations": [
+        "evaluated on a generated fixture corpus; this says nothing about quality on real documents",
+        "the dense model encodes the whole corpus in memory and scores by dense matrix product, so its latency is not comparable to a production ANN index",
+        "no comparison against Mistral, Qwen, Llama, Gemma or DeepSeek was possible: none can be installed on this host, so no superiority claim over them is made or implied",
+        "under a held-out-TOPIC split (unseen vocabulary, not the deployment condition) the dense model scores MRR 0.012346 against BM25 0.382011 — it does not generalise to entirely unseen topic vocabularies at this data volume"
+      ],
+      "status": "completed",
+      "measuredAt": 1793104870.1242778
+    },
+    "limitations": [
+      "trained from scratch; not derived from any pretrained base model",
+      "retriever only: it does not generate text",
+      "'historicalFailures' was not measured"
+    ],
+    "requirements": [
+      {
+        "metric": "mrr",
+        "minimum": 0.6,
+        "maximum": null,
+        "category": "retrieval",
+        "hard": true
+      },
+      {
+        "metric": "latencyMs",
+        "minimum": null,
+        "maximum": 25,
+        "category": "latency",
+        "hard": true
+      },
+      {
+        "metric": "historicalFailures",
+        "minimum": 1,
+        "maximum": null,
+        "category": "historical_failures",
+        "hard": false
+      }
+    ],
+    "validation": {
+      "passed": [
+        "'mrr' 0.7873 meets the requirement",
+        "'latencyMs' 0.0334 meets the requirement"
+      ],
+      "hardFailures": [],
+      "softFailures": [
+        "'historicalFailures' was not measured"
+      ],
+      "validatedAt": 1793104870.1251166,
+      "metrics": {
+        "mrr": 0.787269,
+        "recall@1": 0.708333,
+        "latencyMs": 0.0334
+      }
+    },
+    "artifacts": {
+      "vocabularyDigest": "31812656b2aac89a"
+    },
+    "parentVersion": null,
+    "createdAt": 1793104870.1250842,
+    "releasedAt": 1793104870.125136,
+    "supersededAt": null,
+    "retiredAt": null,
+    "history": [
+      {
+        "at": 1793104870.1250842,
+        "event": "registered",
+        "status": "candidate"
+      },
+      {
+        "at": 1793104870.1251197,
+        "event": "validated",
+        "passed": [
+          "'mrr' 0.7873 meets the requirement",
+          "'latencyMs' 0.0334 meets the requirement"
+        ]
+      },
+      {
+        "at": 1793104870.125136,
+        "event": "released",
+        "notes": "first Aetheris Lite retriever",
+        "superseded": null
+      }
+    ]
+  }
+}

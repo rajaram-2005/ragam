@@ -32,7 +32,7 @@ export const STORE_SCHEMA = 2
 export const CONNECTION_ID = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*)$/
 
 const KLYVARON_TIERS = ['lite', 'pro', 'max']
-const KLYVARON_MODALITIES = ['chat', 'image', 'video']
+const KLYVARON_MODALITIES = ['chat', 'image', 'video', 'voice']
 
 /**
  * Product-tier presets are pointers to a saved connection and a listed model. They hold no
@@ -229,7 +229,7 @@ export class OnlineStore {
    */
   saveKlyvaronPreset(tier, modality, { connectionId, model }) {
     if (!KLYVARON_TIERS.includes(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
-    if (!KLYVARON_MODALITIES.includes(modality)) throw failure('invalid_modality', 'A tier preset is for chat, image or video.', 400)
+    if (!KLYVARON_MODALITIES.includes(modality)) throw failure('invalid_modality', 'A tier preset is for chat, image, video or voice.', 400)
     if (connectionId !== 'klyvaron-native') {
       if (!this.#record(connectionId)) throw failure('connection_not_found', `No saved connection '${connectionId}'.`, 404)
       const record = this.#record(connectionId)
@@ -245,7 +245,7 @@ export class OnlineStore {
   /** Clear one tier's preset. The connection and its key are untouched. */
   removeKlyvaronPreset(tier, modality) {
     if (!KLYVARON_TIERS.includes(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
-    if (!KLYVARON_MODALITIES.includes(modality)) throw failure('invalid_modality', 'A tier preset is for chat, image or video.', 400)
+    if (!KLYVARON_MODALITIES.includes(modality)) throw failure('invalid_modality', 'A tier preset is for chat, image, video or voice.', 400)
     if (!this.data.klyvaron.tiers?.[tier]?.[modality]) throw failure('tier_not_configured', 'That tier has no preset for this modality.', 404)
     delete this.data.klyvaron.tiers[tier][modality]
     if (Object.keys(this.data.klyvaron.tiers[tier]).length === 0) delete this.data.klyvaron.tiers[tier]

@@ -17,10 +17,11 @@ import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { MEDIA_KINDS, assertGenuineVideo, probeMp4, validateMedia } from '../media/validate.mjs'
+import { releasePinViolation } from './release-pins.mjs'
 
 function measureImage(bytes) {
   const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes)
@@ -111,8 +112,14 @@ function sha256File(filePath) {
   return createHash('sha256').update(readFileSync(filePath)).digest('hex')
 }
 
-function runWorkerExec(op, spec, { pythonBinary = 'python3', timeoutMs = 120_000 } = {}) {
+function runWorkerExec(op, spec, { pythonBinary = 'python3', timeoutMs = 120_000, signal = null } = {}) {
   return new Promise((resolveOut, rejectOut) => {
+    if (signal?.aborted) {
+      const err = new Error(`worker_exec '${op}' was cancelled before it started`)
+      err.code = 'aborted'
+      rejectOut(err)
+      return
+    }
     mkdirSync(tmpdir(), { recursive: true })
     const specPath = join(tmpdir(), `klyvaron-mm-${op}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)
     writeFileSync(specPath, JSON.stringify(spec), 'utf8')
@@ -123,15 +130,50 @@ function runWorkerExec(op, spec, { pythonBinary = 'python3', timeoutMs = 120_000
     })
     let stdout = ''
     let stderr = ''
-    const timer = setTimeout(() => {
+    let aborted = false
+    let timedOut = false
+    let killTimer = null
+    // SIGTERM first (a well-behaved worker exits), SIGKILL 2s later: a worker
+    // stuck in native code must not outlive its cancellation or timeout.
+    const killChild = () => {
       try { child.kill('SIGTERM') } catch {}
-    }, timeoutMs)
+      killTimer = setTimeout(() => { try { child.kill('SIGKILL') } catch {} }, 2_000)
+      killTimer.unref()
+    }
+    const onAbort = () => { aborted = true; killChild() }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    const timer = setTimeout(() => { timedOut = true; killChild() }, timeoutMs)
     timer.unref()
     child.stdout.on('data', (c) => { stdout += c })
     child.stderr.on('data', (c) => { stderr += c })
+    child.on('error', (cause) => {
+      // A spawn failure (e.g. the configured Python does not exist) emits
+      // 'error' without a useful 'exit'; without this the promise never settles.
+      clearTimeout(timer)
+      if (killTimer) clearTimeout(killTimer)
+      signal?.removeEventListener('abort', onAbort)
+      try { rmSync(specPath, { force: true }) } catch {}
+      const err = new Error(`worker_exec '${op}' could not start '${pythonBinary}': ${cause.message}`)
+      err.code = 'multimodal_exec_failed'
+      rejectOut(err)
+    })
     child.on('exit', (code) => {
       clearTimeout(timer)
+      if (killTimer) clearTimeout(killTimer)
+      signal?.removeEventListener('abort', onAbort)
       try { rmSync(specPath, { force: true }) } catch {}
+      if (aborted) {
+        const err = new Error(`worker_exec '${op}' was cancelled`)
+        err.code = 'aborted'
+        rejectOut(err)
+        return
+      }
+      if (timedOut) {
+        const err = new Error(`worker_exec '${op}' exceeded ${timeoutMs}ms and was terminated`)
+        err.code = 'multimodal_exec_timeout'
+        rejectOut(err)
+        return
+      }
       const lines = stdout.trim().split(/\r?\n/).filter(Boolean)
       let last = null
       for (let i = lines.length - 1; i >= 0; i -= 1) {
@@ -192,6 +234,16 @@ export class NativeMultimodalHost {
       }
       try {
         const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+        // The directory name is not an identity: the manifest inside must
+        // claim to be the model this slot serves, as the LM host enforces.
+        if (manifest.id !== spec.id) {
+          throw new Error(`Directory '${spec.id}' holds manifest id '${manifest.id}'; substitution is prohibited.`)
+        }
+        for (const [field, value] of [['weights.file', manifest.weights?.file], ['processor.file', manifest.processor?.file]]) {
+          if (typeof value !== 'string' || value !== basename(value) || value === '.' || value === '..') {
+            throw new Error(`Manifest ${field} '${value}' is not a plain file name inside the model directory.`)
+          }
+        }
         const weightsPath = join(modelDir, manifest.weights.file)
         const procPath = join(modelDir, manifest.processor.file)
         if (!existsSync(weightsPath) || !existsSync(procPath)) {
@@ -205,6 +257,19 @@ export class NativeMultimodalHost {
         if (actualProcSha !== manifest.processor.sha256) {
           throw new Error(`processor.json SHA-256 mismatch (expected ${manifest.processor.sha256}, got ${actualProcSha})`)
         }
+        // Release pin: the two checks above only prove the package agrees
+        // with itself. An artifact claiming the released version must also
+        // match the digests recorded in source at release time; locally
+        // retrained artifacts carry a distinct version and skip this gate.
+        const pinViolation = releasePinViolation({
+          id: spec.id,
+          version: manifest.version,
+          weightsFile: manifest.weights.file,
+          weightsSha256: actualWeightsSha,
+          processorFile: manifest.processor.file,
+          processorSha256: actualProcSha,
+        })
+        if (pinViolation) throw new Error(pinViolation)
         if (manifest.architecture?.id !== spec.architecture) {
           throw new Error(`Architecture mismatch: expected '${spec.architecture}', got '${manifest.architecture?.id}'`)
         }
@@ -298,7 +363,7 @@ export class NativeMultimodalHost {
     return { modelId, activeAdapterDir: this.activeAdapters.get(modelId)?.directory ?? null }
   }
 
-  async #executeTask(modelId, task, extraSpec = {}) {
+  async #executeTask(modelId, task, extraSpec = {}, { signal = null } = {}) {
     const rec = this.#requireReady(modelId)
     const adapterDir = this.activeAdapters.get(modelId)?.directory ?? null
     const spec = {
@@ -315,11 +380,11 @@ export class NativeMultimodalHost {
     if (this.userTrainingController?.isLocalWorkerConnected()) {
       const workerModels = this.userTrainingController.workerConnection?.inspectedModels ?? []
       if (workerModels.some((m) => m.id === modelId && m.verified)) {
-        execOut = await this.userTrainingController.runWorkerInference(spec)
+        execOut = await this.userTrainingController.runWorkerInference(spec, { signal })
       }
     }
     if (!execOut) {
-      execOut = await runWorkerExec('infer', spec, { pythonBinary: this.pythonBinary })
+      execOut = await runWorkerExec('infer', spec, { pythonBinary: this.pythonBinary, signal })
     }
 
     this.lastInferenceProof.set(`${modelId}::${task}`, {
@@ -331,8 +396,8 @@ export class NativeMultimodalHost {
     return execOut
   }
 
-  async generateImage({ modelId = 'klyvaron-pro-image', prompt, size = '256x256', width = null, height = null, seed = 42 }) {
-    const res = await this.#executeTask(modelId, 'image.generate', { prompt, size, width, height, seed })
+  async generateImage({ modelId = 'klyvaron-pro-image', prompt, size = '256x256', width = null, height = null, seed = 42, signal = null }) {
+    const res = await this.#executeTask(modelId, 'image.generate', { prompt, size, width, height, seed }, { signal })
     const bytes = Buffer.from(res.output.mediaBase64, 'base64')
     const validation = validateMedia({ bytes, expectedKind: MEDIA_KINDS.IMAGE })
     if (!validation.valid) {
@@ -409,6 +474,7 @@ export class NativeMultimodalHost {
     resolution = '720p',
     durationMs = 2000,
     seed = 42,
+    signal = null,
   }) {
     const res = await this.#executeTask(modelId, 'video.generate', {
       prompt,
@@ -416,7 +482,7 @@ export class NativeMultimodalHost {
       resolution,
       durationMs,
       seed,
-    })
+    }, { signal })
     const bytes = Buffer.from(res.output.mediaBase64, 'base64')
     const validation = validateMedia({ bytes, expectedKind: MEDIA_KINDS.VIDEO })
     const genuine = assertGenuineVideo(validation, { minBytes: 1024 })

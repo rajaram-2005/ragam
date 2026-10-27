@@ -111,7 +111,7 @@ class PipelineConfig:
     validation_seed: int = 20251012
     #: Release gate.
     model_name: str = "aetheris-lite-retriever"
-    model_version: str = "0.1.0"
+    model_version: str = "0.1.1"
     licence: str = "MIT"
     #: Minimum MRR for the trained model to be considered releasable.
     min_mrr: float = 0.60

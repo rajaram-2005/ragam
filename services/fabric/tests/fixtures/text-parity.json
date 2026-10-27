@@ -10,14 +10,17 @@
     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
     "Sentence 0 describes the contactor and thermal limits in detail. Sentence 1 describes the contactor and thermal limits in detail. Sentence 2 describes the contactor and thermal limits in detail. Sentence 3 describes the contactor and thermal limits in detail. Sentence 4 describes the contactor and thermal limits in detail. Sentence 5 describes the contactor and thermal limits in detail. Sentence 6 describes the contactor and thermal limits in detail. Sentence 7 describes the contactor and thermal limits in detail. Sentence 8 describes the contactor and thermal limits in detail. Sentence 9 describes the contactor and thermal limits in detail. Sentence 10 describes the contactor and thermal limits in detail. Sentence 11 describes the contactor and thermal limits in detail. Sentence 12 describes the contactor and thermal limits in detail. Sentence 13 describes the contactor and thermal limits in detail. Sentence 14 describes the contactor and thermal limits in detail. Sentence 15 describes the contactor and thermal limits in detail. Sentence 16 describes the contactor and thermal limits in detail. Sentence 17 describes the contactor and thermal limits in detail. Sentence 18 describes the contactor and thermal limits in detail. Sentence 19 describes the contactor and thermal limits in detail. Sentence 20 describes the contactor and thermal limits in detail. Sentence 21 describes the contactor and thermal limits in detail. Sentence 22 describes the contactor and thermal limits in detail. Sentence 23 describes the contactor and thermal limits in detail. Sentence 24 describes the contactor and thermal limits in detail. Sentence 25 describes the contactor and thermal limits in detail. Sentence 26 describes the contactor and thermal limits in detail. Sentence 27 describes the contactor and thermal limits in detail. Sentence 28 describes the contactor and thermal limits in detail. Sentence 29 describes the contactor and thermal limits in detail. Sentence 30 describes the contactor and thermal limits in detail. Sentence 31 describes the contactor and thermal limits in detail. Sentence 32 describes the contactor and thermal limits in detail. Sentence 33 describes the contactor and thermal limits in detail. Sentence 34 describes the contactor and thermal limits in detail. Sentence 35 describes the contactor and thermal limits in detail. Sentence 36 describes the contactor and thermal limits in detail. Sentence 37 describes the contactor and thermal limits in detail. Sentence 38 describes the contactor and thermal limits in detail. Sentence 39 describes the contactor and thermal limits in detail. Sentence 40 describes the contactor and thermal limits in detail. Sentence 41 describes the contactor and thermal limits in detail. Sentence 42 describes the contactor and thermal limits in detail. Sentence 43 describes the contactor and thermal limits in detail. Sentence 44 describes the contactor and thermal limits in detail. Sentence 45 describes the contactor and thermal limits in detail. Sentence 46 describes the contactor and thermal limits in detail. Sentence 47 describes the contactor and thermal limits in detail. Sentence 48 describes the contactor and thermal limits in detail. Sentence 49 describes the contactor and thermal limits in detail. Sentence 50 describes the contactor and thermal limits in detail. Sentence 51 describes the contactor and thermal limits in detail. Sentence 52 describes the contactor and thermal limits in detail. Sentence 53 describes the contactor and thermal limits in detail. Sentence 54 describes the contactor and thermal limits in detail. Sentence 55 describes the contactor and thermal limits in detail. Sentence 56 describes the contactor and thermal limits in detail. Sentence 57 describes the contactor and thermal limits in detail. Sentence 58 describes the contactor and thermal limits in detail. Sentence 59 describes the contactor and thermal limits in detail.",
     "Multiple\n\nparagraphs. With! Newlines? And   collapsed    spacing.",
-    "a i 7 5G running studies boxes churches status analysis"
+    "a i 7 5G running studies boxes churches status analysis",
+    "The project codename is ZEPHYR-9 and the model id is klyvaron-pro-lm version 0-1-0."
   ],
   "queries": [
     "contactor opening threshold",
     "isolation resistance ohms per volt",
     "the and of",
     "thermal limits",
-    "nothing matches this at all"
+    "nothing matches this at all",
+    "ZEPHYR codename",
+    "klyvaron pro model"
   ],
   "tokenize": [
     [],
@@ -695,6 +698,21 @@
       "churches",
       "status",
       "analysis"
+    ],
+    [
+      "the",
+      "project",
+      "codename",
+      "is",
+      "zephyr-9",
+      "and",
+      "the",
+      "model",
+      "id",
+      "is",
+      "klyvaron-pro-lm",
+      "version",
+      "0-1-0"
     ]
   ],
   "contentTokens": [
@@ -1179,6 +1197,16 @@
       "churches",
       "status",
       "analysis"
+    ],
+    [
+      "project",
+      "codename",
+      "zephyr-9",
+      "model",
+      "id",
+      "klyvaron-pro-lm",
+      "version",
+      "0-1-0"
     ]
   ],
   "stemTokens": [
@@ -1663,6 +1691,24 @@
       "churche",
       "status",
       "analysi"
+    ],
+    [
+      "project",
+      "codename",
+      "zephyr-9",
+      "zephyr",
+      "9",
+      "model",
+      "id",
+      "klyvaron-pro-lm",
+      "klyvaron",
+      "pro",
+      "lm",
+      "version",
+      "0-1-0",
+      "0",
+      "1",
+      "0"
     ]
   ],
   "stem": [
@@ -2102,6 +2148,13 @@
         "start": 0,
         "end": 55
       }
+    ],
+    [
+      {
+        "text": "The project codename is ZEPHYR-9 and the model id is klyvaron-pro-lm version 0-1-0.",
+        "start": 0,
+        "end": 83
+      }
     ]
   ],
   "chunkText": [
@@ -2199,19 +2252,27 @@
         "end": 55,
         "index": 0
       }
+    ],
+    [
+      {
+        "text": "The project codename is ZEPHYR-9 and the model id is klyvaron-pro-lm version 0-1-0.",
+        "start": 0,
+        "end": 83,
+        "index": 0
+      }
     ]
   ],
   "bm25": {
     "k1": 1.5,
     "b": 0.75,
     "stats": {
-      "documents": 9,
-      "uniqueTerms": 106,
-      "totalTokens": 465,
-      "avgdl": 51.666667,
+      "documents": 10,
+      "uniqueTerms": 118,
+      "totalTokens": 481,
+      "avgdl": 48.1,
       "k1": 1.5,
       "b": 0.75,
-      "version": 10
+      "version": 11
     },
     "searches": [
       {
@@ -2220,7 +2281,7 @@
         "hits": [
           {
             "docId": "doc-02",
-            "score": 3.823777774894968,
+            "score": 4.081603691016934,
             "meta": {
               "index": 2
             },
@@ -2231,7 +2292,7 @@
           },
           {
             "docId": "doc-04",
-            "score": 3.7722083443644165,
+            "score": 4.023118683503556,
             "meta": {
               "index": 4
             },
@@ -2242,7 +2303,7 @@
           },
           {
             "docId": "doc-06",
-            "score": 2.265146049031426,
+            "score": 2.446923683076573,
             "meta": {
               "index": 6
             },
@@ -2258,7 +2319,7 @@
         "hits": [
           {
             "docId": "doc-04",
-            "score": 14.687991890974605,
+            "score": 15.258062557172252,
             "meta": {
               "index": 4
             },
@@ -2283,7 +2344,7 @@
         "hits": [
           {
             "docId": "doc-06",
-            "score": 8.186632264689377,
+            "score": 8.514866864792609,
             "meta": {
               "index": 6
             },
@@ -2298,6 +2359,41 @@
         "query": "nothing matches this at all",
         "topK": 5,
         "hits": []
+      },
+      {
+        "query": "ZEPHYR codename",
+        "topK": 5,
+        "hits": [
+          {
+            "docId": "doc-09",
+            "score": 5.695194825232441,
+            "meta": {
+              "index": 9
+            },
+            "matchedTerms": [
+              "zephyr",
+              "codename"
+            ]
+          }
+        ]
+      },
+      {
+        "query": "klyvaron pro model",
+        "topK": 5,
+        "hits": [
+          {
+            "docId": "doc-09",
+            "score": 8.542792237848662,
+            "meta": {
+              "index": 9
+            },
+            "matchedTerms": [
+              "klyvaron",
+              "pro",
+              "model"
+            ]
+          }
+        ]
       }
     ]
   }

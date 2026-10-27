@@ -84,6 +84,20 @@ test('BM25 search returns nothing for an empty query or empty corpus', () => {
   assert.deepEqual(new Bm25Index().search('content'), [])
 })
 
+test('hyphenated identifiers are findable by their parts', () => {
+  // Regression: the tokenizer keeps `zephyr-9` as one token, so a part-only
+  // query used to miss the document entirely (live E2E: memory search for
+  // `ZEPHYR` found nothing). stemTokens now indexes the parts too.
+  const index = new Bm25Index()
+  index.add('memo', 'The E2E project codename is ZEPHYR-9.')
+  index.add('other', 'Unrelated notes about gardening tools and soil.')
+  assert.deepEqual(index.search('ZEPHYR').map((hit) => hit.docId), ['memo'])
+  assert.deepEqual(index.search('zephyr-9').map((hit) => hit.docId), ['memo'])
+  assert.deepEqual(stemTokens('klyvaron-pro-lm'), ['klyvaron-pro-lm', 'klyvaron', 'pro', 'lm'])
+  // Citation offsets are untouched: tokenize still yields whole tokens.
+  assert.deepEqual(tokenize('ZEPHYR-9'), ['zephyr-9'])
+})
+
 test('BM25 serialises and restores with identical results', () => {
   const index = new Bm25Index()
   index.add('a', POLICY_DOC.slice(0, 400))

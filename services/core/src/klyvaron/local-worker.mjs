@@ -131,9 +131,12 @@ function probeCrossPlatformGpu() {
 }
 
 function probePythonBackend() {
+  // An explicit AETHERIS_PYTHON always wins: the /tmp venv paths below are a
+  // developer convenience, not a deployment contract.
+  const configured = process.env.AETHERIS_PYTHON ? [process.env.AETHERIS_PYTHON] : []
   const candidates = process.platform === 'win32'
-    ? ['python', 'python3']
-    : ['/tmp/accel-venv/bin/python', '/tmp/fabric-venv/bin/python', 'python3', 'python']
+    ? [...configured, 'python', 'python3']
+    : [...configured, '/tmp/accel-venv/bin/python', '/tmp/fabric-venv/bin/python', 'python3', 'python']
 
   for (const bin of candidates) {
     if (isAbsolute(bin) && !existsSync(bin)) continue

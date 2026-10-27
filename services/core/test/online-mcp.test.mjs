@@ -148,3 +148,50 @@ test('the plugin surface lists the reviewed built-in and installs nothing custom
   assert.equal(install.status, 403)
   assert.equal(install.data.error, 'extension_installation_disabled')
 })
+
+test('a member can run read-only plugin tools; state changes and writing tools stay owner-only', async (t) => {
+  const f = await fixture(t); await f.login()
+  // A writing capability, installed the same way the app installs its
+  // built-in, so the member boundary has something real to refuse.
+  const schema = { type: 'object', properties: {}, additionalProperties: false }
+  f.app.plugins.install({
+    manifestVersion: 1, id: 'aetheris.test-writer', name: 'Test writer', version: '1.0.0',
+    protocol: 'local_tool', builtin: true, author: 'Aetheris', license: 'MIT', scopes: [],
+    description: 'Test-only writing capability.',
+    capabilities: [{ name: 'write', description: 'Pretend to write.', readOnly: false, inputSchema: schema }],
+  }, { handler: { write: () => ({ wrote: true }) } })
+  f.app.plugins.enable('aetheris.test-writer')
+
+  await f.login(f.member)
+  // Read-only preflight + invoke: the Plugins page offers these to every
+  // signed-in account, and they cannot mutate state (regression: the route
+  // used to refuse members outright with owner_required).
+  const preflight = await f.request('POST', '/api/plugins/aetheris.online-status/preflight', { capability: 'status' })
+  assert.equal(preflight.status, 200)
+  assert.equal(preflight.data.allowed, true)
+  assert.equal(preflight.data.readOnly, true)
+  const invoked = await f.request('POST', '/api/plugins/aetheris.online-status/invoke', { capability: 'status', input: {} })
+  assert.equal(invoked.status, 200)
+  assert.equal(invoked.data.ok, true)
+
+  // A capability that is not read-only stays owner-only for members.
+  const writing = await f.request('POST', '/api/plugins/aetheris.test-writer/invoke', { capability: 'write', input: {} })
+  assert.equal(writing.status, 403)
+  assert.equal(writing.data.error, 'owner_required')
+
+  // Changing what is runnable stays owner-only too.
+  const disable = await f.request('POST', '/api/plugins/aetheris.online-status/disable', {})
+  assert.equal(disable.status, 403)
+  assert.equal(disable.data.error, 'owner_required')
+
+  // Naming a plugin that does not exist is a client error, not a 500.
+  const missing = await f.request('POST', '/api/plugins/no-such-plugin/preflight', { capability: 'status' })
+  assert.equal(missing.status, 404)
+  assert.equal(missing.data.error, 'unknown_plugin')
+
+  // The owner can still do all of it.
+  await f.login()
+  const ownerWrite = await f.request('POST', '/api/plugins/aetheris.test-writer/invoke', { capability: 'write', input: {} })
+  assert.equal(ownerWrite.status, 200)
+  assert.equal(ownerWrite.data.ok, true)
+})

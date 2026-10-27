@@ -90,6 +90,7 @@ test('training worker supports live progress, SIGTERM atomic checkpoint cancella
     'from pathlib import Path',
     'p = argparse.ArgumentParser()',
     'p.add_argument("--preset")',
+    'p.add_argument("--version", default="0.1.0")',
     'p.add_argument("--work-dir", type=Path)',
     'p.add_argument("--install-root", type=Path)',
     'p.add_argument("--corpus-dir", type=Path)',
@@ -190,6 +191,7 @@ test('regression: valid consented preflight starts despite harmless free-disk va
     'from pathlib import Path',
     'p = argparse.ArgumentParser()',
     'p.add_argument("--preset")',
+    'p.add_argument("--version", default="0.1.0")',
     'p.add_argument("--work-dir", type=Path)',
     'p.add_argument("--install-root", type=Path)',
     'p.add_argument("--corpus-dir", type=Path)',
@@ -316,6 +318,13 @@ test('regression: missing, false, expired, and invalid consent are all rejected'
     planRequest: req,
     consent: { confirmed: false, disclosureDigest: plan.disclosureDigest, createdAt: Date.now() },
   }), { code: 'training_consent_required' })
+
+  // Future-dated consent (createdAt beyond clock-skew tolerance) is not a
+  // never-expiring consent: it is refused with the same consent_expired code.
+  assert.throws(() => manager.startJob({
+    planRequest: req,
+    consent: { confirmed: true, disclosureDigest: plan.disclosureDigest, createdAt: Date.now() + 3_600_000 },
+  }), { code: 'consent_expired' })
 
   // Expired consent (createdAt in the past beyond PREFLIGHT_EXPIRY_MS)
   const expiredAt = Date.now() - 31 * 60 * 1000 // 31 minutes ago

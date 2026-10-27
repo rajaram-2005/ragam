@@ -2,8 +2,8 @@
 //
 // Every assertion here is about provenance: a tier resolves to a saved connection and a model
 // that connection already listed, the request goes to that connection (not merely the active
-// one), and the answer names the third-party provider in machine-readable fields. No Klyvaron
-// weights exist in this build, and nothing here may imply otherwise.
+// one), and the answer names the third-party provider in machine-readable fields. This fixture
+// installs no first-party weights, so native presets must report themselves unavailable here.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -87,7 +87,7 @@ test('Klyvaron tiers are unconfigured until the owner assigns a saved connection
   assert.equal(view.status, 200)
   assert.equal(view.data.product, 'klyvaron')
   assert.equal(view.data.independentWeights, false)
-  assert.match(view.data.note, /product tiers, not first-party model weights/)
+  assert.match(view.data.note, /product tiers \(presets\), not separate model weights/)
   assert.deepEqual(view.data.tiers.map((tier) => tier.id), ['lite', 'pro', 'max'])
   for (const tier of view.data.tiers) {
     assert.equal(tier.presets.chat.configured, false)
@@ -250,4 +250,92 @@ test('presets survive a restart and can be cleared without touching the connecti
   const provider = await call('GET', '/api/providers', null, cookie)
   assert.equal(provider.data.connections.find((connection) => connection.id === 'litellm').configured, true)
   assert.ok(options(app).dir)
+})
+
+test('voice tier presets are real end to end: stored, viewed, and honored by voice requests', async (t) => {
+  const a = await chatServer(t, ['model-a'])
+  const f = await fixture(t, [a.base])
+  await f.login()
+  await saveConnection(f, 'litellm', `${a.base}/v1`, 'synthetic-key')
+
+  // The view advertises a voice preset row for every tier.
+  const view = await f.owner('GET', '/api/klyvaron')
+  assert.equal(view.status, 200)
+  for (const tier of view.data.tiers) {
+    assert.equal(tier.presets.voice.configured, false, `${tier.id} voice preset starts unconfigured`)
+  }
+
+  // A chat connection cannot serve a voice preset: refused by name, not stored.
+  const wrongWire = await f.owner('PUT', '/api/klyvaron/pro', { modality: 'voice', connectionId: 'litellm', model: 'model-a' })
+  assert.equal(wrongWire.status, 409)
+  assert.equal(wrongWire.data.error, 'klyvaron_tier_modality')
+
+  // This fixture installs no first-party voice weights, so a native voice
+  // preset is refused as unavailable rather than stored as a false promise.
+  const unverified = await f.owner('PUT', '/api/klyvaron/pro', { modality: 'voice', connectionId: 'klyvaron-native', model: 'klyvaron-pro-voice' })
+  assert.equal(unverified.status, 503)
+  assert.equal(unverified.data.error, 'klyvaron_model_unavailable')
+
+  // Voice requests honor tier discipline exactly like image and video.
+  const unconfigured = await f.owner('POST', '/api/voice/synthesize', { tier: 'lite', text: 'hello' })
+  assert.equal(unconfigured.status, 409)
+  assert.equal(unconfigured.data.error, 'klyvaron_tier_unconfigured')
+  const bogus = await f.owner('POST', '/api/voice/synthesize', { tier: 'bogus', text: 'hello' })
+  assert.equal(bogus.status, 400)
+  assert.equal(bogus.data.error, 'invalid_tier')
+
+  // A stored native voice preset (as it would exist on disk with real
+  // weights) is consulted: the request targets that model and reports it
+  // unavailable here instead of falling back to any other model.
+  // The preset deliberately names the MAX voice model: the refusal must
+  // name it too, which the old model-ignoring fallback (always Pro) could
+  // never produce — this is what proves the preset is actually consulted.
+  f.app.store.saveKlyvaronPreset('pro', 'voice', { connectionId: 'klyvaron-native', model: 'klyvaron-max-voice' })
+  const targeted = await f.owner('POST', '/api/voice/synthesize', { tier: 'pro', text: 'hello' })
+  assert.equal(targeted.status, 503)
+  assert.equal(targeted.data.error, 'klyvaron_model_unavailable')
+  assert.match(targeted.data.message, /klyvaron-max-voice/)
+  const targetedTranscribe = await f.owner('POST', '/api/voice/transcribe', { tier: 'pro', audioBase64: Buffer.from('x').toString('base64') })
+  assert.equal(targetedTranscribe.status, 503)
+  assert.equal(targetedTranscribe.data.error, 'klyvaron_model_unavailable')
+  assert.match(targetedTranscribe.data.message, /klyvaron-max-voice/)
+
+  const cleared = await f.owner('DELETE', '/api/klyvaron/pro/voice', {})
+  assert.equal(cleared.status, 200)
+  assert.equal(cleared.data.tiers.find((tier) => tier.id === 'pro').presets.voice.configured, false)
+})
+
+test('qualification refuses a modelId that is a path, not a model id', async (t) => {
+  const a = await chatServer(t, ['model-a'])
+  const f = await fixture(t, [a.base])
+  await f.login()
+  for (const modelId of ['../../../../docs', '../models', '/etc', 'klyvaron-pro-lm/..', 'Klyvaron-Pro']) {
+    const refused = await f.owner('POST', '/api/klyvaron/qualification/run', { modelId, backend: 'cpu' })
+    assert.equal(refused.status, 400, `${modelId} must be refused before it becomes a path`)
+    assert.equal(refused.data.error, 'invalid_model')
+  }
+  // A canonical id reaches the honest "not installed here" answer instead.
+  const missing = await f.owner('POST', '/api/klyvaron/qualification/run', { modelId: 'klyvaron-pro-lm', backend: 'cpu' })
+  assert.equal(missing.status, 404)
+  assert.equal(missing.data.error, 'model_unavailable')
+})
+
+test('an uncoded server fault is a 500 internal_error, never a fake validation failure', async (t) => {
+  const a = await chatServer(t, ['model-a'])
+  const f = await fixture(t, [a.base])
+  await f.login()
+  const original = f.app.klyvaronView
+  f.app.klyvaronView = () => { throw new Error('synthetic uncoded boom') }
+  try {
+    const fault = await f.owner('GET', '/api/klyvaron')
+    assert.equal(fault.status, 500)
+    assert.equal(fault.data.error, 'internal_error')
+    assert.ok(!JSON.stringify(fault.data).includes('synthetic uncoded boom'), 'internals are not leaked to the client')
+  } finally {
+    f.app.klyvaronView = original
+  }
+  // Coded refusals keep their contract: status, code and message.
+  const coded = await f.owner('GET', '/api/no-such-route')
+  assert.equal(coded.status, 404)
+  assert.equal(coded.data.error, 'not_found')
 })

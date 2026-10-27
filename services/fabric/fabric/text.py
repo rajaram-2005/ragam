@@ -103,7 +103,25 @@ def stem(token: str) -> str:
 
 
 def stem_tokens(text: object) -> list[str]:
-    return [stem(token) for token in content_tokens(text)]
+    out: list[str] = []
+    for token in content_tokens(text):
+        out.append(stem(token))
+        # Hyphenated identifiers (`zephyr-9`, `klyvaron-pro-lm`) are single
+        # tokens to the tokenizer, so a search for one part (`ZEPHYR`) could
+        # never match them. Index the parts alongside the whole token, under
+        # the same rules the tokenizer applies to standalone tokens (min
+        # length, stopwords). Mirrors `stemTokens` in the Node implementation;
+        # `tokenize()` itself is unchanged so offsets still see whole tokens.
+        if "-" in token:
+            for part in token.split("-"):
+                if not part:
+                    continue
+                if len(part) < 2 and not _DIGIT_RE.search(part):
+                    continue
+                if part in STOPWORDS:
+                    continue
+                out.append(stem(part))
+    return out
 
 
 def split_sentences(text: object) -> list[dict]:

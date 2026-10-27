@@ -221,16 +221,32 @@ export async function contextRoutes(request, response, app, session) {
     }
   }
   if (method === 'POST' && path === '/api/plugins/discover') return sendJson(response, 200, app.plugins.discover(await readJson()), app)
-  if (method === 'POST' && path === '/api/plugins/install') return sendJson(response, 201, app.plugins.install(await readJson()), app)
   if (method === 'POST' && segments[1] === 'plugins' && segments[2] && segments[3]) {
-    requireOwner()
     const action = segments[3]
     const body = await readJson()
-    if (action === 'enable') return sendJson(response, 200, app.plugins.enable(segments[2]), app)
-    if (action === 'disable') return sendJson(response, 200, app.plugins.disable(segments[2]), app)
-    if (action === 'uninstall') return sendJson(response, 200, app.plugins.uninstall(segments[2]), app)
-    if (action === 'preflight') return sendJson(response, 200, app.plugins.preflight(segments[2], body.capability, body), app)
-    if (action === 'invoke') return sendJson(response, 200, await app.plugins.invoke(segments[2], body.capability, body.input ?? {}, body), app)
+    if (action === 'enable' || action === 'disable' || action === 'uninstall') {
+      // Changing what is installed or runnable is an owner act.
+      requireOwner()
+      if (action === 'enable') return sendJson(response, 200, app.plugins.enable(segments[2]), app)
+      if (action === 'disable') return sendJson(response, 200, app.plugins.disable(segments[2]), app)
+      return sendJson(response, 200, app.plugins.uninstall(segments[2]), app)
+    }
+    if (action === 'preflight' || action === 'invoke') {
+      // Using a reviewed read-only built-in is every signed-in account's
+      // action, exactly like the MCP preflight/call routes below; the page
+      // offers it to everyone and the tools cannot mutate state. Anything
+      // not declared read-only stays owner-only. The registry's own
+      // preflight is the authority on read-only-ness, so the classification
+      // cannot drift from what invoke enforces.
+      if (session.role !== 'owner') {
+        const check = app.plugins.preflight(segments[2], body.capability, body)
+        if (!check.readOnly) {
+          throw failure('owner_required', 'Only the owner account of this installation can run plugin capabilities that are not read-only.', 403)
+        }
+      }
+      if (action === 'preflight') return sendJson(response, 200, app.plugins.preflight(segments[2], body.capability, body), app)
+      return sendJson(response, 200, await app.plugins.invoke(segments[2], body.capability, body.input ?? {}, body), app)
+    }
   }
 
 
