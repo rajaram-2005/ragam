@@ -262,8 +262,12 @@ def test_a_model_that_misses_its_mrr_floor_is_not_released():
 
 
 def test_a_rejected_experiment_blocks_release_even_with_good_metrics():
-    # The ledger's verdict is a gate, not advice.
-    pipeline = Pipeline(PipelineConfig(epochs=6, candidate_dims=(16,), candidate_epochs=2))
+    # The ledger's verdict is a gate, not advice. The config must clear the
+    # release floors on its own merits (measured mrr 0.8536), so the forced
+    # verdict is the only thing that can block the release. The previous
+    # epochs=6/dims=16 config stopped clearing the 0.6 floor once the dense
+    # tokenizer began emitting hyphen-part tokens (2026-10-25 re-baseline).
+    pipeline = Pipeline(PipelineConfig(epochs=12, candidate_dims=(32,), candidate_epochs=4))
     pipeline.run(stages=("data_validation", "base_selection", "domain_training", "evaluation"))
     evaluation = pipeline.stages["evaluation"]
     evaluation.detail["verdict"] = ExperimentVerdict.REJECT.value

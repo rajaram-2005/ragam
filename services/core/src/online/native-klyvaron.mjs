@@ -21,6 +21,7 @@ import { KlyvaronRuntime } from '../klyvaron/runtime.mjs'
 import { KlyvaronStore } from '../klyvaron/store.mjs'
 import { KlyvaronProvider } from '../providers/klyvaron.mjs'
 import { failure } from './failure.mjs'
+import { releasePinViolation } from '../klyvaron/release-pins.mjs'
 
 export const FIRST_PARTY_MODEL_SPECS = Object.freeze({
   'klyvaron-pro-lm': Object.freeze({
@@ -200,6 +201,25 @@ export class NativeKlyvaronHost {
         'fixture_weights_refused',
         `${id} carries test_fixture random weights rather than trained weights; fixtures never qualify a model.`,
       )
+      this.records.set(id, record)
+      return record
+    }
+
+    // Release pin: the manifest's own SHA-256 check (inside the loader) is
+    // self-referential, so an artifact claiming the released version must
+    // also match the digest recorded in source at release time. Locally
+    // retrained artifacts carry a distinct version and skip this gate. It
+    // runs after the identity/architecture/fixture gates above (those say
+    // *what* the artifact is; the pin says whether it is the release) and
+    // before spending inference on a forgery.
+    const pinViolation = releasePinViolation({
+      id,
+      version: runtime.manifest.version,
+      weightsFile: runtime.manifest.weights.file,
+      weightsSha256: runtime.sha256,
+    })
+    if (pinViolation) {
+      const record = this.#failedRecord(spec, runtime, 'release_pin_mismatch', pinViolation)
       this.records.set(id, record)
       return record
     }

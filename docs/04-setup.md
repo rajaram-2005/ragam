@@ -16,9 +16,9 @@ Every command below was run on the host described in
 | `apps/web` | Node ≥ 20.19 or ≥ 22.12 and npm (for Vite 8). 2 runtime packages, 23 installed in total | Vite 8.3.4, React 18.3.1 |
 | Tests | `pytest` for Fabric; nothing extra for core or web | pytest 9.1.1 |
 
-No GPU is required for anything in this repository. No model weights are
-downloaded, and none are needed to run the platform — see §7 for what that means
-in practice.
+No GPU is required for anything in this repository. The platform runs with no
+model weights at all (gateway models only); the first-party Klyvaron weights
+are an explicit, optional install — §2b. Nothing downloads them for you.
 
 > **Do not `pip install torch`.** Nothing here imports it. On a GPU-less host pip
 > resolves torch to the CUDA build and pulls several gigabytes of runtime that
@@ -52,8 +52,12 @@ Expected startup banner from the core, on a fresh installation:
 Aetheris online-only API listening on 0.0.0.0:8790
   data dir   /home/you/aetheris-omni/.aetheris-data/online
   sign-in    no accounts yet — open the web app and create the first one; it becomes the owner
-Configure an online gateway (LiteLLM, Ollama or llama.cpp server) in Provider Settings. No local inference or automatic model downloads.
+  klyvaron   no first-party weights installed — run: npm run install:klyvaron-models
+Configure an online gateway (LiteLLM, Ollama or llama.cpp server) in Provider Settings for third-party models. Nothing is downloaded automatically.
 ```
+
+With the weights installed (§2b) the `klyvaron` line instead reports how many
+of the 8 first-party models verified locally at boot.
 
 Once an account exists the third line reads `sign-in    1 account(s); owner you@example.com`,
 and a `cookie` line appears whenever the session cookie's SameSite policy is not the
@@ -61,9 +65,48 @@ default. A `(node:NNNN) ExperimentalWarning: SQLite is an experimental feature` 
 above the banner comes from `node:sqlite` and is expected on Node 22.
 
 That banner, with no model listed anywhere in it, **is the correct output** on a
-fresh installation: this entry point performs no inference and installs nothing,
-so there is nothing local to report. It is not an error, and the interface does
+fresh installation: the entry point installs nothing by itself, so until a
+gateway is saved (§7) or the first-party weights are installed (§2b) there is
+nothing to serve inference with. It is not an error, and the interface does
 not soften it — Chat shows the same fact as a banner until a gateway is saved.
+
+---
+
+## 2b. First-party Klyvaron weights (optional)
+
+Klyvaron Pro and Max (chat, image, video, voice) are first-party weights
+trained by this project; they are **not in the git tree**. Install the
+released 0.1.0 artifacts with:
+
+```bash
+npm run install:klyvaron-models
+# = node services/core/scripts/install-klyvaron-models.mjs [--data-dir <dir>] [--source <url-or-file>] [--force]
+```
+
+This downloads the same tarball CI verifies (~177 MB) into
+`<data dir>/klyvaron/models` and proves the result twice: every entry of the
+tarball's `SHA256SUMS` must verify, and every file must match the release
+pins in `services/core/src/klyvaron/release-pins.mjs`. It is safe to re-run
+(already-pinned installs are left alone) and it never overwrites a locally
+retrained artifact unless `--force` is given. `--source` accepts a local
+copy of the tarball for air-gapped hosts; keep one — the pinned commit the
+URL names is an unreachable object in the origin repository and could be
+garbage-collected upstream.
+
+Native **chat** then runs in-process. Native **image, video and voice**
+inference runs through the Fabric Python worker, so the interpreter Core
+invokes needs:
+
+```bash
+pip install numpy jax av Pillow
+export AETHERIS_PYTHON=/path/to/that/python   # when `python3` is not that interpreter
+```
+
+Without the weights (or without that Python stack), the affected models
+report themselves unavailable and requests naming them are refused — nothing
+is silently substituted. Expect research-grade output: these are small
+models trained from scratch on CPUs; the model cards in `docs/model-cards/`
+state exactly what was measured.
 
 ---
 
@@ -98,7 +141,7 @@ npm install          # 62 packages, ~12 s
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 100 tests
+npm test             # 102 tests
 ```
 
 | Variable | Default | Purpose |
@@ -231,10 +274,10 @@ limitations.
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1874 tests)
-npm run test:core         # 952
-npm run test:web          # 100
-npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
+npm test                  # all three suites (1898 tests)
+npm run test:core         # 973
+npm run test:web          # 102
+npm run test:fabric       # 823 — needs numpy + pytest on the interpreter
 ```
 
 Beyond the suites, one check is run by hand rather than by CI, because it costs nine suite
@@ -287,9 +330,9 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 952 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
-| **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 100 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Core service** | 973 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Fabric** | 823 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
+| **Web app** | `npm ci`, 102 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 49-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |
 
@@ -346,16 +389,19 @@ Deterministic apart from `latencyMs`. Seeds: data `1`, model `7`. See the
 
 ## 7. Making chat actually work
 
-The active product — `npm run core`, which is `services/core/src/server.mjs` — performs
-**no local inference and downloads no models**. It sends chat to **one** configured online
-endpoint at a time, of one of three kinds: a **LiteLLM** gateway, an **Ollama** server, or a
-**llama.cpp** server (`llama-server`). All three are called the same way:
+The active product — `npm run core`, which is `services/core/src/server.mjs` —
+**downloads nothing automatically**. Chat runs against **one** configured endpoint at a
+time: an online endpoint of one of three kinds — a **LiteLLM** gateway, an **Ollama**
+server, or a **llama.cpp** server (`llama-server`) — or a first-party **Klyvaron** model
+you installed locally (§2b), which is the only inference that runs on this machine. All
+three online kinds are called the same way:
 `GET {base}/models` and `POST {base}/chat/completions`. A LiteLLM gateway always needs a
 Bearer key. Ollama and llama.cpp need one only if you set it (`llama-server --api-key`).
-Until a connection is saved, `/api/ready` reports `status: "setup_required"`
+Until a connection is saved or a local Klyvaron model is installed, `/api/ready` reports `status: "setup_required"`
 with `capabilities.chat: false`, the model list is empty, and Chat says so in a banner
 rather than failing quietly. That empty state is not a defect and no amount of
-re-signing-in changes it: it is the product waiting for a gateway or runtime.
+re-signing-in changes it: it is the product waiting for a gateway, a runtime, or a
+local model — and it never substitutes one for another.
 
 Sign in as the **owner** account (the first one created on an installation), open
 **Provider Settings**, and enter:

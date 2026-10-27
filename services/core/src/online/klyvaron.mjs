@@ -1,14 +1,18 @@
 // Klyvaron product tiers in the online architecture.
 //
-// The name on the outside is a product tier. The model on the inside is a third-party model the
-// operator configured, and every view built here names it. There are no Klyvaron weights in this
-// build, so a preset is a *pointer* to a saved connection and a model that connection already
-// lists — never a separate model, never a claim of independent training.
+// The name on the outside is a product tier. The model on the inside is whatever the
+// operator configured — a third-party model behind a saved connection, or verified
+// first-party Klyvaron weights (`klyvaron-native`) — and every view built here names
+// it. A preset is a *pointer*: to a saved connection and a model that connection
+// already lists, or to a first-party artifact that passed digest and live-inference
+// verification. It is never a separate model hiding behind the tier name.
 //
 // Three rules this module exists to keep true:
 //
-//   1. A tier is not a model. `independentWeights: false` and `provenance.kind:
-//      'third_party_api'` are facts, not UI copy that a later template can drop.
+//   1. A tier is not a model. Provenance (`kind: 'third_party_api'` with the vendor
+//      named, or `kind: 'first_party_native'` with the weights digest) is a fact
+//      computed from the record that served the request, not UI copy a later
+//      template can drop.
 //   2. The tier cannot name a vendor the operator did not save. Resolution goes through the
 //      connection store, so provenance is read from the same record the request uses.
 //   3. A tier with no preset stays unconfigured and refuses a request by name. It never falls
@@ -36,9 +40,9 @@ export const KLYVARON_TIERS = Object.freeze([
 ])
 
 export const TIER_IDS = Object.freeze(KLYVARON_TIERS.map((tier) => tier.id))
-export const MODALITIES = Object.freeze(['chat', 'image', 'video'])
+export const MODALITIES = Object.freeze(['chat', 'image', 'video', 'voice'])
 
-export const KLYVARON_NOTE = 'Klyvaron Lite, Pro and Max are product tiers, not first-party model weights. Every request is served by the third-party provider and model named in provenance.'
+export const KLYVARON_NOTE = 'Klyvaron Lite, Pro and Max are product tiers (presets), not separate model weights. A preset names either a saved third-party connection or verified first-party Klyvaron weights; the provenance on every request states which one served it.'
 
 /** The label for a tier id, or null when it is not a tier this build defines. */
 export function tierFor(id) {

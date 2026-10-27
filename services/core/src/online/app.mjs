@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { mkdirSync, existsSync, readFileSync, readdirSync, renameSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import { OnlineStore } from './store.mjs'
@@ -200,6 +200,9 @@ export class OnlineApp {
       modelsRoot: join(this.dir, 'klyvaron', 'models'),
       nativeKlyvaron: this.nativeKlyvaron,
       qualificationRegistry: this.qualificationRegistry,
+      // The multimodal worker needs the Fabric Python stack (NumPy/JAX/PyAV);
+      // AETHERIS_PYTHON names that interpreter when `python3` is not it.
+      pythonBinary: process.env.AETHERIS_PYTHON || 'python3',
     })
     this.trainingWorker = new LocalTrainingWorkerManager({ root: join(this.dir, 'klyvaron'), ledger: this.ledger })
     this.trainingController = new UserTrainingController({
@@ -304,7 +307,7 @@ export class OnlineApp {
     const workerCaps = this.trainingController.isLocalWorkerConnected()
       ? this.trainingController.workerConnection?.capabilities
       : null
-    const allModalities = [...MODALITIES, 'voice']
+    const allModalities = MODALITIES
     return {
       product: 'klyvaron',
       independentWeights: nativeSummary.readyCount + mmReadyCount > 0,
@@ -393,7 +396,7 @@ export class OnlineApp {
   setKlyvaronPreset(tier, body, session) {
     const entry = tierFor(tier)
     if (!entry) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
-    const allowedMods = [...MODALITIES, 'voice']
+    const allowedMods = MODALITIES
     if (!allowedMods.includes(body?.modality)) throw failure('invalid_modality', 'A tier preset is for chat, image, video or voice.', 400)
     if (typeof body?.connectionId !== 'string' || typeof body?.model !== 'string') throw failure('invalid_preset', 'A preset needs a saved connection and a listed model.', 400)
     if (body.connectionId === 'klyvaron-native') {
@@ -608,8 +611,8 @@ export class OnlineApp {
         params: { prompt, size, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
         subject: session.accountId,
         filenameHint: `${rec.id}-image`,
-        run: async () => {
-          const gen = await this.multimodalHost.generateImage({ modelId: rec.id, prompt, size })
+        run: async ({ signal }) => {
+          const gen = await this.multimodalHost.generateImage({ modelId: rec.id, prompt, size, signal })
           return {
             bytes: gen.buffer,
             mime: gen.mimeType,
@@ -821,13 +824,14 @@ export class OnlineApp {
         params: { prompt, aspectRatio, resolution, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
         subject: session.accountId,
         filenameHint: `${rec.id}-video`,
-        run: async () => {
+        run: async ({ signal }) => {
           const gen = await this.multimodalHost.generateVideo({
             modelId: rec.id,
             prompt,
             aspectRatio,
             resolution,
             durationMs: Number(body.durationMs ?? 2000),
+            signal,
           })
           return {
             bytes: gen.buffer,
@@ -916,19 +920,57 @@ export class OnlineApp {
     return this.multimodalHost.understandVideo({ modelId: rec.id, videoBuffer: sourceBytes, prompt: body.prompt || '' })
   }
 
-  async startVoiceSynthesis(body, session) {
+  /**
+   * Which native voice model serves a request — the same preset discipline as
+   * image and video. An explicit `tier` must have a voice preset and is never
+   * silently served by a different model; an explicit `model` names the model
+   * directly; otherwise the first verified native voice model serves.
+   */
+  voiceModelFor(body) {
+    const tier = body.tier === undefined || body.tier === null ? null : body.tier
+    if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
+    const tierPreset = tier === null ? null : this.store.klyvaronPreset(tier, 'voice')
+    if (tier !== null && !tierPreset) {
+      throw failure('klyvaron_tier_unconfigured', `${tierFor(tier).label} has no voice preset. Choose a saved connection and a listed model in Provider Settings.`, 409)
+    }
+    if (tierPreset && tierPreset.connectionId !== 'klyvaron-native') {
+      // Refuses by name for every current gateway wire (none serves voice).
+      // Should a voice wire ever exist, execution stays first-party only in
+      // this build rather than substituting models behind the tier label.
+      resolveTier({ tier, modality: 'voice', store: this.store, configFor: (id) => this.store.config(id), wireFor })
+      throw failure('capability_unavailable', `${tierFor(tier).label} voice is set to a gateway connection, but voice requests execute only on first-party Klyvaron voice models in this build.`, 409)
+    }
     const nativeReady = this.nativeMultimodalModelsFor('voice')
-    const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-voice'
+    const targetModel = tierPreset?.connectionId === 'klyvaron-native'
+      ? tierPreset.model
+      : (body.model || nativeReady[0]?.id || 'klyvaron-pro-voice')
     const rec = this.multimodalHost.records.get(targetModel)
     if (!rec || rec.modality !== 'voice') throw failure('model_unavailable', `Unknown first-party voice model '${targetModel}'.`, 409)
     if (!rec.verified) throw failure('klyvaron_model_unavailable', `Model '${targetModel}' is missing or unverified.`, 503)
+    const provenance = {
+      kind: 'first_party_native',
+      providerId: 'klyvaron-native',
+      provider: 'Klyvaron Native',
+      wire: 'klyvaron-native',
+      model: rec.id,
+      firstPartyWeights: true,
+      weightsSha256: rec.weightsSha256,
+      parameters: rec.parameterCount,
+      training: 'first_party_trained_from_scratch',
+      statement: `Served locally by verified first-party voice model ${rec.id} (SHA-256 ${rec.weightsSha256.slice(0, 16)}…).`,
+    }
+    return { tier, rec, provenance }
+  }
+
+  async startVoiceSynthesis(body, session) {
+    const { tier, rec, provenance } = this.voiceModelFor(body)
     const text = body.text ?? body.prompt
     if (typeof text !== 'string' || !text.trim()) throw failure('invalid_prompt', 'Non-empty text is required for speech synthesis.', 400)
     const context = this.contextFor(session.accountId)
     const synth = await this.multimodalHost.synthesizeSpeech({ modelId: rec.id, text })
     const job = context.media.enqueue({
       kind: 'audio',
-      params: { text, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native' },
+      params: { text, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
       subject: session.accountId,
       filenameHint: `${rec.id}-voice`,
       run: async () => ({
@@ -944,6 +986,8 @@ export class OnlineApp {
     })
     return {
       job,
+      tier,
+      provenance,
       modelId: rec.id,
       weightsSha256: synth.weightsSha256,
       durationSeconds: synth.durationSeconds,
@@ -956,11 +1000,7 @@ export class OnlineApp {
   }
 
   async transcribeVoice(body, session) {
-    const nativeReady = this.nativeMultimodalModelsFor('voice')
-    const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-voice'
-    const rec = this.multimodalHost.records.get(targetModel)
-    if (!rec || rec.modality !== 'voice') throw failure('model_unavailable', `Unknown first-party voice model '${targetModel}'.`, 409)
-    if (!rec.verified) throw failure('klyvaron_model_unavailable', `Model '${targetModel}' is missing or unverified.`, 503)
+    const { tier, rec, provenance } = this.voiceModelFor(body)
     const context = this.contextFor(session.accountId)
     let sourceBytes = null
     if (typeof body.audioBase64 === 'string' && body.audioBase64) {
@@ -972,7 +1012,8 @@ export class OnlineApp {
     if (!sourceBytes || sourceBytes.length === 0) {
       throw failure('invalid_parameters', 'Supply either audioBase64 or a valid sourceJobId for speech transcription.', 400)
     }
-    return this.multimodalHost.transcribeSpeech({ modelId: rec.id, audioBuffer: sourceBytes })
+    const transcript = await this.multimodalHost.transcribeSpeech({ modelId: rec.id, audioBuffer: sourceBytes })
+    return { ...transcript, tier, provenance }
   }
 
   async configure(body, { session, kind = 'litellm' } = {}) {
@@ -1482,12 +1523,22 @@ export class OnlineApp {
           const body = await readBody(req, { principal: session.accountId })
           const modelId = body?.modelId ?? null
           const backend = body?.backend ?? 'cpu'
+          // The id becomes a directory name below (and on a paired worker):
+          // only a canonical first-party id shape is allowed through, never
+          // a path. Owner-only does not excuse traversal — defence in depth.
+          if (modelId !== null && (typeof modelId !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(modelId))) {
+            throw failure('invalid_model', 'A qualification modelId is a first-party model id (lower-case words separated by hyphens).', 400)
+          }
           if (modelId) {
             if (this.trainingController.isLocalWorkerConnected()) {
               const out = await this.trainingController.qualifyWorkerBackend({ modelId, backend, actor: session.accountId })
               return sendJson(res, 200, out)
             }
-            const modelDir = join(this.dir, 'klyvaron', 'models', modelId)
+            const modelsRoot = join(this.dir, 'klyvaron', 'models')
+            const modelDir = join(modelsRoot, modelId)
+            if (!resolve(modelDir).startsWith(resolve(modelsRoot) + sep)) {
+              throw failure('invalid_model', 'The model directory must stay inside the Klyvaron models directory.', 400)
+            }
             if (!existsSync(modelDir)) throw failure('model_unavailable', `Model directory not found for '${modelId}'.`, 404)
             const rec = this.qualificationRegistry.qualifyModelOnHost({ capabilities: null, modelDir, backend })
             return sendJson(res, rec.qualified ? 200 : 409, rec)
@@ -1773,8 +1824,19 @@ export class OnlineApp {
         if (await contextRoutes(req, res, this, session)) return
         throw failure('not_found', 'This route is not part of the online product.', 404)
       } catch (error) {
-        if (!res.headersSent && !res.destroyed) sendJson(res, error.status ?? 400, { error: error.code ?? 'request_failed', message: error.code ? error.message : 'Request failed validation.' })
-        else if (!res.destroyed) res.end()
+        if (!res.headersSent && !res.destroyed) {
+          if (error?.code) {
+            // A coded failure is a deliberate refusal: its status and message
+            // are part of the API contract.
+            sendJson(res, error.status ?? 400, { error: error.code, message: error.message })
+          } else {
+            // An uncoded error is a bug in this service, not bad input. Say so
+            // (500), log the stack for the operator, and never dress it up as
+            // a validation failure the caller could retry their way out of.
+            process.stderr.write(`[aetheris] unhandled error on ${req.method} ${req.url}: ${error?.stack ?? error}\n`)
+            sendJson(res, 500, { error: 'internal_error', message: 'The server hit an internal error. It has been logged on the host.' })
+          }
+        } else if (!res.destroyed) res.end()
       }
     })
     server.requestTimeout = 120_000; server.headersTimeout = 15_000

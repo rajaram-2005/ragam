@@ -326,7 +326,7 @@ export class AccountStore {
        ON CONFLICT(account_id) DO UPDATE SET code_hash = excluded.code_hash, requested_at = excluded.requested_at,
          expires_at = excluded.expires_at, consumed_at = NULL`,
     ).run(row.id, hashPassword(code), now, expiresAt)
-    this.#writeResetCodes({ [row.id]: { email: row.email, code, expiresAt, requestedAt: now } })
+    this.#writeResetCode(row.id, { email: row.email, code, expiresAt, requestedAt: now })
     this.audit?.({ category: 'auth', action: 'password_reset_request', outcome: 'success', subject: row.id, detail: { expiresAt } })
     this.onResetCode?.({ email: row.email, code, expiresAt, file: this.resetFile })
     return { created: true, code, expiresAt }
@@ -348,8 +348,13 @@ export class AccountStore {
     if (verifyPassword(password, row.password_hash)) {
       throw failure('weak_password', 'Choose a password this account has not used before.', 400)
     }
+    // Validate the new password BEFORE consuming the single-use code: a
+    // person who first picks a too-short password must be able to retry with
+    // the same code instead of finding it burned by their own typo.
+    const problems = passwordProblems(password, row.email)
+    if (problems.length) throw failure('weak_password', problems.join(' '), 400)
     this.db.prepare('UPDATE password_resets SET consumed_at = ? WHERE account_id = ?').run(now, row.id)
-    this.#writeResetCodes({})
+    this.#writeResetCode(row.id, null)
     this.audit?.({ category: 'auth', action: 'password_reset_confirm', outcome: 'success', subject: row.id, detail: {} })
     return this.#setPassword(row, password)
   }
@@ -362,6 +367,26 @@ export class AccountStore {
       .run(hashPassword(password), now, row.id)
     this.audit?.({ category: 'auth', action: 'password_change', outcome: 'success', subject: row.id, detail: {} })
     return this.get(row.id)
+  }
+
+  /**
+   * Merge one account's entry into the host-readable reset code file (or
+   * remove it when `entry` is null), rewriting atomically at 0600.
+   *
+   * The file is the operator's only way to read a pending code, so it must
+   * hold every account's pending code at once: replacing the whole file for
+   * one request would silently destroy another account's still-valid code
+   * (its hash survives in the database, but the plaintext would be gone).
+   */
+  #writeResetCode(accountId, entry) {
+    let entries = {}
+    try {
+      const parsed = JSON.parse(readFileSync(this.resetFile, 'utf8'))
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) entries = parsed
+    } catch { /* missing or unreadable: start from empty */ }
+    if (entry) entries[accountId] = entry
+    else delete entries[accountId]
+    return this.#writeResetCodes(entries)
   }
 
   /** Rewrite the host-readable reset code file atomically, at 0600. */

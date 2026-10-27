@@ -11,6 +11,7 @@
   "scripts": {
     "core": "node services/core/src/server.mjs",
     "worker": "node services/core/bin/klyvaron-local-worker.mjs",
+    "install:klyvaron-models": "node services/core/scripts/install-klyvaron-models.mjs",
     "fabric": "cd services/fabric && ${AETHERIS_PYTHON:-python3} -m fabric.server",
     "web": "cd apps/web && npm run dev",
     "web:build": "cd apps/web && npm run build",

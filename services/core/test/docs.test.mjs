@@ -455,6 +455,31 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.setup, '| **Core service** | 809 tests pass'], [doc.setup, '`npm ci`, 92 tests'],
     [doc.readme, '1715 tests: core 809, web 92, fabric 814'], [doc.readme, 'All 1715 run in CI'],
     [doc.readme, '| `apps/web` | React 18 + Vite | 2,691 | 1,818 | react, react-dom | 92 |'],
+    // The 1874 total, superseded by the audit-repair suites (release pins, model
+    // installer, multimodal cancellation) and the tokenizer parity test.
+    [doc.status, '**952 / 952**'], [doc.status, '**822 / 822**'], [doc.status, '**100 / 100**'],
+    [doc.status, '**Test totals: 1874 passing'],
+    [doc.status, 'Implemented and tested (952 tests)'], [doc.status, 'Implemented and tested (822 tests)'],
+    [doc.status, 'Implemented and tested (100 tests)'],
+    [doc.setup, 'all three suites (1874 tests)'], [doc.setup, 'npm run test:core         # 952'],
+    [doc.setup, 'npm run test:web          # 100'], [doc.setup, 'npm run test:fabric       # 822 —'],
+    [doc.setup, '| **Core service** | 952 tests pass'], [doc.setup, '| **Fabric** | 822 tests pass'],
+    [doc.setup, '| **Web app** | `npm ci`, 100 tests'], [doc.setup, 'npm test             # 100 tests'],
+    [doc.security, '822 Fabric tests'],
+    [doc.readme, '1874 tests: core 952, web 100, fabric 822'], [doc.readme, 'All 1874 run in CI'],
+    // The 1896 total, superseded within the same pass by the cancel-during-finalize
+    // regression test the live verification produced.
+    [doc.status, '**971 / 971**'], [doc.status, '**Test totals: 1896 passing'],
+    [doc.status, 'Implemented and tested (971 tests)'],
+    [doc.setup, 'all three suites (1896 tests)'], [doc.setup, 'npm run test:core         # 971'],
+    [doc.setup, '| **Core service** | 971 tests pass'],
+    [doc.readme, '1896 tests: core 971, web 102, fabric 823'], [doc.readme, 'All 1896 run in CI'],
+    // The 1897 total, superseded by the tag-source fallback test for the weights installer.
+    [doc.status, '**972 / 972**'], [doc.status, '**Test totals: 1897 passing'],
+    [doc.status, 'Implemented and tested (972 tests)'],
+    [doc.setup, 'all three suites (1897 tests)'], [doc.setup, 'npm run test:core         # 972'],
+    [doc.setup, '| **Core service** | 972 tests pass'],
+    [doc.readme, '1897 tests: core 972, web 102, fabric 823'], [doc.readme, 'All 1897 run in CI'],
   ]) {
     assert.ok(!read().includes(stale), `stale suite total resurrected: ${stale}`)
   }
@@ -712,47 +737,49 @@ test('the status doc reports the real test totals', () => {
   // media workflow, the industry packs, the benchmark harness and the release verifier.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 64)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 67)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**952 / 952**'), 'core total must be stated')
-  assert.ok(status.includes('**822 / 822**'), 'fabric total must be stated')
-  assert.ok(status.includes('**100 / 100**'), 'web total must be stated')
-  assert.ok(status.includes('1874 passing'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('**973 / 973**'), 'core total must be stated')
+  assert.ok(status.includes('**823 / 823**'), 'fabric total must be stated')
+  assert.ok(status.includes('**102 / 102**'), 'web total must be stated')
+  assert.ok(status.includes('1898 passing'), 'the grand total must equal the sum of the suites')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1874 tests: core 952, web 100, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('1898 tests: core 973, web 102, fabric 823'),
     'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1874 run in CI'),
+  assert.ok(squash(doc.readme()).includes('All 1898 run in CI'),
     'README must state the same totals where it describes CI')
   assert.ok(status.includes('(42 files'), 'the file count must move with the suite')
 
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(952), `core heading must say 952, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(100), `web heading must say 100, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(973), `core heading must say 973, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(823), `fabric heading must say 823, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(102), `web heading must say 102, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1874,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1874`,
+    1898,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1898`,
   )
 })
 
 test('the setup guide describes the product that actually runs', () => {
   // §2 and §7 showed the legacy service's startup banner and told readers to install
   // Ollama and start the core with LLAMACPP_ENABLED=true. `npm run core` is the online
-  // entry: it never reads that variable, has no local runtime, and answers an unconfigured
-  // installation with setup_required. A setup guide for a different product is worse than
+  // entry: it never reads that variable, downloads nothing automatically, runs local
+  // inference only for first-party Klyvaron models the operator installed (§2b), and
+  // answers an installation with neither a saved connection nor a local model with
+  // setup_required. A setup guide for a different product is worse than
   // none -- it sends somebody to install a runtime that cannot be reached, and the report
   // that follows is "I signed in and cannot see the models or chat".
   const setup = squash(doc.setup())
   const raw = doc.setup()
   for (const claim of [
-    'performs **no local inference and downloads no models**',
+    '**downloads nothing automatically**',
     'AETHERIS_LITELLM_TRUSTED_ORIGINS=http://127.0.0.1:4000 npm run core',
     '**exact origin**',
     'endpoint_blocked',
@@ -1456,7 +1483,12 @@ test('the Markdown model card keeps the two limitation lists distinct', () => {
     'the mixed list must not come back')
 
   assert.ok(text.includes('## Reproducibility across revisions'))
-  assert.ok(text.includes('This card is therefore **not stale**: it reproduces bit-for-bit at `HEAD`.'))
+  // The bit-for-bit claim was true through the re-verification revision and stopped
+  // being true when the tokenizer was corrected (2026-10-25). The card must record
+  // that, with the re-measured figure, rather than keep claiming currency.
+  assert.ok(text.includes('no longer reproduces these weights bit-for-bit'),
+    'the Markdown card must record that bit-for-bit reproduction has ended')
+  assert.ok(text.includes('0.787269'), 'the correction must state the re-measured MRR')
   assert.ok(text.includes('`6be52b98dfdc6c4d741ff7d521541758ef512175`'),
     'the Markdown card must name the revision it was re-verified at')
 

@@ -239,7 +239,17 @@ they did not touch the pipeline, the encoder or the metrics. `latencyMs` differs
 the fourth decimal place because it is a wall-clock measurement, and both values sit
 far inside the 1.0 ms noise floor and the 25 ms hard ceiling.
 
-This card is therefore **not stale**: it reproduces bit-for-bit at `HEAD`.
+At that revision this card was **not stale**: it reproduced bit-for-bit at `HEAD`.
+
+**Correction (2026-10-25).** A tokenizer correction — the stemmed token stream now
+includes the parts of hyphenated terms, in both the Python and JavaScript stemmers —
+changed the data this configuration trains on, so the current pipeline **no longer
+reproduces these weights bit-for-bit**: the same released configuration now measures
+MRR **0.787269** against the 0.849702 recorded above. No measured value on this card
+has been altered; the card is now the record of the released artifact at its training
+revision, and re-issuing it from a fresh release run is open work. The full
+re-measurement is in the erratum in
+[docs/07](../07-improvement-cycle.md).
 
 ## Reproducing
 

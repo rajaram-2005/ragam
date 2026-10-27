@@ -51,8 +51,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip && pip install numpy jax av Pillow
           mkdir -p .aetheris-data/online/klyvaron/models
-          curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40 \
-            | tar -xz --strip-components=1 -C .aetheris-data/online/klyvaron/models
+          # Tag first (a reachable ref GitHub cannot garbage-collect), pinned commit as
+          # fallback. sha256sum -c below verifies the bytes either way.
+          curl -fsSL -o /tmp/klyvaron-weights.tar.gz https://codeload.github.com/rajaram-2005/ragam/tar.gz/refs/tags/klyvaron-weights-0.1.0 \
+            || curl -fsSL -o /tmp/klyvaron-weights.tar.gz https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40
+          tar -xzf /tmp/klyvaron-weights.tar.gz --strip-components=1 -C .aetheris-data/online/klyvaron/models
           (
             cd .aetheris-data/online/klyvaron/models
             cat klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part* > klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz
@@ -272,8 +275,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip > /dev/null && pip install numpy jax av Pillow pytest
           mkdir -p .aetheris-data/online/klyvaron/models
-          curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40 \
-            | tar -xz --strip-components=1 -C .aetheris-data/online/klyvaron/models
+          # Tag first (a reachable ref GitHub cannot garbage-collect), pinned commit as
+          # fallback. sha256sum -c below verifies the bytes either way.
+          curl -fsSL -o /tmp/klyvaron-weights.tar.gz https://codeload.github.com/rajaram-2005/ragam/tar.gz/refs/tags/klyvaron-weights-0.1.0 \
+            || curl -fsSL -o /tmp/klyvaron-weights.tar.gz https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40
+          tar -xzf /tmp/klyvaron-weights.tar.gz --strip-components=1 -C .aetheris-data/online/klyvaron/models
           (
             cd .aetheris-data/online/klyvaron/models
             cat klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part* > klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz

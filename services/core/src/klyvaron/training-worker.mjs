@@ -132,7 +132,14 @@ export class LocalTrainingWorkerManager {
     const logicalCpus = cpus().length
     const simdFlags = readCpuSimdFlags()
 
-    const candidates = ['/tmp/accel-venv/bin/python', '/tmp/fabric-venv/bin/python', 'python3']
+    // An explicit AETHERIS_PYTHON always wins over the developer-convenience
+    // venv paths and the PATH fallback.
+    const candidates = [
+      ...(process.env.AETHERIS_PYTHON ? [process.env.AETHERIS_PYTHON] : []),
+      '/tmp/accel-venv/bin/python',
+      '/tmp/fabric-venv/bin/python',
+      'python3',
+    ]
     let runtime = null
     for (const candidate of candidates) {
       if (candidate.startsWith('/') && !existsSync(candidate)) continue
@@ -404,7 +411,11 @@ export class LocalTrainingWorkerManager {
       })
     }
 
-    if (typeof consent.createdAt !== 'number' || (Date.now() - consent.createdAt) > PREFLIGHT_EXPIRY_MS) {
+    // A consent timestamp in the future is as untrustworthy as a stale one:
+    // without the skew bound, `Date.now() + 1e12` would never expire. 60s
+    // tolerates ordinary clock drift between browser and host.
+    const consentAgeMs = typeof consent.createdAt === 'number' ? Date.now() - consent.createdAt : null
+    if (consentAgeMs === null || consentAgeMs > PREFLIGHT_EXPIRY_MS || consentAgeMs < -60_000) {
       throw new TrainingWorkerError(
         'Consent is expired or missing a createdAt timestamp. A fresh consent matching the current preflight disclosureDigest is required.',
         {
@@ -412,7 +423,7 @@ export class LocalTrainingWorkerManager {
           status: 403,
           detail: {
             createdAt: consent.createdAt ?? null,
-            ageMs: typeof consent.createdAt === 'number' ? Date.now() - consent.createdAt : null,
+            ageMs: consentAgeMs,
             maxAgeMs: PREFLIGHT_EXPIRY_MS,
           },
         },
@@ -450,6 +461,13 @@ export class LocalTrainingWorkerManager {
 
     const args = [
       this.trainScript,
+      // A locally trained artifact must never carry the released version:
+      // release pins (release-pins.mjs) bind `0.1.0` to the published file
+      // digests, so a retrain installed as `0.1.0` would be refused as a
+      // forgery — and if pins were absent it would silently impersonate
+      // the release. The job-scoped suffix keeps runs distinguishable and
+      // makes a resume reinstall the same version it started.
+      '--version', `0.1.0-local.${jobId.slice(0, 8)}`,
       '--preset', prepared.plan.preset,
       '--corpus-dir', prepared.plan.corpusDir,
       '--corpus-record', prepared.plan.corpusRecord,

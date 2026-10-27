@@ -71,36 +71,36 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 36,964 source lines, 24,229 test lines
+### `services/core` — 37,336 source lines, 24,880 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
 | `hardware/detect.mjs` | 61 | OS memory, CPU features, disk and optional bounded GPU probes |
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
-| `online/accounts.mjs` | 387 | Accounts, scrypt password hashes, lockouts, throttling and host-delivered reset codes |
-| `online/app.mjs` | 1,783 | Authenticated online application, per-account context, verified native Klyvaron Pro/Max multimodal local inference, runtime qualification & manifest endpoints, and user-computer training worker controls alongside exact-model external gateway routing |
-| `online/native-klyvaron.mjs` | 469 | First-party Klyvaron Pro (27,559,946 params) and Klyvaron Max (92,077,066 params) SHA-256 verification, preset-architecture enforcement, startup live inference self-test, and fail-closed selector gating |
-| `online/context-routes.mjs` | 260 | Authenticated context and reviewed read-only tool routes |
+| `online/accounts.mjs` | 412 | Accounts, scrypt password hashes, lockouts, throttling and host-delivered reset codes |
+| `online/app.mjs` | 1,845 | Authenticated online application, per-account context, verified native Klyvaron Pro/Max multimodal local inference, runtime qualification & manifest endpoints, and user-computer training worker controls alongside exact-model external gateway routing |
+| `online/native-klyvaron.mjs` | 489 | First-party Klyvaron Pro (27,559,946 params) and Klyvaron Max (92,077,066 params) SHA-256 verification, preset-architecture enforcement, startup live inference self-test, and fail-closed selector gating |
+| `online/context-routes.mjs` | 276 | Authenticated context and reviewed read-only tool routes |
 | `online/gateway.mjs` | 222 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
 | `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
 | `online/http.mjs` | 32 | Bounded JSON requests and no-store responses |
-| `online/klyvaron.mjs` | 87 | Klyvaron product tiers in the online build: resolve a tier to a saved connection and a listed model, refuse an unconfigured tier by name, and name the third-party provider and model as provenance |
+| `online/klyvaron.mjs` | 91 | Klyvaron product tiers in the online build: resolve a tier to a saved connection and a listed model, refuse an unconfigured tier by name, and name the third-party provider and model as provenance |
 | `online/store.mjs` | 405 | Multi-connection encrypted store (schema 2): one sealed credential per connection, an active id, a store-wide revision, native first-party model selection persistence, and optional Klyvaron tier presets |
 | `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `klyvaron/format.mjs` | 721 | The Klyvaron artifact format: manifest validation, character and learned Byte-BPE vocabulary digests, differentiator head metadata, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
-| `media/jobs.mjs` | 444 | Job queue, progress, cancellation, timeouts, image/video/audio artifact storage |
+| `media/jobs.mjs` | 461 | Job queue, progress, cancellation, timeouts, image/video/audio artifact storage |
 | `klyvaron/runtime.mjs` | 1,045 | First-party `aetheris-core-v1` Transformer inference in plain JavaScript across Lite/Pro/Max: Byte-BPE + character tokenizers, int8 LUT dequantization, incremental KV-cache parity, age/state conditioning, verdict/state heads, and cancellation |
-| `klyvaron/multimodal-host.mjs` | 677 | First-party multimodal host for Klyvaron Image, Video, and Voice (`pro` & `max`): SHA-256 verification, native Python runtime execution, PNG/MP4/WAV output validation, and runtime qualification |
+| `klyvaron/multimodal-host.mjs` | 743 | First-party multimodal host for Klyvaron Image, Video, and Voice (`pro` & `max`): SHA-256 verification, native Python runtime execution, PNG/MP4/WAV output validation, and runtime qualification |
 | `klyvaron/qualification.mjs` | 257 | Persistent runtime qualification registry keyed by hardware signature, backend, runtime version, model version, and SHA-256 digest with automatic staleness invalidation |
-| `klyvaron/training-worker.mjs` | 674 | Consent-gated local training worker setup and execution manager: hardware/software inspection, stable preflight snapshot with live-resource separation, compute/license/storage/energy pre-consent disclosure, expiry-bound consent, resource re-checks, atomic checkpointing, cancellation, and recovery |
-| `klyvaron/training-controller.mjs` | 1,155 | User-computer-first training & adaptation controller: unpaired fail-closed default, 5-mode resource-aware planner across all 8 models, non-silent downgrade approval gate, 7-field training specification + disclosure consent, 120s interactive ceiling vs unbounded foundation pretraining, and hot rollback |
-| `klyvaron/local-worker.mjs` | 1,161 | Authenticated cross-platform local worker HTTP RPC server: single-use pairing handshake, constant-time Bearer token verification, realpath directory confinement, zero shell execution, and 9 typed local inference/qualification/training operations |
+| `klyvaron/training-worker.mjs` | 692 | Consent-gated local training worker setup and execution manager: hardware/software inspection, stable preflight snapshot with live-resource separation, compute/license/storage/energy pre-consent disclosure, expiry-bound consent, resource re-checks, atomic checkpointing, cancellation, and recovery |
+| `klyvaron/training-controller.mjs` | 1,163 | User-computer-first training & adaptation controller: unpaired fail-closed default, 5-mode resource-aware planner across all 8 models, non-silent downgrade approval gate, 7-field training specification + disclosure consent, 120s interactive ceiling vs unbounded foundation pretraining, and hot rollback |
+| `klyvaron/local-worker.mjs` | 1,164 | Authenticated cross-platform local worker HTTP RPC server: single-use pairing handshake, constant-time Bearer token verification, realpath directory confinement, zero shell execution, and 9 typed local inference/qualification/training operations |
 | `providers/local.mjs` | 329 | Ollama and OpenAI-compatible local providers |
 | `router/registry.mjs` | 356 | Model descriptors, capability matching, candidate scoring, tag exclusions |
-| `plugins/registry.mjs` | 613 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation, signature checks |
+| `plugins/registry.mjs` | 617 | Install/enable/disable/uninstall, scope enforcement, preflight, invocation, signature checks |
 | `mcp/layer.mjs` | 624 | Servers, tools, risk tiers, approval gates, allowlist, output neutralisation |
 | `mcp/authority.mjs` | 537 | The data/instruction boundary: provenance on every tool, plugin, resource and prompt output, an authority that only a user turn can mint, and a consequential action refused when its only reason is data — with the classifier kept as audit evidence precisely so the refusal does not depend on it |
 | `shared/timeout.mjs` | 46 | The one timeout-and-cancellation race, shared by the MCP layer and the plugin registry: a thunk so the clock starts where the work does, a `{ once: true }` abort listener so a signal cannot reject a promise nobody is waiting for, and the timer cleared on every path — with each caller supplying its own error type, because the failure's type is contract and the mechanism is not |
@@ -118,8 +118,8 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `config.mjs` | 248 | Environment → config, secret loading, `publicConfig` redaction |
 | `policy/egress.mjs` | 253 | The egress guard, runtime policies, data classes, `*` allow-all, global fetch hook |
 | `providers/klyvaron.mjs` | 295 | The first-party provider adapter: `klyvaron-chat-v1` multi-turn rendering, freshness age conditioning, local worker execution, and explicit limitations carried into every response |
-| `server.mjs` | 48 | Entry point, startup banner, graceful shutdown |
-| `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
+| `server.mjs` | 55 | Entry point, startup banner, graceful shutdown |
+| `knowledge/text.mjs` | 165 | Tokeniser, stemmer, sentence splitter, chunker |
 | `media/validate.mjs` | 199 | Magic-byte sniffing, video genuineness check |
 | `media/workflow.mjs` | 487 | Image and video generation as a workflow rather than an attempt: routed through the provider fabric so an unservable request is refused by name, authorised through the broker when the provider is external, measured from the artifact's own header (PNG/GIF/JPEG dimensions, MP4 `mvhd` duration) before it is described, and a still image returned for a video request refused as a substitution rather than delivered |
 | `klyvaron/footprint.mjs` | 137 | The footprint report a user sees: categorized bytes plus unmanaged files, against the 5 GB budget |
@@ -164,6 +164,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `packs/registry.mjs` | 277 | Installed, enabled and disabled packs; readiness measured against the provider fabric (a capability this installation cannot serve is reported by name, never substituted), application that refuses an unavailable pack unless the caller acknowledges it, and no method that grants, authorises or executes |
 | `packs/builtin.mjs` | 131 | Three shipped packs — engineering repo maintenance, legal document review (confidential, human review, "reading support, not legal advice"), grounded tutoring — each narrow, and each capability either evidenced by a file in this repository or marked unimplemented |
 | `benchmark/harness.mjs` | 254 | The measured benchmark of the adaptive core: every entry calls the real module, a failed entry is kept in the table with its error and fails the run, and a benchmark that measures nothing is refused rather than reported as zero |
+| `klyvaron/release-pins.mjs` | 104 | Frozen SHA-256 release pins for the eight first-party Klyvaron 0.1.0 artifacts; a model directory whose digests disagree with the pin for its declared released version is refused, while local retrains (`0.1.0-local.<job>`) are not pinned |
 | `release/manifest.mjs` | 284 | Release verification: one version across `VERSION` and the three packages, a dated changelog entry, documented totals compared against supplied measurements (not against each other), all 8 Pro/Max multimodal cards and run records verified present, and every shipped pack capability evidenced |
 | `providers/catalog.mjs` | 388 | The vendor catalogue: wire format, auth kind, documentation URL and a status per provider. A `ready` entry may only claim capabilities backed by a test in this repository; `gateway_only` may claim none; `pending` is refused by name. Validation is what keeps a credential field unrepresentable |
 | `providers/select.mjs` | 173 | Capability selection with reasons: strict offline refuses a remote request before candidates are considered, an unrecorded context limit does not satisfy a stated minimum, and every rejected candidate is returned with a code rather than silently dropped |
@@ -210,7 +211,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/wires/luma-video.mjs` | 109 | Luma Dream Machine: `POST /generations`, `queued`/`dreaming`/`completed`/`failed` translation, `assets.video` download without the key, and `DELETE` cancellation |
 | `providers/wires/firefly-images.mjs` | 126 | Adobe Firefly: a validated two-part OAuth client credential, an in-memory IMS token exchange and cache, `x-api-key` plus Bearer generation, and a delivery download that carries neither secret |
 
-### `services/fabric` — 17,241 source lines, 10,540 test lines
+### `services/fabric` — 17,259 source lines, 10,583 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible
@@ -221,7 +222,7 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 5,595 source lines, 2,023 test lines
+### `apps/web` — 5,599 source lines, 2,036 test lines
 
 Five area components, three sign-in pages (sign in, create account, reset
 password), the account card and the Klyvaron tier panel, a shell, shared primitives,

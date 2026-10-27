@@ -557,3 +557,35 @@ test('the account store stands alone: caps, roles, reset lifetime and a repeatab
   // Closing twice must not throw: shutdown paths are allowed to overlap.
   store.close(); store.close()
 })
+
+test('reset codes for two accounts coexist on the host, and a weak first attempt does not burn the code', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'aetheris-store-resets-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const store = new AccountStore({ dir, maxAccounts: 4 })
+  t.after(() => store.close())
+
+  const one = store.register({ email: 'one@example.test', password: 'a-long-first-password' })
+  const two = store.register({ email: 'two@example.test', password: 'a-long-second-password' })
+
+  const resetOne = store.requestReset('one@example.test')
+  const resetTwo = store.requestReset('two@example.test')
+  // The host file must hold BOTH pending codes: the second request used to
+  // overwrite the file and destroy the first account's readable code.
+  assert.equal(store.pendingResets().length, 2)
+  const onHost = JSON.parse(readFileSync(join(dir, 'password-resets.json'), 'utf8'))
+  assert.equal(onHost[one.id].code, resetOne.code)
+  assert.equal(onHost[two.id].code, resetTwo.code)
+
+  // A too-short password is refused WITHOUT consuming the single-use code:
+  // the same code must still work with an acceptable password.
+  assert.throws(
+    () => store.confirmReset({ email: 'one@example.test', code: resetOne.code, password: 'short' }),
+    (error) => error.code === 'weak_password',
+  )
+  assert.equal(store.confirmReset({ email: 'one@example.test', code: resetOne.code, password: 'a-brand-new-password' }).id, one.id)
+  // Confirming one account removes only its own host entry.
+  assert.equal(store.pendingResets().length, 1)
+  assert.equal(store.pendingResets()[0].email, 'two@example.test')
+  assert.equal(store.confirmReset({ email: 'two@example.test', code: resetTwo.code, password: 'a-brand-new-password' }).id, two.id)
+  assert.equal(store.pendingResets().length, 0)
+})

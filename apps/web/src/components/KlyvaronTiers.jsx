@@ -9,7 +9,7 @@ import { Button } from './ui.jsx'
 // party model identities (`klyvaron-pro-lm`, `klyvaron-max-lm`). Unverified first-party models are
 // never enabled until cryptographic digest verification and live generation checks pass.
 
-const MODALITIES = ['chat', 'image', 'video']
+const MODALITIES = ['chat', 'image', 'video', 'voice']
 
 export default function KlyvaronTiers({ providers, owner = false, onChanged }) {
   const [view, setView] = useState(null)
@@ -197,6 +197,9 @@ export default function KlyvaronTiers({ providers, owner = false, onChanged }) {
               consent: {
                 confirmed: true,
                 disclosureDigest: workerPlan.disclosureDigest,
+                // The worker refuses consent without a fresh timestamp
+                // (`consent_expired`); it binds this click to the plan above.
+                createdAt: Date.now(),
               },
             })
             load()
@@ -217,6 +220,7 @@ export default function KlyvaronTiers({ providers, owner = false, onChanged }) {
                 consent: {
                   confirmed: true,
                   disclosureDigest: workerPlan.disclosureDigest,
+                  createdAt: Date.now(),
                 },
               })
               load()
@@ -230,7 +234,9 @@ export default function KlyvaronTiers({ providers, owner = false, onChanged }) {
 
 function Form({ tier, modality, options, connectionId, model, models, busy, configured, onConnection, onModel, onSave, onClear }) {
   if (!options.length) {
-    return <span className="small"> Add and test a saved {modality} connection above first.</span>
+    return <span className="small"> {modality === 'voice'
+      ? 'Install and verify first-party Klyvaron voice weights first (voice presets are native-only).'
+      : `Add and test a saved ${modality} connection above first.`}</span>
   }
   return <form onSubmit={(event) => { event.preventDefault(); onSave({ connectionId, model }) }} style={{ marginTop: 4 }}>
     <select className="select" aria-label={`${tier} ${modality} connection`} value={connectionId} disabled={busy} onChange={(e) => onConnection(e.target.value)}>

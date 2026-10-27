@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Active product entry: online inference only, signed in with an account. Legacy research is not imported.
+// Active product entry: account-signed, serving gateway models and/or verified first-party Klyvaron weights. Legacy research is not imported.
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { OnlineApp } from './online/app.mjs'
@@ -37,7 +37,14 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
   if (config.cookieSameSite !== 'strict') {
     stdout(`  cookie     SameSite=${config.cookieSameSite}${config.secureCookie ? ' + Secure' : ''} — the session is sent on cross-site requests, so this app can be embedded in another site; mutations still require the x-aetheris-request header`)
   }
-  stdout('Configure an online gateway (LiteLLM, Ollama or llama.cpp server) in Provider Settings. No local inference or automatic model downloads.')
+  const nativeReady = app.nativeKlyvaron.summary().readyCount
+    + Object.values(app.multimodalHost.status().models).filter((model) => model.verified).length
+  if (nativeReady > 0) {
+    stdout(`  klyvaron   ${nativeReady} of 8 first-party models verified locally (chat in-process; image/video/voice via the Fabric Python worker)`)
+  } else {
+    stdout('  klyvaron   no first-party weights installed — run: npm run install:klyvaron-models')
+  }
+  stdout('Configure an online gateway (LiteLLM, Ollama or llama.cpp server) in Provider Settings for third-party models. Nothing is downloaded automatically.')
   const shutdown = async () => { server.closeAllConnections(); await new Promise((done) => server.close(done)); app.close() }
   return { app, server, config, shutdown, exitCode: 0 }
 }
