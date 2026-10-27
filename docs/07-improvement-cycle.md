@@ -372,10 +372,12 @@ control: the dense retriever must still be rejected, and for the same reason.
 | Selection protocol fix | `services/fabric/fabric/pipeline.py` (`base_selection`) | Implemented and tested; artifact unchanged |
 
 The fusion is **not** wired into the released model artifact as a replacement for
-it. `aetheris-lite-retriever@0.1.0` remains the released retriever and its recorded
+it. `aetheris-lite-retriever@0.1.0` remained the released retriever and its recorded
 digests are unchanged; this pass produced an accepted *candidate* improvement and
 the regression cases that guard it. Promoting it would be a separate, versioned
-release decision — see [`docs/model-cards/`](./model-cards/).
+release decision — see [`docs/model-cards/`](./model-cards/). (0.1.0 has since been
+superseded by `0.1.1` for the tokenizer correction in the erratum below; the fusion
+remains unpromoted.)
 
 ## 9. L4: does the lesson generalise across task families?
 
@@ -554,3 +556,12 @@ new figures deterministically; the recorded-outcome tests in
 `tests/test_sparsiz_cycle.py` and `tests/test_robustness.py` were re-baselined to
 them with this note as the reason. Nothing in the ledger's rules, tolerances or
 release floors changed.
+
+**Addendum (2026-10-27).** The card has been re-issued as
+[`aetheris-lite-retriever@0.1.1`](./model-cards/aetheris-lite-retriever-0.1.1.md),
+generated at `00dcb35` — the first committed revision containing the tokenizer
+correction, so its recorded `codeRevision` is a revision from which the weights
+actually reproduce. The pipeline's default `model_version` is now `0.1.1`. The
+0.1.1 card reports the same configuration's lower ordering scores and a worse
+held-out-topic result (MRR 0.012346 against 0.1.0's 0.093673); both are printed
+on the card, not summarised away.

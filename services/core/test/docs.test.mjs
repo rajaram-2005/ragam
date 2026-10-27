@@ -1401,6 +1401,8 @@ test('every documented file actually exists', () => {
     'third-party/licenses/numpy-BSD-3-Clause.txt', 'services/fabric/README.md',
     'docs/model-cards/aetheris-lite-retriever-0.1.0.md',
     'docs/model-cards/aetheris-lite-retriever-0.1.0.json',
+    'docs/model-cards/aetheris-lite-retriever-0.1.1.md',
+    'docs/model-cards/aetheris-lite-retriever-0.1.1.json',
     'apps/web/src/areas.js',
   ]) {
     assert.ok(exists(resolve(REPO, path)), `${path} is referenced by the docs but does not exist`)
@@ -1409,15 +1411,19 @@ test('every documented file actually exists', () => {
 
 test('the model card JSON is machine-readable and self-consistent', () => {
   // The file is a wrapper: { format, generatedBy, reproduce, runId, runStatus, card }.
-  const wrapper = JSON.parse(read('docs/model-cards/aetheris-lite-retriever-0.1.0.json'))
+  // The released card is 0.1.1; 0.1.0 stays committed as the superseded record and
+  // its own guards follow, because superseding an artifact is a status change and
+  // not a licence to edit what it published (same rule as the LM cards above).
+  const wrapper = JSON.parse(read('docs/model-cards/aetheris-lite-retriever-0.1.1.json'))
   assert.equal(wrapper.format, 'aetheris-model-card/1')
   assert.equal(wrapper.runStatus, 'partial', 'the run was partial: 3 of 8 stages could not execute')
-  assert.ok(wrapper.reproduce.includes('PipelineConfig(epochs=25)'), 'the card must carry its own reproduction command')
+  assert.ok(wrapper.reproduce.includes('PipelineConfig(epochs=25, model_version=\'0.1.1\')'),
+    'the card must carry its own reproduction command, naming the version it mints')
 
   const card = wrapper.card
   assert.equal(card.name, 'aetheris-lite-retriever')
-  assert.equal(card.version, '0.1.0')
-  assert.equal(card.identifier, 'aetheris-lite-retriever@0.1.0')
+  assert.equal(card.version, '0.1.1')
+  assert.equal(card.identifier, 'aetheris-lite-retriever@0.1.1')
   assert.equal(card.status, 'released')
   assert.equal(card.baseCheckpoint, null, 'trained from scratch, not a fine-tune — must stay explicit')
   assert.equal(card.licence, 'MIT')
@@ -1449,13 +1455,39 @@ test('the model card JSON is machine-readable and self-consistent', () => {
   assert.ok(card.metrics.mrr >= 0.6, 'the release floor must hold')
   assert.ok(card.metrics.latencyMs <= 25, 'the latency ceiling must hold')
 
-  // The card was generated at an older revision than HEAD, so the re-verification is
-  // what makes it current rather than stale. Pin the claim so it cannot drift.
-  const reverified = wrapper.reverifiedAt
+  // The card's own limitations are the properties of the ARTIFACT (3). The run's
+  // limitations (13) are a different list, and the Markdown card must keep them
+  // distinct rather than presenting one as the other.
+  assert.equal(card.limitations.length, 3)
+  assert.ok(card.limitations.some((text) => /trained from scratch/.test(text)))
+  assert.ok(card.limitations.some((text) => /does not generate text/.test(text)))
+  assert.ok(card.validation.softFailures.some((text) => /historicalFailures/.test(text)))
+
+  // The superseded 0.1.0 card is still an artifact of record. Its measurements were
+  // taken under the previous token stream, so the two cards must agree on the
+  // things that did not change (corpus, encoder config) and disagree on the things
+  // that did (weights, vocabulary, generation revision) — that pattern is exactly
+  // what "same configuration, corrected tokenizer" means, and it is checkable.
+  const previousWrapper = JSON.parse(read('docs/model-cards/aetheris-lite-retriever-0.1.0.json'))
+  const previous = previousWrapper.card
+  assert.equal(previousWrapper.format, 'aetheris-model-card/1')
+  assert.equal(previous.identifier, 'aetheris-lite-retriever@0.1.0')
+  assert.equal(previous.status, 'released', 'supersession is recorded around the card, not by editing its status')
+  assert.equal(previous.datasetDigest, card.datasetDigest, 'the corpus did not change')
+  assert.equal(previous.configDigest, card.configDigest, 'the encoder configuration did not change')
+  assert.notEqual(previous.weightsDigest, card.weightsDigest, 'the weights did change')
+  assert.notEqual(previous.artifacts.vocabularyDigest, card.artifacts.vocabularyDigest, 'the vocabulary did change')
+  assert.notEqual(previous.provenance.codeRevision, card.provenance.codeRevision)
+  assert.deepEqual(previous.validation.hardFailures, [], 'the superseded release also passed its gate')
+  assert.ok(previous.metrics.mrr >= 0.6)
+
+  // The 0.1.0 card was re-verified bit-for-bit at a later revision; that record
+  // stays true of the check that was run, so it stays pinned.
+  const reverified = previousWrapper.reverifiedAt
   assert.ok(reverified, 'the card must record that it was re-verified at a later revision')
   assert.equal(reverified.result, 'identical')
   assert.ok(/^[0-9a-f]{40}$/.test(reverified.codeRevision), 'the re-verification revision must be a real git SHA')
-  assert.notEqual(reverified.codeRevision, card.provenance.codeRevision,
+  assert.notEqual(reverified.codeRevision, previous.provenance.codeRevision,
     're-verification is only meaningful at a different revision than generation')
   for (const field of ['weightsDigest', 'datasetDigest', 'configDigest', 'metrics.mrr']) {
     assert.ok(reverified.fieldsCompared.includes(field), `${field} must be among the compared fields`)
@@ -1463,19 +1495,44 @@ test('the model card JSON is machine-readable and self-consistent', () => {
   assert.deepEqual(reverified.excluded, ['metrics.latencyMs'],
     'only the wall-clock measurement may be excluded, and it must be named')
 
-  // The card's own limitations are the properties of the ARTIFACT (3). The run's
-  // limitations (12) are a different list, and the Markdown card must keep them
-  // distinct rather than presenting one as the other.
-  assert.equal(card.limitations.length, 3)
-  assert.ok(card.limitations.some((text) => /trained from scratch/.test(text)))
-  assert.ok(card.limitations.some((text) => /does not generate text/.test(text)))
-  assert.ok(card.validation.softFailures.some((text) => /historicalFailures/.test(text)))
+  // And the end of that bit-for-bit claim is corrected on the card itself, with
+  // the re-measured figure and the superseding release — never by editing a
+  // measured value.
+  assert.equal(previousWrapper.corrections.length, 1, 'the ended bit-for-bit claim must be corrected on the card')
+  const [cardCorrection] = previousWrapper.corrections
+  assert.ok(cardCorrection.was.includes('bit-for-bit'), 'the correction must quote the claim it ends')
+  assert.ok(cardCorrection.now.includes('0.787269'), 'the correction must state the re-measured MRR')
+  assert.ok(cardCorrection.now.includes('aetheris-lite-retriever@0.1.1'), 'the correction must name the superseding release')
+  assert.equal(cardCorrection.measuredValuesChanged, false)
 })
 
 test('the Markdown model card keeps the two limitation lists distinct', () => {
+  // The released card is 0.1.1. Its run reported 13 limitations, one more than
+  // 0.1.0's run, because the pipeline now states the extrapolation ceiling too.
+  const current = squash(read('docs/model-cards/aetheris-lite-retriever-0.1.1.md'))
+  assert.ok(current.includes('There are **two** limitation lists, and they are not the same thing'))
+  assert.ok(current.includes('`card.limitations` (3)'))
+  assert.ok(current.includes('`run.limitations` (13)'))
+  assert.ok(!/reproduced verbatim:\s*\n\s*1\. The corpus is a generated/i.test(current),
+    'the mixed list must not come back')
+
+  // A superseding card must name what it supersedes, and carry the exact digests
+  // the machine-readable card carries — the JSON is the authority.
+  assert.ok(current.includes('Supersedes** `aetheris-lite-retriever@0.1.0`'))
+  const currentJson = JSON.parse(read('docs/model-cards/aetheris-lite-retriever-0.1.1.json'))
+  assert.ok(current.includes(currentJson.card.weightsDigest), 'the Markdown card must print the full weights digest')
+  assert.ok(current.includes(currentJson.card.provenance.codeRevision), 'the Markdown card must name its generation revision')
+  assert.ok(current.includes('## Reproducibility across revisions'))
+
+  // The competitor-comparison limitation belongs to the RUN record, verbatim.
+  assert.ok(current.includes('no comparison against Mistral, Qwen, Llama, Gemma or DeepSeek was possible'))
+  // And so does the losing condition, worse than 0.1.0's, with the exact numbers.
+  assert.ok(current.includes('under a held-out-TOPIC split'))
+  assert.ok(current.includes('MRR 0.012346 against BM25 0.382011'))
+
+  // 0.1.0's Markdown card stays the record of that artifact, corrected where its
+  // bit-for-bit claim ended and pointing at its replacement.
   const text = squash(read('docs/model-cards/aetheris-lite-retriever-0.1.0.md'))
-  // It previously presented ten items as "recorded by the pipeline, reproduced
-  // verbatim" — a list that was neither the card's three nor the run's twelve.
   assert.ok(text.includes('There are **two** limitation lists, and they are not the same thing'))
   assert.ok(text.includes('`card.limitations` (3)'))
   assert.ok(text.includes('`run.limitations` (12)'))
@@ -1491,10 +1548,8 @@ test('the Markdown model card keeps the two limitation lists distinct', () => {
   assert.ok(text.includes('0.787269'), 'the correction must state the re-measured MRR')
   assert.ok(text.includes('`6be52b98dfdc6c4d741ff7d521541758ef512175`'),
     'the Markdown card must name the revision it was re-verified at')
-
-  // The competitor-comparison limitation belongs to the RUN record, verbatim.
+  assert.ok(text.includes('Superseded 2026-10-27'), 'the superseded card must say so, dated')
   assert.ok(text.includes('no comparison against Mistral, Qwen, Llama, Gemma or DeepSeek was possible'))
-  // And so does the losing condition, with the exact measured numbers.
   assert.ok(text.includes('under a held-out-TOPIC split'))
   assert.ok(text.includes('MRR 0.093673 against BM25 0.382011'))
 })

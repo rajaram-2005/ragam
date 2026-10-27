@@ -244,7 +244,7 @@ def test_the_held_out_topic_limitation_is_recorded_not_hidden(completed_run):
 def test_release_is_gated_on_validation(completed_run):
     pipeline, record = completed_run
     detail = next(s for s in record.stages if s["name"] == "release")["detail"]
-    assert detail["identifier"] == "aetheris-lite-retriever@0.1.0"
+    assert detail["identifier"] == "aetheris-lite-retriever@0.1.1"
     assert detail["statusAfterValidation"] in (ModelStatus.VALIDATED, ModelStatus.RELEASED)
     assert detail["metrics"]["mrr"] >= pipeline.config.min_mrr
     assert detail["requirements"], "the gate must be explicit requirements, not a judgement call"

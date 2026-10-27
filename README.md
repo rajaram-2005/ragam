@@ -151,7 +151,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 37,336 | 24,880 | **zero npm packages** | 973 |
+| `services/core` | Node 22 ESM | 37,336 | 24,935 | **zero npm packages** | 973 |
 | `services/fabric` | Python 3.11 | 17,259 | 10,583 | NumPy only | 823 |
 | `apps/web` | React 18 + Vite | 5,599 | 2,036 | react, react-dom | 102 |
 
@@ -269,17 +269,18 @@ models remain release gates. See [the policy and acceptance matrix](docs/13-hard
 
 ### The retriever
 
-**`aetheris-lite-retriever@0.1.0`**, a 18,784-parameter dual encoder trained from
+**`aetheris-lite-retriever@0.1.1`**, a 18,928-parameter dual encoder trained from
 scratch by a hand-written NumPy Adam loop whose five parameter gradients all match
 central finite differences to ~3e-10. Trained from scratch, not a fine-tune:
 `baseCheckpoint: null`.
 
-On held-out queries at low lexical overlap it scores **MRR 0.8497 against BM25's
-0.3352** (+153.5%), with an untrained control at 0.0500. The experiment ledger
-verdict is `accept`. (2026-10-25: a tokenizer correction changed the token stream
-this model trains on; the same release configuration now measures MRR 0.7873, and
-the model card — the record of the released weights above — carries the correction.
-See the erratum in [docs/07](docs/07-improvement-cycle.md).)
+On held-out queries at low lexical overlap it scores **MRR 0.7873 against BM25's
+0.3352** (+134.9%), with an untrained control at 0.0583. The experiment ledger
+verdict is `accept`. It supersedes `0.1.0` (MRR 0.8497, +153.5%, control 0.0500):
+a 2026-10-25 tokenizer correction changed the token stream this model trains on,
+the same configuration re-measured lower, and the card was re-issued rather than
+edited — 0.1.0's card stands as the record of those weights. See the erratum in
+[docs/07](docs/07-improvement-cycle.md) and the two model cards.
 
 > **This is not a claim that Aetheris beats Mistral, Qwen, Llama, Gemma or
 > DeepSeek.** None of those could be installed on this host, so no such comparison
@@ -294,7 +295,8 @@ guard metric doing its job.
 
 Full numbers, conditions, fairness controls and reproduction commands:
 [`docs/06-benchmarks.md`](docs/06-benchmarks.md).
-Model card: [`docs/model-cards/aetheris-lite-retriever-0.1.0.md`](docs/model-cards/aetheris-lite-retriever-0.1.0.md).
+Model card: [`docs/model-cards/aetheris-lite-retriever-0.1.1.md`](docs/model-cards/aetheris-lite-retriever-0.1.1.md)
+(superseding 0.1.0, whose card stands as the record of those weights).
 
 Three of eight pipeline stages are **blocked** on this host — SFT, preference
 optimization and distillation all need weights, and the first and third need a GPU.

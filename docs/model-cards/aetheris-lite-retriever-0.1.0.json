@@ -170,7 +170,7 @@
     {
       "date": "2026-10-25",
       "was": "This card is therefore not stale: it reproduces bit-for-bit at HEAD.",
-      "now": "The card reproduced bit-for-bit through the reverifiedAt revision. A 2026-10-25 tokenizer correction (the stemmed token stream now includes the parts of hyphenated terms, in both the Python and JavaScript stemmers) changed the data this configuration trains on, so the current pipeline no longer reproduces these weights bit-for-bit: the same released configuration now measures MRR 0.787269 against the 0.849702 recorded on this card. The card remains the record of the released artifact at its training revision; re-issuing it from a fresh release run is open work, recorded in docs/07-improvement-cycle.md (erratum, 2026-10-25).",
+      "now": "The card reproduced bit-for-bit through the reverifiedAt revision. A 2026-10-25 tokenizer correction (the stemmed token stream now includes the parts of hyphenated terms, in both the Python and JavaScript stemmers) changed the data this configuration trains on, so the current pipeline no longer reproduces these weights bit-for-bit: the same released configuration now measures MRR 0.787269 against the 0.849702 recorded on this card. The card was re-issued as aetheris-lite-retriever@0.1.1 on 2026-10-27 (generated at 00dcb35ecfa036d6de595f017b7f45ade2eb2eb7, the first revision containing the tokenizer correction); this 0.1.0 card is retained unchanged as the superseded record of the released artifact at its training revision, per docs/07-improvement-cycle.md (erratum, 2026-10-25).",
       "measuredValuesChanged": false
     }
   ]
