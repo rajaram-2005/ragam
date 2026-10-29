@@ -11,7 +11,7 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test inventory: 1875 cases across the three suites.** This deployment increment did not rerun the full Core or Fabric suites. The previous full local Core attempt had 11 environment-dependent failures: six require genuine Pro/Max model artifacts absent from this checkout, and five require NumPy in the default system Python. No model artifacts were fabricated and no training was run. The deployment-focused Core/account/docs suites and the full Web suite were rerun for this change.
+**Test totals: 1875 cases across the three suites.** This deployment increment did not rerun the full Core or Fabric suites. The previous full local Core attempt had 11 environment-dependent failures: six require genuine Pro/Max model artifacts absent from this checkout, and five require NumPy in the default system Python. No model artifacts were fabricated and no training was run. The deployment-focused Core/account/docs suites and the full Web suite were rerun for this change.
 
 | Suite | Command | Result |
 |---|---|---|
