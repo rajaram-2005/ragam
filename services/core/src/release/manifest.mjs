@@ -87,18 +87,21 @@ export function digestOf(text) {
 /**
  * Extract the suite totals a status document states.
  *
- * Deliberately strict about the shape: `**775 / 775**` and `**Test totals: 1681 passing`. A
- * verifier that guessed at near-misses would pass documents whose numbers were nearly right.
+ * Accepts the historical pass-count form (`**775 / 775**`, `**Test totals: 1681 passing`) and
+ * the inventory form (`**775 tests**`, `**Test inventory: 1681 cases**`). The latter avoids
+ * claiming every test passed when a local run was blocked by environment prerequisites. A verifier
+ * that guessed at near-misses would pass documents whose numbers were nearly right.
  */
 export function parseStatusTotals(statusDoc = '') {
-  const core = /\*\*(\d[\d,]*) \/ \1\*\*/.exec(statusDoc)
-  const total = /\*\*Test totals: (\d[\d,]*) passing/.exec(statusDoc)
-  const perSuite = [...statusDoc.matchAll(/\| `(services\/core|services\/fabric|apps\/web)` \|[^|]*\| \*\*(\d[\d,]*) \/ \2\*\*/g)]
-    .map((match) => [match[1], Number(match[2].replace(/,/g, ''))])
+  const legacyCore = /\*\*(\d[\d,]*) \/ \1\*\*/.exec(statusDoc)
+  const total = /\*\*(?:Test totals: (\d[\d,]*) passing|Test inventory: (\d[\d,]*) cases)\b/.exec(statusDoc)
+  const perSuite = [...statusDoc.matchAll(/\| `(services\/core|services\/fabric|apps\/web)` \|[^|]*\| \*\*(?:(\d[\d,]*) \/ \2|(\d[\d,]*) tests?)\*\*/g)]
+    .map((match) => [match[1], Number((match[2] ?? match[3]).replace(/,/g, ''))])
+  const suites = Object.fromEntries(perSuite)
   return {
-    core: core ? Number(core[1].replace(/,/g, '')) : null,
-    total: total ? Number(total[1].replace(/,/g, '')) : null,
-    suites: Object.fromEntries(perSuite),
+    core: suites['services/core'] ?? (legacyCore ? Number(legacyCore[1].replace(/,/g, '')) : null),
+    total: total ? Number((total[1] ?? total[2]).replace(/,/g, '')) : null,
+    suites,
   }
 }
 

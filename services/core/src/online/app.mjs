@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { mkdirSync, existsSync, readFileSync, readdirSync, renameSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { OnlineStore } from './store.mjs'
 import { OnlineGateway, gatewayUrl, failure, runtimeFor } from './gateway.mjs'
 import { readBody, sendJson } from './http.mjs'
@@ -123,7 +123,7 @@ export function readInstallationDoc(name) {
 
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null }) {
+  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null, logger = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
     // should refuse without leaving a half-written data directory behind.
     const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
@@ -137,6 +137,8 @@ export class OnlineApp {
       throw new Error('SameSite=None requires a Secure cookie: browsers discard it without one, so every session would end at the first request. Set AETHERIS_COOKIE_SECURE=true, or use strict or lax (AETHERIS_COOKIE_SAMESITE)')
     }
     this.cookieSameSite = sameSite
+    this.logger = typeof logger === 'function' ? logger : () => {}
+    this.trustedWebOrigins = new Set(trustedWebOrigins)
     this.dir = resolve(dataDir); mkdirSync(this.dir, { recursive: true, mode: 0o700 })
     this.store = new OnlineStore(this.dir)
     this.gateway = new OnlineGateway({ trustedOrigins, timeoutMs })
@@ -1360,6 +1362,10 @@ export class OnlineApp {
   }
   server() {
     const server = createServer(async (req, res) => {
+      const incomingRequestId = req.headers['x-request-id']
+      const requestId = typeof incomingRequestId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(incomingRequestId)
+        ? incomingRequestId : randomUUID()
+      res.setHeader('x-request-id', requestId)
       const controller = new AbortController()
       res.on('close', () => { if (!res.writableEnded) controller.abort() })
       try {
@@ -1368,7 +1374,12 @@ export class OnlineApp {
         // Browser mutations require same-origin and a non-simple custom header.
         if (!['GET','HEAD'].includes(req.method)) {
           if (req.headers['x-aetheris-request'] !== '1' || req.headers['sec-fetch-site'] === 'cross-site') throw failure('csrf_rejected', 'Use the same-origin application.', 403)
-          if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host) throw failure('origin_rejected', 'Cross-origin request refused.', 403)
+          if (req.headers.origin) {
+            let parsedOrigin
+            try { parsedOrigin = new URL(req.headers.origin) } catch { throw failure('origin_rejected', 'Invalid request origin.', 403) }
+            const sameHost = parsedOrigin.host === req.headers.host
+            if (!sameHost && !this.trustedWebOrigins.has(parsedOrigin.origin)) throw failure('origin_rejected', 'Cross-origin request refused.', 403)
+          }
         }
         // --- public auth surface: traditional pages, email address and password ----
         // There is exactly one way in. The operator access-token file, its login route
@@ -1773,7 +1784,28 @@ export class OnlineApp {
         if (await contextRoutes(req, res, this, session)) return
         throw failure('not_found', 'This route is not part of the online product.', 404)
       } catch (error) {
-        if (!res.headersSent && !res.destroyed) sendJson(res, error.status ?? 400, { error: error.code ?? 'request_failed', message: error.code ? error.message : 'Request failed validation.' })
+        const hasSafeCode = typeof error?.code === 'string' && /^[A-Za-z][A-Za-z0-9_]{1,63}$/.test(error.code)
+        const hasApplicationErrorShape = hasSafeCode && (
+          (Number.isInteger(error.status) && error.status >= 400 && error.status <= 599)
+          || (typeof error.name === 'string' && error.name !== 'Error')
+          || /^[a-z][a-z0-9_]{1,63}$/.test(error.code)
+        )
+        const safeApplicationFailure = hasApplicationErrorShape
+        const status = safeApplicationFailure
+          ? (Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 400)
+          : 500
+        const errorCode = safeApplicationFailure ? error.code : 'internal_error'
+        try {
+          this.logger({
+            event: ['invalid_credentials', 'account_locked'].includes(errorCode) ? 'authentication_failed' : 'http_request_failed',
+            requestId,
+            method: req.method ?? 'UNKNOWN',
+            status,
+            errorCode,
+          })
+        } catch { /* logging must not change the API result */ }
+        const message = safeApplicationFailure ? error.message : 'The request could not be completed.'
+        if (!res.headersSent && !res.destroyed) sendJson(res, status, { error: errorCode, message })
         else if (!res.destroyed) res.end()
       }
     })

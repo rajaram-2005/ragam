@@ -5,6 +5,9 @@
   "type": "module",
   "description": "Aetheris Omni web app — exactly five product areas",
   "license": "MIT",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

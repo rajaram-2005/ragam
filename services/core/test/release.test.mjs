@@ -157,6 +157,8 @@ test('assertReleasable throws a ReleaseError carrying every problem', () => {
 
 test('the parsers read the documented forms exactly and report absence rather than guessing', () => {
   assert.deepEqual(parseStatusTotals(GOOD_STATUS), { core: 700, total: 1_590, suites: { 'services/core': 700, 'services/fabric': 800, 'apps/web': 90 } })
+  const inventoryStatus = readFileSync(resolve(REPO, 'docs/03-status.md'), 'utf8')
+  assert.deepEqual(parseStatusTotals(inventoryStatus), { core: 952, total: 1_875, suites: { 'services/core': 952, 'services/fabric': 822, 'apps/web': 101 } })
   assert.deepEqual(parseStatusTotals('nothing here'), { core: null, total: null, suites: {} })
   assert.deepEqual(parseReadmeTotals(GOOD_README), { total: 1_590, core: 700, web: 90, fabric: 800 })
   assert.equal(parseReadmeTotals('no numbers'), null)

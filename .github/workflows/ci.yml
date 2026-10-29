@@ -204,6 +204,12 @@ jobs:
         working-directory: apps/web
         run: npm ci
 
+      - name: Check deployment entrypoints
+        run: |
+          node --check 'apps/web/api/[...path].js'
+          node --check scripts/production-smoke.mjs
+          node --check services/core/src/server.mjs
+
       - name: Test
         working-directory: apps/web
         run: node --test test/*.test.mjs

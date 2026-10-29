@@ -11,14 +11,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1874 passing, 0 failing.**
+**Test inventory: 1875 cases across the three suites.** This deployment increment did not rerun the full Core or Fabric suites. The previous full local Core attempt had 11 environment-dependent failures: six require genuine Pro/Max model artifacts absent from this checkout, and five require NumPy in the default system Python. No model artifacts were fabricated and no training was run. The deployment-focused Core/account/docs suites and the full Web suite were rerun for this change.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **952 / 952** (64 files, ~500 s with live multimodal E2E) |
-| `services/fabric` | `pytest -q` | **822 / 822** (42 files, ~3.5 min) |
-| `apps/web` | `node --test test/*.test.mjs` | **100 / 100** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | production bundle, single chunk, no warnings |
+| `services/core` | `node --test test/*.test.mjs` | **952 tests** (64 files; previous full local attempt: 941 pass, 11 environment-dependent failures). Current focused account/online/docs run: **96 / 96 pass** |
+| `services/fabric` | `pytest -q` | **822 tests** (42 files; prior recorded run was green; not rerun for this deployment change) |
+| `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; rerun for this change) |
+| `apps/web` build | `vite build` | production bundle built successfully; rerun for this change |
 
 **Released first-party Klyvaron Pro and Max multimodal artifacts (all 8 trained from scratch, `baseCheckpoint: null`, verified by SHA-256 on load):**
 
@@ -383,7 +383,7 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (100 tests)
+### `apps/web` — Implemented and tested (101 tests)
 
 | Area | Status |
 |---|---|
