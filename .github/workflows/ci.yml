@@ -210,6 +210,26 @@ jobs:
           node --check scripts/production-smoke.mjs
           node --check services/core/src/server.mjs
 
+      - name: Build Render Core image and verify disk permissions
+        run: |
+          set -euo pipefail
+          docker build --tag ragam-core:ci .
+          mount_dir=$(mktemp -d)
+          trap 'rm -rf "$mount_dir" /tmp/ragam-no-disk.log' EXIT
+          output=$(docker run --rm --volume "$mount_dir:/var/data" ragam-core:ci id -u)
+          app_uid=$(printf '%s\n' "$output" | tail -n 1)
+          disk_uid=$(stat -c '%u' "$mount_dir")
+          if [ "$app_uid" = 0 ] || [ "$disk_uid" != "$app_uid" ]; then
+            echo "::error::Docker entrypoint did not hand the mounted disk to an unprivileged app user"
+            printf 'app uid=%s disk uid=%s\n' "$app_uid" "$disk_uid"
+            exit 1
+          fi
+          if docker run --rm ragam-core:ci id -u >/tmp/ragam-no-disk.log 2>&1; then
+            echo "::error::Core image started without the required persistent disk"
+            exit 1
+          fi
+          grep -F 'persistent disk is not mounted at /var/data' /tmp/ragam-no-disk.log
+
       - name: Test
         working-directory: apps/web
         run: node --test test/*.test.mjs

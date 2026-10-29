@@ -1,21 +1,21 @@
+# Use Docker instead of Render's native Node runtime so the root-owned disk can
+# be handed to the unprivileged app user before Core starts.
 services:
   - type: web
-    name: ragam-core
-    runtime: node
+    name: ragam-core-docker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     plan: starter
     region: singapore
     autoDeploy: false
     numInstances: 1
-    buildCommand: node --check services/core/src/server.mjs && node --check services/core/src/online/app.mjs
-    startCommand: node services/core/src/server.mjs
     healthCheckPath: /api/health
     disk:
       name: ragam-core-data
       mountPath: /var/data
       sizeGB: 1
     envVars:
-      - key: NODE_VERSION
-        value: 22.22.3
       - key: NODE_ENV
         value: production
       - key: AETHERIS_CORE_HOST

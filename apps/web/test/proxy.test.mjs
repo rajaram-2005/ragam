@@ -28,9 +28,18 @@ test('Vercel proxy preserves bodies, cookies, status, streaming, and fails close
   assert.equal(vercel.functions['api/**/*.js'].maxDuration, 60)
   const render = readFileSync(new URL('../../../render.yaml', import.meta.url), 'utf8')
   assert.match(render, /autoDeploy: false/)
+  assert.match(render, /runtime: docker/)
+  assert.match(render, /dockerfilePath: \.\/Dockerfile/)
+  assert.match(render, /dockerContext: \./)
   assert.match(render, /healthCheckPath: \/api\/health/)
   assert.match(render, /mountPath: \/var\/data/)
   assert.match(render, /value: \/var\/data\/online/)
+  const dockerfile = readFileSync(new URL('../../../Dockerfile', import.meta.url), 'utf8')
+  const entrypoint = readFileSync(new URL('../../../docker-entrypoint.sh', import.meta.url), 'utf8')
+  assert.match(dockerfile, /ENTRYPOINT \["\/usr\/local\/bin\/ragam-render-entrypoint"\]/)
+  assert.match(entrypoint, /chown -R node:node/)
+  assert.match(entrypoint, /exec gosu node:node/)
+  assert.match(entrypoint, /refusing to start/)
 
   let seen = null
   const upstream = createServer(async (req, res) => {

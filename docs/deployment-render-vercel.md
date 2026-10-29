@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This is the deployment procedure for the checked-in configuration; it is not evidence of a live deployment. No Render service, disk, Vercel project, production URL, production account, backup, or restore has been provisioned or verified by this repository change. Render's Starter service and persistent disk may incur charges. Review the plan, disk capacity, and account permissions before applying the Blueprint.
+This is the deployment procedure for the checked-in configuration; it is not evidence of a working production system. A native Node Render service was attempted, but startup failed with `EACCES` while creating `/var/data/online`; it has not passed a Core health check. The Vercel `ragam` project exists and the current branch has a ready Preview deployment, but no successful end-to-end Core path, persistent-disk durability test, backup, or restore has been verified. The updated Blueprint uses a Docker service to correct the disk ownership before dropping to the unprivileged app user. Render's Starter service and persistent disk may incur charges. Review the plan, disk capacity, and account permissions before applying the Blueprint.
 
 The deployment must be performed manually after the GitHub checks are green. `render.yaml` sets `autoDeploy: false`; pushing source does not authorize or trigger a production deploy.
 
@@ -13,7 +13,8 @@ The deployment must be performed manually after the GitHub checks are green. `re
 ## Audited application facts
 
 - Active Core entry point: `node services/core/src/server.mjs`; it starts the real `OnlineApp` in `services/core/src/online/app.mjs`.
-- Runtime: Node 22. `services/core` uses Node built-ins only, including `node:sqlite`; no Core `npm ci` is required. Vercel's `apps/web` project is pinned to Node 22 by its package `engines` field.
+- Runtime: the Render image pins Node 22.22.3. `services/core` uses Node built-ins only, including `node:sqlite`; no Core `npm ci` is required. Vercel's `apps/web` project is pinned to Node 22 by its package `engines` field.
+- Disk ownership: Render's persistent-disk mount root is root-owned. The Docker entrypoint checks that `/var/data` is actually mounted, changes ownership of the disk to the image's `node` user when needed, then uses `gosu` to drop privileges before starting Core. A missing disk fails closed instead of silently writing to ephemeral storage.
 - Frontend: React/Vite in `apps/web`; `npm ci`, `npm run build`, output `dist/`. Browser API calls are relative `/api/...` paths.
 - Active account data: `accounts.sqlite` (SQLite), provider configuration and its master key, audit ledger, and per-account memory/knowledge stores under `AETHERIS_ONLINE_DATA_DIR`. Parent directory is created with restrictive permissions; SQLite account DB is WAL-backed and mode 0600.
 - Authentication routes: `GET /api/auth`, `POST /api/auth/register`, `POST /api/auth/login`, and authenticated `POST /api/auth/logout`. `GET /api/health` is a public liveness check; `/api/ready` is authenticated and reports application readiness, so Render uses `/api/health`.
@@ -36,18 +37,19 @@ The proxy does not take an upstream host from the incoming request. It forwards 
 
 1. Review this branch and wait for the repository's GitHub CI checks to pass. The Render Blueprint is manual (`autoDeploy: false`).
 2. Confirm the Render account, region, Starter plan and persistent disk are approved. The Blueprint requests a 1 GB disk; production data/media volume has not been measured. Set an appropriate capacity before real use.
-3. Confirm the repository's root-level `render.yaml` is the Blueprint source. Render runs build/start commands from the repository root; there is intentionally no root lockfile or Core install command.
+3. Confirm the repository's root-level `render.yaml` is the Blueprint source and the reviewed branch contains `Dockerfile`, `docker-entrypoint.sh`, and `.dockerignore`. The Docker build context is the repository root and intentionally installs no npm dependencies for Core.
 4. Resolve the public-registration/owner-bootstrap blocker above before any public production rollout. For isolated validation only, use a dedicated synthetic owner and a separate dedicated smoke-test member; never use a personal account for automated smoke checks.
 
 ## 2. Render Core and persistent disk
 
 1. In Render, create a Blueprint deployment from the reviewed GitHub branch and inspect the service plan and disk before applying it. Do not accept charges without approval.
-2. Confirm the service is named `ragam-core`, runs Node 22 in Singapore, has one instance, has `autoDeploy` disabled, and mounts the named disk at `/var/data`.
-3. Confirm the Core data directory is `/var/data/online`. Render injects `PORT`; Core binds `AETHERIS_CORE_HOST=0.0.0.0` and uses `PORT` when `AETHERIS_CORE_PORT` is unset.
-4. Set `AETHERIS_TRUSTED_WEB_ORIGINS` to the exact production Vercel origin after the Vercel project and production domain are known, for example `https://ragam.example`. Use no wildcard, path, trailing slash, or preview hostname. This is a browser-origin allowlist, separate from provider destination allowlists.
-5. Keep `AETHERIS_COOKIE_SECURE=true` and `AETHERIS_COOKIE_SAMESITE=strict`. Do not set `AETHERIS_COOKIE_SAMESITE=none` for this same-origin proxy design.
-6. Check Render logs for the structured `core_started` event and confirm its `dataDir` is `/var/data/online`. The current configuration does not set `AETHERIS_CORE_PORT`, so the injected `PORT` is used.
-7. Check `https://<render-service-host>/api/health` returns HTTP 200 with the non-sensitive `status: ok` response. This proves the process is answering, not that a mounted disk has been tested for durability.
+2. The Blueprint creates `ragam-core-docker` using the Docker runtime, pinned Node 22.22.3 image, one instance in Singapore, `autoDeploy: false`, and a 1 GB disk mounted at `/var/data`.
+3. **Replacing an existing native Node service:** Render does not allow changing a service's runtime from native Node to Docker in place. Create this Docker service as the separate `ragam-core-docker` service; do not attach the old service's disk to both. Keep the old service until the new one passes health and proxy checks and its data status is understood. The old failed service may continue to incur charges while both exist; remove it only after confirming it contains no needed data and approving the change.
+4. The Docker entrypoint requires `/var/data` to be a mounted filesystem. It assigns that disk to the `node` user when its owner differs, then drops root privileges with `gosu`; Core runs as `node`, not root. The Core data directory is `/var/data/online`. Render injects `PORT`; Core uses it when `AETHERIS_CORE_PORT` is unset.
+5. Set `AETHERIS_TRUSTED_WEB_ORIGINS` to the exact Vercel origin you intend to test. For the current branch Preview, add its exact `https://...vercel.app` origin; add the production Vercel origin only when production is ready. Use no wildcard, path, or trailing slash. This browser-origin allowlist is separate from provider destination allowlists.
+6. Keep `AETHERIS_COOKIE_SECURE=true` and `AETHERIS_COOKIE_SAMESITE=strict`. Do not set `AETHERIS_COOKIE_SAMESITE=none` for this same-origin proxy design.
+7. Check Render logs for `core_started` and `dataDir: /var/data/online`. The entrypoint should first report ownership repair only on the initial startup (or when the disk owner changes). The current config leaves `AETHERIS_CORE_PORT` unset, so the injected `PORT` is used.
+8. Check `https://<render-service-host>/api/health` returns HTTP 200 with the non-sensitive `status: ok` response. This proves the process is answering, not that the mounted disk has been tested for durability.
 
 ## 3. Vercel frontend and API function
 
@@ -59,9 +61,9 @@ The proxy does not take an upstream host from the incoming request. It forwards 
    CORE_API_URL=https://<render-service-host>
    ```
 
-   Use the exact HTTPS origin Render assigned, without a path or trailing slash. Set it for Production. Do not prefix it with `VITE_` and do not put it into browser build-time variables. Preview domains are not trusted by Render unless each exact origin is deliberately added to `AETHERIS_TRUSTED_WEB_ORIGINS`.
+   Use the exact HTTPS origin Render assigned, without a path or trailing slash. Set it for Preview first. Add a Production-target value only after production readiness and the owner-bootstrap blocker are resolved. Do not prefix it with `VITE_` or put it into browser build-time variables. Preview domains are not trusted by Render unless each exact origin is deliberately added to `AETHERIS_TRUSTED_WEB_ORIGINS`.
 
-4. Deploy the frontend only after the intended production Vercel origin is added to Render's trusted web origins. Verify `https://<vercel-production-host>/api/health` returns the Core health response through the Vercel function.
+4. Redeploy the Preview only after its exact origin is added to Render's trusted web origins. Verify `https://<vercel-preview-host>/api/health` returns the Core health response through the Vercel function. Do not promote to Production while Core has not passed the security, persistence, and smoke-test gates.
 5. Do not use permissive CORS as a workaround. The same-origin `/api` proxy is the browser-facing API route.
 
 ## 4. Smoke checks (only after owner bootstrap is secured)
@@ -105,7 +107,9 @@ Core emits JSON records for startup, shutdown, configuration failures, and API e
 
 | Symptom | Check |
 |---|---|
-| Render health check fails | Render logs for `core_startup_failed`; check Node 22, injected `PORT`, mount permissions, and `AETHERIS_ONLINE_DATA_DIR` |
+| `EACCES` creating `/var/data/online` | The native Node service cannot write to Render's root-owned disk mount. Do not make the volume world-writable or move app state to ephemeral storage. Deploy the Docker runtime from `render.yaml`; its root entrypoint fixes ownership and immediately drops to `node`. Runtime is immutable on an existing Render service, so use a replacement Docker service and switch Vercel only after checks pass |
+| Entrypoint says the disk is not mounted | Attach the persistent disk at exactly `/var/data`, then redeploy. The container intentionally fails closed instead of writing application state to ephemeral storage |
+| Render health check fails | Render logs for `core_startup_failed`; check Node 22, injected `PORT`, disk attachment at `/var/data`, and `AETHERIS_ONLINE_DATA_DIR` |
 | Vercel `/api/health` returns 503 | `CORE_API_URL` is missing, malformed, non-HTTPS, or has a path/trailing slash |
 | Mutations return 403 | `AETHERIS_TRUSTED_WEB_ORIGINS` must exactly match the browser's production origin; keep the CSRF marker and `Sec-Fetch-Site` forwarding enabled |
 | Sign-in works but next request is 401 | Confirm the browser receives the `Secure`, `HttpOnly`, `SameSite=Strict`, `/api` cookie through Vercel; sign in again after a Core restart |
@@ -114,4 +118,4 @@ Core emits JSON records for startup, shutdown, configuration failures, and API e
 
 ## Verification status
 
-Repository-level verification includes the Core port/cookie/origin/sign-in/API/logout/restart smoke test, a proxy test for body/cookie/status/streaming/path/timeout/error behavior, the web suite, and the Vite build. It does not prove Render Blueprint acceptance, Vercel deployment, a production URL, real persistent-disk durability, backups, or live authentication. Run the deployment and persistence steps above before claiming production readiness.
+Repository-level verification includes the Core port/cookie/origin/sign-in/API/logout/restart smoke test, the Vercel proxy contract tests, the web suite, the Vite build, and static checks for the Docker ownership/drop-privileges contract. The current native Node Render service has failed startup with `EACCES`; this branch's Docker replacement has not yet been deployed to Render. A Vercel Preview deployment exists, but no successful end-to-end Core path, real persistent-disk durability test, backups, restore, or live authentication has been verified. Run the replacement-service and persistence steps above before claiming production readiness.
