@@ -11,14 +11,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1875 cases across the three suites.** This deployment increment did not rerun the full Core or Fabric suites. The previous full local Core attempt had 11 environment-dependent failures: six require genuine Pro/Max model artifacts absent from this checkout, and five require NumPy in the default system Python. No model artifacts were fabricated and no training was run. The deployment-focused Core/account/docs suites and the full Web suite were rerun for this change.
+**Test totals: 1875 cases across the three suites.** GitHub Actions run [40849516343](https://github.com/rajaram-2005/ragam/actions/runs/40849516343) passed all five jobs, including the full Core, Fabric, Web, documentation and measured-release checks. A previous full local Core attempt had 11 environment-dependent failures: six required genuine Pro/Max model artifacts absent from that checkout, and five required NumPy in the default system Python. CI supplied its configured dependencies and verified artifacts. Its existing Fabric release-gate reproduction ran as part of CI; this deployment change did not train Klyvaron models or add model artifacts/evidence.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **952 tests** (64 files; previous full local attempt: 941 pass, 11 environment-dependent failures). Current focused account/online/docs run: **96 / 96 pass** |
-| `services/fabric` | `pytest -q` | **822 tests** (42 files; prior recorded run was green; not rerun for this deployment change) |
-| `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; rerun for this change) |
-| `apps/web` build | `vite build` | production bundle built successfully; rerun for this change |
+| `services/core` | `node --test test/*.test.mjs` | **952 tests** (64 files; full GitHub Actions suite passed; prior local attempt: 941 pass, 11 environment-dependent failures) |
+| `services/fabric` | `pytest -q` | **822 tests** (42 files; full GitHub Actions suite passed) |
+| `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; local and GitHub Actions runs passed) |
+| `apps/web` build | `vite build` | production bundle built successfully locally and in GitHub Actions |
 
 **Released first-party Klyvaron Pro and Max multimodal artifacts (all 8 trained from scratch, `baseCheckpoint: null`, verified by SHA-256 on load):**
 
