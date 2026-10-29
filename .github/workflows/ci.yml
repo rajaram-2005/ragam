@@ -213,11 +213,26 @@ jobs:
       - name: Build Render Core image and verify disk permissions
         run: |
           set -euo pipefail
-          docker build --tag ragam-core:ci .
+          annotate_tail() {
+            tail -n 25 "$1" | while IFS= read -r line; do
+              echo "::error::$(printf '%s' "$line" | cut -c1-300)"
+            done
+          }
+          if ! docker build --tag ragam-core:ci . >/tmp/ragam-docker-build.log 2>&1; then
+            cat /tmp/ragam-docker-build.log
+            annotate_tail /tmp/ragam-docker-build.log
+            exit 1
+          fi
+          cat /tmp/ragam-docker-build.log
           mount_dir=$(mktemp -d)
-          trap 'rm -rf "$mount_dir" /tmp/ragam-no-disk.log' EXIT
-          output=$(docker run --rm --volume "$mount_dir:/var/data" ragam-core:ci id -u)
-          app_uid=$(printf '%s\n' "$output" | tail -n 1)
+          trap 'rm -rf "$mount_dir" /tmp/ragam-no-disk.log /tmp/ragam-docker-build.log /tmp/ragam-disk-test.log' EXIT
+          if ! docker run --rm --volume "$mount_dir:/var/data" ragam-core:ci id -u >/tmp/ragam-disk-test.log 2>&1; then
+            cat /tmp/ragam-disk-test.log
+            annotate_tail /tmp/ragam-disk-test.log
+            exit 1
+          fi
+          cat /tmp/ragam-disk-test.log
+          app_uid=$(tail -n 1 /tmp/ragam-disk-test.log)
           disk_uid=$(stat -c '%u' "$mount_dir")
           if [ "$app_uid" = 0 ] || [ "$disk_uid" != "$app_uid" ]; then
             echo "::error::Docker entrypoint did not hand the mounted disk to an unprivileged app user"
@@ -228,7 +243,12 @@ jobs:
             echo "::error::Core image started without the required persistent disk"
             exit 1
           fi
-          grep -F 'persistent disk is not mounted at /var/data' /tmp/ragam-no-disk.log
+          if ! grep -Fq 'persistent disk is not mounted at /var/data' /tmp/ragam-no-disk.log; then
+            cat /tmp/ragam-no-disk.log
+            annotate_tail /tmp/ragam-no-disk.log
+            exit 1
+          fi
+          cat /tmp/ragam-no-disk.log
 
       - name: Test
         working-directory: apps/web
