@@ -225,7 +225,7 @@ jobs:
           fi
           cat /tmp/ragam-docker-build.log
           mount_dir=$(mktemp -d)
-          trap 'rm -rf "$mount_dir" /tmp/ragam-no-disk.log /tmp/ragam-docker-build.log /tmp/ragam-disk-test.log' EXIT
+          trap 'rm -rf "$mount_dir" /tmp/ragam-no-disk.log /tmp/ragam-docker-build.log /tmp/ragam-disk-test.log || true' EXIT
           if ! docker run --rm --volume "$mount_dir:/var/data" ragam-core:ci id -u >/tmp/ragam-disk-test.log 2>&1; then
             cat /tmp/ragam-disk-test.log
             annotate_tail /tmp/ragam-disk-test.log
