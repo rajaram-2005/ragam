@@ -316,7 +316,7 @@ test('the cookie SameSite policy is an operator choice, and the unusable combina
   assert.deepEqual([...COOKIE_SAME_SITE], ['strict', 'lax', 'none'], 'the accepted values are documented in docs/20')
 })
 
-test('the production entrypoint binds Render PORT and Vercel proxy sign-in/API is same-origin and secure', async (t) => {
+test('the production entrypoint binds the managed PORT and Vercel proxy sign-in/API is same-origin and secure', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'aetheris-entry-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   const frontendOrigin = 'https://ragam.example'
@@ -330,8 +330,8 @@ test('the production entrypoint binds Render PORT and Vercel proxy sign-in/API i
   t.after(() => running.shutdown())
   assert.equal(running.config.cookieSameSite, 'strict')
   assert.deepEqual(running.config.trustedWebOrigins, [frontendOrigin])
-  assert.equal(running.config.dataDir, dir, 'Render must point Core at the persistent data mount')
-  assert.ok(running.server.address().port > 0, 'Render-provided PORT must be used when AETHERIS_CORE_PORT is absent')
+  assert.equal(running.config.dataDir, dir, 'The configured data directory must be used')
+  assert.ok(running.server.address().port > 0, 'Managed PORT must be used when AETHERIS_CORE_PORT is absent')
   assert.deepEqual(parseTrustedWebOrigins(`${frontendOrigin},${frontendOrigin}`), [frontendOrigin])
   assert.throws(() => parseTrustedWebOrigins('https://ragam.example/path'), /exact HTTPS origins/)
   assert.throws(() => parseTrustedWebOrigins('http://public.example'), /exact HTTPS origins/)

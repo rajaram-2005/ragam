@@ -115,7 +115,7 @@ Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
 
 Full instructions, environment variables and troubleshooting:
-[`docs/04-setup.md`](docs/04-setup.md). The manual Render + Vercel deployment, smoke-test, persistent-disk verification, backup/restore and rollback procedure is in [`docs/deployment-render-vercel.md`](docs/deployment-render-vercel.md).
+[`docs/04-setup.md`](docs/04-setup.md). Hosted Core requirements and deployment status are documented in [`docs/deployment-status.md`](docs/deployment-status.md).
 
 > **Do not `pip install torch` for normal development or tests.** The Fabric service
 > is NumPy-only. Only the explicit optional LoRA command above bootstraps torch and
@@ -171,7 +171,7 @@ Status of every acceptance criterion, with evidence:
 |---|---|---|---|---|---|
 | `services/core` | Node 22 ESM | 37,051 | 24,353 | **zero npm packages** | 952 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 5,595 | 2,262 | react, react-dom | 101 |
+| `apps/web` | React 18 + Vite | 5,595 | 2,247 | react, react-dom | 101 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

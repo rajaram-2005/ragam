@@ -1,7 +1,7 @@
 // Same-origin API proxy for Vercel deployments.
 //
 // Browser requests stay relative to the Vercel site (/api/...). The upstream is a fixed
-// operator-configured Render origin, never a URL supplied by the request. Keeping the browser
+// operator-configured Core origin, never a URL supplied by the request. Keeping the browser
 // and API on one origin preserves HttpOnly session cookies and avoids enabling CORS.
 import { randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'

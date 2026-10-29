@@ -79,12 +79,12 @@ npm run core
 |---|---|---|
 | `AETHERIS_CORE_HOST` | `0.0.0.0` | Bind address. Use `127.0.0.1` for a single-user machine |
 | `AETHERIS_CORE_PORT` | `8790` | Explicit bind-port override; when unset, the active entry uses the host-provided `PORT` before falling back to `8790` |
-| `PORT` | *(managed host supplied)* | Render supplies the listening port; ignored when `AETHERIS_CORE_PORT` is explicitly set |
+| `PORT` | *(managed host supplied)* | The hosting platform supplies the listening port; ignored when `AETHERIS_CORE_PORT` is explicitly set |
 | `AETHERIS_ONLINE_DATA_DIR` | `./.aetheris-data/online` | Active online account/provider/SQLite data directory; place on persistent storage in production |
 | `AETHERIS_TRUSTED_WEB_ORIGINS` | *(empty)* | Exact HTTPS browser origins accepted through the Vercel same-origin API proxy; comma-separated, no wildcard |
 | `AETHERIS_COOKIE_SECURE` | `true` | Keep Secure on for production HTTPS cookies |
 | `AETHERIS_COOKIE_SAMESITE` | `strict` | Safe with the Vercel same-origin proxy; `none` is only for genuinely cross-site embedding and requires Secure |
-| `AETHERIS_ONLINE_TIMEOUT_MS` | `120000` | Upstream gateway time budget; the Render/Vercel deployment blueprint sets `55000` to fit its 60-second proxy function budget |
+| `AETHERIS_ONLINE_TIMEOUT_MS` | `120000` | Upstream gateway time budget; when using the 60-second Vercel proxy, configure Core below the proxy's function limit |
 | `AETHERIS_MODEL_CATALOG_FILE` | unset | Optional operator-owned versioned catalog-source JSON; metadata only, no automatic remote refresh. See [17](./17-model-catalog.md) |
 | `AETHERIS_DATA_DIR` | `./.aetheris-data` | SQLite files, media artifacts, audit ledger |
 | `AETHERIS_RUNTIME_POLICY` | `strict_offline` | `strict_offline` \| `hybrid` \| `online_enabled` |
@@ -110,7 +110,7 @@ npm test             # 101 web tests
 | `WEB_PORT` | `5173` | Dev/preview server port |
 | `AETHERIS_CORE_URL` | `http://127.0.0.1:8790` | Dev-server proxy target only. Node-side; never reaches the browser |
 | `NODE_ENV` | `development` locally; `production` on Vercel | The Vercel proxy permits loopback HTTP only in development; production requires HTTPS |
-| `CORE_API_URL` | *(Vercel project variable)* | Production `/api` function's fixed HTTPS Render origin; never exposed to the browser |
+| `CORE_API_URL` | *(Vercel project variable)* | `/api` function's fixed HTTPS Core origin; never exposed to the browser |
 
 The dev server binds `0.0.0.0` with `allowedHosts: true` so it works behind a
 container port-forward or a preview proxy. Browser-facing code uses relative
@@ -122,15 +122,9 @@ proxy `/api` to the core service (nginx, Caddy, or the core itself behind a
 reverse proxy). No absolute backend URL is baked into the bundle, so the same
 build works against any origin that proxies `/api`.
 
-### Production deployment: Render Core + Vercel frontend
+### Hosted deployment status
 
-`render.yaml` defines a single-instance Dockerized Core service in Singapore using a pinned Node 22.22.3 image, a persistent disk mounted at `/var/data`, an online data directory at `/var/data/online`, secure production cookies, the platform `PORT` binding, and `/api/health` as the health check. Render mounts the disk root as root-owned; `docker-entrypoint.sh` verifies the mount, transfers ownership to the unprivileged `node` user, then drops privileges before Core starts. The app itself never runs as root. `autoDeploy` is disabled so source pushes do not trigger production deploys. The `starter` service plan and disk may incur Render charges; applying the Blueprint is a separate operator action. The blueprint requests 1 GB of disk: production media/data volume has not been measured, so review capacity before use and define backups separately—persistence alone is not a backup plan. See the [Render + Vercel deployment runbook](./deployment-render-vercel.md) for setup, native-runtime replacement instructions, production smoke tests, restart-based disk verification, backup/restore, rollback, and remaining limits.
-
-Set `AETHERIS_TRUSTED_WEB_ORIGINS` in Render to the exact HTTPS origin Vercel assigns to the frontend (for example, `https://your-project.vercel.app`). Do not use `*`, paths, or a preview origin as a production substitute. `apps/web/vercel.json` builds the Vite app from the `apps/web` project root and routes `/api/*` through the fixed-origin `apps/web/api/[...path].js` proxy. Set the Vercel runtime variable `CORE_API_URL` to the Render service's HTTPS origin. The proxy forwards the browser's `Origin`, `Sec-Fetch-Site`, CSRF header, cookies, and `Set-Cookie`; Core accepts only the exact configured frontend origin for proxied mutations. Browser traffic remains same-origin, so CORS is not opened and `SameSite=Strict; Secure` works.
-
-The proxy's 60-second function budget is paired with a 55-second Core gateway timeout; requests beyond that budget need a separately verified hosting/plan design. Core keeps auth sessions in process memory, so this single-instance setup intentionally does not scale horizontally and users must sign in again after a Core restart. SQLite accounts, provider records and other Core-managed app state live on the Render disk, so this is hosted—not local-only—storage; review privacy, retention and provider egress consent before using real data. No backup/restore workflow is provisioned here.
-
-The deployment smoke script exercises health, signed-out status, rejection of an untrusted-origin mutation, secure cookie issuance for a pre-existing dedicated account, authenticated API access and logout through the same proxy. It never creates or deletes accounts. A Vercel project and Preview deployment exist, but the current native Node Render service fails startup with `EACCES` at `/var/data/online`; the Docker replacement has not yet been deployed or verified. No successful end-to-end production path or persistent-disk durability test is claimed. Public use is also blocked until controlled owner bootstrap/registration is implemented; see the runbook's go/no-go security blocker.
+The frontend can be hosted separately from Core, but this repository does not currently configure a managed Core host. The earlier paid hosting configuration was removed to meet the zero-cost requirement. This does not remove or cancel anything in an external hosting account. See [deployment status and requirements](./deployment-status.md) before connecting a hosted Core API. A free compute tier is not sufficient if its filesystem is ephemeral: Core stores account and provider state on disk, so do not use temporary storage for real data.
 
 ### Fabric service
 
