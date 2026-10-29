@@ -21,7 +21,8 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 import { COOKIE_SAME_SITE, OnlineApp, SESSIONS, RESET_REQUESTED_MESSAGE } from '../src/online/app.mjs'
-import { main } from '../src/server.mjs'
+import { main, parseTrustedWebOrigins } from '../src/server.mjs'
+import { proxyRequest } from '../../../apps/web/api/[...path].js'
 import {
   AccountStore, MAX_FAILED_LOGINS, PASSWORD_MIN_LENGTH, ROLES, RESET_CODE_TTL_MS,
   hashPassword, normalizeEmail, passwordProblems, verifyPassword,
@@ -315,33 +316,154 @@ test('the cookie SameSite policy is an operator choice, and the unusable combina
   assert.deepEqual([...COOKIE_SAME_SITE], ['strict', 'lax', 'none'], 'the accepted values are documented in docs/20')
 })
 
-test('the entry point reads the cookie policy from the environment and says so at boot', async (t) => {
+test('the production entrypoint binds Render PORT and Vercel proxy sign-in/API is same-origin and secure', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'aetheris-entry-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const frontendOrigin = 'https://ragam.example'
   const env = {
-    AETHERIS_ONLINE_DATA_DIR: dir, AETHERIS_CORE_HOST: '127.0.0.1', AETHERIS_CORE_PORT: '0',
-    AETHERIS_COOKIE_SECURE: 'true', AETHERIS_COOKIE_SAMESITE: 'NONE',
+    AETHERIS_ONLINE_DATA_DIR: dir, AETHERIS_CORE_HOST: '127.0.0.1', PORT: '0',
+    AETHERIS_COOKIE_SECURE: 'true', AETHERIS_COOKIE_SAMESITE: 'strict',
+    AETHERIS_TRUSTED_WEB_ORIGINS: frontendOrigin,
   }
   const lines = []
-  const running = await main({ env, stdout: (line) => lines.push(line) })
+  let running = await main({ env, stdout: (line) => lines.push(line) })
   t.after(() => running.shutdown())
-  assert.equal(running.config.cookieSameSite, 'none', 'the value is normalised rather than trusted as typed')
-  assert.ok(lines.some((line) => line.includes('SameSite=none')),
-    'widening a session cookie to cross-site must be visible on the console at boot')
+  assert.equal(running.config.cookieSameSite, 'strict')
+  assert.deepEqual(running.config.trustedWebOrigins, [frontendOrigin])
+  assert.equal(running.config.dataDir, dir, 'Render must point Core at the persistent data mount')
+  assert.ok(running.server.address().port > 0, 'Render-provided PORT must be used when AETHERIS_CORE_PORT is absent')
+  assert.deepEqual(parseTrustedWebOrigins(`${frontendOrigin},${frontendOrigin}`), [frontendOrigin])
+  assert.throws(() => parseTrustedWebOrigins('https://ragam.example/path'), /exact HTTPS origins/)
+  assert.throws(() => parseTrustedWebOrigins('http://public.example'), /exact HTTPS origins/)
+  assert.throws(() => parseTrustedWebOrigins('http://localhost:5173'), /exact HTTPS origins/)
+  assert.throws(() => parseTrustedWebOrigins('https://user:secret@ragam.example'), (error) => {
+    assert.match(error.message, /exact HTTPS origins/)
+    assert.equal(error.message.includes('secret'), false, 'configuration errors must not echo credential-shaped values')
+    return true
+  })
+  const invalidConfigLogs = []
+  const invalidConfig = await main({ env: { AETHERIS_TRUSTED_WEB_ORIGINS: 'https://user:secret@ragam.example' }, stdout: (line) => invalidConfigLogs.push(line) })
+    .then((instance) => ({ instance }), (error) => ({ error }))
+  t.after(async () => { await invalidConfig.instance?.shutdown() })
+  assert.ok(invalidConfig.error)
+  assert.equal(invalidConfig.error.message.includes('secret'), false)
+  assert.ok(invalidConfigLogs.some((line) => line.includes('"event":"configuration_invalid"')))
+  assert.equal(invalidConfigLogs.some((line) => line.includes('secret')), false)
 
-  // The combination browsers discard is refused instead of served, and the refusal names
-  // both variables so the fix is one edit away.
-  //
-  // Written as a settled outcome rather than `assert.rejects` on purpose. If the refusal
-  // ever stops happening, `main()` resolves into a listening server, and a test that
-  // simply asserts on a rejected promise leaves that server holding the event loop open:
-  // the suite would hang instead of failing. Cleanup is registered before the assertion,
-  // so a failure shuts the stray instance down and the run still reports.
-  const refused = await main({ env: { ...env, AETHERIS_COOKIE_SECURE: 'false' }, stdout: () => {} })
-    .then((running) => ({ running }), (error) => ({ error }))
-  t.after(async () => { await refused.running?.shutdown() })
-  assert.ok(refused.error, 'SameSite=None without a Secure cookie must be refused, not served')
-  assert.match(refused.error.message, /SameSite=None requires a Secure cookie[\s\S]*AETHERIS_COOKIE_SECURE=true/)
+  let coreOrigin = `http://127.0.0.1:${running.server.address().port}`
+  const proxy = createServer((req, res) => {
+    void (async () => {
+      // Simulate the Node serverless adapter pre-parsing JSON into req.body.
+      if (req.method === 'POST') {
+        const chunks = []
+        for await (const chunk of req) chunks.push(chunk)
+        req.body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+      }
+      await proxyRequest(req, res, { coreOrigin, allowLoopbackForTests: true })
+    })()
+  })
+  const proxyUrl = await listen(proxy)
+  t.after(() => close(proxy))
+  const browserHeaders = {
+    origin: frontendOrigin,
+    'sec-fetch-site': 'same-origin',
+    'x-aetheris-request': '1',
+  }
+
+  const health = await fetch(`${proxyUrl}/api/health`, { headers: browserHeaders })
+  assert.equal(health.status, 200)
+  assert.match(health.headers.get('x-request-id'), /^[0-9a-f-]{36}$/i)
+  assert.equal((await health.json()).status, 'ok')
+
+  const registered = await fetch(`${proxyUrl}/api/auth/register`, {
+    method: 'POST',
+    headers: { ...browserHeaders, 'content-type': 'application/json' },
+    body: JSON.stringify({ email: OWNER.email, password: OWNER.password }),
+  })
+  assert.equal(registered.status, 201, await registered.text())
+  const registrationCookie = registered.headers.get('set-cookie')
+  assert.match(registrationCookie, /HttpOnly/)
+  assert.match(registrationCookie, /Secure/)
+  assert.match(registrationCookie, /SameSite=Strict/)
+  assert.match(registrationCookie, /Path=\/api/)
+
+  const loggedIn = await fetch(`${proxyUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { ...browserHeaders, 'content-type': 'application/json' },
+    body: JSON.stringify({ email: OWNER.email, password: OWNER.password }),
+  })
+  assert.equal(loggedIn.status, 200, await loggedIn.text())
+  const cookie = loggedIn.headers.get('set-cookie')
+  assert.match(cookie, /Secure/, 'the login cookie must also survive the Vercel proxy')
+
+  const auth = await fetch(`${proxyUrl}/api/auth`, { headers: { cookie } })
+  assert.equal(auth.status, 200)
+  assert.equal((await auth.json()).authenticated, true, 'proxy must preserve the session cookie on the next request')
+  const providers = await fetch(`${proxyUrl}/api/providers`, { headers: { cookie } })
+  assert.equal(providers.status, 200, 'an authenticated application API call must survive the proxy')
+
+  const forged = await fetch(`${proxyUrl}/api/auth/logout`, {
+    method: 'POST',
+    headers: { ...browserHeaders, origin: 'https://untrusted.example', cookie, 'content-type': 'application/json' },
+    body: '{}',
+  })
+  assert.equal(forged.status, 403, 'Core must reject origins not explicitly trusted for the Vercel proxy')
+  const originFailureLog = lines.map((line) => { try { return JSON.parse(line) } catch { return null } })
+    .find((entry) => entry?.event === 'http_request_failed' && entry.errorCode === 'origin_rejected')
+  assert.ok(originFailureLog?.requestId, 'API rejection logs carry a correlation id')
+  assert.equal(JSON.stringify(originFailureLog).includes(OWNER.password), false, 'request logs must not include credentials')
+
+  const logout = await fetch(`${proxyUrl}/api/auth/logout`, {
+    method: 'POST',
+    headers: { ...browserHeaders, cookie, 'content-type': 'application/json' },
+    body: '{}',
+  })
+  assert.equal(logout.status, 200)
+  assert.match(logout.headers.get('set-cookie'), /Max-Age=0/)
+  assert.match(logout.headers.get('set-cookie'), /Secure/)
+  const signedOut = await fetch(`${proxyUrl}/api/auth`, { headers: { cookie } })
+  assert.equal((await signedOut.json()).authenticated, false, 'logout must revoke the server-side session')
+  const deniedAfterLogout = await fetch(`${proxyUrl}/api/providers`, { headers: { cookie } })
+  assert.equal(deniedAfterLogout.status, 401)
+
+  assert.equal(existsSync(join(dir, 'accounts.sqlite')), true, 'registration must be stored under the configured data directory')
+  await running.shutdown()
+  running = await main({ env, stdout: () => {} })
+  coreOrigin = `http://127.0.0.1:${running.server.address().port}`
+  const afterRestart = await fetch(`${proxyUrl}/api/auth`, { headers: { cookie } })
+  assert.equal((await afterRestart.json()).authenticated, false, 'the in-memory session must not survive a Core restart')
+  const persistentLogin = await fetch(`${proxyUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { ...browserHeaders, 'content-type': 'application/json' },
+    body: JSON.stringify({ email: OWNER.email, password: OWNER.password }),
+  })
+  assert.equal(persistentLogin.status, 200, 'the account database must remain usable after a Core restart')
+
+  const originalFindByEmail = running.app.accounts.findByEmail
+  running.app.accounts.findByEmail = () => {
+    const error = new Error('private SQLite file path and internal detail')
+    error.code = 'ERR_SQLITE_ERROR'
+    throw error
+  }
+  let databaseFailure
+  try {
+    databaseFailure = await fetch(`${proxyUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { ...browserHeaders, 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'db-error@example.test', password: 'a-long-database-password' }),
+    })
+  } finally {
+    running.app.accounts.findByEmail = originalFindByEmail
+  }
+  assert.equal(databaseFailure.status, 500)
+  assert.deepEqual(await databaseFailure.json(), { error: 'internal_error', message: 'The request could not be completed.' })
+
+  // Embedded mode remains opt-in and refuses the browser-invalid None-without-Secure pair.
+  const refused = await main({ env: { ...env, AETHERIS_COOKIE_SAMESITE: 'none', AETHERIS_COOKIE_SECURE: 'false' }, stdout: () => {} })
+    .then((instance) => ({ instance }), (error) => ({ error }))
+  t.after(async () => { await refused.instance?.shutdown() })
+  assert.ok(refused.error)
+  assert.match(refused.error.message, /SameSite=None requires a Secure cookie/)
 })
 
 test('sessions belong to one account, roll over at the cap, and die with the process', async (t) => {

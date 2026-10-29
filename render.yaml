@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: ragam-core
+    runtime: node
+    plan: starter
+    region: singapore
+    autoDeploy: false
+    numInstances: 1
+    buildCommand: node --check services/core/src/server.mjs && node --check services/core/src/online/app.mjs
+    startCommand: node services/core/src/server.mjs
+    healthCheckPath: /api/health
+    disk:
+      name: ragam-core-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.3
+      - key: NODE_ENV
+        value: production
+      - key: AETHERIS_CORE_HOST
+        value: 0.0.0.0
+      - key: AETHERIS_ONLINE_DATA_DIR
+        value: /var/data/online
+      - key: AETHERIS_COOKIE_SECURE
+        value: "true"
+      - key: AETHERIS_COOKIE_SAMESITE
+        value: strict
+      - key: AETHERIS_ONLINE_TIMEOUT_MS
+        value: "55000"
+      - key: AETHERIS_TRUSTED_WEB_ORIGINS
+        sync: false

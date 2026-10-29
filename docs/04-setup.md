@@ -13,7 +13,7 @@ Every command below was run on the host described in
 |---|---|---|
 | `services/core` | **Node ≥ 22.5.0** (for `node:sqlite`). Zero npm dependencies | Node v22.22.3 |
 | `services/fabric` | **Python ≥ 3.11** + **NumPy** | Python 3.11.2, NumPy 2.1.3 |
-| `apps/web` | Node ≥ 20.19 or ≥ 22.12 and npm (for Vite 8). 2 runtime packages, 23 installed in total | Vite 8.3.4, React 18.3.1 |
+| `apps/web` | Node 22.x and npm. Vite 8 requires ≥ 20.19 or ≥ 22.12; the Vercel function runtime is pinned to Node 22. 2 runtime packages, 23 installed in total | Vite 8.3.4, React 18.3.1 |
 | Tests | `pytest` for Fabric; nothing extra for core or web | pytest 9.1.1 |
 
 No GPU is required for anything in this repository. No model weights are
@@ -55,9 +55,7 @@ Aetheris online-only API listening on 0.0.0.0:8790
 Configure an online gateway (LiteLLM, Ollama or llama.cpp server) in Provider Settings. No local inference or automatic model downloads.
 ```
 
-Once an account exists the third line reads `sign-in    1 account(s); owner you@example.com`,
-and a `cookie` line appears whenever the session cookie's SameSite policy is not the
-default. A `(node:NNNN) ExperimentalWarning: SQLite is an experimental feature` line
+Once an account exists, the third line reports the account count and whether an owner is configured, without logging an email address. A `cookie` line appears whenever the session cookie's SameSite policy is not the default. A `(node:NNNN) ExperimentalWarning: SQLite is an experimental feature` line
 above the banner comes from `node:sqlite` and is expected on Node 22.
 
 That banner, with no model listed anywhere in it, **is the correct output** on a
@@ -80,7 +78,13 @@ npm run core
 | Variable | Default | Purpose |
 |---|---|---|
 | `AETHERIS_CORE_HOST` | `0.0.0.0` | Bind address. Use `127.0.0.1` for a single-user machine |
-| `AETHERIS_CORE_PORT` | `8790` | |
+| `AETHERIS_CORE_PORT` | `8790` | Explicit bind-port override; when unset, the active entry uses the host-provided `PORT` before falling back to `8790` |
+| `PORT` | *(managed host supplied)* | Render supplies the listening port; ignored when `AETHERIS_CORE_PORT` is explicitly set |
+| `AETHERIS_ONLINE_DATA_DIR` | `./.aetheris-data/online` | Active online account/provider/SQLite data directory; place on persistent storage in production |
+| `AETHERIS_TRUSTED_WEB_ORIGINS` | *(empty)* | Exact HTTPS browser origins accepted through the Vercel same-origin API proxy; comma-separated, no wildcard |
+| `AETHERIS_COOKIE_SECURE` | `true` | Keep Secure on for production HTTPS cookies |
+| `AETHERIS_COOKIE_SAMESITE` | `strict` | Safe with the Vercel same-origin proxy; `none` is only for genuinely cross-site embedding and requires Secure |
+| `AETHERIS_ONLINE_TIMEOUT_MS` | `120000` | Upstream gateway time budget; the Render/Vercel deployment blueprint sets `55000` to fit its 60-second proxy function budget |
 | `AETHERIS_MODEL_CATALOG_FILE` | unset | Optional operator-owned versioned catalog-source JSON; metadata only, no automatic remote refresh. See [17](./17-model-catalog.md) |
 | `AETHERIS_DATA_DIR` | `./.aetheris-data` | SQLite files, media artifacts, audit ledger |
 | `AETHERIS_RUNTIME_POLICY` | `strict_offline` | `strict_offline` \| `hybrid` \| `online_enabled` |
@@ -98,13 +102,15 @@ npm install          # 62 packages, ~12 s
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 100 tests
+npm test             # 101 web tests
 ```
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `WEB_PORT` | `5173` | Dev/preview server port |
-| `AETHERIS_CORE_URL` | `http://127.0.0.1:8790` | **Proxy target only.** Node-side; never reaches the browser |
+| `AETHERIS_CORE_URL` | `http://127.0.0.1:8790` | Dev-server proxy target only. Node-side; never reaches the browser |
+| `NODE_ENV` | `development` locally; `production` on Vercel | The Vercel proxy permits loopback HTTP only in development; production requires HTTPS |
+| `CORE_API_URL` | *(Vercel project variable)* | Production `/api` function's fixed HTTPS Render origin; never exposed to the browser |
 
 The dev server binds `0.0.0.0` with `allowedHosts: true` so it works behind a
 container port-forward or a preview proxy. Browser-facing code uses relative
@@ -115,6 +121,16 @@ appears in `src/`.
 proxy `/api` to the core service (nginx, Caddy, or the core itself behind a
 reverse proxy). No absolute backend URL is baked into the bundle, so the same
 build works against any origin that proxies `/api`.
+
+### Production deployment: Render Core + Vercel frontend
+
+`render.yaml` defines a single-instance Node 22 Core service in Singapore, a persistent disk mounted at `/var/data`, an online data directory at `/var/data/online`, secure production cookies, the platform `PORT` binding, and `/api/health` as the health check. `autoDeploy` is disabled so source pushes do not trigger production deploys. The `starter` service plan and disk may incur Render charges; applying the Blueprint is a separate operator action. The blueprint requests 1 GB of disk: production media/data volume has not been measured, so review capacity before use and define backups separately—persistence alone is not a backup plan. See the [Render + Vercel deployment runbook](./deployment-render-vercel.md) for setup, production smoke tests, restart-based disk verification, backup/restore, rollback, and remaining limits.
+
+Set `AETHERIS_TRUSTED_WEB_ORIGINS` in Render to the exact HTTPS origin Vercel assigns to the frontend (for example, `https://your-project.vercel.app`). Do not use `*`, paths, or a preview origin as a production substitute. `apps/web/vercel.json` builds the Vite app from the `apps/web` project root and routes `/api/*` through the fixed-origin `apps/web/api/[...path].js` proxy. Set the Vercel runtime variable `CORE_API_URL` to the Render service's HTTPS origin. The proxy forwards the browser's `Origin`, `Sec-Fetch-Site`, CSRF header, cookies, and `Set-Cookie`; Core accepts only the exact configured frontend origin for proxied mutations. Browser traffic remains same-origin, so CORS is not opened and `SameSite=Strict; Secure` works.
+
+The proxy's 60-second function budget is paired with a 55-second Core gateway timeout; requests beyond that budget need a separately verified hosting/plan design. Core keeps auth sessions in process memory, so this single-instance setup intentionally does not scale horizontally and users must sign in again after a Core restart. SQLite accounts, provider records and other Core-managed app state live on the Render disk, so this is hosted—not local-only—storage; review privacy, retention and provider egress consent before using real data. No backup/restore workflow is provisioned here.
+
+The deployment smoke script exercises health, signed-out status, rejection of an untrusted-origin mutation, secure cookie issuance for a pre-existing dedicated account, authenticated API access and logout through the same proxy. It never creates or deletes accounts. A local pass validates repository configuration only; it does not prove Render or Vercel has provisioned or deployed anything. No production deployment is claimed by this repository configuration. Public use is also blocked until controlled owner bootstrap/registration is implemented; see the runbook's go/no-go security blocker.
 
 ### Fabric service
 
@@ -231,9 +247,9 @@ limitations.
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1874 tests)
+npm test                  # all three suites (1875 tests)
 npm run test:core         # 952
-npm run test:web          # 100
+npm run test:web          # 101
 npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
 
@@ -289,7 +305,7 @@ when something else changes would not notice.
 |---|---|
 | **Core service** | 952 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 100 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Web app** | `npm ci`, 101 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 49-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |
 

@@ -11,14 +11,14 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1874 passing, 0 failing.**
+**Test totals: 1875 cases across the three suites.** GitHub Actions run [40849516343](https://github.com/rajaram-2005/ragam/actions/runs/40849516343) passed all five jobs, including the full Core, Fabric, Web, documentation and measured-release checks. A previous full local Core attempt had 11 environment-dependent failures: six required genuine Pro/Max model artifacts absent from that checkout, and five required NumPy in the default system Python. CI supplied its configured dependencies and verified artifacts. Its existing Fabric release-gate reproduction ran as part of CI; this deployment change did not train Klyvaron models or add model artifacts/evidence.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **952 / 952** (64 files, ~500 s with live multimodal E2E) |
-| `services/fabric` | `pytest -q` | **822 / 822** (42 files, ~3.5 min) |
-| `apps/web` | `node --test test/*.test.mjs` | **100 / 100** (4 files, ~1 s) |
-| `apps/web` build | `vite build` | production bundle, single chunk, no warnings |
+| `services/core` | `node --test test/*.test.mjs` | **952 tests** (64 files; full GitHub Actions suite passed; prior local attempt: 941 pass, 11 environment-dependent failures) |
+| `services/fabric` | `pytest -q` | **822 tests** (42 files; full GitHub Actions suite passed) |
+| `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; local and GitHub Actions runs passed) |
+| `apps/web` build | `vite build` | production bundle built successfully locally and in GitHub Actions |
 
 **Released first-party Klyvaron Pro and Max multimodal artifacts (all 8 trained from scratch, `baseCheckpoint: null`, verified by SHA-256 on load):**
 
@@ -383,7 +383,7 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (100 tests)
+### `apps/web` — Implemented and tested (101 tests)
 
 | Area | Status |
 |---|---|
