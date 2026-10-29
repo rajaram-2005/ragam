@@ -62,14 +62,34 @@ internal service promoted to a navigation entry, fails the build.
 ## Quick start
 
 ```bash
+# Core uses Node's standard library; it has no dependency install step.
 node services/core/src/server.mjs        # core API on :8790
-cd apps/web && npm install && npm run dev # UI, proxies /api to core
+
+# In another terminal, install the locked Web dependencies and start the UI.
+npm ci --prefix apps/web
+npm run web                               # UI, proxies /api to core
 ```
+
+For the optional Fabric service and its test tools, install into an isolated
+virtual environment (macOS/Linux):
+
+```bash
+python3 -m venv services/fabric/.venv
+services/fabric/.venv/bin/python -m pip install -e 'services/fabric[dev]'
+# Point the test runner at that environment when running all suites:
+AETHERIS_PYTHON="$PWD/services/fabric/.venv/bin/python" npm test
+```
+
+The root `package.json` is a script runner, not a dependency workspace. The only
+npm dependency tree is `apps/web`; `npm ci --prefix apps/web` installs it from the
+lockfile. Core has zero npm dependencies. Fabric needs NumPy at runtime and pytest
+for tests; the `[dev]` extra installs both. **Do not install PyTorch** for normal
+setup or tests—no GPU or model weights are required.
 
 Requirements: **Node ≥ 22.12** — the core service needs ≥ 22.5 for `node:sqlite`
 and the web app's build tooling (Vite 8) needs ≥ 22.12, so the higher bound
-applies — and, for the training service,
-**Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
+applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weights are
+downloaded.
 
 ```bash
 npm test          # 1875 tests: core 952, web 101, fabric 822
