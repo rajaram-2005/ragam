@@ -56,7 +56,7 @@ async function fixture(t, options = {}) {
   const create = () => new OnlineApp({
     dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: options.timeoutMs ?? 2000,
     maxAccounts: options.maxAccounts, secureCookie: options.secureCookie,
-    cookieSameSite: options.cookieSameSite, onResetCode: (info) => f.resetCodes.push(info),
+    cookieSameSite: options.cookieSameSite, onResetCode: (info) => f.resetCodes.push(info), sessionStore: options.sessionStore,
   })
   f.app = create()
   f.server = f.app.server()
@@ -159,6 +159,41 @@ test('password policy is length and denylist, and every rejection names the prob
 // ---------------------------------------------------------------------------
 // Roles, and the removal of the token
 // ---------------------------------------------------------------------------
+
+test('auth routes delegate session creation, lookup and logout to the durable session store', async (t) => {
+  const token = 'session-token-that-is-long-enough-for-the-cookie'
+  const live = new Map()
+  const operations = []
+  const sessionStore = {
+    async create(account) {
+      operations.push(['create', account.id])
+      live.set(token, { token, accountId: account.id, email: account.email, role: account.role, expires: Date.now() + 60_000 })
+      return token
+    },
+    async get(value) { operations.push(['get', value]); return live.get(value) ?? null },
+    async revoke(value) { operations.push(['revoke', value]); return live.delete(value) },
+    async revokeAccount(accountId, exceptToken = null) {
+      operations.push(['revokeAccount', accountId, exceptToken])
+      let count = 0
+      for (const [key, session] of live) if (session.accountId === accountId && key !== exceptToken) { live.delete(key); count += 1 }
+      return count
+    },
+  }
+  const f = await fixture(t, { sessionStore })
+  const registered = await f.register()
+  assert.equal(registered.status, 201)
+  assert.equal(cookieOf(registered), `aetheris_session=${token}`)
+  assert.equal(f.app.sessions.size, 0, 'durable sessions must not also be held in the process-local Map')
+  const auth = await f.request('GET', '/api/auth', undefined, { cookie: cookieOf(registered) })
+  assert.equal(auth.status, 200)
+  assert.deepEqual(auth.data.account, { id: registered.data.account.id, email: OWNER.email, role: 'owner' })
+  const logout = await f.request('POST', '/api/auth/logout', {}, { cookie: cookieOf(registered) })
+  assert.equal(logout.status, 200)
+  assert.equal(live.size, 0)
+  assert.ok(operations.some(([name]) => name === 'create'))
+  assert.ok(operations.some(([name]) => name === 'get'))
+  assert.ok(operations.some(([name]) => name === 'revoke'))
+})
 
 test('the first account owns the installation, later ones are members, and no caller can ask for a role', async (t) => {
   const f = await fixture(t)

@@ -40,6 +40,96 @@ CREATE TABLE public.ragam_sessions (
 );
 CREATE INDEX ragam_sessions_account_expiry_idx ON public.ragam_sessions(account_id, expires_at);
 
+-- Serialize session caps and revocations across independent Vercel invocations. The only
+-- session credential accepted here is a SHA-256 digest; the browser token is never persisted.
+CREATE FUNCTION public.ragam_create_session(
+  p_account_id text,
+  p_token_hash text,
+  p_now bigint,
+  p_expires_at bigint,
+  p_per_account integer,
+  p_installation_limit integer
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE
+  active_for_account integer;
+  active_for_installation integer;
+  victims_to_revoke integer;
+BEGIN
+  IF p_account_id IS NULL OR p_account_id = '' OR p_token_hash !~ '^[0-9a-f]{64}$'
+     OR p_expires_at <= p_now OR p_per_account < 1 OR p_installation_limit < 1 THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'session_arguments_invalid');
+  END IF;
+
+  PERFORM pg_catalog.pg_advisory_xact_lock(99712013, 1);
+  IF NOT EXISTS (SELECT 1 FROM public.ragam_accounts WHERE id = p_account_id) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'account_not_found');
+  END IF;
+
+  DELETE FROM public.ragam_sessions WHERE expires_at <= p_now;
+  SELECT count(*)::integer INTO active_for_account
+    FROM public.ragam_sessions
+    WHERE account_id = p_account_id AND revoked_at IS NULL AND expires_at > p_now;
+  victims_to_revoke := GREATEST(0, active_for_account - p_per_account + 1);
+  IF victims_to_revoke > 0 THEN
+    WITH victims AS (
+      SELECT token_hash FROM public.ragam_sessions
+      WHERE account_id = p_account_id AND revoked_at IS NULL AND expires_at > p_now
+      ORDER BY expires_at ASC, created_at ASC
+      LIMIT victims_to_revoke
+    )
+    UPDATE public.ragam_sessions AS sessions
+       SET revoked_at = p_now
+     WHERE sessions.token_hash IN (SELECT token_hash FROM victims);
+  END IF;
+
+  SELECT count(*)::integer INTO active_for_installation
+    FROM public.ragam_sessions WHERE revoked_at IS NULL AND expires_at > p_now;
+  IF active_for_installation >= p_installation_limit THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'session_limit');
+  END IF;
+
+  INSERT INTO public.ragam_sessions(token_hash, account_id, created_at, expires_at, revoked_at, last_seen_at)
+  VALUES (p_token_hash, p_account_id, p_now, p_expires_at, NULL, p_now);
+  RETURN jsonb_build_object('ok', true, 'expires_at', p_expires_at);
+END;
+$$;
+
+CREATE FUNCTION public.ragam_revoke_session(p_token_hash text, p_now bigint)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE changed integer;
+BEGIN
+  UPDATE public.ragam_sessions SET revoked_at = p_now
+   WHERE token_hash = p_token_hash AND revoked_at IS NULL;
+  GET DIAGNOSTICS changed = ROW_COUNT;
+  RETURN changed = 1;
+END;
+$$;
+
+CREATE FUNCTION public.ragam_revoke_sessions(p_account_id text, p_except_hash text, p_now bigint)
+RETURNS integer
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE changed integer;
+BEGIN
+  UPDATE public.ragam_sessions SET revoked_at = p_now
+   WHERE account_id = p_account_id AND revoked_at IS NULL
+     AND (p_except_hash IS NULL OR token_hash <> p_except_hash);
+  GET DIAGNOSTICS changed = ROW_COUNT;
+  RETURN changed;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.ragam_create_session(text, text, bigint, bigint, integer, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.ragam_revoke_session(text, bigint) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.ragam_revoke_sessions(text, text, bigint) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.ragam_create_session(text, text, bigint, bigint, integer, integer) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION public.ragam_revoke_session(text, bigint) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION public.ragam_revoke_sessions(text, text, bigint) FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.ragam_create_session(text, text, bigint, bigint, integer, integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.ragam_revoke_session(text, bigint) TO service_role;
+GRANT EXECUTE ON FUNCTION public.ragam_revoke_sessions(text, text, bigint) TO service_role;
+
 -- Hash the normalized login identity before storing counters; do not persist raw email here.
 CREATE TABLE public.ragam_auth_attempts (
   identity_hash char(64) PRIMARY KEY CHECK (identity_hash ~ '^[0-9a-f]{64}$'),

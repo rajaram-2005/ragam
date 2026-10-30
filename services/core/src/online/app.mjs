@@ -123,7 +123,7 @@ export function readInstallationDoc(name) {
 
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null, logger = null }) {
+  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
     // should refuse without leaving a half-written data directory behind.
     const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
@@ -145,7 +145,7 @@ export class OnlineApp {
     // The video wire polls a long-running operation. Tests shorten the interval; production uses
     // the documented 10-second cadence. This is a timing seam, not a behaviour switch.
     this.mediaPoll = mediaPoll
-    this.secureCookie = secureCookie; this.sessions = new Map(); this.authAttempts = new Map()
+    this.secureCookie = secureCookie; this.sessions = new Map(); this.sessionStore = sessionStore; this.authAttempts = new Map()
     this.activeRequests = 0
     this.ledger = new AuditLedger(join(this.dir, 'audit.sqlite'))
     // Accounts replace the operator token file. Every auth event lands in the same
@@ -1312,16 +1312,19 @@ export class OnlineApp {
   }
   /** The live session behind a request, or null: `{ token, accountId, email, role, expires }`. */
   sessionFor(req) {
-    const token = this.authenticated(req)
+    const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]
+    if (this.sessionStore) return token ? this.sessionStore.get(token) : null
     const session = token ? this.sessions.get(token) : null
-    return session ? { token, ...session } : null
+    return session && session.expires > Date.now() ? { token, ...session } : null
   }
   /** What the unauthenticated world is allowed to know: whether this cookie is signed in. */
   authStatus(req) {
     const session = this.sessionFor(req)
-    return { authenticated: Boolean(session), mode: 'accounts', account: session ? { id: session.accountId, email: session.email, role: session.role } : null }
+    const status = (value) => ({ authenticated: Boolean(value), mode: 'accounts', account: value ? { id: value.accountId, email: value.email, role: value.role } : null })
+    return session && typeof session.then === 'function' ? session.then(status) : status(session)
   }
   createSession(account) {
+    if (this.sessionStore) return this.sessionStore.create(account)
     const now = Date.now()
     for (const [token, session] of this.sessions) if (session.expires <= now) this.sessions.delete(token)
     const mine = [...this.sessions.entries()].filter(([, session]) => session.accountId === account.id).sort((a, b) => a[1].expires - b[1].expires)
@@ -1333,9 +1336,14 @@ export class OnlineApp {
   }
   /** Drop a person's sessions; `exceptToken` keeps the one that just proved its password. */
   revokeSessions(accountId, exceptToken = null) {
+    if (this.sessionStore) return this.sessionStore.revokeAccount(accountId, exceptToken)
     let revoked = 0
     for (const [token, session] of this.sessions) if (session.accountId === accountId && token !== exceptToken) { this.sessions.delete(token); revoked += 1 }
     return revoked
+  }
+  revokeSession(token) {
+    if (this.sessionStore) return this.sessionStore.revoke(token)
+    return this.sessions.delete(token)
   }
   /**
    * Bound the public auth endpoints.
@@ -1386,7 +1394,7 @@ export class OnlineApp {
         // and its `token` body field are gone, so there is no second credential to
         // phish, no shared secret to leak in a screenshot, and no way to be signed in
         // without an account this installation created.
-        if (req.method === 'GET' && path === '/api/auth') return sendJson(res, 200, this.authStatus(req))
+        if (req.method === 'GET' && path === '/api/auth') return sendJson(res, 200, await this.authStatus(req))
         if (req.method === 'POST' && path === '/api/auth/register') {
           const body = await readBody(req)
           this.throttleAuth('register', body.email)
@@ -1394,14 +1402,14 @@ export class OnlineApp {
           this.adoptLegacyContext(account)
           // Registering signs you in. Making a person repeat a password they typed ten
           // seconds ago is not a security control, it is a form.
-          const token = this.createSession(account)
+          const token = await this.createSession(account)
           res.setHeader('set-cookie', this.cookie(token)); return sendJson(res, 201, { authenticated: true, account })
         }
         if (req.method === 'POST' && path === '/api/auth/login') {
           const body = await readBody(req)
           this.throttleAuth('login', body.email)
           const account = this.accounts.authenticate({ email: body.email, password: body.password })
-          const token = this.createSession(account)
+          const token = await this.createSession(account)
           res.setHeader('set-cookie', this.cookie(token)); return sendJson(res, 200, { authenticated: true, account })
         }
         if (req.method === 'POST' && path === '/api/auth/password-reset/request') {
@@ -1419,16 +1427,16 @@ export class OnlineApp {
           const account = this.accounts.confirmReset({ email: body.email, code: body.code, password: body.password })
           // A password reset is how you recover an account, so it also ends every
           // session that was holding it — including one an attacker may have opened.
-          this.revokeSessions(account.id)
+          await this.revokeSessions(account.id)
           return sendJson(res, 200, { reset: true, message: 'Your password is changed. Sign in with the new one.' })
         }
-        const session = this.sessionFor(req)
+        const session = await this.sessionFor(req)
         if (!session) throw failure('unauthenticated', 'Sign in to this Aetheris installation.', 401)
-        if (req.method === 'POST' && path === '/api/auth/logout') { this.sessions.delete(session.token); res.setHeader('set-cookie', this.cookie('', 0)); return sendJson(res, 200, { authenticated: false }) }
+        if (req.method === 'POST' && path === '/api/auth/logout') { await this.revokeSession(session.token); res.setHeader('set-cookie', this.cookie('', 0)); return sendJson(res, 200, { authenticated: false }) }
         if (req.method === 'POST' && path === '/api/auth/password') {
           const body = await readBody(req, { principal: session.accountId })
           const account = this.accounts.changePassword({ accountId: session.accountId, currentPassword: body.currentPassword, newPassword: body.newPassword })
-          this.revokeSessions(account.id, session.token)
+          await this.revokeSessions(account.id, session.token)
           return sendJson(res, 200, { changed: true, account })
         }
         if (req.method === 'GET' && path === '/api/config') return sendJson(res, 200, { policy: 'online_only', offlineEnforced: false, auth: { mode: 'accounts', account: { email: session.email, role: session.role } } })
