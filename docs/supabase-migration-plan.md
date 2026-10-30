@@ -4,7 +4,7 @@
 
 The proposed cloud architecture is Vercel Node.js Functions for request execution, Supabase Postgres for durable structured state, and a private Supabase Storage bucket for file artifacts. This is a substantial backend migration, not a `CORE_API_URL` change. Supabase does not run the existing long-lived Node server by itself.
 
-The Supabase project `ragam-core` is now `ACTIVE_HEALTHY` in `eu-west-2` (London). Its database is healthy and has no migrations recorded yet. The existing inactive projects were left untouched. No schema has been applied, no Core data has been exported or migrated, and no Vercel configuration has been changed. The project's billing plan and free-tier capacity have not been verified; no production readiness is claimed.
+The Supabase project `ragam-core` is `ACTIVE_HEALTHY` in `eu-west-2` (London); the user confirmed its dashboard plan is Free and chose to keep this region. Its database is healthy and has no migrations recorded yet. The existing inactive projects were left untouched. No schema has been applied, no Core data has been exported or migrated, and no Vercel configuration has been changed. The connector does not independently report billing plan or quota; no production readiness is claimed.
 
 ## Current implementation that must change
 
