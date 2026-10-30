@@ -297,7 +297,7 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 979 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. On [41059287828](https://github.com/rajaram-2005/ragam/actions/runs/41059287828), the Core job exited 1 while the separate counted Core suite in release verification passed; this discrepancy needs a clean rerun before the revision is called green. |
+| **Core service** | Current suite: 979 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Latest complete run: [41060698368](https://github.com/rajaram-2005/ragam/actions/runs/41060698368) at `58d1216`; all five CI jobs passed. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 101 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 49-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
