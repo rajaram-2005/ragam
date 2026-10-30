@@ -10,6 +10,22 @@ The Supabase project `ragam-core` is `ACTIVE_HEALTHY` in `eu-west-2` (London); t
 
 The Core service currently starts a long-lived `node:http` server and uses synchronous `node:sqlite` stores. Persistent state spans accounts and password resets, provider configuration, audit events, memories and sessions, knowledge documents/chunks/embeddings, skills/styles, Klyvaron configuration, and durable job metadata. Media and other artifacts also use local filesystem paths. Authentication sessions are currently process-local memory.
 
+### Repository storage inventory (migration work starts here)
+
+| Existing state | Current implementation | Hosted replacement / gate |
+|---|---|---|
+| Accounts and password resets | `online/accounts.mjs`: SQLite accounts; reset-code delivery is file-backed and operator-local | Postgres account/reset records; keep password hashes (never plaintext); choose a reset-delivery method before enabling reset on hosted deployment |
+| Sessions and sign-in throttles | `OnlineApp` keeps sessions and auth-attempt counters in process-local `Map`s | Persist only a hash of opaque session tokens; use shared, atomic throttling; verify revocation across independent function invocations |
+| Provider connections and presets | `online/store.mjs`: one installation-level JSON file; credentials are AES-GCM encrypted with a local `master.key` | Postgres records with app-side encryption key held as a server secret; preserve the installation-wide/owner semantics and never return ciphertext or plaintext to the browser |
+| Audit ledger | `audit/ledger.mjs`: append-only SQLite events | Postgres append-only table; preserve redaction and actor/subject linkage |
+| Memory, chat sessions, and turns | `memory/store.mjs`: account-specific SQLite files; `memory/fabric.mjs` adds provenance/tombstones | Account-owned Postgres rows with explicit owner filters and deletion/tombstone semantics |
+| Knowledge documents and index | `knowledge/store.mjs`: account-specific SQLite tables for documents, chunks, ACL, embeddings, index runs, and deletion records | Account-owned Postgres rows; decide whether embeddings are stored as vectors or serialized data only after checking actual retrieval usage and available extensions |
+| Skills and styles | `skills/store.mjs` and `online/styles.mjs`: local files and version/deletion records | Database-backed metadata/content with preserved version history; installation-wide reviewed skills remain distinct from user-owned preferences |
+| Media jobs and generated files | Job state and outputs use process/local filesystem storage in current paths | Durable job metadata and private Storage objects; a serverless request must not claim background execution beyond its bounded lifetime |
+| Klyvaron artifacts and training | Model files, qualifications, checkpoints, and worker state are local filesystem/process based | **Not a Vercel Functions migration item.** Keep local training/artifacts local unless a separately approved compatible worker/storage design is provided; do not claim serverless training or move private artifacts to public Storage |
+
+A versioned baseline SQL migration now exists at `supabase/migrations/20261030000100_initial_core.sql`. It creates 28 relational tables, enables RLS with no browser-role policies, and includes account-scoped foreign keys and constraints for personal-memory consent/training prohibition. Its syntax was exercised in an ephemeral PGlite instance, and a repository test checks the table/RLS inventory. `SupabaseAccountRepository` adds a narrow, tested PostgREST layer that always filters reads/writes by account and refuses caller-supplied ownership changes. Neither repository is wired into `OnlineApp` yet, and the schema has NOT been applied to the hosted project. The baseline is a starting schema, not application parity: transactional RPCs, account/session integration, remaining repositories, private Storage, and serverless route conversion remain before a live schema change.
+
 A correct hosted migration therefore needs all of the following before the Vercel proxy can be replaced:
 
 1. An asynchronous Postgres data layer and explicit, versioned SQL migrations for every active store.
