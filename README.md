@@ -92,7 +92,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 1896 tests: core 973, web 101, fabric 822
+npm test          # 1901 tests: core 978, web 101, fabric 822
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -107,7 +107,7 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1896 run in CI on every push and pull request
+All 1901 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as five jobs — one per
 component, plus one that fails if this documentation stops matching the code, plus one
 that counts what the suites reported and verifies the release against those counts. The
@@ -169,7 +169,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 37,701 | 24,844 | **zero npm packages** | 973 |
+| `services/core` | Node 22 ESM | 37,782 | 24,914 | **zero npm packages** | 978 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
 | `apps/web` | React 18 + Vite | 5,595 | 2,247 | react, react-dom | 101 |
 

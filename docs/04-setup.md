@@ -241,8 +241,8 @@ limitations.
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1896 tests)
-npm run test:core         # 973
+npm test                  # all three suites (1901 tests)
+npm run test:core         # 978
 npm run test:web          # 101
 npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
@@ -297,7 +297,7 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 973 tests pass in CI; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Latest successful full run: [41056477712](https://github.com/rajaram-2005/ragam/actions/runs/41056477712) at commit `bc7022b`. |
+| **Core service** | Current suite: 978 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. The latest completed full CI run [41056477712](https://github.com/rajaram-2005/ragam/actions/runs/41056477712) at `bc7022b` passed the prior 973-test inventory; CI for the current style-store addition is pending. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 101 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 49-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
