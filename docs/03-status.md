@@ -11,11 +11,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1884 cases across the three suites.** GitHub Actions run [40849516343](https://github.com/rajaram-2005/ragam/actions/runs/40849516343) passed all five jobs, including the full Core, Fabric, Web, documentation and measured-release checks. A previous full local Core attempt had 11 environment-dependent failures: six required genuine Pro/Max model artifacts absent from that checkout, and five required NumPy in the default system Python. CI supplied its configured dependencies and verified artifacts. Its existing Fabric release-gate reproduction ran as part of CI; this deployment change did not train Klyvaron models or add model artifacts/evidence.
+**Test totals: 1896 cases across the three suites.** GitHub Actions run [41050262075](https://github.com/rajaram-2005/ragam/actions/runs/41050262075) passed all five jobs at commit `0af518a`. Later runs [41053276734](https://github.com/rajaram-2005/ragam/actions/runs/41053276734) and [41054433331](https://github.com/rajaram-2005/ragam/actions/runs/41054433331) failed before this documentation refresh: the first also reported a missing genuine Max model artifact; both had stale documentation totals. After correcting the docs, the local documentation-accuracy suite passes 49/49. The current local Core run completed 973 tests: 962 passed and 11 failed only on unavailable genuine Pro/Max model artifacts (5) and Python NumPy (6) in this workspace. No model weights or benchmark evidence were fabricated. No hosted Supabase migration or Vercel deployment has occurred.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **961 tests** (67 files; full GitHub Actions suite passed; prior local attempt: 941 pass, 11 environment-dependent failures) |
+| `services/core` | `node --test test/*.test.mjs` | **973 tests** (69 files; last local run: 962 passed, 11 environment-dependent failures; latest CI result recorded above) |
 | `services/fabric` | `pytest -q` | **822 tests** (42 files; full GitHub Actions suite passed) |
 | `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; local and GitHub Actions runs passed) |
 | `apps/web` build | `vite build` | production bundle built successfully locally and in GitHub Actions |
@@ -55,7 +55,7 @@ data (`docs/experiments/differentiator-prototype.json`, 900 steps, CPU). No weig
 tiers stay `unbuilt` — see [24 — Own models](./24-own-models.md).
 
 For the accounts increment, the operator-token sign-in was **removed rather than
-supplemented**: `services/core/test/accounts.test.mjs` (18 tests) covers scrypt password
+supplemented**: `services/core/test/accounts.test.mjs` (20 tests) covers scrypt password
 storage, lockout scope, enumeration resistance, throttling, session bounds, owner-only
 gateway control and per-account data isolation, and the web suite grew by 8 tests for the
 three sign-in pages. `online.test.mjs` now signs in with an account. See
@@ -246,14 +246,14 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (961 tests)
+### `services/core` — Implemented and tested (973 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
 | Egress policy & guard | **Implemented and tested** | Three policies; fails safe to `strict_offline` on a blank/invalid value |
 | Data classification & redaction | **Implemented and tested** | Whole-identifier patterns catch `AWS_SECRET_ACCESS_KEY`-style names |
 | Audit ledger | **Implemented and tested** | Append-only SQLite; refusals audited; NDJSON export; subject purge |
-| Accounts & sign-in (online entry) | **Implemented and tested** | 18 tests; scrypt hashes with no reversible copy, per-account lockout and throttling, owner/member roles, host-delivered reset codes, per-account stores; see doc 20 |
+| Accounts & sign-in (online entry) | **Implemented and tested** | 20 tests; scrypt hashes with no reversible copy, per-account lockout and throttling, owner/member roles, host-delivered reset codes, per-account stores; see doc 20 |
 | Model registry & router | **Implemented and tested** | Capability gating before scoring; unknown latency scores 0.5, not 0 |
 | Native provider adapters | **Implemented and tested against local fixtures; no live call** | Twenty-one wires. Chat: OpenAI-compatible, Anthropic Messages, Gemini generateContent, Cohere Chat v2, Azure OpenAI v1, Vertex AI and Bedrock Converse. Image: OpenAI Images, Gemini Images, Stability AI, Recraft, Ideogram, Black Forest Labs, fal.ai, Replicate and Adobe Firefly. Video: Veo, Runway, Luma, fal.ai and Replicate. Cohere paginates discovery; Azure uses `api-key` and the deployment name; Vertex exchanges a service-account JWT for a cached OAuth token; Bedrock signs with SigV4 against AWS's published vector and is non-streaming by contract; Firefly exchanges a two-part client credential for a cached IMS token. Structured credentials are validated and compacted at save time. See [docs/27](27-provider-framework.md) §4.1 and §5 |
 | Ollama / llama.cpp, legacy entry | **Implemented and tested against a fixture server** | `providers/local.mjs`, used by the retained legacy service only. The online entry uses the `/v1` routes of the same runtimes; see [docs/19](19-online-only-phase-2.md) |

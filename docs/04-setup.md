@@ -241,8 +241,8 @@ limitations.
 ## 4. Tests
 
 ```bash
-npm test                  # all three suites (1884 tests)
-npm run test:core         # 961
+npm test                  # all three suites (1896 tests)
+npm run test:core         # 973
 npm run test:web          # 101
 npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
@@ -297,7 +297,7 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | 961 tests pass, `services/core` still declares **zero** dependencies, and no `services/core/node_modules` exists. That property is load-bearing: it is what keeps the core auditable and free of a supply chain |
+| **Core service** | 973 tests pass when the documented Pro/Max artifacts and NumPy are present; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. The last successful full CI run was at commit `0af518a`; recent runs exposed missing Max artifact availability and stale docs totals, so check the current branch run before treating it as green. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 101 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 49-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |

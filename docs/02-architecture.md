@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 37,293 source lines, 24,547 test lines
+### `services/core` — 37,701 source lines, 24,844 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -79,7 +79,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
 | `online/accounts.mjs` | 387 | Accounts, scrypt password hashes, lockouts, throttling and host-delivered reset codes |
-| `online/app.mjs` | 1,815 | Authenticated online application, per-account context, verified native Klyvaron Pro/Max multimodal local inference, runtime qualification & manifest endpoints, and user-computer training worker controls alongside exact-model external gateway routing |
+| `online/app.mjs` | 1,831 | Authenticated online application, per-account context, verified native Klyvaron Pro/Max multimodal local inference, runtime qualification & manifest endpoints, and user-computer training worker controls alongside exact-model external gateway routing |
 | `online/native-klyvaron.mjs` | 469 | First-party Klyvaron Pro (27,559,946 params) and Klyvaron Max (92,077,066 params) SHA-256 verification, preset-architecture enforcement, startup live inference self-test, and fail-closed selector gating |
 | `online/context-routes.mjs` | 260 | Authenticated context and reviewed read-only tool routes |
 | `online/gateway.mjs` | 222 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
@@ -134,6 +134,8 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
 | `storage/supabase-admin.mjs` | 104 | Server-only Supabase REST client with fixed-origin, endpoint, header, timeout and credential-redaction guards |
 | `storage/supabase-account-repository.mjs` | 138 | Account-scoped PostgREST operations that force owner filters and reject identity changes |
+| `storage/supabase-session-store.mjs` | 117 | Durable server-side sessions that store only SHA-256 hashes of opaque browser tokens |
+| `storage/supabase-account-store.mjs` | 275 | Supabase-backed account records, scrypt authentication, password recovery and distributed login throttles |
 | `klyvaron/tiers.mjs` | 1,140 | Separated subscription tiers, 8 first-party Klyvaron model identities (`pro` & `max` across Chat, Image, Video, Voice), programmatic runtime capability readiness (`ready`, `partially_available`, `missing_artifact`, `runtime_unqualified`, `training_required`, `unsupported_hardware`), and separate Pro/Max capability manifests |
 | `klyvaron/plan.mjs` | 187 | The development plan: thirteen per-tier gates derived from the tier records, including the stance, the two differentiators, modality separation and `own_weights`, each open gate with its reason |
 | `klyvaron/trends.mjs` | 186 | Dated, sourced observations that expire and abstain; the mechanism `trend.awareness` is defined against, with no model behind it |
