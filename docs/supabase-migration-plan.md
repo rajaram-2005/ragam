@@ -4,7 +4,7 @@
 
 The proposed cloud architecture is Vercel Node.js Functions for request execution, Supabase Postgres for durable structured state, and a private Supabase Storage bucket for file artifacts. This is a substantial backend migration, not a `CORE_API_URL` change. Supabase does not run the existing long-lived Node server by itself.
 
-The Supabase project `ragam-core` is `ACTIVE_HEALTHY` in `eu-west-2` (London); the user confirmed its dashboard plan is Free and chose to keep this region. Its database is healthy and has no migrations recorded yet. The existing inactive projects were left untouched. No schema has been applied, no Core data has been exported or migrated, and no Vercel configuration has been changed. The connector does not independently report billing plan or quota; no production readiness is claimed.
+The Supabase project `ragam-core` is `ACTIVE_HEALTHY` in `eu-west-2` (London); the user confirmed its dashboard plan is Free and chose to keep this region. Its database is healthy and has no migrations recorded yet. The existing inactive projects were left untouched. A server-only REST transport module (`services/core/src/storage/supabase-admin.mjs`) has been added with fixed-origin, path/header allowlists, bounded requests, and sanitized errors; its four tests use mocks only. No live database/storage request has been made, no schema has been applied, no Core data has been exported or migrated, and no Vercel configuration has been changed. The connector does not independently report billing plan or quota; no production readiness is claimed.
 
 ## Current implementation that must change
 
@@ -25,7 +25,7 @@ The current registration behavior is a release blocker: public registration is o
 
 ## Project setup status
 
-The user-created `ragam-core` project is active and its database is healthy. The connector reports region `eu-west-2` (London); the project is empty and has no migrations. The other inactive projects remain untouched. Before applying schema, confirm in the Supabase Dashboard that the project is on the **Free** plan and has no paid add-ons. The region is fixed for this project; if an India region is required, decide before adding schema or data and create a separate project rather than assuming it can be moved in place.
+The user-created `ragam-core` project is active and its database is healthy. The connector reports region `eu-west-2` (London); the user confirmed the dashboard shows the **Free** plan and chose to keep this region. The project is empty and has no migrations. The other inactive projects remain untouched. The connector itself does not report the plan, so any billing change must be checked in the dashboard. The region is fixed for this project; an India region would require a separate project.
 
 Keep the database password in the user's password manager. Do not paste it into chat, Git, a browser build variable, or Vercel logs. Share only the project reference when needed for connector operations; never share the database password, service-role key, or provider credentials.
 

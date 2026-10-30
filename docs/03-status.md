@@ -11,11 +11,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1875 cases across the three suites.** GitHub Actions run [40849516343](https://github.com/rajaram-2005/ragam/actions/runs/40849516343) passed all five jobs, including the full Core, Fabric, Web, documentation and measured-release checks. A previous full local Core attempt had 11 environment-dependent failures: six required genuine Pro/Max model artifacts absent from that checkout, and five required NumPy in the default system Python. CI supplied its configured dependencies and verified artifacts. Its existing Fabric release-gate reproduction ran as part of CI; this deployment change did not train Klyvaron models or add model artifacts/evidence.
+**Test totals: 1879 cases across the three suites.** GitHub Actions run [40849516343](https://github.com/rajaram-2005/ragam/actions/runs/40849516343) passed all five jobs, including the full Core, Fabric, Web, documentation and measured-release checks. A previous full local Core attempt had 11 environment-dependent failures: six required genuine Pro/Max model artifacts absent from that checkout, and five required NumPy in the default system Python. CI supplied its configured dependencies and verified artifacts. Its existing Fabric release-gate reproduction ran as part of CI; this deployment change did not train Klyvaron models or add model artifacts/evidence.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **952 tests** (64 files; full GitHub Actions suite passed; prior local attempt: 941 pass, 11 environment-dependent failures) |
+| `services/core` | `node --test test/*.test.mjs` | **956 tests** (65 files; full GitHub Actions suite passed; prior local attempt: 941 pass, 11 environment-dependent failures) |
 | `services/fabric` | `pytest -q` | **822 tests** (42 files; full GitHub Actions suite passed) |
 | `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; local and GitHub Actions runs passed) |
 | `apps/web` build | `vite build` | production bundle built successfully locally and in GitHub Actions |
@@ -246,7 +246,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (952 tests)
+### `services/core` — Implemented and tested (956 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|

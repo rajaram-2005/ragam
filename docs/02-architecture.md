@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 37,051 source lines, 24,353 test lines
+### `services/core` — 37,155 source lines, 24,452 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -132,6 +132,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `skills/permissions.mjs` | 272 | The permission block of a SKILL.md: parsed, refused when malformed or wildcarded, bounded against the runtime grant, and used as the scope the procedure runs with — a caller cannot widen it |
 | `skills/evaluation.mjs` | 274 | EVALUATE and DIAGNOSE: an append-only digest-chained verdict log, the incumbent's passing checks as the regression set, and a closed set of diagnoses (regression, regression_not_run, new_failure) so a rejection says which kind it was |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
+| `storage/supabase-admin.mjs` | 104 | Server-only Supabase REST client with fixed-origin, endpoint, header, timeout and credential-redaction guards |
 | `klyvaron/tiers.mjs` | 1,140 | Separated subscription tiers, 8 first-party Klyvaron model identities (`pro` & `max` across Chat, Image, Video, Voice), programmatic runtime capability readiness (`ready`, `partially_available`, `missing_artifact`, `runtime_unqualified`, `training_required`, `unsupported_hardware`), and separate Pro/Max capability manifests |
 | `klyvaron/plan.mjs` | 187 | The development plan: thirteen per-tier gates derived from the tier records, including the stance, the two differentiators, modality separation and `own_weights`, each open gate with its reason |
 | `klyvaron/trends.mjs` | 186 | Dated, sourced observations that expire and abstain; the mechanism `trend.awareness` is defined against, with no model behind it |
