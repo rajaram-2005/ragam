@@ -1312,8 +1312,11 @@ export class OnlineApp {
   }
   /** The live session behind a request, or null: `{ token, accountId, email, role, expires }`. */
   sessionFor(req) {
-    const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]
-    if (this.sessionStore) return token ? this.sessionStore.get(token) : null
+    if (this.sessionStore) {
+      const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]
+      return token ? this.sessionStore.get(token) : null
+    }
+    const token = this.authenticated(req)
     const session = token ? this.sessions.get(token) : null
     return session && session.expires > Date.now() ? { token, ...session } : null
   }
