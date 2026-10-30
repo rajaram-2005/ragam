@@ -26,7 +26,10 @@ test('initial Supabase schema is additive, fail-closed, and keeps account data s
 
   assert.match(migration, /training_use\s+text NOT NULL CHECK \(training_use = 'prohibited'\)/)
   assert.match(migration, /token_hash\s+char\(64\) PRIMARY KEY/)
-  for (const rpc of ['ragam_create_session', 'ragam_revoke_session', 'ragam_revoke_sessions']) {
+  for (const rpc of [
+    'ragam_register_account', 'ragam_record_account_login', 'ragam_update_account_password', 'ragam_reset_account_password', 'ragam_consume_auth_attempt',
+    'ragam_create_session', 'ragam_revoke_session', 'ragam_revoke_sessions',
+  ]) {
     assert.match(migration, new RegExp(`CREATE FUNCTION public\\.${rpc}\\(`), `${rpc} must be versioned with the schema`)
     assert.match(migration, new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${rpc}\\([^;]+ TO service_role;`), `${rpc} must be restricted to the server role`)
   }

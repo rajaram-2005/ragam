@@ -74,9 +74,9 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
   log({ event: 'core_started', host, port: server.address().port, dataDir: config.dataDir, nodeVersion: process.versions.node })
   stdout(`Aetheris online-only API listening on ${host}:${server.address().port}`)
   stdout(`  data dir   ${config.dataDir}`)
-  const accounts = app.accounts.count()
+  const accounts = await app.accounts.count()
   if (accounts === 0) stdout('  sign-in    no accounts yet — open the web app and create the first one; it becomes the owner')
-  else stdout(`  sign-in    ${accounts} account(s); owner ${app.accounts.owner() ? 'configured' : 'missing'}`)
+  else stdout(`  sign-in    ${accounts} account(s); owner ${(await app.accounts.owner()) ? 'configured' : 'missing'}`)
   if (config.cookieSameSite !== 'strict') {
     stdout(`  cookie     SameSite=${config.cookieSameSite}${config.secureCookie ? ' + Secure' : ''} — the session is sent on cross-site requests, so this app can be embedded in another site; mutations still require the x-aetheris-request header`)
   }

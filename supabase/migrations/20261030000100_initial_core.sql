@@ -30,6 +30,138 @@ CREATE TABLE public.ragam_password_resets (
 );
 
 -- Session tokens are random and opaque. Store only SHA-256 hex digests; never raw cookies.
+-- Account mutations are transactional so concurrent serverless invocations cannot create
+-- multiple owners, exceed the account cap, or race password lockout/reset state.
+CREATE FUNCTION public.ragam_register_account(
+  p_account_id text, p_email text, p_password_hash text, p_now bigint, p_max_accounts integer
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE account_role text; account_count integer;
+BEGIN
+  IF p_account_id IS NULL OR p_account_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+     OR p_email IS NULL OR p_email = '' OR p_email <> lower(btrim(p_email))
+     OR p_password_hash IS NULL OR p_password_hash = '' OR p_max_accounts < 1 THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'account_arguments_invalid');
+  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(99712013, 2);
+  IF EXISTS (SELECT 1 FROM public.ragam_accounts WHERE lower(email) = p_email) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'email_taken');
+  END IF;
+  SELECT count(*)::integer INTO account_count FROM public.ragam_accounts;
+  IF account_count >= p_max_accounts THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'account_limit');
+  END IF;
+  account_role := CASE WHEN account_count = 0 THEN 'owner' ELSE 'member' END;
+  INSERT INTO public.ragam_accounts(id, email, password_hash, role, created_at, updated_at, last_login_at, failed_logins, locked_until)
+  VALUES (p_account_id, p_email, p_password_hash, account_role, p_now, p_now, NULL, 0, NULL);
+  RETURN jsonb_build_object('ok', true, 'account', jsonb_build_object(
+    'id', p_account_id, 'email', p_email, 'role', account_role,
+    'created_at', p_now, 'updated_at', p_now, 'last_login_at', NULL, 'locked_until', NULL
+  ));
+END;
+$$;
+
+CREATE FUNCTION public.ragam_record_account_login(
+  p_account_id text, p_expected_password_hash text, p_password_valid boolean,
+  p_now bigint, p_max_failed integer, p_lockout_ms bigint
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE account_row public.ragam_accounts%ROWTYPE; failed integer; lock_until bigint;
+BEGIN
+  SELECT * INTO account_row FROM public.ragam_accounts WHERE id = p_account_id FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'code', 'account_not_found'); END IF;
+  IF account_row.password_hash <> p_expected_password_hash THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'password_changed');
+  END IF;
+  IF account_row.locked_until IS NOT NULL AND account_row.locked_until > p_now THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'account_locked', 'locked_until', account_row.locked_until);
+  END IF;
+  IF p_password_valid THEN
+    UPDATE public.ragam_accounts SET failed_logins = 0, locked_until = NULL,
+      last_login_at = p_now, updated_at = p_now WHERE id = p_account_id;
+    RETURN jsonb_build_object('ok', true, 'account', jsonb_build_object(
+      'id', account_row.id, 'email', account_row.email, 'role', account_row.role,
+      'created_at', account_row.created_at, 'updated_at', p_now, 'last_login_at', p_now, 'locked_until', NULL
+    ));
+  END IF;
+  failed := account_row.failed_logins + 1;
+  IF failed >= p_max_failed THEN
+    lock_until := p_now + p_lockout_ms;
+    UPDATE public.ragam_accounts SET failed_logins = 0, locked_until = lock_until,
+      updated_at = p_now WHERE id = p_account_id;
+    RETURN jsonb_build_object('ok', false, 'code', 'account_locked', 'locked_until', lock_until);
+  END IF;
+  UPDATE public.ragam_accounts SET failed_logins = failed, locked_until = NULL,
+    updated_at = p_now WHERE id = p_account_id;
+  RETURN jsonb_build_object('ok', false, 'code', 'invalid_credentials');
+END;
+$$;
+
+CREATE FUNCTION public.ragam_update_account_password(
+  p_account_id text, p_expected_password_hash text, p_new_password_hash text, p_now bigint
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE account_row public.ragam_accounts%ROWTYPE;
+BEGIN
+  SELECT * INTO account_row FROM public.ragam_accounts WHERE id = p_account_id FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'code', 'account_not_found'); END IF;
+  IF account_row.password_hash <> p_expected_password_hash THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'password_changed');
+  END IF;
+  IF p_new_password_hash IS NULL OR p_new_password_hash = p_expected_password_hash THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'password_reused');
+  END IF;
+  UPDATE public.ragam_accounts SET password_hash = p_new_password_hash, failed_logins = 0,
+    locked_until = NULL, updated_at = p_now WHERE id = p_account_id;
+  RETURN jsonb_build_object('ok', true, 'account', jsonb_build_object(
+    'id', account_row.id, 'email', account_row.email, 'role', account_row.role,
+    'created_at', account_row.created_at, 'updated_at', p_now,
+    'last_login_at', account_row.last_login_at, 'locked_until', NULL
+  ));
+END;
+$$;
+
+CREATE FUNCTION public.ragam_reset_account_password(
+  p_account_id text, p_expected_password_hash text, p_expected_reset_hash text,
+  p_new_password_hash text, p_now bigint
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE account_row public.ragam_accounts%ROWTYPE; reset_row public.ragam_password_resets%ROWTYPE;
+BEGIN
+  SELECT * INTO account_row FROM public.ragam_accounts WHERE id = p_account_id FOR UPDATE;
+  IF NOT FOUND OR account_row.password_hash <> p_expected_password_hash THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'reset_invalid');
+  END IF;
+  SELECT * INTO reset_row FROM public.ragam_password_resets WHERE account_id = p_account_id FOR UPDATE;
+  IF NOT FOUND OR reset_row.consumed_at IS NOT NULL OR reset_row.expires_at <= p_now
+     OR reset_row.code_hash <> p_expected_reset_hash THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'reset_invalid');
+  END IF;
+  IF p_new_password_hash IS NULL OR p_new_password_hash = p_expected_password_hash THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'password_reused');
+  END IF;
+  UPDATE public.ragam_accounts SET password_hash = p_new_password_hash, failed_logins = 0,
+    locked_until = NULL, updated_at = p_now WHERE id = p_account_id;
+  UPDATE public.ragam_password_resets SET consumed_at = p_now WHERE account_id = p_account_id;
+  UPDATE public.ragam_sessions SET revoked_at = p_now
+    WHERE account_id = p_account_id AND revoked_at IS NULL;
+  RETURN jsonb_build_object('ok', true, 'account', jsonb_build_object(
+    'id', account_row.id, 'email', account_row.email, 'role', account_row.role,
+    'created_at', account_row.created_at, 'updated_at', p_now,
+    'last_login_at', account_row.last_login_at, 'locked_until', NULL
+  ));
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.ragam_register_account(text, text, text, bigint, integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.ragam_record_account_login(text, text, boolean, bigint, integer, bigint) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.ragam_update_account_password(text, text, text, bigint) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.ragam_reset_account_password(text, text, text, text, bigint) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.ragam_register_account(text, text, text, bigint, integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.ragam_record_account_login(text, text, boolean, bigint, integer, bigint) TO service_role;
+GRANT EXECUTE ON FUNCTION public.ragam_update_account_password(text, text, text, bigint) TO service_role;
+GRANT EXECUTE ON FUNCTION public.ragam_reset_account_password(text, text, text, text, bigint) TO service_role;
+
 CREATE TABLE public.ragam_sessions (
   token_hash  char(64) PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
   account_id  text NOT NULL REFERENCES public.ragam_accounts(id) ON DELETE CASCADE,
@@ -133,10 +265,49 @@ GRANT EXECUTE ON FUNCTION public.ragam_revoke_sessions(text, text, bigint) TO se
 -- Hash the normalized login identity before storing counters; do not persist raw email here.
 CREATE TABLE public.ragam_auth_attempts (
   identity_hash char(64) PRIMARY KEY CHECK (identity_hash ~ '^[0-9a-f]{64}$'),
-  failures      integer NOT NULL DEFAULT 0 CHECK (failures >= 0),
-  locked_until  bigint,
-  updated_at    bigint NOT NULL
+  failures           integer NOT NULL DEFAULT 0 CHECK (failures >= 0),
+  window_started_at  bigint NOT NULL,
+  locked_until       bigint,
+  updated_at         bigint NOT NULL
 );
+
+CREATE FUNCTION public.ragam_consume_auth_attempt(
+  p_identity_hash text, p_now bigint, p_limit integer, p_window_ms bigint
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE attempt_row public.ragam_auth_attempts%ROWTYPE; retry_at bigint;
+BEGIN
+  IF p_identity_hash IS NULL OR p_identity_hash !~ '^[0-9a-f]{64}$'
+     OR p_limit < 1 OR p_window_ms < 1 THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'auth_attempt_arguments_invalid');
+  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_identity_hash, 0));
+  DELETE FROM public.ragam_auth_attempts WHERE updated_at + (p_window_ms * 2) <= p_now;
+  INSERT INTO public.ragam_auth_attempts(identity_hash, failures, window_started_at, locked_until, updated_at)
+  VALUES (p_identity_hash, 0, p_now, NULL, p_now) ON CONFLICT (identity_hash) DO NOTHING;
+  SELECT * INTO attempt_row FROM public.ragam_auth_attempts WHERE identity_hash = p_identity_hash FOR UPDATE;
+  IF attempt_row.window_started_at + p_window_ms <= p_now THEN
+    attempt_row.failures := 0;
+    attempt_row.window_started_at := p_now;
+    attempt_row.locked_until := NULL;
+  END IF;
+  IF attempt_row.locked_until IS NOT NULL AND attempt_row.locked_until > p_now THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'rate_limited', 'retry_at', attempt_row.locked_until);
+  END IF;
+  IF attempt_row.failures >= p_limit THEN
+    retry_at := attempt_row.window_started_at + p_window_ms;
+    UPDATE public.ragam_auth_attempts SET locked_until = retry_at, updated_at = p_now
+      WHERE identity_hash = p_identity_hash;
+    RETURN jsonb_build_object('ok', false, 'code', 'rate_limited', 'retry_at', retry_at);
+  END IF;
+  UPDATE public.ragam_auth_attempts SET failures = attempt_row.failures + 1,
+    window_started_at = attempt_row.window_started_at, locked_until = NULL, updated_at = p_now
+    WHERE identity_hash = p_identity_hash;
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.ragam_consume_auth_attempt(text, bigint, integer, bigint) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.ragam_consume_auth_attempt(text, bigint, integer, bigint) TO service_role;
 
 -- Provider configuration is installation-wide in the current application. The encrypted
 -- credential is application-encrypted; the encryption key belongs in a server secret.

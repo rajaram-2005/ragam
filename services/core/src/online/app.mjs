@@ -77,7 +77,7 @@ export const PROVIDER_CONNECTION_PREFIX = '/api/providers/'
 const PROVIDER_CONNECTION = new RegExp(`^${PROVIDER_CONNECTION_PREFIX}([a-z0-9]+(?:-[a-z0-9]+)*)(/test)?$`)
 
 /** Answered identically for a known and an unknown address, on purpose. */
-export const RESET_REQUESTED_MESSAGE = 'If an account on this installation uses that email address, a single-use reset code is now waiting on the Core host. It expires in 15 minutes.'
+export const RESET_REQUESTED_MESSAGE = 'If an account on this installation uses that email address, a single-use reset code is available through its configured recovery method. It expires in 15 minutes.'
 
 
 // Rules whose presence in a reply is a product failure rather than a style note. These are the
@@ -123,7 +123,7 @@ export function readInstallationDoc(name) {
 
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null }) {
+  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null, accountStore = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
     // should refuse without leaving a half-written data directory behind.
     const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
@@ -151,7 +151,8 @@ export class OnlineApp {
     // Accounts replace the operator token file. Every auth event lands in the same
     // ledger as everything else, naming the account id — which is the difference
     // between "the gateway was changed" and "this account changed the gateway".
-    this.accounts = new AccountStore({ dir: this.dir, maxAccounts, onResetCode, audit: (event) => this.ledger.record(event) })
+    this.accounts = accountStore ?? new AccountStore({ dir: this.dir, maxAccounts, onResetCode, audit: (event) => this.ledger.record(event) })
+    this.remoteAccountStore = Boolean(accountStore)
     // History, memory and knowledge are per account: one SQLite file each, opened on
     // first use. Isolation comes from separate databases rather than from a WHERE
     // clause, so a query that forgot to filter could not leak another person's turns.
@@ -480,6 +481,9 @@ export class OnlineApp {
     const status = s.configured
       ? (s.checkedAt ? 'configured' : 'connection_unchecked')
       : (nativeReady + mmTotalReady > 0 ? 'configured' : 'setup_required')
+    const accountTotal = typeof this.accounts.countForReadiness === 'function'
+      ? this.accounts.countForReadiness()
+      : this.accounts.count()
     const base = {
       status,
       policy: 'online_only',
@@ -506,7 +510,7 @@ export class OnlineApp {
         selectedModel: this.defaultSelectedModel(),
         checkedAt: s.checkedAt,
       },
-      accounts: { total: this.accounts.count() },
+      accounts: { total: accountTotal },
       note: nativeReady > 0
         ? `${nativeReady} verified first-party Klyvaron model(s) ready locally; external gateway models list availability separately without automatic fallback.`
         : 'Listing a model does not verify inference or modality support. No local inference or fallback.',
@@ -1354,10 +1358,11 @@ export class OnlineApp {
    * Two buckets because one is not enough. The per-address bucket is what stops one
    * person's password being guessed at; the installation-wide bucket is what stops the
    * endpoint being used to keep scrypt busy, since each attempt costs a hash whether or
-   * not the address exists. Both are in-memory sliding windows, so they clear on
-   * restart — the durable half of this is the per-account lockout in AccountStore.
+   * not the address exists. The local AccountStore path uses process-local windows; the
+   * hosted store implements the same two buckets with shared atomic Postgres RPCs.
    */
   throttleAuth(action, email, { perAddress = 12, perInstallation = 60, windowMs = 60_000 } = {}) {
+    if (typeof this.accounts.throttleAuth === 'function') return this.accounts.throttleAuth(action, email, { perAddress, perInstallation, windowMs })
     const now = Date.now()
     const address = typeof email === 'string' ? email.trim().toLowerCase().slice(0, 254) : 'unknown'
     for (const [bucket, limit] of [[`${action}:${address}`, perAddress], [action, perInstallation]]) {
@@ -1400,9 +1405,9 @@ export class OnlineApp {
         if (req.method === 'GET' && path === '/api/auth') return sendJson(res, 200, await this.authStatus(req))
         if (req.method === 'POST' && path === '/api/auth/register') {
           const body = await readBody(req)
-          this.throttleAuth('register', body.email)
-          const account = this.accounts.register({ email: body.email, password: body.password })
-          this.adoptLegacyContext(account)
+          await this.throttleAuth('register', body.email)
+          const account = await this.accounts.register({ email: body.email, password: body.password })
+          if (!this.remoteAccountStore) this.adoptLegacyContext(account)
           // Registering signs you in. Making a person repeat a password they typed ten
           // seconds ago is not a security control, it is a form.
           const token = await this.createSession(account)
@@ -1410,24 +1415,24 @@ export class OnlineApp {
         }
         if (req.method === 'POST' && path === '/api/auth/login') {
           const body = await readBody(req)
-          this.throttleAuth('login', body.email)
-          const account = this.accounts.authenticate({ email: body.email, password: body.password })
+          await this.throttleAuth('login', body.email)
+          const account = await this.accounts.authenticate({ email: body.email, password: body.password })
           const token = await this.createSession(account)
           res.setHeader('set-cookie', this.cookie(token)); return sendJson(res, 200, { authenticated: true, account })
         }
         if (req.method === 'POST' && path === '/api/auth/password-reset/request') {
           const body = await readBody(req)
-          this.throttleAuth('password_reset', body.email)
-          this.accounts.requestReset(body.email)
-          // Identical answer for a known and an unknown address. The code goes to the
-          // Core host, never into this response: the person asking has not yet proved
-          // who they are, which is the whole reason they are asking.
+          await this.throttleAuth('password_reset', body.email)
+          await this.accounts.requestReset(body.email)
+          // Identical answer for a known and an unknown address. The code goes only
+          // through the configured recovery channel, never into this response: the
+          // person asking has not yet proved who they are.
           return sendJson(res, 202, { requested: true, message: RESET_REQUESTED_MESSAGE })
         }
         if (req.method === 'POST' && path === '/api/auth/password-reset/confirm') {
           const body = await readBody(req)
-          this.throttleAuth('password_reset_confirm', body.email)
-          const account = this.accounts.confirmReset({ email: body.email, code: body.code, password: body.password })
+          await this.throttleAuth('password_reset_confirm', body.email)
+          const account = await this.accounts.confirmReset({ email: body.email, code: body.code, password: body.password })
           // A password reset is how you recover an account, so it also ends every
           // session that was holding it — including one an attacker may have opened.
           await this.revokeSessions(account.id)
@@ -1438,7 +1443,7 @@ export class OnlineApp {
         if (req.method === 'POST' && path === '/api/auth/logout') { await this.revokeSession(session.token); res.setHeader('set-cookie', this.cookie('', 0)); return sendJson(res, 200, { authenticated: false }) }
         if (req.method === 'POST' && path === '/api/auth/password') {
           const body = await readBody(req, { principal: session.accountId })
-          const account = this.accounts.changePassword({ accountId: session.accountId, currentPassword: body.currentPassword, newPassword: body.newPassword })
+          const account = await this.accounts.changePassword({ accountId: session.accountId, currentPassword: body.currentPassword, newPassword: body.newPassword })
           await this.revokeSessions(account.id, session.token)
           return sendJson(res, 200, { changed: true, account })
         }
