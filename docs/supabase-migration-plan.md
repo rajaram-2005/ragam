@@ -4,7 +4,7 @@
 
 The proposed cloud architecture is Vercel Node.js Functions for request execution, Supabase Postgres for durable structured state, and a private Supabase Storage bucket for file artifacts. This is a substantial backend migration, not a `CORE_API_URL` change. Supabase does not run the existing long-lived Node server by itself.
 
-No Supabase project has been created or modified for Ragam. Existing inactive projects were left untouched. No Core data has been exported or migrated. No production readiness or free-tier capacity is claimed.
+The Supabase project `ragam-core` is now `ACTIVE_HEALTHY` in `eu-west-2` (London). Its database is healthy and has no migrations recorded yet. The existing inactive projects were left untouched. No schema has been applied, no Core data has been exported or migrated, and no Vercel configuration has been changed. The project's billing plan and free-tier capacity have not been verified; no production readiness is claimed.
 
 ## Current implementation that must change
 
@@ -23,19 +23,13 @@ A correct hosted migration therefore needs all of the following before the Verce
 
 The current registration behavior is a release blocker: public registration is open and the first account becomes owner. Do not expose the API to real users until controlled owner bootstrap/registration has been implemented and tested.
 
-## Create a separate Supabase project yourself
+## Project setup status
 
-The Supabase connector currently shows no project named Ragam and several inactive projects. Keep those untouched. To create a new project without sharing database credentials in chat:
+The user-created `ragam-core` project is active and its database is healthy. The connector reports region `eu-west-2` (London); the project is empty and has no migrations. The other inactive projects remain untouched. Before applying schema, confirm in the Supabase Dashboard that the project is on the **Free** plan and has no paid add-ons. The region is fixed for this project; if an India region is required, decide before adding schema or data and create a separate project rather than assuming it can be moved in place.
 
-1. In the Supabase Dashboard, choose **New project** and select your intended organization.
-2. Name it `ragam-core`.
-3. Select **Free** only if the dashboard confirms that no paid upgrade or add-on is required. If it asks for a paid plan, stop.
-4. Select **South Asia (Mumbai)** (`ap-south-1`) if offered; it is the closest listed region to Chennai. Keep the project isolated from other applications.
-5. Generate a strong database password, save it in your password manager, and do not paste it into chat, Git, or a browser build variable.
-6. Create the project and wait until Supabase reports that it is healthy. Do not add data or production credentials yet.
-7. Share only the project reference (the short project ID shown in the dashboard) when ready. Do not share the database password, service-role key, or any provider credentials.
+Keep the database password in the user's password manager. Do not paste it into chat, Git, a browser build variable, or Vercel logs. Share only the project reference when needed for connector operations; never share the database password, service-role key, or provider credentials.
 
-Free project quotas, sleep/pausing behavior, storage limits, and function limits can change. Verify the current limits in the dashboard before relying on the project for availability or real user data.
+Free project quotas, sleep/pausing behavior, storage limits, and function limits can change. Verify current limits in the dashboard before relying on the project for availability or real user data.
 
 ## Implementation sequence
 
