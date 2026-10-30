@@ -11,11 +11,11 @@ pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
 `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
 `download.pytorch.org`, `huggingface.co`.**
 
-**Test totals: 1901 cases across the three suites.** GitHub Actions run [41057876904](https://github.com/rajaram-2005/ragam/actions/runs/41057876904) passed all five jobs at commit `e265dfa`, including the 978-test Core suite, Web/Fabric tests, documentation accuracy, and measured release verification. Earlier runs [41053276734](https://github.com/rajaram-2005/ragam/actions/runs/41053276734) and [41054433331](https://github.com/rajaram-2005/ragam/actions/runs/41054433331) failed during migration work because test/documentation counts were stale and an artifact check did not find the Max package; those issues were corrected before the passing run. The latest full local Core run completed 978 tests: 967 passed and 11 failed only on unavailable genuine Pro/Max model artifacts (5) and Python NumPy (6) in this workspace. CI supplies the required verified artifacts and dependencies. No model weights or benchmark evidence were fabricated. No hosted Supabase migration or Vercel deployment has occurred.
+**Test totals: 1902 cases across the three suites.** GitHub Actions run [41057876904](https://github.com/rajaram-2005/ragam/actions/runs/41057876904) passed all five jobs at commit `e265dfa`, including the then-current 978-test Core suite, Web/Fabric tests, documentation accuracy, and measured release verification. The current branch adds async style-store injection to `OnlineApp`; CI for that change is pending. Earlier runs [41053276734](https://github.com/rajaram-2005/ragam/actions/runs/41053276734) and [41054433331](https://github.com/rajaram-2005/ragam/actions/runs/41054433331) failed during migration work because test/documentation counts were stale and an artifact check did not find the Max package; those issues were corrected before the passing run. The latest full local Core run completed 979 tests: 968 passed and 11 failed only on unavailable genuine Pro/Max model artifacts (5) and Python NumPy (6) in this workspace. CI supplies the required verified artifacts and dependencies. No model weights or benchmark evidence were fabricated. No hosted Supabase migration or Vercel deployment has occurred.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **978 tests** (70 files; latest local run: 967 passed, 11 environment-dependent failures; latest CI result recorded above) |
+| `services/core` | `node --test test/*.test.mjs` | **979 tests** (70 files; latest full local run: 968 passed, 11 environment-dependent failures; current CI run pending) |
 | `services/fabric` | `pytest -q` | **822 tests** (42 files; full GitHub Actions suite passed) |
 | `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; local and GitHub Actions runs passed) |
 | `apps/web` build | `vite build` | production bundle built successfully locally and in GitHub Actions |
@@ -246,7 +246,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (978 tests)
+### `services/core` — Implemented and tested (979 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|

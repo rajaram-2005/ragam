@@ -123,7 +123,7 @@ export function readInstallationDoc(name) {
 
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null, accountStore = null }) {
+  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
     // should refuse without leaving a half-written data directory behind.
     const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
@@ -135,6 +135,9 @@ export class OnlineApp {
     // with that combination would reproduce, on purpose, the failure it exists to fix.
     if (sameSite === 'none' && !secureCookie) {
       throw new Error('SameSite=None requires a Secure cookie: browsers discard it without one, so every session would end at the first request. Set AETHERIS_COOKIE_SECURE=true, or use strict or lax (AETHERIS_COOKIE_SAMESITE)')
+    }
+    if (styleStore && (typeof styleStore.get !== 'function' || typeof styleStore.set !== 'function')) {
+      throw new TypeError('styleStore must provide async-compatible get(accountId) and set(accountId, style) methods')
     }
     this.cookieSameSite = sameSite
     this.logger = typeof logger === 'function' ? logger : () => {}
@@ -163,7 +166,7 @@ export class OnlineApp {
     // A style is a stored preference, not an estimate. The estimator in adaptive/wording.mjs
     // guesses a state from a message; this surface never does: no preference means no
     // instruction, and the chat route never infers one from what the user wrote.
-    this.styles = new StyleStore({ dir: join(this.dir, 'styles') })
+    this.styles = styleStore ?? new StyleStore({ dir: join(this.dir, 'styles') })
     this.plugins = new PluginRegistry({ ledger: this.ledger, grantedScopes: [], requireSignature: false })
     this.mcp = new McpRegistry({ ledger: this.ledger, allowedRisks: [RISK.READ_ONLY] })
     // One reviewed in-process server makes the MCP area a working surface without pretending a

@@ -123,13 +123,13 @@ export async function contextRoutes(request, response, app, session) {
       return sendJson(response, 200, {
         styles: STYLES.map(({ id, label, instruction }) => ({ id, label, instruction })),
         prohibitions: STYLE_PROHIBITIONS,
-        preference: app.styles.get(accountId),
+        preference: await app.styles.get(accountId),
       }, app)
     }
     if (method === 'PUT') {
       const body = await readJson()
       if (!('style' in body)) throw failure('invalid_style', 'Send { style } with one of the listed ids, or null.', 400)
-      return sendJson(response, 200, app.styles.set(accountId, body.style ?? null), app)
+      return sendJson(response, 200, await app.styles.set(accountId, body.style ?? null), app)
     }
   }
   // --- skills -------------------------------------------------------------

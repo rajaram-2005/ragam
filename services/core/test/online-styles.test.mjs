@@ -20,7 +20,7 @@ import { STYLE_IDS } from '../src/online/styles.mjs'
 const listen = (s) => new Promise((done) => s.listen(0, '127.0.0.1', () => done(`http://127.0.0.1:${s.address().port}`)))
 const close = (s) => new Promise((done) => { s.closeAllConnections(); s.close(done) })
 
-async function fixture(t) {
+async function fixture(t, { styleStore = null } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'aetheris-styles-test-'))
   const f = { calls: [], dir, reply: 'Synthetic answer for the question.' }
   const gateway = createServer(async (req, res) => {
@@ -31,7 +31,7 @@ async function fixture(t) {
     return res.end(JSON.stringify({ model: body.model, choices: [{ message: { content: f.reply } }] }))
   })
   f.gatewayUrl = await listen(gateway)
-  const create = () => new OnlineApp({ dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: 2000 })
+  const create = () => new OnlineApp({ dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: 2000, ...(styleStore ? { styleStore } : {}) })
   f.app = create(); const server = f.app.server(); f.server = server; f.url = await listen(server)
   f.shutdown = async () => { if (server.listening) await close(server); f.app.close() }
   let cookie = ''
@@ -79,6 +79,33 @@ test('the seven styles are the directive list and every instruction carries the 
   assert.match(r.data.prohibitions, /permission/i)
   assert.equal(r.data.preference.style, null, 'no style is the default')
   assert.equal(r.data.preference.explicit, false)
+})
+
+test('style routes await an injected account-scoped store for hosted persistence', async (t) => {
+  const values = new Map()
+  const calls = []
+  const styleStore = {
+    async get(accountId) {
+      calls.push(['get', accountId])
+      return values.get(accountId) ?? { style: null, explicit: false }
+    },
+    async set(accountId, style) {
+      calls.push(['set', accountId, style])
+      const preference = { style, explicit: true }
+      values.set(accountId, preference)
+      return preference
+    },
+  }
+  const f = await fixture(t, { styleStore })
+  await f.login()
+  const identity = await f.request('GET', '/api/auth')
+  const accountId = identity.data.account.id
+  assert.equal((await f.request('GET', '/api/styles')).data.preference.explicit, false)
+  assert.deepEqual(await f.request('PUT', '/api/styles', { style: 'cautious' }).then((result) => result.data),
+    { style: 'cautious', explicit: true })
+  assert.deepEqual((await f.request('GET', '/api/styles')).data.preference,
+    { style: 'cautious', explicit: true })
+  assert.deepEqual(calls, [['get', accountId], ['set', accountId, 'cautious'], ['get', accountId]])
 })
 
 test('nothing selects a style for the user, even when the message is emotional', async (t) => {
