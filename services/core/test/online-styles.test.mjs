@@ -20,7 +20,7 @@ import { STYLE_IDS } from '../src/online/styles.mjs'
 const listen = (s) => new Promise((done) => s.listen(0, '127.0.0.1', () => done(`http://127.0.0.1:${s.address().port}`)))
 const close = (s) => new Promise((done) => { s.closeAllConnections(); s.close(done) })
 
-async function fixture(t, { styleStore = null } = {}) {
+async function fixture(t, { styleStore = null, contextStoreFactory = null } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'aetheris-styles-test-'))
   const f = { calls: [], dir, reply: 'Synthetic answer for the question.' }
   const gateway = createServer(async (req, res) => {
@@ -31,7 +31,7 @@ async function fixture(t, { styleStore = null } = {}) {
     return res.end(JSON.stringify({ model: body.model, choices: [{ message: { content: f.reply } }] }))
   })
   f.gatewayUrl = await listen(gateway)
-  const create = () => new OnlineApp({ dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: 2000, ...(styleStore ? { styleStore } : {}) })
+  const create = () => new OnlineApp({ dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: 2000, ...(styleStore ? { styleStore } : {}), ...(contextStoreFactory ? { contextStoreFactory } : {}) })
   f.app = create(); const server = f.app.server(); f.server = server; f.url = await listen(server)
   f.shutdown = async () => { if (server.listening) await close(server); f.app.close() }
   let cookie = ''
@@ -81,9 +81,22 @@ test('the seven styles are the directive list and every instruction carries the 
   assert.equal(r.data.preference.explicit, false)
 })
 
-test('style routes await an injected account-scoped store for hosted persistence', async (t) => {
+test('style and account-context routes await injected stores for hosted persistence', async (t) => {
   const values = new Map()
   const calls = []
+  const contextAccounts = []
+  const contextStoreFactory = async ({ accountId }) => {
+    contextAccounts.push(accountId)
+    return {
+      memory: {
+        async listMemories() { return [{ id: 'memory-1', text: 'user-approved' }] },
+        async listCandidates() { return [] },
+        async stats() { return { memories: 1 } },
+      },
+      knowledge: {},
+      media: {},
+    }
+  }
   const styleStore = {
     async get(accountId) {
       calls.push(['get', accountId])
@@ -96,10 +109,18 @@ test('style routes await an injected account-scoped store for hosted persistence
       return preference
     },
   }
-  const f = await fixture(t, { styleStore })
+  const f = await fixture(t, { styleStore, contextStoreFactory })
   await f.login()
   const identity = await f.request('GET', '/api/auth')
   const accountId = identity.data.account.id
+  const [firstMemoryRead, secondMemoryRead] = await Promise.all([
+    f.request('GET', '/api/memory'),
+    f.request('GET', '/api/memory'),
+  ])
+  assert.equal(firstMemoryRead.status, 200)
+  assert.equal(firstMemoryRead.data.memories[0].text, 'user-approved')
+  assert.deepEqual(secondMemoryRead.data.stats, { memories: 1 })
+  assert.deepEqual(contextAccounts, [accountId], 'concurrent route access should reuse the one async account store context')
   assert.equal((await f.request('GET', '/api/styles')).data.preference.explicit, false)
   assert.deepEqual(await f.request('PUT', '/api/styles', { style: 'cautious' }).then((result) => result.data),
     { style: 'cautious', explicit: true })
