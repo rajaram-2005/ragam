@@ -84,7 +84,20 @@ jobs:
       # one already had. docs/03-status.md reports the current totals.
       - name: Test
         working-directory: services/core
-        run: node --test test/*.test.mjs
+        run: |
+          # Match the release-verification invocation and retain the TAP diagnostics.
+          # A separate Core job must expose its failure reason in check annotations too.
+          set +e
+          node --test --test-reporter=tap test/*.test.mjs > /tmp/core.tap 2>&1
+          status=$?
+          tail -n 10 /tmp/core.tap
+          if [ "$status" -ne 0 ]; then
+            grep -E '^not ok ' /tmp/core.tap | head -n 5 |
+              while IFS= read -r line; do echo "::error::$line"; done
+            awk '/^not ok /{remaining=25} remaining>0{print; remaining--}' /tmp/core.tap | head -n 100 |
+              while IFS= read -r line; do echo "::error::$(printf '%s' "$line" | cut -c1-300)"; done
+          fi
+          exit "$status"
 
   fabric:
     name: Fabric training service (Python + NumPy)
