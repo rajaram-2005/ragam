@@ -4,6 +4,32 @@ import { readFileSync } from 'node:fs'
 
 const migrationPath = new URL('../../../supabase/migrations/20261030000100_initial_core.sql', import.meta.url)
 const migration = readFileSync(migrationPath, 'utf8')
+const memoryRpcPath = new URL('../../../supabase/migrations/20261031000100_memory_rpcs.sql', import.meta.url)
+const memoryRpcMigration = readFileSync(memoryRpcPath, 'utf8')
+
+test('memory RPC migration keeps compound operations transactional and service-role-only', () => {
+  const functions = [
+    ['ragam_memory_remember', 'text,text,text,text,text,jsonb,text,text,text,bigint,integer'],
+    ['ragam_memory_supersede', 'text,text,text,text,text,text,jsonb,text,text,bigint,integer'],
+    ['ragam_memory_forget', 'text,text,text,bigint,text,text'],
+    ['ragam_memory_forget_all', 'text,bigint,text,text'],
+    ['ragam_memory_decide_candidate', 'text,text,boolean,text,text,text,jsonb,bigint,integer'],
+    ['ragam_memory_append_turn', 'text,text,text,text,text,text,bigint,integer'],
+    ['ragam_memory_delete_session', 'text,text'],
+    ['ragam_memory_stats', 'text'],
+  ]
+  for (const [name, signature] of functions) {
+    const body = new RegExp(`CREATE FUNCTION public\\.${name}\\([\\s\\S]*?\\$\\$;`).exec(memoryRpcMigration)?.[0]
+    assert.ok(body, `${name} must be defined in the versioned migration`)
+    assert.match(body, /SECURITY DEFINER SET search_path = ''/)
+    assert.match(memoryRpcMigration, new RegExp(`REVOKE ALL ON FUNCTION public\\.${name}\\(${signature}\\) FROM PUBLIC, anon, authenticated;`))
+    assert.match(memoryRpcMigration, new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${name}\\(${signature}\\) TO service_role;`))
+  }
+  assert.match(memoryRpcMigration, /pg_advisory_xact_lock/, 'deduplication and count caps serialize per account')
+  assert.match(memoryRpcMigration, /training_use/)
+  assert.match(memoryRpcMigration, /INSERT INTO public\.ragam_memory_deletions/)
+  assert.ok(memoryRpcMigration.includes('This migration remains local/staged; do not apply it to hosted ragam-core yet'))
+})
 
 test('initial Supabase schema is additive, fail-closed, and keeps account data scoped', () => {
   const created = [...migration.matchAll(/^CREATE TABLE public\.(\w+)\s*\(/gm)].map((match) => match[1])

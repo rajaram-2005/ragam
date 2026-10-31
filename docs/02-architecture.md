@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 37,811 source lines, 24,962 test lines
+### `services/core` — 38,366 source lines, 25,196 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -126,9 +126,10 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/base.mjs` | 136 | Provider contract, timeout and retry helpers |
 | `policy/classify.mjs` | 143 | Secret and sensitivity classification, redaction |
 | `audit/ledger.mjs` | 137 | Append-only SQLite ledger, query, NDJSON export, subject purge |
-| `memory/store.mjs` | 702 | User-approved memory, candidates that need approval before use, and session recall with citations |
+| `memory/store.mjs` | 656 | Local SQLite implementation of user-approved memory, approval-gated candidates, and session recall with citations |
 | `memory/fabric.mjs` | 790 | Seven layers, each entry carrying assertion and verification as separate records, required provenance rows, a confidence with a required basis, scope and readers enforced on read, and deletion that takes the provenance with it |
 | `memory/bridge.mjs` | 138 | Approved memory entering the fabric as a claim (never a fact), and fabric entries leaving as candidates a person must approve; one direction, because the schema refuses the other |
+| `memory/contracts.mjs` | 42 | Storage-independent memory invariants, limits, states, and coded error contract shared by local and hosted stores |
 | `skills/permissions.mjs` | 272 | The permission block of a SKILL.md: parsed, refused when malformed or wildcarded, bounded against the runtime grant, and used as the scope the procedure runs with — a caller cannot widen it |
 | `skills/evaluation.mjs` | 274 | EVALUATE and DIAGNOSE: an append-only digest-chained verdict log, the incumbent's passing checks as the regression set, and a closed set of diagnoses (regression, regression_not_run, new_failure) so a rejection says which kind it was |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
@@ -137,6 +138,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `storage/supabase-session-store.mjs` | 117 | Durable server-side sessions that store only SHA-256 hashes of opaque browser tokens |
 | `storage/supabase-account-store.mjs` | 275 | Supabase-backed account records, scrypt authentication, password recovery and distributed login throttles |
 | `storage/supabase-style-store.mjs` | 81 | Async account-filtered style preference persistence with validated IDs and explicit-null semantics; tested but not yet wired into `OnlineApp` |
+| `storage/supabase-memory-store.mjs` | 559 | Account-filtered async memory/session repository with BM25 rebuilt from approved rows and transactional SQL RPCs for approval, deletion, and append semantics; implemented but not wired into startup |
 | `klyvaron/tiers.mjs` | 1,140 | Separated subscription tiers, 8 first-party Klyvaron model identities (`pro` & `max` across Chat, Image, Video, Voice), programmatic runtime capability readiness (`ready`, `partially_available`, `missing_artifact`, `runtime_unqualified`, `training_required`, `unsupported_hardware`), and separate Pro/Max capability manifests |
 | `klyvaron/plan.mjs` | 187 | The development plan: thirteen per-tier gates derived from the tier records, including the stance, the two differentiators, modality separation and `own_weights`, each open gate with its reason |
 | `klyvaron/trends.mjs` | 186 | Dated, sourced observations that expire and abstain; the mechanism `trend.awareness` is defined against, with no model behind it |

@@ -7,11 +7,11 @@ something does not work, it says so and says why.
 
 **Core test environment used for the verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test totals: 1902 cases across the three suites.** Full GitHub Actions run [41061920819](https://github.com/rajaram-2005/ragam/actions/runs/41061920819) at `b72593f` passed all five jobs. A later run [41214306367](https://github.com/rajaram-2005/ragam/actions/runs/41214306367) passed Web, Docs, Core service and Fabric, but its duplicate counted Core suite in Release verification failed at test 373 (`klyvaron-max-lm` acceptance); the annotation lacked assertion detail and the Actions log endpoint returned EOF, so the cause remains unknown. Follow-up run [41214987248](https://github.com/rajaram-2005/ragam/actions/runs/41214987248) at `22fabe2` passed all five jobs, so the discrepancy did not reproduce. The complete local Core suite passes **979/979** and the isolated Max test passes locally. No tests were skipped or weakened, no weights or results were fabricated, and no model or environment artifacts are committed. No hosted Supabase migration or Vercel deployment has occurred.
+**Test totals: 1911 cases across the three suites.** The last fully green pre-migration CI run was [41215729276](https://github.com/rajaram-2005/ragam/actions/runs/41215729276) at `ae86ddb`. The follow-up at `3741d30` passed Release verification, Docs, Fabric and Web, but the separate Core job exited 1; its signed log was not retrievable here, so its cause is unknown. The current worktree adds the async Supabase memory/session store and staged transactional RPC migration. The full Core suite now passes **988/988 locally** with the documented Python environment; the Docs and Release suites pass **63/63**. No tests were skipped or weakened, no weights or results were fabricated, and no model or environment artifacts are committed. No hosted Supabase migration or Vercel deployment has occurred.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **979 tests** (70 files; local run and follow-up CI: **979 / 979 passed**; the earlier Release verification discrepancy in 412143 did not reproduce) |
+| `services/core` | `node --test test/*.test.mjs` | **988 tests** (71 files; full local run: **988 / 988 passed**) |
 | `services/fabric` | `pytest -q` | **822 tests** (42 files; full GitHub Actions suite passed) |
 | `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; local and GitHub Actions runs passed) |
 | `apps/web` build | `vite build` | production bundle built successfully locally and in GitHub Actions |
@@ -242,7 +242,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (979 tests)
+### `services/core` — Implemented and tested (988 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|

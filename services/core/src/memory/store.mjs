@@ -40,55 +40,9 @@ import { dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 import { Bm25Index } from '../knowledge/bm25.mjs'
+import { APPROVER, CANDIDATE_STATES, LIMITS, MEMORY_KINDS, MEMORY_MECHANISMS, MemoryError } from './contracts.mjs'
 
-/**
- * The distinct mechanisms, named so a reader can see what this module is *not*.
- * §7 requires these to remain separate; keeping the list next to the code that owns two
- * of them is the cheapest way to stop them merging by accident.
- */
-export const MEMORY_MECHANISMS = Object.freeze({
-  CONVERSATION_CONTEXT: 'conversation_context',   // the current request; nothing persisted
-  APPROVED_MEMORY: 'approved_memory',             // this module
-  SESSION_RECALL: 'session_recall',               // this module, on demand only
-  RETRIEVAL_INDEX: 'retrieval_index',             // knowledge/, for documents
-  TRAINING_EXAMPLE: 'training_example',           // fabric/, only from validated failures
-  RELEASED_WEIGHTS: 'released_weights',           // an artifact with a model card
-})
-
-export const MEMORY_KINDS = Object.freeze({
-  FACT: 'fact',
-  PREFERENCE: 'preference',
-  DECISION: 'decision',
-  CONSTRAINT: 'constraint',
-})
-
-export const CANDIDATE_STATES = Object.freeze({
-  PENDING: 'pending',
-  APPROVED: 'approved',
-  REJECTED: 'rejected',
-})
-
-/** The only value the schema accepts. An agent cannot approve its own memory. */
-export const APPROVER = 'user'
-
-export const LIMITS = Object.freeze({
-  maxMemoryChars: 2000,
-  maxMemories: 2000,
-  maxTurnsPerSession: 2000,
-  maxRecallResults: 25,
-  // Injected memories are capped by count as well as by relevance, so a large memory
-  // store cannot silently consume a prompt.
-  maxContextMemories: 8,
-})
-
-export class MemoryError extends Error {
-  constructor(message, code = 'memory_error', detail = {}) {
-    super(message)
-    this.name = 'MemoryError'
-    this.code = code
-    this.detail = detail
-  }
-}
+export { APPROVER, CANDIDATE_STATES, LIMITS, MEMORY_KINDS, MEMORY_MECHANISMS, MemoryError } from './contracts.mjs'
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS memories (

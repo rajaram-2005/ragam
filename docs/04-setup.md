@@ -256,11 +256,11 @@ curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed4
 PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
 ```
 
-The pinned archive includes the model manifests and checksum list. A full successful run validates all 979 cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
+The pinned archive includes the model manifests and checksum list. A full successful run validates all 988 cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-npm test                  # all three suites (1902 tests)
-npm run test:core         # 979
+npm test                  # all three suites (1911 tests)
+npm run test:core         # 988
 npm run test:web          # 101
 npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
@@ -315,7 +315,7 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 979 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Latest complete run: [41060698368](https://github.com/rajaram-2005/ragam/actions/runs/41060698368) at `58d1216`; all five CI jobs passed. |
+| **Core service** | Current suite: 988 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Latest pushed CI at `3741d30`: [41218973442](https://github.com/rajaram-2005/ragam/actions/runs/41218973442) passed Release verification, Docs, Fabric and Web, but the Core job exited 1 with no retrievable assertion details; the current 988-test Core suite passes locally. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 101 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 49-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
