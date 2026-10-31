@@ -14,11 +14,9 @@ Every command below was run on the host described in
 | `services/core` | **Node ≥ 22.5.0** (for `node:sqlite`). Zero npm dependencies | Node v22.22.3 |
 | `services/fabric` | **Python ≥ 3.11** + **NumPy** | Python 3.11.2, NumPy 2.1.3 |
 | `apps/web` | Node 22.x and npm. Vite 8 requires ≥ 20.19 or ≥ 22.12; the Vercel function runtime is pinned to Node 22. 2 runtime packages, 23 installed in total | Vite 8.3.4, React 18.3.1 |
-| Tests | `pytest` for Fabric; nothing extra for core or web | pytest 9.1.1 |
+| Tests | Python 3.11 with NumPy, JAX, PyAV and Pillow plus the pinned first-party Pro/Max packages for the full Core suite; `pytest` for Fabric; nothing extra for Web | Python 3.11.2, NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0, Pillow 13.0.0, pytest 9.1.1 |
 
-No GPU is required for anything in this repository. No model weights are
-downloaded, and none are needed to run the platform — see §7 for what that means
-in practice.
+No GPU is required for anything in this repository. No model weights are downloaded or needed to run the platform — see §7 for what that means in practice. The full Core acceptance suite is different: five tests exercise genuine released Pro/Max packages and several worker tests import Python multimodal dependencies. Those test-only prerequisites are described in §4; they are kept outside Git.
 
 > **Do not `pip install torch`.** Nothing here imports it. On a GPU-less host pip
 > resolves torch to the CUDA build and pulls several gigabytes of runtime that
@@ -239,6 +237,26 @@ limitations.
 ---
 
 ## 4. Tests
+
+### Full Core test prerequisites
+
+The application itself needs neither Python nor model weights. To run the **entire** Core acceptance suite locally, provide the Python test environment and the same genuine, digest-verified first-party artifacts used by CI. The artifacts live only under ignored `.aetheris-data/`; they are not committed. Run from the repository root:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install numpy==2.4.6 jax==0.10.2 av==18.1.0 Pillow==13.0.0
+mkdir -p .aetheris-data/online/klyvaron/models
+curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40 \
+  | tar -xz --strip-components=1 -C .aetheris-data/online/klyvaron/models
+(
+  cd .aetheris-data/online/klyvaron/models
+  cat klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part* > klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz
+  sha256sum -c SHA256SUMS
+)
+PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
+```
+
+The pinned archive includes the model manifests and checksum list. A full successful run validates all 979 cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
 npm test                  # all three suites (1902 tests)

@@ -5,17 +5,13 @@
 Every claim below is tied to a test, a measurement or a named limitation. Where
 something does not work, it says so and says why.
 
-**Host used for all of this work:** 2 CPUs · 3.85 GB RAM · **no GPU** ·
-Node v22.22.3 (`node:sqlite` verified) · Python 3.11.2 · NumPy 2.1.3 ·
-pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
-`registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
-`download.pytorch.org`, `huggingface.co`.**
+**Core test environment used for the verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test totals: 1902 cases across the three suites.** GitHub Actions run [41060698368](https://github.com/rajaram-2005/ragam/actions/runs/41060698368) at commit `58d1216` passed all five jobs, including the 979-test Core suite, Web/Fabric tests, documentation accuracy, and measured release verification. The immediately prior run [41059287828](https://github.com/rajaram-2005/ragam/actions/runs/41059287828) had a Core-job failure while its separate counted Core suite passed; a clean subsequent run passed all jobs, and no specific cause for that discrepancy was established. The latest full local Core run completed 979 tests: 968 passed and 11 failed only on unavailable genuine Pro/Max model artifacts (5) and Python NumPy (6) in this workspace. CI supplies the required verified artifacts and dependencies. Earlier migration failures from stale inventory and missing artifact checks were corrected before this passing run. No model weights or benchmark evidence were fabricated. No hosted Supabase migration or Vercel deployment has occurred.
+**Test totals: 1902 cases across the three suites.** GitHub Actions run [41061920819](https://github.com/rajaram-2005/ragam/actions/runs/41061920819) at commit `b72593f` passed all five jobs, including Core, Web, Fabric, documentation accuracy and measured release verification. The full local Core suite now also passes **979/979** after provisioning the missing Python test dependencies in an isolated, ignored `.venv` and staging the genuine, digest-verified first-party artifacts in ignored `.aetheris-data/`. No weights or test results were fabricated; no model or environment artifacts are committed. No hosted Supabase migration or Vercel deployment has occurred.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **979 tests** (70 files; latest full local run: 968 passed, 11 environment-dependent failures; current CI run pending) |
+| `services/core` | `node --test test/*.test.mjs` | **979 tests** (70 files; full local run and latest CI: **979 / 979 passed**) |
 | `services/fabric` | `pytest -q` | **822 tests** (42 files; full GitHub Actions suite passed) |
 | `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; local and GitHub Actions runs passed) |
 | `apps/web` build | `vite build` | production bundle built successfully locally and in GitHub Actions |
