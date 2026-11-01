@@ -45,6 +45,24 @@ test('registration normalizes email, scrypt-hashes passwords, and delegates owne
   now += 1
 })
 
+test('hosted registration requires the bootstrap email for the first owner and stays closed by default', async () => {
+  let registered = false
+  const client = fakeClient(async (endpoint, options) => {
+    if (endpoint.endsWith('/ragam_accounts')) return registered ? [{ id: ACCOUNT_ID }] : []
+    if (endpoint.endsWith('/rpc/ragam_register_account')) {
+      registered = true
+      return { ok: true, account: { ...publicAccount(), id: options.body.p_account_id, email: options.body.p_email, role: 'owner', created_at: options.body.p_now, updated_at: options.body.p_now } }
+    }
+    throw new Error(`Unexpected endpoint ${endpoint}`)
+  })
+  const store = new SupabaseAccountStore({ client, bootstrapEmail: 'owner@example.test', registrationEnabled: false })
+  await assert.rejects(store.register({ email: 'other@example.test', password: PASSWORD }), (error) => error.code === 'owner_bootstrap_email_required' && error.status === 403)
+  assert.equal(registered, false)
+  const owner = await store.register({ email: 'Owner@example.test', password: PASSWORD })
+  assert.equal(owner.role, 'owner')
+  await assert.rejects(store.register({ email: 'member@example.test', password: PASSWORD }), (error) => error.code === 'registration_disabled' && error.status === 403)
+})
+
 test('login verifies scrypt hashes locally and asks an atomic RPC to persist success or lockout', async () => {
   const attempts = []
   const client = fakeClient(async (endpoint, { body }) => {

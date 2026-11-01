@@ -1,6 +1,6 @@
 -- Initial Ragam Core relational schema for the Vercel Functions + Supabase target.
--- This file is staged for review and local/disposable validation only. It has NOT been
--- applied to the hosted ragam-core project. No user data is copied by this migration.
+-- Apply this baseline before the follow-on RPC and hosted-storage migrations. It creates
+-- schema only; it does not read, copy, or delete any existing local or hosted user data.
 --
 -- Browser roles receive no policies. The server-only service-role client bypasses RLS,
 -- so every server request MUST authenticate first and include explicit account ownership

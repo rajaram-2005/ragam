@@ -63,10 +63,11 @@ export class SupabaseAdminClient {
     this.timeoutMs = Math.max(1, Math.min(30_000, Number(timeoutMs) || 10_000))
   }
 
-  async request(endpoint, { method = 'GET', query = '', headers = {}, body, timeoutMs = this.timeoutMs } = {}) {
+  async request(endpoint, { method = 'GET', query = '', headers = {}, body, responseType = 'json', timeoutMs = this.timeoutMs } = {}) {
     const path = endpointPath(endpoint)
     const verb = String(method).toUpperCase()
     if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(verb)) throw new SupabaseAdminError('supabase_method_invalid')
+    if (!['json', 'bytes'].includes(responseType)) throw new SupabaseAdminError('supabase_response_type_invalid')
     if (typeof query !== 'string' || query.startsWith('?') || query.includes('#')) throw new SupabaseAdminError('supabase_query_invalid')
     const url = `${this.#origin}/${path}${query ? `?${query}` : ''}`
     const controller = new AbortController()
@@ -90,6 +91,7 @@ export class SupabaseAdminClient {
       })
       if (!response.ok) throw new SupabaseAdminError(`supabase_http_${response.status}`, response.status)
       if (response.status === 204 || verb === 'HEAD') return null
+      if (responseType === 'bytes') return new Uint8Array(await response.arrayBuffer())
       const text = await response.text()
       if (!text) return null
       try { return JSON.parse(text) } catch { throw new SupabaseAdminError('supabase_response_invalid', response.status) }

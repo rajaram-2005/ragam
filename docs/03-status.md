@@ -7,14 +7,14 @@ something does not work, it says so and says why.
 
 **Core test environment used for the verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test totals: 1935 cases across the three suites.** The latest successful CI run [41270904552](https://github.com/rajaram-2005/ragam/actions/runs/41270904552) at `ddc3a95` passed all five jobs, including Core and Release verification. Locally, the full Core suite passes **1012/1012**, Docs/Release passes **63/63**, Web passes **101/101**, and Fabric passes **822/822**. The implementation adds the account-scoped async Supabase BM25 pipeline, injectable per-account context factory, bulk ACL filtering, paged reads below PostgREST row caps, and an authenticated-principal override at the knowledge search route. Pipeline tests use a mocked PostgREST harness; the transactional knowledge RPCs were separately exercised in disposable PGlite. No hosted Supabase migration, data transfer, Vercel configuration change, or deployment has occurred.
+**Test totals: 1958 cases across the three suites** (Core 1035, Web 101, Fabric 822). The last successful GitHub Actions run before the current hosted-function work was [41271512048](https://github.com/rajaram-2005/ragam/actions/runs/41271512048) at `1dbbf51`; the current Vercel/Supabase integration changes have not yet completed CI. The current full Core, Web, and Fabric suites have all passed locally; the focused Supabase/docs/schema set also passed. The repository now contains the Vercel Core Function entrypoint and Supabase account/session, provider, audit, memory/knowledge, styles, and bounded private-media wiring. The user reports that only the baseline SQL migration has been applied in Supabase; no subsequent migration has been verified, no data has been transferred, and no Vercel project settings or deployment have been changed by the agent.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **1012 tests** (73 files; full local run pending the refreshed docs assertions) |
-| `services/fabric` | `pytest -q` | **822 tests** (42 files; full GitHub Actions suite passed) |
-| `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; local and GitHub Actions runs passed) |
-| `apps/web` build | `vite build` | production bundle built successfully locally and in GitHub Actions |
+| `services/core` | `PATH=.venv/bin:$PATH node --test test/*.test.mjs` | **1035 tests** (80 files; 1035/1035 passed with Python multimodal dependencies and the pinned Pro/Max artifact archive installed outside Git and checksum-verified) |
+| `services/fabric` | `PATH=.venv/bin:$PATH npm run test:fabric` | **822 tests** (42 files; local run passed) |
+| `apps/web` | `npm run test:web` | **101 tests** (5 files; 101/101 passed locally) |
+| `apps/web` build | `npm run build --prefix apps/web` | production bundle built successfully locally |
 
 **Released first-party Klyvaron Pro and Max multimodal artifacts (all 8 trained from scratch, `baseCheckpoint: null`, verified by SHA-256 on load):**
 
@@ -242,7 +242,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (1012 tests)
+### `services/core` — Implemented and tested (1035 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -256,8 +256,9 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Ollama / llama.cpp, online entry | **Implemented and tested against a loopback fixture** | Same transport as LiteLLM; keyless by default; exact trusted origin required. No real runtime qualified here |
 | Klyvaron development plan | **Implemented and tested** | Per-tier gates derived from the tier records, `klyvaron.mjs plan`; see [docs/11](11-klyvaron-family.md) §1.5 |
 | Klyvaron CPU execution | **Implemented and tested** | Single worker, bounded incremental streaming, cancellation/deadlines, one-model residency; see doc 15 |
-| Knowledge pipeline | **Implemented and tested** | SQLite + filesystem + in-memory rebuildable BM25; hosted Supabase storage is not wired into the pipeline yet |
-| Supabase knowledge repository | **Implemented and tested as an adapter** | Account-filtered and bounded async reads; transactional Postgres RPCs for insert/dedup/chunk/ACL and hard-delete receipts; PGlite exercises insert, dedup, exact stats, and purge. Staged only; not applied to hosted Supabase or wired into the Vercel function path |
+| Knowledge pipeline | **Implemented and tested** | SQLite remains the local default; the hosted Vercel factory injects account-scoped Supabase memory/knowledge stores with bounded BM25 refresh, ACL filtering, and grounded citations |
+| Supabase knowledge repository | **Implemented and tested as an adapter** | Account-filtered bounded reads; transactional Postgres RPCs for insert/dedup/chunk/ACL and hard-delete receipts; PGlite exercises insert, dedup, exact stats, and purge. Its RPC migration is staged but the user has not confirmed applying it to hosted Supabase |
+| Vercel Core handler | **Implemented; not deployed** | Node Function entrypoint, parsed-body limits, warm-instance reuse, Supabase startup wiring and same-origin frontend proxy. No live Supabase round-trip or Vercel Preview test yet |
 | Media queue & validation | **Implemented and tested** | Progress, cancellation, timeouts, retry-after, state history; an optional state file makes a terminal job and its artifact survive a restart, and a job interrupted mid-run is recorded as `failed` with `interrupted`, never replayed as running |
 | Plugin registry & manifests | **Implemented and tested** | Preflight vs invoke distinction; uninstall keeps a record |
 | MCP layer & schema validator | **Implemented and tested** | Risk tiers, approval gates, output neutralisation, per-tool timeouts |

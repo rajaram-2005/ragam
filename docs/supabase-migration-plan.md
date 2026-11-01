@@ -1,65 +1,56 @@
-# Supabase migration plan (not yet deployed)
+# Supabase + Vercel migration status
 
-## Chosen target
+## Target architecture
 
-The proposed cloud architecture is Vercel Node.js Functions for request execution, Supabase Postgres for durable structured state, and a private Supabase Storage bucket for file artifacts. This is a substantial backend migration, not a `CORE_API_URL` change. Supabase does not run the existing long-lived Node server by itself.
+The migration target uses two Vercel projects connected to this repository:
 
-The Supabase project `ragam-core` is `ACTIVE_HEALTHY` in `eu-west-2` (London); the user confirmed its dashboard plan is Free and chose to keep this region. Its database is healthy and has no migrations recorded yet. The existing inactive projects were left untouched. A server-only REST transport module (`services/core/src/storage/supabase-admin.mjs`) has been added with fixed-origin, path/header allowlists, bounded requests, and sanitized errors; its four tests use mocks only. No live database/storage request has been made, no schema has been applied, no Core data has been exported or migrated, and no Vercel configuration has been changed. The connector does not independently report billing plan or quota; no production readiness is claimed.
+- **Web project:** Root Directory `apps/web`, builds the Vite frontend and serves the same-origin `/api/*` proxy.
+- **Core project:** Root Directory `services/core`, runs `api/[...path].js` as a Node.js Function. Its handler reuses one `OnlineApp` per warm Function instance and does not start a listening server.
+- **Supabase:** Postgres is the durable system of record; a private `ragam-media` Storage bucket holds validated image/video artifacts.
 
-## Current implementation that must change
+The web project's `CORE_API_URL` is a bare exact HTTPS origin for the Core project (no path and no trailing slash). Browser code continues to call relative `/api/*` paths, preserving HttpOnly cookies and same-origin browser behavior. The Core Vercel project must trust the exact web Preview/Production origins.
 
-The Core service currently starts a long-lived `node:http` server and uses synchronous `node:sqlite` stores. Persistent state spans accounts and password resets, provider configuration, audit events, memories and sessions, knowledge documents/chunks/embeddings, skills/styles, Klyvaron configuration, and durable job metadata. Media and other artifacts also use local filesystem paths. Authentication sessions are currently process-local memory.
+The user chose to keep Supabase project `ragam-core` on the Free plan in London (`eu-west-2`). No plan or region changes are recommended.
 
-### Repository storage inventory (migration work starts here)
+## Hosted implementation now present in the repository
 
-| Existing state | Current implementation | Hosted replacement / gate |
-|---|---|---|
-| Accounts and password resets | Default `online/accounts.mjs` remains SQLite/file-backed; an injectable `SupabaseAccountStore` now uses Postgres rows and atomic auth RPCs | Wire only after the Vercel handler and controlled owner bootstrap; choose a reset-delivery method before enabling hosted reset |
-| Sessions and sign-in throttles | Default `OnlineApp` remains process-local; injectable Supabase stores now persist token hashes and use shared hashed rate-limit buckets | Wire the stores at the serverless entrypoint and verify revocation/throttling across independent invocations |
-| Provider connections and presets | `online/store.mjs`: one installation-level JSON file; credentials are AES-GCM encrypted with a local `master.key` | Postgres records with app-side encryption key held as a server secret; preserve the installation-wide/owner semantics and never return ciphertext or plaintext to the browser |
-| Audit ledger | `audit/ledger.mjs`: append-only SQLite events | Postgres append-only table; preserve redaction and actor/subject linkage |
-| Memory, chat sessions, and turns | `memory/store.mjs`: account-specific SQLite files; `memory/fabric.mjs` adds provenance/tombstones. `storage/supabase-memory-store.mjs` now implements the account-filtered async memory/session contract; BM25 is rebuilt from approved rows, while deduplication, candidate approval, supersede/delete, and turn append use account-serialized Postgres RPCs. `OnlineApp` can inject this through its async context factory, but defaults to SQLite | Wire it only after the Vercel handler is ready, then run cross-invocation tests and explicit export/deletion checks against disposable Supabase; Fabric entries/provenance/tombstones still need their own repository |
-| Knowledge documents and index | `knowledge/store.mjs`: account-specific SQLite tables for documents, chunks, ACL, embeddings, index runs, and deletion records. `SupabaseKnowledgeStore` now provides account-filtered, bounded PostgREST reads, atomic document/chunk/ACL insertion and purge RPCs, bulk ACL reads (no per-chunk network checks), opaque float32 embedding bytes, index-run records, and exact stats. `SupabaseKnowledgePipeline` is an async BM25 counterpart preserving deduplication, access/classification filters, citation offsets, grounded context, evaluation, purge, and stats. It refreshes a bounded account snapshot on every search to see writes from other warm Functions instances; scans over 10,000 chunks or ACL rows fail closed. `createSupabaseContextStoreFactory` builds the per-account Supabase memory and knowledge stores and waits for initial index initialization. The `/api/knowledge/search` route overwrites caller-supplied principals with the authenticated account id. Pipeline and factory tests use an in-memory PostgREST harness; the staged `20261101000100_knowledge_rpcs.sql` was separately exercised in disposable PGlite | The factory is available through `OnlineApp`'s injected async context seam, but `server.mjs` does not select it yet; hosted migration, Vercel handler, full account/session/style/startup wiring, and cross-invocation live Supabase tests are still required. Embeddings remain opaque and unused by the Supabase BM25 path |
-| Skills and styles | `skills/store.mjs` and `online/styles.mjs`: local files and version/deletion records; an account-filtered `SupabaseStyleStore` now validates and persists response-style preferences, and `OnlineApp` accepts an injected async-compatible style store | The app still defaults to its local file store; startup does not construct the Supabase adapter. Skills remain local. Database-backed skill metadata/content must preserve version history, and installation-wide reviewed skills remain distinct from user-owned preferences |
-| Media jobs and generated files | Job state and outputs use process/local filesystem storage in current paths | Durable job metadata and private Storage objects; a serverless request must not claim background execution beyond its bounded lifetime |
-| Klyvaron artifacts and training | Model files, qualifications, checkpoints, and worker state are local filesystem/process based | **Not a Vercel Functions migration item.** Keep local training/artifacts local unless a separately approved compatible worker/storage design is provided; do not claim serverless training or move private artifacts to public Storage |
+- `services/core/api/[...path].js`, `services/core/vercel.json`, and `services/core/src/vercel/handler.mjs` provide the Vercel Function entry point, warm-instance app reuse, body-size checks, bounded Node request dispatch, and safe startup errors. `readBody()` accepts Vercel's parsed JSON body while preserving the 2 MiB limit and overwriting caller-supplied ownership fields.
+- `SupabaseAdminClient` is server-only, pins an exact HTTPS Supabase origin, limits endpoints/headers, bounds requests, sanitizes errors, and supports binary Storage downloads.
+- `SupabaseAccountStore` and `SupabaseSessionStore` persist accounts, auth throttles, revocation, and hashes of opaque session tokens. Hosted signup requires `AETHERIS_OWNER_EMAIL` for the first account and remains disabled afterward unless explicitly enabled. Reset delivery remains disabled without a real channel.
+- `SupabaseProviderStore` keeps provider credentials AES-GCM encrypted with `AETHERIS_PROVIDER_ENCRYPTION_KEY`; an optimistic revision-checked SQL RPC prevents stale warm Functions from silently overwriting newer settings. Each request refreshes the provider snapshot; queued provider and audit writes are flushed before the response is ended.
+- `SupabaseAuditLedger` queues append-only events and retains failed events for safe retry.
+- `SupabaseMemoryStore`, `SupabaseKnowledgeStore`, `SupabaseKnowledgePipeline`, and `createSupabaseContextStoreFactory` provide account-scoped durable memory, session history, knowledge, ACL checks, deletion, bounded pagination, and grounded citations.
+- `SupabaseMediaQueue` stores image/video metadata in Postgres and validated artifacts in the private Storage bucket. Generation runs synchronously inside a bounded request (maximum 45 seconds and 24 MiB artifact size); it is **not** a background worker. It accepts abort from a disconnected request, verifies stored bytes by SHA-256, and filters every operation by account.
+- Local Klyvaron training/worker and hosted Voice routes are blocked in the Vercel adapter. Model training and its artifacts remain local; the Functions runtime does not claim to train or host those local weights.
 
-A versioned baseline SQL migration exists at `supabase/migrations/20261030000100_initial_core.sql`. It creates 28 relational tables, enables RLS with no browser-role policies, and includes account-scoped foreign keys and constraints for personal-memory consent/training prohibition. Its syntax was exercised in an ephemeral PGlite instance, and a repository test checks the table/RLS inventory. `SupabaseAccountRepository` adds a narrow, tested PostgREST layer that always filters reads/writes by account and refuses caller-supplied ownership changes.
+## Supabase migration state
 
-Authentication persistence is partially implemented. The baseline migration includes service-role-only atomic account registration, password lockout/update/reset, shared rate-limit, and session create/revoke RPCs. `SupabaseAccountStore` preserves the scrypt password policy, stores only password/reset hashes, delegates concurrent account/lockout/reset operations to SQL, and supports distributed address/installation throttling. `SupabaseSessionStore` persists only hashes of opaque cookies. `OnlineApp` accepts injected async account/session stores and awaits their auth operations. The second staged migration adds the transactional memory/session operations used by `SupabaseMemoryStore`. Both migrations were applied together in a disposable PGlite database; remember/dedupe, candidate approval, supersede, append, delete, and full wipe RPC paths were exercised there. This validates SQL syntax and local RPC behavior only; it is not a live Supabase integration. Repository tests cover account filtering, consent invariants, store behavior, service-role grants and the migration inventory.
+The user reports that the first migration, `20261030000100_initial_core.sql`, was run in the Supabase SQL Editor and returned **“Success. No rows returned.”** That is the normal result for schema DDL. The hosted baseline is therefore user-applied according to that report, but the agent has not independently queried Supabase to verify its objects.
 
-This remains an injectable implementation stage, not a deployed integration: `OnlineApp` accepts an async per-account `contextStoreFactory`, and `createSupabaseContextStoreFactory` now supplies the Supabase memory and knowledge repositories after awaiting bounded index initialization. The factory requires a deployment-specific media queue rather than silently using the existing local-disk queue. `SupabaseKnowledgePipeline` is async and preserves grounded, account-authorized citations; direct PostgREST snapshots refresh per search and fail closed above 10,000 chunks or ACL rows. Its tests use a mocked PostgREST transport, not a live project. `OnlineApp` still defaults to SQLite/local state, and `server.mjs` does not instantiate the Supabase client or factory; the Vercel Functions request handler is not implemented. `SupabaseStyleStore` and the account/session adapters are tested but not selected at startup. Reset delivery is intentionally disabled unless an explicit delivery callback is provided. Provider, audit, skills, styles, and media still use local files/SQLite/process memory by default. Registration remains open to the first owner and is a release blocker for real users. No hosted project has been changed, no migration has been applied, no data has been moved, and no Vercel deployment has occurred. Application parity is incomplete; provider/audit/history/Fabric/skills/media repositories, private Storage, controlled owner bootstrap, startup wiring, and serverless request conversion remain.
+The remaining staged SQL files, to be run **one at a time in this order** after reviewing the code, are:
 
-A correct hosted migration therefore needs all of the following before the Vercel proxy can be replaced:
+1. `supabase/migrations/20261031000100_memory_rpcs.sql`
+2. `supabase/migrations/20261101000100_knowledge_rpcs.sql`
+3. `supabase/migrations/20261102000100_provider_snapshot.sql` — adds the revision-checked provider snapshot RPC and creates the private Storage bucket.
 
-1. An asynchronous Postgres data layer and explicit, versioned SQL migrations for every active store.
-2. A private Storage bucket for media/artifacts, with ownership checks in Core and no public object access by default.
-3. Application-side encryption for provider credentials, with the encryption key held only as a server-side Vercel secret. Never expose a service-role key or encryption key to browser code.
-4. Persistent, revocable session records (store a hash of opaque session tokens, not raw tokens) and distributed authentication throttles. The existing in-memory session store is not reliable across serverless invocations.
-5. A request handler compatible with Vercel's Node function lifecycle, plus bounded request/response handling and authenticated ownership checks on every database and storage operation.
-6. Durable job state and an honest design for long-running provider calls. A Vercel function's execution limit is not a background worker; tasks that exceed it must be declined or use a separately approved worker design.
-7. Tests using a disposable database and storage bucket, migration/rollback tests, and security tests for row ownership, storage paths, session revocation, and secret redaction.
-8. An explicit data-migration decision. This plan does not copy, transform, or delete any existing service data.
+Do not rerun the baseline. No local application data has been exported or transferred. SQL Editor execution does not create a local CLI migration-history record; keep a record of which files were applied in the dashboard and avoid applying one twice. No hosted migration after the baseline has been confirmed by the user yet.
 
-The current registration behavior is a release blocker: public registration is open and the first account becomes owner. Do not expose the API to real users until controlled owner bootstrap/registration has been implemented and tested.
+## Remaining readiness gates
 
-## Project setup status
+1. Apply the three follow-on migrations in order and verify the expected tables, RPCs, RLS, and private bucket in the Supabase Dashboard.
+2. Add the Core and Web Vercel projects from the correct repository directories. Set server-only Core variables: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AETHERIS_PROVIDER_ENCRYPTION_KEY`, and `AETHERIS_OWNER_EMAIL`. Never add the service-role or encryption key to the Web project or a `VITE_*` variable.
+3. In Web Preview variables set `CORE_API_URL` to the Core Preview's exact HTTPS origin. In Core Preview, allow the exact Web Preview origin through `AETHERIS_TRUSTED_WEB_ORIGINS`. Production uses its own exact origins and should remain untouched until Preview passes.
+4. Run live Preview checks for first-owner bootstrap, login/logout and revocation across cold starts, account isolation, provider configuration, chat, knowledge ingest/search/purge, and private media upload/download/delete. Current automated tests use mocked PostgREST/Storage or disposable local databases; they are not live-hosted evidence.
+5. Decide separately whether any existing local data should be migrated. Nothing is copied automatically, and no data deletion is part of this plan.
 
-The user-created `ragam-core` project is active and its database is healthy. The connector reports region `eu-west-2` (London); the user confirmed the dashboard shows the **Free** plan and chose to keep this region. The project is empty and has no migrations. The other inactive projects remain untouched. The connector itself does not report the plan, so any billing change must be checked in the dashboard. The region is fixed for this project; an India region would require a separate project.
+## Known limitations (do not imply production parity)
 
-Keep the database password in the user's password manager. Do not paste it into chat, Git, a browser build variable, or Vercel logs. Share only the project reference when needed for connector operations; never share the database password, service-role key, or provider credentials.
+- The current database adapters for account/session, provider, audit, memory/knowledge, and image/video media have automated coverage, but no live Supabase round-trip or Vercel Preview deployment has been tested.
+- Password-reset email delivery is not configured, so hosted reset remains unavailable.
+- The Vercel media operation is bounded and synchronous. A long provider operation can time out; no detached job or durable worker is claimed. A later Function invocation cannot forcibly stop a provider request running in another invocation.
+- Local Klyvaron training, qualifications, and private model artifacts are intentionally not moved to Vercel. Hosted Voice endpoints are disabled. Skill content and user-managed plugin/MCP persistence have not been migrated as hosted durable stores.
+- The user has not authorized changing Vercel project settings, creating deployments, transferring data, or applying additional SQL. No such external changes have been made by the agent.
 
-Free project quotas, sleep/pausing behavior, storage limits, and function limits can change. Verify current limits in the dashboard before relying on the project for availability or real user data.
+## Credentials and cost controls
 
-## Implementation sequence
-
-1. Review the active SQLite schemas and data ownership rules; write corresponding Postgres migrations with RLS default-deny policies.
-2. Implement and test the Postgres repository layer while keeping the SQLite path available for local development until parity is measured.
-3. Implement private Storage access and migrate file references to opaque object keys; add explicit size/type validation and account ownership checks.
-4. Wire the tested account/session stores into a serverless entrypoint only after controlled owner bootstrap and an explicit reset-delivery method are implemented; keep throttling in the shared Postgres RPCs.
-5. Convert the Node server entrypoint to a Vercel-compatible request handler and update the `/api/*` routing without adding a second public API path.
-6. Run the full Core/Web suites plus disposable Supabase integration tests; validate migrations, authorization, deletion, and restart behavior.
-7. Only after an explicit data-migration approval, export and migrate any existing user data with integrity checks and a rollback plan.
-8. Configure Vercel server-only Supabase settings and test Preview health/auth/storage. Do not set Production variables or route production traffic until security, backup, quota, and end-to-end checks pass.
-
-Until these phases pass, the current frontend remains a frontend only; this document is a plan, not evidence of a working Supabase backend.
+Keep the Supabase database password, service-role key, provider credentials, and provider-encryption key in a password manager and their appropriate hosted secret settings only. Do not paste them into chat or commit them. Keep both services on the chosen Free plans; check current quotas in the dashboards before relying on availability. Do not upgrade, delete, pause, or change the region of any project without explicit authorization.

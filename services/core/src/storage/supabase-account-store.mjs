@@ -75,13 +75,15 @@ export class SupabaseAccountStore {
   #maxAccounts
   #dummyHash
 
-  constructor({ client, now = () => Date.now(), maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null } = {}) {
+  constructor({ client, now = () => Date.now(), maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, bootstrapEmail = null, registrationEnabled = true } = {}) {
     if (!client || typeof client.request !== 'function') throw new SupabaseAccountError('supabase_client_invalid')
     if (typeof now !== 'function') throw new SupabaseAccountError('supabase_clock_invalid')
     if (onResetCode !== null && typeof onResetCode !== 'function') throw new SupabaseAccountError('supabase_reset_delivery_invalid')
     this.#client = client
     this.#now = now
     this.#onResetCode = onResetCode
+    this.bootstrapEmail = bootstrapEmail === null ? null : normalizeEmail(bootstrapEmail)
+    this.registrationEnabled = registrationEnabled === true
     this.#maxAccounts = Number.isInteger(maxAccounts) && maxAccounts > 0 ? maxAccounts : DEFAULT_MAX_ACCOUNTS
     this.#dummyHash = hashPassword(randomBytes(24).toString('base64url'))
   }
@@ -152,6 +154,15 @@ export class SupabaseAccountStore {
     const address = normalizeEmail(email)
     const problems = passwordProblems(password, address)
     if (problems.length) throw failure('weak_password', problems.join(' '), 400)
+    if (!this.registrationEnabled || this.bootstrapEmail !== null) {
+      const count = await this.count()
+      if (count === 0) {
+        if (!this.bootstrapEmail) throw failure('owner_bootstrap_not_configured', 'Owner account bootstrap is not configured for this installation.', 503)
+        if (address !== this.bootstrapEmail) throw failure('owner_bootstrap_email_required', 'The first account must use the owner bootstrap email configured for this installation.', 403)
+      } else if (!this.registrationEnabled) {
+        throw failure('registration_disabled', 'New account registration is disabled on this installation.', 403)
+      }
+    }
     const id = randomUUID()
     const now = this.#now()
     const result = rpcResult(await this.#client.request('rest/v1/rpc/ragam_register_account', {

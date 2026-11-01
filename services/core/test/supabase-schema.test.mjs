@@ -8,6 +8,8 @@ const memoryRpcPath = new URL('../../../supabase/migrations/20261031000100_memor
 const memoryRpcMigration = readFileSync(memoryRpcPath, 'utf8')
 const knowledgeRpcPath = new URL('../../../supabase/migrations/20261101000100_knowledge_rpcs.sql', import.meta.url)
 const knowledgeRpcMigration = readFileSync(knowledgeRpcPath, 'utf8')
+const providerStoragePath = new URL('../../../supabase/migrations/20261102000100_provider_snapshot.sql', import.meta.url)
+const providerStorageMigration = readFileSync(providerStoragePath, 'utf8')
 
 test('memory RPC migration keeps compound operations transactional and service-role-only', () => {
   const functions = [
@@ -30,7 +32,7 @@ test('memory RPC migration keeps compound operations transactional and service-r
   assert.match(memoryRpcMigration, /pg_advisory_xact_lock/, 'deduplication and count caps serialize per account')
   assert.match(memoryRpcMigration, /training_use/)
   assert.match(memoryRpcMigration, /INSERT INTO public\.ragam_memory_deletions/)
-  assert.ok(memoryRpcMigration.includes('This migration remains local/staged; do not apply it to hosted ragam-core yet'))
+  assert.ok(memoryRpcMigration.includes('Apply only after 20261030000100_initial_core.sql has succeeded.'))
 })
 
 test('knowledge RPC migration keeps document, chunk, ACL and deletion changes atomic and server-only', () => {
@@ -50,7 +52,7 @@ test('knowledge RPC migration keeps document, chunk, ACL and deletion changes at
   assert.match(knowledgeRpcMigration, /INSERT INTO public\.ragam_knowledge_chunks/)
   assert.match(knowledgeRpcMigration, /INSERT INTO public\.ragam_knowledge_acl/)
   assert.match(knowledgeRpcMigration, /INSERT INTO public\.ragam_knowledge_deletions/)
-  assert.ok(knowledgeRpcMigration.includes('do not apply it to hosted ragam-core yet'))
+  assert.ok(knowledgeRpcMigration.includes('Apply after the baseline and memory RPC migrations have succeeded.'))
 })
 
 test('initial Supabase schema is additive, fail-closed, and keeps account data scoped', () => {
@@ -83,5 +85,17 @@ test('initial Supabase schema is additive, fail-closed, and keeps account data s
   }
   assert.match(migration, /CREATE TRIGGER ragam_audit_events_append_only/)
   assert.match(migration, /vector\s+bytea NOT NULL/, 'legacy embeddings stay opaque until separately qualified')
-  assert.match(migration, /has NOT been\n-- applied to the hosted ragam-core project/i)
+  assert.match(migration, /It creates\n-- schema only; it does not read, copy, or delete any existing local or hosted user data\./i)
+})
+
+test('provider snapshot RPC is revision-checked and service-role-only, and media storage is private', () => {
+  assert.match(providerStorageMigration, /ADD COLUMN IF NOT EXISTS payload jsonb/)
+  assert.match(providerStorageMigration, /CREATE OR REPLACE FUNCTION public\.ragam_save_provider_snapshot/)
+  assert.match(providerStorageMigration, /SECURITY DEFINER SET search_path = ''/)
+  assert.match(providerStorageMigration, /pg_advisory_xact_lock/)
+  assert.match(providerStorageMigration, /p_expected_revision/)
+  assert.match(providerStorageMigration, /provider_state_conflict/)
+  assert.match(providerStorageMigration, /REVOKE ALL ON FUNCTION public\.ragam_save_provider_snapshot\(jsonb, bigint, bigint\) FROM PUBLIC, anon, authenticated/)
+  assert.match(providerStorageMigration, /GRANT EXECUTE ON FUNCTION public\.ragam_save_provider_snapshot\(jsonb, bigint, bigint\) TO service_role/)
+  assert.match(providerStorageMigration, /VALUES \('ragam-media', 'ragam-media', false, 25165824\)/)
 })

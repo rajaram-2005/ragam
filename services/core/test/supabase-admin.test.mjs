@@ -79,6 +79,18 @@ test('writes encode JSON and never expose upstream error bodies', async () => {
   })
 })
 
+test('binary Storage responses are returned as bytes without JSON parsing', async () => {
+  const payload = Uint8Array.from([0, 1, 2, 255])
+  const client = new SupabaseAdminClient({
+    url: URL,
+    serviceRoleKey: KEY,
+    fetchImpl: async () => new Response(payload, { status: 200, headers: { 'content-type': 'application/octet-stream' } }),
+  })
+  const bytes = await client.request('storage/v1/object/ragam-media/account/file.png', { responseType: 'bytes' })
+  assert.deepEqual([...bytes], [...payload])
+  await assert.rejects(client.request('storage/v1/object/ragam-media/file', { responseType: 'html' }), { code: 'supabase_response_type_invalid' })
+})
+
 test('no-content responses return null and timeouts have a fixed safe code', async () => {
   const noContent = new SupabaseAdminClient({
     url: URL,

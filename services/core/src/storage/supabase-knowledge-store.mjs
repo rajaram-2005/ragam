@@ -420,4 +420,3 @@ export class SupabaseKnowledgeStore {
 
   close() {}
 }
-

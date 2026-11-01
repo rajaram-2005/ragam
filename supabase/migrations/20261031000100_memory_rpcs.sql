@@ -1,5 +1,5 @@
 -- Account-scoped transactional operations for the async Supabase memory repository.
--- This migration remains local/staged; do not apply it to hosted ragam-core yet.
+-- Apply only after 20261030000100_initial_core.sql has succeeded.
 -- Multi-row actions are RPCs so concurrent Vercel invocations cannot split decisions,
 -- partial deletes, or session turn counts across separate HTTP requests.
 

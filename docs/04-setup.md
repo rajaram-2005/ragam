@@ -120,9 +120,17 @@ proxy `/api` to the core service (nginx, Caddy, or the core itself behind a
 reverse proxy). No absolute backend URL is baked into the bundle, so the same
 build works against any origin that proxies `/api`.
 
-### Hosted deployment status
+### Vercel + Supabase (hosted Preview path)
 
-The frontend can be hosted separately from Core, but this repository does not currently configure a managed Core host. The earlier paid hosting configuration was removed to meet the zero-cost requirement. This does not remove or cancel anything in an external hosting account. See [deployment status and requirements](./deployment-status.md) before connecting a hosted Core API. A free compute tier is not sufficient if its filesystem is ephemeral: Core stores account and provider state on disk, so do not use temporary storage for real data.
+The repository now has a Vercel Node Function entrypoint at `services/core/api/[...path].js`; create the Core Vercel project with **Root Directory** `services/core`. It uses Supabase for account/session state, provider settings, audit events, per-account memory/knowledge, and image/video job metadata and private artifacts. Generation runs synchronously inside a bounded Function request (45 seconds); it is not a background worker. Local Klyvaron training/artifacts stay local, and hosted Voice routes are intentionally disabled.
+
+The frontend remains a separate Vercel project with **Root Directory** `apps/web`. Its same-origin `/api/*` proxy requires `CORE_API_URL` set to the Core deployment's exact HTTPS origin, with no path or trailing slash. The Core project must allow the exact frontend Preview/Production origins through `AETHERIS_TRUSTED_WEB_ORIGINS`.
+
+Before deploying a Preview, apply the Supabase migration files in order through the Dashboard SQL Editor: baseline `20261030000100_initial_core.sql`, memory RPCs `20261031000100_memory_rpcs.sql`, knowledge RPCs `20261101000100_knowledge_rpcs.sql`, then provider snapshot/private media storage `20261102000100_provider_snapshot.sql`. The user reports the baseline has already returned “Success. No rows returned”; do not run it again. The follow-on migrations are not yet confirmed on the hosted project, and no live Supabase integration test has been run.
+
+Set these variables **only in the Core Vercel project**, initially for Preview: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AETHERIS_PROVIDER_ENCRYPTION_KEY` (32 random bytes as 64 hex characters or base64), and `AETHERIS_OWNER_EMAIL`. Never put the service-role or encryption key in frontend `VITE_*` variables or chat. Account registration is closed by default after the first owner is created; enable it only deliberately with `AETHERIS_ALLOW_ACCOUNT_REGISTRATION=true`. Password-reset delivery is disabled until a real delivery channel is configured.
+
+Set `CORE_API_URL` in the **frontend** Vercel project to the Core Preview origin. Deploy and test Preview first; keep Production variables/traffic unchanged until sign-in, ownership isolation, chat, knowledge search/deletion, provider settings, media upload/download/deletion, and Function timeout behavior pass. Supabase remains on the Free plan in London; verify current quotas in its dashboard and do not upgrade. No hosted migrations beyond the baseline, data transfer, Vercel variables, or deployment have been performed by this agent.
 
 ### Fabric service
 
@@ -256,11 +264,11 @@ curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed4
 PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
 ```
 
-The pinned archive includes the model manifests and checksum list. A full successful run validates all 1012 cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
+The pinned archive includes the model manifests and checksum list. A full successful run validates all 1035 cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-npm test                  # all three suites (1935 tests)
-npm run test:core         # 1012
+npm test                  # all three suites (1958 tests)
+npm run test:core         # 1035
 npm run test:web          # 101
 npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
@@ -315,7 +323,7 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 1012 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Latest successful CI at `ddc3a95`: [41270904552](https://github.com/rajaram-2005/ragam/actions/runs/41270904552) passed all five jobs, including the async Supabase knowledge pipeline tests. |
+| **Core service** | Current suite: 1035 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. The last green CI before the current hosted-function changes was [41271512048](https://github.com/rajaram-2005/ragam/actions/runs/41271512048) at `1dbbf51`; the current integration changes still need CI and live Preview verification. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 101 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 49-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |

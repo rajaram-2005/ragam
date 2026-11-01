@@ -1,5 +1,5 @@
 -- Account-scoped transactional operations for hosted knowledge metadata.
--- This migration remains local/staged; do not apply it to hosted ragam-core yet.
+-- Apply after the baseline and memory RPC migrations have succeeded.
 -- Document, chunks and ACL grants are created atomically; purge removes all derived
 -- rows and records a content-free deletion receipt in the same transaction.
 

@@ -123,7 +123,7 @@ export function readInstallationDoc(name) {
 
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null }) {
+  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null, providerStore = null, auditLedger = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
     // should refuse without leaving a half-written data directory behind.
     const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
@@ -147,14 +147,20 @@ export class OnlineApp {
     this.logger = typeof logger === 'function' ? logger : () => {}
     this.trustedWebOrigins = new Set(trustedWebOrigins)
     this.dir = resolve(dataDir); mkdirSync(this.dir, { recursive: true, mode: 0o700 })
-    this.store = new OnlineStore(this.dir)
+    this.store = providerStore ?? new OnlineStore(this.dir)
+    if (providerStore && (typeof providerStore.public !== 'function' || typeof providerStore.config !== 'function' || typeof providerStore.flush !== 'function')) {
+      throw new TypeError('providerStore must implement the OnlineStore API and durable flush()')
+    }
     this.gateway = new OnlineGateway({ trustedOrigins, timeoutMs })
     // The video wire polls a long-running operation. Tests shorten the interval; production uses
     // the documented 10-second cadence. This is a timing seam, not a behaviour switch.
     this.mediaPoll = mediaPoll
     this.secureCookie = secureCookie; this.sessions = new Map(); this.sessionStore = sessionStore; this.authAttempts = new Map()
     this.activeRequests = 0
-    this.ledger = new AuditLedger(join(this.dir, 'audit.sqlite'))
+    this.ledger = auditLedger ?? new AuditLedger(join(this.dir, 'audit.sqlite'))
+    if (auditLedger && (typeof auditLedger.record !== 'function' || typeof auditLedger.flush !== 'function')) {
+      throw new TypeError('auditLedger must implement record() and durable flush()')
+    }
     // Accounts replace the operator token file. Every auth event lands in the same
     // ledger as everything else, naming the account id — which is the difference
     // between "the gateway was changed" and "this account changed the gateway".
@@ -598,7 +604,7 @@ export class OnlineApp {
   /**
    * Queue one image generation for this account and return immediately.
    */
-  async startImage(body, session) {
+  async startImage(body, session, requestSignal = null) {
     const tier = body.tier === undefined || body.tier === null ? null : body.tier
     if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
     const tierPreset = tier === null ? null : this.store.klyvaronPreset(tier, 'image')
@@ -643,6 +649,7 @@ export class OnlineApp {
         params: { prompt, size, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
         subject: session.accountId,
         filenameHint: `${rec.id}-image`,
+        signal: requestSignal,
         run: async () => {
           const gen = await this.multimodalHost.generateImage({ modelId: rec.id, prompt, size })
           return {
@@ -690,6 +697,7 @@ export class OnlineApp {
       params: { prompt, size: size ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
       subject: session.accountId,
       filenameHint: `${config.id}-image`,
+      signal: requestSignal,
       run: ({ signal }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
         model, prompt, size, signal,
         poll: this.mediaPoll ?? undefined,
@@ -707,7 +715,7 @@ export class OnlineApp {
     return this.store.config(id)
   }
 
-  async startImageEdit(body, session) {
+  async startImageEdit(body, session, requestSignal = null) {
     const nativeReady = this.nativeMultimodalModelsFor('image')
     const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-image'
     const rec = this.multimodalHost.records.get(targetModel)
@@ -743,6 +751,7 @@ export class OnlineApp {
       params: { prompt, mode: 'edit', model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', provenance },
       subject: session.accountId,
       filenameHint: `${rec.id}-image-edit`,
+      signal: requestSignal,
       run: async () => {
         const edited = await this.multimodalHost.editImage({
           modelId: rec.id,
@@ -800,7 +809,7 @@ export class OnlineApp {
    * Queue one video generation. Video is a long-running provider operation, so the HTTP response is
    * the job record and nothing else; polling, cancellation and the restart rule live in the queue.
    */
-  async startVideo(body, session) {
+  async startVideo(body, session, requestSignal = null) {
     const tier = body.tier === undefined || body.tier === null ? null : body.tier
     if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
     const tierPreset = tier === null ? null : this.store.klyvaronPreset(tier, 'video')
@@ -856,6 +865,7 @@ export class OnlineApp {
         params: { prompt, aspectRatio, resolution, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
         subject: session.accountId,
         filenameHint: `${rec.id}-video`,
+        signal: requestSignal,
         run: async () => {
           const gen = await this.multimodalHost.generateVideo({
             modelId: rec.id,
@@ -917,6 +927,7 @@ export class OnlineApp {
       params: { prompt, aspectRatio: aspectRatio ?? null, resolution: resolution ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
       subject: session.accountId,
       filenameHint: `${config.id}-video`,
+      signal: requestSignal,
       run: ({ signal, progress }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
         model,
         prompt,
@@ -1407,6 +1418,26 @@ export class OnlineApp {
   }
   server() {
     const server = createServer(async (req, res) => {
+      // Hosted stores queue writes from legacy synchronous call sites. Do not let a serverless
+      // response finish until provider state and audit events are durable. If persistence fails,
+      // terminate the response rather than claim a successful mutation that will vanish.
+      const originalEnd = res.end.bind(res)
+      let endRequested = false
+      res.end = (...args) => {
+        if (endRequested) return res
+        endRequested = true
+        Promise.all([
+          this.store.flush?.(),
+          this.ledger.flush?.(),
+        ]).then(() => originalEnd(...args)).catch((error) => {
+          try {
+            const code = typeof error?.code === 'string' && /^[A-Za-z0-9_]{1,64}$/.test(error.code) ? error.code : 'persistence_failed'
+            this.logger({ event: 'response_persistence_failed', errorCode: code })
+          } catch { /* logging must not change the failure */ }
+          res.destroy()
+        })
+        return res
+      }
       const incomingRequestId = req.headers['x-request-id']
       const requestId = typeof incomingRequestId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(incomingRequestId)
         ? incomingRequestId : randomUUID()
@@ -1414,6 +1445,7 @@ export class OnlineApp {
       const controller = new AbortController()
       res.on('close', () => { if (!res.writableEnded) controller.abort() })
       try {
+        if (typeof this.store.refresh === 'function') await this.store.refresh()
         const url = new URL(req.url, 'http://core.invalid'), path = url.pathname
         if (req.method === 'GET' && path === '/api/health') return sendJson(res, 200, { status: 'ok', policy: 'online_only' })
         // Browser mutations require same-origin and a non-simple custom header.
@@ -1762,11 +1794,11 @@ export class OnlineApp {
         if (req.method === 'GET' && path === '/api/video/jobs') return sendJson(res, 200, { jobs: await mediaStore.list({ kind: 'video', limit: 50 }) })
         if (req.method === 'GET' && path === '/api/media/jobs') return sendJson(res, 200, { jobs: await mediaStore.list({ limit: 50 }) })
         if (req.method === 'POST' && path === '/api/image/generate') {
-          const job = await this.startImage(await readBody(req, { principal: session.accountId }), session)
+          const job = await this.startImage(await readBody(req, { principal: session.accountId }), session, controller.signal)
           return sendJson(res, 202, job)
         }
         if (req.method === 'POST' && path === '/api/image/edit') {
-          const job = await this.startImageEdit(await readBody(req, { principal: session.accountId }), session)
+          const job = await this.startImageEdit(await readBody(req, { principal: session.accountId }), session, controller.signal)
           return sendJson(res, 202, job)
         }
         if (req.method === 'POST' && path === '/api/image/understand') {
@@ -1774,7 +1806,7 @@ export class OnlineApp {
           return sendJson(res, 200, analysis)
         }
         if (req.method === 'POST' && path === '/api/video/generate') {
-          const job = await this.startVideo(await readBody(req, { principal: session.accountId }), session)
+          const job = await this.startVideo(await readBody(req, { principal: session.accountId }), session, controller.signal)
           return sendJson(res, 202, job)
         }
         if (req.method === 'POST' && path === '/api/video/understand') {
