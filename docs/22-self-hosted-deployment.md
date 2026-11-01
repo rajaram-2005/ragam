@@ -1,8 +1,12 @@
 # Self-hosted deployment (Docker Compose)
 
-This deploys the **existing** online Core and Vite-built web app. Caddy serves the web
-bundle, proxies `/api/*` to Core, and can obtain HTTPS certificates for a domain you
-control. It does not add inference, migrate hosted data, or change any external account.
+This is intended to run on **your own computer** using its Docker Engine and Compose—not on
+an Arena or paid cloud host. It deploys the **existing** online Core and Vite-built web app.
+Caddy serves the web bundle and proxies `/api/*` to Core. All app databases, generated files,
+and Caddy state live in named Docker volumes on that computer (`ragam-data`,
+`ragam-caddy-data`, and `ragam-caddy-config`). Nothing here redirects app storage to
+Supabase. It does not add local model inference, migrate hosted data, or change any external
+account.
 
 ## Scope and safety
 
@@ -28,10 +32,11 @@ control. It does not add inference, migrate hosted data, or change any external 
 
 ## Configure and start
 
-Use a host with Docker Engine and the Docker Compose plugin already installed. The
-browser-only repository editor cannot start containers on your behalf. A Compose UI can
-be used instead of a terminal if it supports building from this repository and persistent
-named volumes; apply the same environment values and backup cautions below.
+On your computer, open Docker Desktop (or another Docker Compose UI) and ensure its local
+Docker Engine is running. Arena cannot reach or start containers on your physical computer;
+this repository's CI only validates a temporary stack in GitHub Actions. Use the Compose UI
+to build and run this repository with persistent named volumes; no separate server or cloud
+storage is required. Keep the same environment values and backup cautions below.
 
 1. Copy `.env.example` to `.env` using your host's file manager or deployment UI.
 2. Set `AETHERIS_OWNER_EMAIL` to the one address allowed to create the first account.
