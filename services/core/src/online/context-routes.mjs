@@ -3,8 +3,8 @@
 // `session` is the signed-in account, resolved by the caller from its own cookie. Every
 // history, memory and knowledge access below goes through `app.contextFor(session.id)`,
 // which is that account's own database — so "your conversations" means yours, and there
-// is no request field that can widen it. Plugins and MCP stay installation-wide: they
-// are reviewed read-only built-ins, not personal data.
+// is no request field that can widen it. MCP/plugin connections are installation-wide and
+// owner-managed; remote calls require per-call approval and are never treated as trusted data.
 import { CANDIDATE_STATES } from '../memory/contracts.mjs'
 import { validateManifest } from '../plugins/manifest.mjs'
 import { readBody, sendJson } from './http.mjs'
@@ -207,7 +207,7 @@ export async function contextRoutes(request, response, app, session) {
         plugins: app.plugins.list({
           state: url.searchParams.get('state'),
           protocol: url.searchParams.get('protocol'),
-        }),
+        }).map((plugin) => ({ ...plugin, userManaged: app.remoteServers?.isUserManagedPlugin(plugin.id) ?? false })),
       },
       app,
     )
@@ -221,20 +221,40 @@ export async function contextRoutes(request, response, app, session) {
     }
   }
   if (method === 'POST' && path === '/api/plugins/discover') return sendJson(response, 200, app.plugins.discover(await readJson()), app)
-  if (method === 'POST' && path === '/api/plugins/install') return sendJson(response, 201, app.plugins.install(await readJson()), app)
+  if (method === 'POST' && path === '/api/plugins/connect') {
+    requireOwner()
+    return sendJson(response, 201, await app.remoteServers.connectPlugin(await readJson()), app)
+  }
+  // Raw manifest installation remains closed: executable custom code is never loaded. A
+  // user-managed HTTP plugin must use the bounded ragam-plugin/1 remote contract above.
+  if (method === 'POST' && path === '/api/plugins/install') throw failure('extension_installation_disabled', 'Installable plugin code is disabled. Connect an HTTP plugin server through the reviewed Ragam protocol instead.', 403)
   if (method === 'POST' && segments[1] === 'plugins' && segments[2] && segments[3]) {
     requireOwner()
     const action = segments[3]
     const body = await readJson()
-    if (action === 'enable') return sendJson(response, 200, app.plugins.enable(segments[2]), app)
-    if (action === 'disable') return sendJson(response, 200, app.plugins.disable(segments[2]), app)
-    if (action === 'uninstall') return sendJson(response, 200, app.plugins.uninstall(segments[2]), app)
+    if (action === 'enable') return sendJson(response, 200, app.remoteServers?.isUserManagedPlugin(segments[2])
+      ? app.remoteServers.setPluginEnabled(segments[2], true) : app.plugins.enable(segments[2]), app)
+    if (action === 'disable') return sendJson(response, 200, app.remoteServers?.isUserManagedPlugin(segments[2])
+      ? app.remoteServers.setPluginEnabled(segments[2], false) : app.plugins.disable(segments[2]), app)
+    if (action === 'uninstall') {
+      if (app.remoteServers?.isUserManagedPlugin(segments[2])) return sendJson(response, 200, await app.remoteServers.removePlugin(segments[2]), app)
+      if (!app.plugins.has(segments[2])) throw failure('plugin_not_found', 'No plugin has that ID.', 404)
+      return sendJson(response, 200, app.plugins.uninstall(segments[2]), app)
+    }
     if (action === 'preflight') return sendJson(response, 200, app.plugins.preflight(segments[2], body.capability, body), app)
     if (action === 'invoke') return sendJson(response, 200, await app.plugins.invoke(segments[2], body.capability, body.input ?? {}, body), app)
   }
 
 
   // --- MCP ----------------------------------------------------------------
+  if (method === 'POST' && path === '/api/mcp/servers/connect') {
+    requireOwner()
+    return sendJson(response, 201, await app.remoteServers.connectMcp(await readJson()), app)
+  }
+  if (method === 'DELETE' && segments[1] === 'mcp' && segments[2] === 'servers' && segments[3] && segments.length === 4) {
+    requireOwner()
+    return sendJson(response, 200, await app.remoteServers.removeMcp(segments[3]), app)
+  }
   if (method === 'GET' && path === '/api/mcp/servers') return sendJson(response, 200, { servers: app.mcp.listServers() }, app)
   if (method === 'GET' && path === '/api/mcp/tools') {
     return sendJson(response, 200, { tools: app.mcp.listTools({ serverId: url.searchParams.get('server'), risk: url.searchParams.get('risk'), query: url.searchParams.get('q') }) }, app)
@@ -252,7 +272,9 @@ export async function contextRoutes(request, response, app, session) {
   if (method === 'POST' && segments[1] === 'mcp' && segments[2] === 'servers' && segments[3] && segments[4] === 'toggle') {
     requireOwner()
     const body = await readJson()
-    return sendJson(response, 200, app.mcp.setEnabled(segments[3], Boolean(body.enabled)), app)
+    return sendJson(response, 200, app.remoteServers?.isUserManagedMcp(segments[3])
+      ? app.remoteServers.setMcpEnabled(segments[3], Boolean(body.enabled))
+      : app.mcp.setEnabled(segments[3], Boolean(body.enabled)), app)
   }
 
 

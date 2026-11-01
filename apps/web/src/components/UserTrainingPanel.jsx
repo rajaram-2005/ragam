@@ -6,7 +6,7 @@ const MODE_LABELS = Object.freeze([
   ['', 'Auto-select from request & worker resources'],
   ['context_only', 'Context-only adaptation (no weight updates)'],
   ['memory_or_retrieval', 'Authorized memory / retrieval update (preferred for single corrections)'],
-  ['lightweight_adapter', 'Lightweight LoRA adapter (max 120s including finalization)'],
+  ['lightweight_adapter', 'Lightweight LoRA adapter (max 120s including setup & finalization)'],
   ['full_fine_tune', 'Full-model checkpoint fine-tuning'],
   ['foundation_pretrain', 'Foundation-model pretraining (separate session, not 120s-capped)'],
 ])

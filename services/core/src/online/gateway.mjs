@@ -93,11 +93,15 @@ export function gatewayUrl(value, trustedOrigins = []) {
 
 export class OnlineGateway {
   constructor({ trustedOrigins = [], timeoutMs = 120_000, maxBytes = 2 * 1024 * 1024 } = {}) { Object.assign(this, { trustedOrigins, timeoutMs, maxBytes }) }
-  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, binary = false, method: requestedMethod = null } = {}) {
-    const runtime = runtimeFor(config.kind ?? config.id ?? 'litellm'), label = runtime.label
-    const base = gatewayUrl(config.baseUrl, this.trustedOrigins)
+  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, binary = false, method: requestedMethod = null, trustEndpoint = false, includeHeaders = false, allowEmpty = false } = {}) {
+    const runtime = runtimeFor(config.kind ?? config.id ?? 'litellm'), label = config.label ?? runtime.label
+    const endpointOrigin = (() => { try { return new URL(config.baseUrl).origin } catch { return null } })()
+    const requestTrustedOrigins = trustEndpoint && endpointOrigin
+      ? [...new Set([...this.trustedOrigins, endpointOrigin])]
+      : this.trustedOrigins
+    const base = gatewayUrl(config.baseUrl, requestTrustedOrigins)
     const url = new URL(`${base}${path}`)
-    const trusted = this.trustedOrigins.includes(url.origin)
+    const trusted = requestTrustedOrigins.includes(url.origin)
     // A wire that signs its request must sign the exact bytes that are sent, so a body may be
     // supplied already serialised. The default stays JSON, and `contentType` exists because a
     // token exchange is form-encoded; neither changes what existing callers send.
@@ -199,8 +203,27 @@ export class OnlineGateway {
           // ends, and its adapter is responsible for asserting that the protocol's own completion
           // event arrived (Anthropic's `message_stop`, Gemini's final candidate).
           if (onFrame) return streamDone || doneOnEnd ? done(null, null) : done(failure('provider_interrupted', 'Gateway stream ended without completion.', 502))
-          if (binary) return done(null, { bytes: Buffer.concat(chunks), contentType: String(res.headers['content-type'] ?? '') })
-          try { done(null, JSON.parse(text)) } catch { done(failure('invalid_response', 'Gateway returned invalid JSON.', 502)) }
+          if (binary) {
+            const value = { bytes: Buffer.concat(chunks), contentType: String(res.headers['content-type'] ?? '') }
+            return done(null, includeHeaders ? { body: value, headers: res.headers, statusCode: res.statusCode } : value)
+          }
+          const responseType = String(res.headers['content-type'] ?? '').toLowerCase()
+          let value
+          if (!text.trim() && allowEmpty) value = null
+          else if (responseType.includes('text/event-stream')) {
+            // Streamable HTTP MCP servers may return a single JSON-RPC response as SSE.
+            // Only JSON data frames are accepted; comments and event names carry no authority.
+            const frames = text.replace(/\r\n/g, '\n').split(/\n\n+/).map((frame) => frame.split('\n')
+              .filter((line) => line.startsWith('data:'))
+              .map((line) => line.slice(5).trim())
+              .join('\n')).filter(Boolean)
+            try { value = frames.map((frame) => JSON.parse(frame)).findLast((frame) => frame && typeof frame === 'object') }
+            catch { return done(failure('invalid_response', 'Remote server returned an invalid event stream.', 502)) }
+            if (!value) return done(failure('invalid_response', 'Remote server event stream contained no JSON response.', 502))
+          } else {
+            try { value = JSON.parse(text) } catch { return done(failure('invalid_response', 'Remote server returned invalid JSON.', 502)) }
+          }
+          done(null, includeHeaders ? { body: value, headers: res.headers, statusCode: res.statusCode } : value)
         })
       })
       req.on('error', (error) => done(error.code === 'endpoint_blocked' ? error : failure('provider_unreachable', `Cannot reach ${label}. Check the endpoint, TLS, DNS and server network access.`, 502)))
@@ -210,6 +233,16 @@ export class OnlineGateway {
       req.end(payload)
     })
   }
+  /**
+   * A constrained raw JSON request for an owner-configured MCP/plugin endpoint. It deliberately
+   * reuses this transport's URL checks, DNS private-address filtering, redirect refusal, byte
+   * bounds, cancellation and total deadline; custom server clients do not get a second, weaker
+   * network path.
+   */
+  async requestRemote(endpoint, options = {}) {
+    return this.request({ id: 'ollama', label: 'Connected server', baseUrl: endpoint, apiKey: null }, '', options)
+  }
+
   /** Model listing is a property of the wire, not of the transport: each adapter parses its own. */
   async modelCatalogue(config) {
     const wireId = config.wire ?? runtimeFor(config.kind ?? config.id ?? 'litellm').wire

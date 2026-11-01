@@ -169,6 +169,11 @@ export class OnlineStore {
     return { iv: iv.toString('base64'), data: data.toString('base64'), tag: cipher.getAuthTag().toString('base64') }
   }
 
+  /** Decrypt a server-owned secret for an outbound request; callers never expose this value. */
+  unseal(sealed) {
+    try { return this.#open(sealed) } catch { throw failure('credential_store_corrupt', 'A saved connection credential could not be decrypted.', 500) }
+  }
+
   #open(sealed) {
     const { iv, data, tag } = sealed
     const cipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(iv, 'base64')); cipher.setAuthTag(Buffer.from(tag, 'base64'))

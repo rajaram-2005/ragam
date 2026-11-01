@@ -496,8 +496,10 @@ test('memory can be exported, not only deleted', () => {
 })
 
 test('the security controls the product added are visible in their areas', () => {
-  assert.match(read('areas/PluginsArea.jsx'),/signing alone is not a sandbox/)
-  assert.match(read('areas/McpArea.jsx'),/cannot grant permissions/)
+  assert.match(read('areas/PluginsArea.jsx'),/Ragam does not download or execute plugin code/)
+  assert.match(read('areas/PluginsArea.jsx'),/service\.external/)
+  assert.match(read('areas/McpArea.jsx'),/does not execute downloaded server code/)
+  assert.match(read('areas/McpArea.jsx'),/I approve sending these arguments/)
   assert.match(read('pages/SignInPage.jsx'),/api\.login\(/)
   const settings=read('components/ProviderSettings.jsx')
   assert.match(settings,/type="password"/)

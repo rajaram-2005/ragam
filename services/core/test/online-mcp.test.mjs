@@ -45,7 +45,7 @@ test('the installation exposes its reviewed in-process servers and read-only too
   const f = await fixture(t); await f.login()
   const servers = await f.request('GET', '/api/mcp/servers')
   assert.equal(servers.status, 200)
-  assert.deepEqual(servers.data.servers.map((server) => server.id).sort(), ['aetheris.online', 'installation-docs'])
+  assert.deepEqual(servers.data.servers.map((server) => server.id).sort(), ['aetheris.online', 'aetheris.procedures', 'installation-docs'])
   for (const server of servers.data.servers) {
     assert.equal(server.kind, 'in_process')
     assert.ok(server.enabled)
@@ -57,6 +57,7 @@ test('the installation exposes its reviewed in-process servers and read-only too
   assert.ok(names.includes('list-documents'))
   assert.ok(names.includes('read-document'))
   assert.ok(names.includes('connection.status'))
+  assert.ok(names.includes('list-procedures'))
   for (const tool of tools.data.tools) assert.equal(tool.risk, 'read_only', `${tool.name} must be read-only`)
 
   // A member can read the catalogue; only the owner can change whether a server is enabled.

@@ -672,6 +672,7 @@ export class KlyvaronLocalWorkerServer {
   }
 
   createTrainingJob(payload) {
+    const requestStartedAt = Date.now()
     if (this.activeProcess) {
       throw new LocalWorkerRpcError('Local worker is already running an active training job.', {
         code: 'worker_busy',
@@ -690,6 +691,9 @@ export class KlyvaronLocalWorkerServer {
     if (!['lightweight_adapter', 'full_fine_tune', 'foundation_pretrain'].includes(mode)) {
       throw new LocalWorkerRpcError(`Unsupported worker training mode '${mode}'.`, { code: 'invalid_mode' })
     }
+    const interactiveDeadlineAt = mode === 'lightweight_adapter'
+      ? Math.min(Number.isSafeInteger(payload.deadlineAt) ? payload.deadlineAt : requestStartedAt + INTERACTIVE_ADAPTER_WALL_LIMIT_MS, requestStartedAt + INTERACTIVE_ADAPTER_WALL_LIMIT_MS)
+      : null
 
     const jobId = payload.jobId ?? randomUUID()
     const jobRoot = this.resolveAuthorizedPath(join(this.workspaceDir, 'jobs', jobId))
@@ -727,8 +731,14 @@ export class KlyvaronLocalWorkerServer {
     }
 
     const maxDurationMs = mode === 'lightweight_adapter'
-      ? Math.min(Number(payload.stoppingCriteria?.maxDurationMs ?? INTERACTIVE_ADAPTER_WALL_LIMIT_MS), INTERACTIVE_ADAPTER_WALL_LIMIT_MS)
+      ? Math.min(Number(payload.stoppingCriteria?.maxDurationMs ?? INTERACTIVE_ADAPTER_WALL_LIMIT_MS), INTERACTIVE_ADAPTER_WALL_LIMIT_MS, interactiveDeadlineAt - Date.now())
       : Number(payload.stoppingCriteria?.maxDurationMs ?? 3_600_000)
+    if (mode === 'lightweight_adapter' && maxDurationMs <= 0) {
+      rmSync(jobRoot, { recursive: true, force: true })
+      throw new LocalWorkerRpcError('Interactive adaptation reached its 120-second deadline during setup; no training process was started.', {
+        code: 'exceeded_interactive_120s_limit', status: 408,
+      })
+    }
 
     const workerSpec = {
       jobId,
@@ -768,6 +778,12 @@ export class KlyvaronLocalWorkerServer {
       resume: Boolean(payload.resume),
     }
     writeFileSync(specFile, JSON.stringify(workerSpec, null, 2) + '\n', 'utf8')
+    if (mode === 'lightweight_adapter' && Date.now() >= interactiveDeadlineAt) {
+      rmSync(jobRoot, { recursive: true, force: true })
+      throw new LocalWorkerRpcError('Interactive adaptation reached its 120-second deadline during setup; no training process was started.', {
+        code: 'exceeded_interactive_120s_limit', status: 408,
+      })
+    }
 
     const maxThreads = String(Math.max(1, Math.min(caps.cpu.logicalCores, Number(payload.maxCpuThreads ?? caps.cpu.logicalCores))))
     const child = spawn(caps.software.pythonBinary, [this.workerExecScript, 'train', specFile], {
@@ -788,7 +804,7 @@ export class KlyvaronLocalWorkerServer {
       modelId: payload.modelId,
       mode,
       state: 'running',
-      startedAt: new Date().toISOString(),
+      startedAt: new Date(requestStartedAt).toISOString(),
       completedAt: null,
       baseline: {
         modelDir: baseModelDir,
@@ -818,17 +834,27 @@ export class KlyvaronLocalWorkerServer {
     }
     this.jobs.set(jobId, jobRecord)
 
-    // Watchdog enforcing hard wall-clock ceiling (including finalization for interactive jobs).
+    // The absolute deadline starts at the RPC entry, before setup and artifact preparation.
+    // At the deadline, request graceful cancellation and force-stop shortly afterwards if the
+    // worker does not exit; no new job may be spawned after setup consumed the full budget.
+    const watchdogDelayMs = mode === 'lightweight_adapter'
+      ? Math.max(1, interactiveDeadlineAt - Date.now())
+      : maxDurationMs
     const timer = setTimeout(() => {
       if (this.activeProcess?.jobId === jobId) {
         jobRecord.timedOut = true
         try { writeFileSync(cancelFlagPath, 'timeout\n', 'utf8') } catch {}
         try { child.kill('SIGTERM') } catch {}
+        const killTimer = setTimeout(() => {
+          if (this.activeProcess?.jobId === jobId) { try { child.kill('SIGKILL') } catch {} }
+        }, 250)
+        killTimer.unref()
+        this.activeProcess.killTimer = killTimer
       }
-    }, maxDurationMs + 250)
+    }, watchdogDelayMs)
     timer.unref()
 
-    this.activeProcess = { jobId, child, timer }
+    this.activeProcess = { jobId, child, timer, killTimer: null }
 
     const consumeLine = (chunk) => {
       for (const rawLine of String(chunk).split(/\r?\n/).filter(Boolean)) {
@@ -863,7 +889,10 @@ export class KlyvaronLocalWorkerServer {
     child.stderr.on('data', consumeLine)
     child.on('exit', (code, signalName) => {
       clearTimeout(timer)
-      if (this.activeProcess?.jobId === jobId) this.activeProcess = null
+      if (this.activeProcess?.jobId === jobId) {
+        clearTimeout(this.activeProcess.killTimer)
+        this.activeProcess = null
+      }
       jobRecord.completedAt = new Date().toISOString()
       const hasCheckpoint = existsSync(checkpointPath)
       if (code === 0 && jobRecord.result) {
@@ -1144,6 +1173,7 @@ export class KlyvaronLocalWorkerServer {
   async close() {
     if (this.activeProcess) {
       clearTimeout(this.activeProcess.timer)
+      clearTimeout(this.activeProcess.killTimer)
       try { this.activeProcess.child.kill('SIGTERM') } catch {}
       this.activeProcess = null
     }

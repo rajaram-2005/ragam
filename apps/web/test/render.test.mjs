@@ -382,12 +382,13 @@ test('the Klyvaron panel names the provider behind each tier and offers no model
   assert.doesNotMatch(markup, /<(button|select)\b/)
 })
 
-test('Plugins does not offer executable unreviewed sample installations', () => {
-  const markup=render('PluginsArea',React.createElement(components.PluginsArea))
-  assert.match(markup,/Arbitrary extension installation and execution are disabled/)
-  assert.match(markup,/No reviewed plugin is loaded/)
-  assert.doesNotMatch(markup,/Demo Text Tools|Install plugin/)
-
+test('Plugins offers the bounded remote contract without executable code installation', () => {
+  const markup = render('PluginsArea', React.createElement(components.PluginsArea, { account: { role: 'owner' } }))
+  assert.match(markup, /Connect a Ragam HTTP plugin server/)
+  assert.ok(markup.includes('ragam-plugin/1'))
+  assert.ok(markup.includes('service.external'))
+  assert.match(markup, /Remote code is never installed/)
+  assert.doesNotMatch(markup, /Demo Text Tools|Install plugin/)
 })
 
 test('the policy is displayed but never rendered as a control', () => {
@@ -404,12 +405,11 @@ test('the policy is displayed but never rendered as a control', () => {
   }
 })
 
-test('MCP renders honestly before any server is loaded', () => {
-  const markup=render('McpArea',React.createElement(components.McpArea))
-  assert.match(markup,/No tool matches/)
-  assert.match(markup,/No remote MCP connection is configured/)
-  assert.match(markup,/enforced server-side/)
-
+test('MCP describes remote calls as external and results as untrusted', () => {
+  const markup = render('McpArea', React.createElement(components.McpArea))
+  assert.match(markup, /No tool matches/)
+  assert.match(markup, /arguments are sent to that endpoint only after you approve each call/)
+  assert.match(markup, /untrusted data/)
 })
 
 test('the media areas render their validation surface', () => {
@@ -686,7 +686,7 @@ test('UserTrainingPanel defaults to unpaired user-computer-first mode and never 
   }))
   assert.match(unpaired, /No local worker is paired\. Your computer is not connected/)
   assert.match(unpaired, /never runs neural weight training silently from ordinary chat messages/)
-  assert.match(unpaired, /max 120s including finalization/)
+  assert.match(unpaired, /max 120s including setup &amp; finalization/)
 })
 
 test('UserTrainingPanel discloses real paired worker hardware, mode-downgrade approval gate, and rollback control', () => {

@@ -2,7 +2,7 @@
 
 Date: 2026-10-14. This supersedes the earlier offline-first product direction.
 
-**Update (2026-10-17):** the provider framework now ships native chat, image and video adapters and several saved connections from a 39-entry catalogue; see [27-provider-framework.md](./27-provider-framework.md). The phase-2 text below records the 2026-10-14 increment. Where it says Image and Video have no adapter, or that Provider Settings saves one endpoint, docs/27 and the Image/Video rows of [03-status.md](./03-status.md) are current.
+**Historical snapshot, updated 2026-11-01:** this document records the 2026-10-14 increment, not the entire current UI. The provider framework later added native chat, image and video adapters and several saved connections from a 39-entry catalogue; see [27-provider-framework.md](./27-provider-framework.md). The current app also has an explicit user-computer training/adaptation workflow in Chat, owner-managed MCP Streamable HTTP connections, and the Ragam HTTP plugin contract. See [28-user-managed-servers.md](./28-user-managed-servers.md) for the current server workflows. Historical statements below about training and remote plugins/MCP are superseded.
 
 ## Agreed scope and delivered change
 
@@ -10,12 +10,12 @@ The user selected **five areas with simplified Chat**, and **LiteLLM gateway fir
 The active `npm run core` entry now loads `online/app.mjs`, not the legacy offline-first application.
 
 - **Chat, Image, Video, Plugins, MCP** remain the only primary areas. Provider Settings is a dialog reached from the sidebar and Chat.
-- No local/hybrid inference mode, local runtime startup, model downloads, Klyvaron tier/hardware panel, training panel, benchmark panel, God Core dashboard, or local inference fallback in the active product.
+- At the 2026-10-14 snapshot there was no local/hybrid inference mode, local runtime startup, model downloads, Klyvaron tier/hardware panel, training panel, benchmark panel, God Core dashboard, or local inference fallback. The later Chat training/adaptation workflow is documented in [28-user-managed-servers.md](./28-user-managed-servers.md).
 - Authenticated Provider Settings saves one online endpoint: a LiteLLM gateway (key required), or an Ollama or llama.cpp server (key optional). Tests connection by fetching `/models`; refreshes listings; removes the connection/key. Configuration is server-owned and persists across restart.
 - A visible model picker saves an exact model ID. Unknown/unavailable selections fail rather than silently choosing another model. Model listings are labelled unverified; successful text inference is recorded separately. A gateway alias may itself route upstream; Aetheris does not attest to the gateway's internal routing policy.
 - Real OpenAI-compatible `/chat/completions` transport with SSE, cancellation, total body-inclusive timeout, response/request limits, no redirects, no retries, and at most two concurrent chat requests per installation.
 - Conversation history, optional approved memory and text-file knowledge remain. Files are limited to supported plain-text formats up to 1 MiB in the UI; no PDF/Office parsing. Context is sent only when selected for the request. Sensitive data needs explicit per-request authorization; credential-shaped content is redacted. Classification covers the entire assembled request and cannot be lowered by a caller's `public` label.
-- Plugins/MCP retain reviewed read-only built-ins. Arbitrary extension installs, trust-key modifications, external MCP registration and agent-driven tool execution are disabled in this increment. Built-ins are trusted because they are part of reviewed application source, not because of a publisher signature or a claimed in-process sandbox.
+- At the 2026-10-14 snapshot, Plugins/MCP retained reviewed read-only built-ins and arbitrary installs, trust-key modifications, external MCP registration and agent-driven tool execution were disabled. This historical limitation is superseded by the owner-managed protocols in [28-user-managed-servers.md](./28-user-managed-servers.md); downloaded code remains disabled.
 
 **Not delivered on 2026-10-14:** real online Image/Video generation adapters, direct native provider integrations (Ollama's `/api/chat` and llama.cpp's native protocols are not used online; both runtimes are reached over `/v1`), cloud deployment, durable autonomous tasks, or a qualified Sparsiz training loop. Image/Video clearly stated that their adapters were not connected; no synthetic output was substituted. On 2026-10-17 the image and video adapters landed (docs/27); cloud deployment and a qualified Sparsiz loop remain undone, and no live vendor call has been made.
 

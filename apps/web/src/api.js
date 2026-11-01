@@ -246,6 +246,7 @@ export const api = {
   trustKey: (body) => request('POST', '/api/plugins/trust', body),
   untrustKey: (keyId) => request('DELETE', `/api/plugins/trust/${encodeURIComponent(keyId)}`, {}),
   validateManifest: (manifest) => request('POST', '/api/plugins/validate', manifest),
+  connectPluginServer: (body) => request('POST', '/api/plugins/connect', body),
   installPlugin: (manifest) => request('POST', '/api/plugins/install', manifest),
   pluginPreflight: (id, capability, body = {}) =>
     request('POST', `/api/plugins/${encodeURIComponent(id)}/preflight`, { capability, ...body }),
@@ -255,6 +256,8 @@ export const api = {
 
   // --- MCP ----------------------------------------------------------------
   mcpServers: () => request('GET', '/api/mcp/servers'),
+  connectMcpServer: (body) => request('POST', '/api/mcp/servers/connect', body),
+  disconnectMcpServer: (server) => request('DELETE', `/api/mcp/servers/${encodeURIComponent(server)}`, {}),
   mcpTools: (params = {}) => {
     const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value))
     return request('GET', `/api/mcp/tools${query.toString() ? `?${query}` : ''}`)

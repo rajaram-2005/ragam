@@ -258,11 +258,11 @@ curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed4
 PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
 ```
 
-The pinned archive includes the model manifests and checksum list. A full successful run validates all 963 Core cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
+The pinned archive includes the model manifests and checksum list. A full successful run validates all 970 Core cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-npm test                  # all three suites (1884 tests)
-npm run test:core         # 963
+npm test                  # all three suites (1891 tests)
+npm run test:core         # 970
 npm run test:web          # 99
 npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
@@ -317,7 +317,7 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 963 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41307026637](https://github.com/rajaram-2005/ragam/actions/runs/41307026637) passed Core and release verification; the separate Compose job also passed its startup, API-through-Caddy, cold backup and restore checks. This does not verify any persistent deployment or hosted-data migration. |
+| **Core service** | Current suite: 970 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41307026637](https://github.com/rajaram-2005/ragam/actions/runs/41307026637) passed Core and release verification; the separate Compose job also passed its startup, API-through-Caddy, cold backup and restore checks. This does not verify any persistent deployment or hosted-data migration. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 99 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docker Compose** | Run [41307026637](https://github.com/rajaram-2005/ragam/actions/runs/41307026637) passed: builds both images, starts Core/web/Caddy, verifies owner bootstrap and authenticated API through Caddy, then cold-backs up and restores the named volume and verifies persisted data. This is a synthetic CI smoke, not a production or hosted-data migration check. |
