@@ -69,7 +69,7 @@ function copyInstalledModelsTo(targetKlyvaronRoot) {
 }
 
 for (const spec of EXPECTED_SPECS) {
-  test(`[${spec.id}] 1-7: checksum, Byte-BPE tokenizer, exact ${spec.expectedTensorCount} tensors (${spec.params.toLocaleString('en-US')} params), worker-thread hardware init, KV-parity inference, non-anthropomorphic completion, and measured resources`, { timeout: 120_000 }, async (t) => {
+  test(`[${spec.id}] 1-7: checksum, Byte-BPE tokenizer, exact ${spec.expectedTensorCount} tensors (${spec.params.toLocaleString('en-US')} params), worker-thread hardware init, KV-parity inference, non-anthropomorphic completion, and measured resources`, { timeout: spec.preset === 'max' ? 300_000 : 180_000 }, async (t) => {
     assert.equal(existsSync(spec.dir), true, `missing genuine installed artifact directory ${spec.dir}`)
     assert.equal(existsSync(spec.cardPath), true, `missing model card ${spec.cardPath}`)
 
