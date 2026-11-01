@@ -5,9 +5,9 @@ Compose stack on their own computer using its Docker Engine, rather than connect
 maintainer's computer or a shared cloud backend. It deploys the **existing** online Core and
 Vite-built web app. Caddy serves the web bundle and proxies `/api/*` to Core. Each instance's
 app databases, generated files, and Caddy state live in that person's local Docker volumes
-(`ragam-data`, `ragam-caddy-data`, and `ragam-caddy-config`). Nothing here redirects app
-storage to Supabase. This does not add local model inference, migrate hosted data, or change
-any external account.
+(`ragam-data`, `ragam-caddy-data`, and `ragam-caddy-config`). Docker Compose is the repository's
+only deployment path; the app's databases and files stay on the user's computer. This does
+not add local model inference or migrate any externally hosted data.
 
 ## Scope and safety
 
@@ -19,10 +19,9 @@ any external account.
 - The first self-host account is restricted to `AETHERIS_OWNER_EMAIL`. Member registration
   stays closed unless `AETHERIS_ALLOW_ACCOUNT_REGISTRATION=true` is deliberately set.
   The self-host account cap defaults to one.
-- Vercel and Supabase code/configuration remain intact. There is no hosted-data export or
-  migration in this deployment. Do not retire, delete, pause or modify the hosted stack
-  until its data has been inventoried/exported, imported, reconciled and verified with a
-  successful self-host backup and restore.
+- The repository no longer contains Vercel or Supabase deployment integrations or
+  migrations. This repository cleanup does **not** delete, pause, or modify any external
+  project, deployment, account, or data. No hosted-data export or migration is included.
 - Provider URLs are opened by the Core **container**. A host's `127.0.0.1` is not the
   Core container; configure a provider on an address reachable from that container (or
   within the same Docker network) and add only its exact origin to
@@ -50,7 +49,7 @@ For a Compose UI or other platform, use these manual configuration steps instead
 
 1. Copy `.env.example` to `.env` using your host's file manager or deployment UI.
 2. Set `AETHERIS_OWNER_EMAIL` to the one address allowed to create the first account.
-   Do not put a password, provider key, Supabase key or database password in this file.
+   Do not put a password or provider key in this file.
    The address match is an operator allowlist, **not** email verification or proof of
    mailbox control. Keep the first-owner page reachable only from a trusted machine/network
    until the owner account has been created.
@@ -149,8 +148,7 @@ before execution. Preserve the prior volume until every restore check passes.
 ## Updating and cutover gates
 
 Rebuild from reviewed repository source with `docker compose up -d --build`; back up first
-and keep the previous known-good images/backup until health and sign-in pass. No automatic
-migration from Vercel/Supabase, hosted-account export, or data reconciliation is included.
-Before any cutover, separately verify hosted exports, account ownership, provider secrets,
-per-account history/knowledge, consent/retention requirements and restore recovery. Until
-all of those checks pass, keep the existing hosted paths and data intact.
+and keep the previous known-good images/backup until health and sign-in pass. There is no
+automatic migration from external hosting or hosted-account export in this Docker-only
+repository. The removal of deployment integrations here is repository-only: any external
+service, project, deployment and data remains under its owner's control and is unchanged.

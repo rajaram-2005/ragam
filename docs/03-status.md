@@ -7,13 +7,13 @@ something does not work, it says so and says why.
 
 **Core test environment used for the verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test totals: 1960 cases across the three suites** (Core 1038, Web 100, Fabric 822). GitHub Actions run [41300147257](https://github.com/rajaram-2005/ragam/actions/runs/41300147257) passed all six jobs, including Core, Web, Fabric, documentation, release verification, and the Compose stack's owner/API-through-Caddy plus cold backup/restore checks. This verifies the self-hosted smoke path, not a persistent production deployment. A read-only inventory of the hosted `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket; its migration-history API returned no entries. No data or schema export/import was run, and no hosted service or project was changed. Thus no application records were present to transfer at inventory time, but the absence of a permanent self-hosted deployment means cutover is not complete. Supabase Preview was skipped. In this workspace the focused owner/bootstrap and account tests pass (23/23), documentation tests pass (49/49), Web tests pass (100/100), and the Vite production build succeeds. The full Core suite was attempted locally: 1027/1038 passed, with 11 environment-dependent failures because the pinned Pro/Max model artifacts and Python NumPy dependencies are not installed here. Docker/Podman are unavailable locally. No Vercel/Supabase settings or deployments have been changed.
+**Test totals: 1884 cases across the three suites** (Core 963, Web 99, Fabric 822). The prior all-green CI run [41304923904](https://github.com/rajaram-2005/ragam/actions/runs/41304923904) passed all six jobs before this repository cleanup. It exercised the Compose stack's owner/API-through-Caddy plus cold backup/restore checks; this is a synthetic smoke path, not a permanent deployment. A read-only inventory of the external `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket; its migration-history API returned no entries. No data or schema export/import was run, and no external service, project, deployment, account, setting, or data was changed. This is historical inventory evidence, not a live integration test. In this workspace, focused owner/bootstrap and account tests pass (23/23), documentation tests pass (50/50), Web tests pass (99/99), and the Vite production build succeeds. The full Core suite currently passes 952/963 locally; the 11 remaining failures require pinned Pro/Max artifacts and Python multimodal dependencies unavailable in this environment. Docker/Podman are unavailable locally. Vercel/Supabase repository integrations have now been removed; external resources remain under their owners' control and untouched.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **1038 tests** (80 files; this workspace: 1027 passed, 11 environment failures; the focused self-host bootstrap/account tests passed 23/23) |
+| `services/core` | `node --test test/*.test.mjs` | **963 tests** (65 files; local environment-dependent Pro/Max artifact and Python multimodal prerequisites may cause 11 documented failures; focused self-host bootstrap/account tests pass 23/23) |
 | `services/fabric` | `PATH=.venv/bin:$PATH npm run test:fabric` | **822 tests** (42 files; local run passed) |
-| `apps/web` | `npm run test:web` | **100 tests** (5 files; 100/100 passed locally) |
+| `apps/web` | `npm run test:web` | **99 tests** (4 files; 99/99 passed locally) |
 | `apps/web` build | `npm run build --prefix apps/web` | production bundle built successfully locally |
 
 **Released first-party Klyvaron Pro and Max multimodal artifacts (all 8 trained from scratch, `baseCheckpoint: null`, verified by SHA-256 on load):**
@@ -242,7 +242,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (1038 tests)
+### `services/core` — Implemented and tested (963 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -256,9 +256,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Ollama / llama.cpp, online entry | **Implemented and tested against a loopback fixture** | Same transport as LiteLLM; keyless by default; exact trusted origin required. No real runtime qualified here |
 | Klyvaron development plan | **Implemented and tested** | Per-tier gates derived from the tier records, `klyvaron.mjs plan`; see [docs/11](11-klyvaron-family.md) §1.5 |
 | Klyvaron CPU execution | **Implemented and tested** | Single worker, bounded incremental streaming, cancellation/deadlines, one-model residency; see doc 15 |
-| Knowledge pipeline | **Implemented and tested** | SQLite remains the local default; the hosted Vercel factory injects account-scoped Supabase memory/knowledge stores with bounded BM25 refresh, ACL filtering, and grounded citations |
-| Supabase knowledge repository | **Implemented and tested as an adapter** | Account-filtered bounded reads; transactional Postgres RPCs for insert/dedup/chunk/ACL and hard-delete receipts; PGlite exercises insert, dedup, exact stats, and purge. Its RPC migration is staged but the user has not confirmed applying it to hosted Supabase |
-| Vercel Core handler | **Implemented; not deployed** | Node Function entrypoint, parsed-body limits, warm-instance reuse, Supabase startup wiring and same-origin frontend proxy. No live Supabase round-trip or Vercel Preview test yet |
+| Knowledge pipeline | **Implemented and tested** | Local SQLite stores with bounded BM25 refresh, ACL filtering, grounded citations, evaluation, and purge; persists on the end user's Docker volume |
 | Media queue & validation | **Implemented and tested** | Progress, cancellation, timeouts, retry-after, state history; an optional state file makes a terminal job and its artifact survive a restart, and a job interrupted mid-run is recorded as `failed` with `interrupted`, never replayed as running |
 | Plugin registry & manifests | **Implemented and tested** | Preflight vs invoke distinction; uninstall keeps a record |
 | MCP layer & schema validator | **Implemented and tested** | Risk tiers, approval gates, output neutralisation, per-tool timeouts |
@@ -381,7 +379,7 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (100 tests)
+### `apps/web` — Implemented and tested (99 tests)
 
 | Area | Status |
 |---|---|
@@ -391,7 +389,7 @@ baseline it was measured against and not enough to hold a conversation.
 | Plugins | **Implemented and tested** — manifest validation, install, preflight, invoke, approvals |
 | MCP | **Implemented and tested** — servers, tools, risk gates, elevated-scope approvals |
 
-**Rendering is covered** by `test/render.test.mjs` (29 tests), added after an
+**Rendering is covered** by `test/render.test.mjs` (37 tests), added after an
 earlier revision of this document recorded the rendering layer as "implemented, not
 fully tested". There is no browser here, and adding `jsdom` would have meant a new
 dependency tree — so instead the test bundles the JSX with `rolldown` (already a Vite 8
@@ -494,12 +492,13 @@ No untracked or ignored artefacts were found in the tree beyond the empty, gitig
 `.aetheris-data/`. The suite after the change: **831 / 831** core, 48/48 docs, 93/93 web (run with
 `npm ci`), 814 fabric.
 
-**Follow-up dependency audit (2026-11-01):** removed `apps/web/src/components/Jobs.jsx` and its
-empty-table-only render test. The component had no production importer; Image and Video render
-their own job surfaces. Remaining JavaScript files with no importers were reviewed as application
-entry points, manually-run scripts, generated-fixture tools, or documented legacy code. In
-particular, the Vercel/Supabase entry points and migrations remain while the hosted production path
-is retained for safe cutover. No test fixtures, model evidence, licences, or hosted data were deleted.
+**Repository cleanup (2026-11-01):** removed `apps/web/src/components/Jobs.jsx` and its
+empty-table-only render test because Image and Video render their own job surfaces. After the
+user selected Docker-only deployment, removed the unused Vercel functions/configuration,
+Supabase adapters, migrations, their integration tests, and hosted-deployment smoke material.
+No test fixtures, model evidence, licences, or external hosted data were deleted; external
+projects, deployments, settings, accounts, and data were not accessed or changed. Docker Compose
+is the sole deployment path documented by this repository.
 
 ### Phases 9–10 — industry packs, and a release that verifies its own numbers
 

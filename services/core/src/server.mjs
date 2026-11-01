@@ -41,7 +41,7 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
     trustedOrigins: [env.AETHERIS_TRUSTED_ORIGINS || '', env.AETHERIS_LITELLM_TRUSTED_ORIGINS || ''].join(',').split(',').map((s) => s.trim()).filter(Boolean),
     trustedWebOrigins,
     secureCookie: env.AETHERIS_COOKIE_SECURE !== 'false',
-    // 'strict' works when the browser talks to the same-origin Vercel proxy. Use 'none'
+    // 'strict' is the same-origin default for the Docker-served web app. Use 'none'
     // only for a genuinely cross-site embedded deployment; OnlineApp requires Secure.
     cookieSameSite: (env.AETHERIS_COOKIE_SAMESITE || 'strict').trim().toLowerCase(),
     // Public self-host installs begin with exactly one explicitly configured owner.

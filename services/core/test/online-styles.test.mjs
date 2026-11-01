@@ -81,7 +81,7 @@ test('the seven styles are the directive list and every instruction carries the 
   assert.equal(r.data.preference.explicit, false)
 })
 
-test('style and account-context routes await injected stores for hosted persistence', async (t) => {
+test('style and account-context routes await explicitly injected stores', async (t) => {
   const values = new Map()
   const calls = []
   const contextAccounts = []

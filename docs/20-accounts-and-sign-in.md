@@ -47,9 +47,8 @@ counts the navigation entries and fails if one appears.
 for the first account. Only that normalized address may claim the owner role. Once the
 owner exists, `AETHERIS_ALLOW_ACCOUNT_REGISTRATION=true` is required to admit members;
 the default account cap is one (`AETHERIS_MAX_ACCOUNTS=1`). If the owner email is absent,
-registration fails closed instead of allowing a visitor to become owner. The hosted
-Vercel/Supabase adapter retains its independent `AETHERIS_BOOTSTRAP_EMAIL` and
-`AETHERIS_REGISTRATION_ENABLED` controls and its existing account-cap default.
+registration fails closed instead of allowing a visitor to become owner. This policy is
+applied independently by each end user's local Docker instance.
 
 - **The first account is the owner.** The role is decided by the store, never by the
   request body. Only the owner can change the gateway connection or its key
@@ -200,7 +199,7 @@ header; nothing about CSRF handling changed.
 |---|---|---|
 | `AETHERIS_OWNER_EMAIL` | unset | Required by the self-hosted Core entrypoint to bootstrap the first owner; signup remains closed until configured |
 | `AETHERIS_ALLOW_ACCOUNT_REGISTRATION` | `false` | Explicitly opt into member registrations after owner creation |
-| `AETHERIS_MAX_ACCOUNTS` | `1` self-hosted; `64` hosted adapter | Hard cap; self-host accepts 1–10000; raise above one deliberately when enabling members |
+| `AETHERIS_MAX_ACCOUNTS` | `1` | Hard cap from 1–10000; raise above one deliberately when enabling members |
 | `AETHERIS_PRINT_RESET_CODES` | `false` | Also print a password-reset code on the Core console |
 | `AETHERIS_COOKIE_SECURE` | `true` | Unchanged; `false` only for deliberate HTTP local development |
 | `AETHERIS_COOKIE_SAMESITE` | `strict` | `strict`, `lax` or `none`. Use `none` when the web app is embedded in another site; it requires `AETHERIS_COOKIE_SECURE=true`, and Core refuses to start without it |

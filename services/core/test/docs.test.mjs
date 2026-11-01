@@ -393,7 +393,7 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.status, '**545 / 545**'], [doc.status, '**89 / 89**'], [doc.status, '**Test totals: 1209 passing'],
     [doc.status, 'Implemented and tested (545 tests)'], [doc.status, 'Implemented and tested (89 tests)'],
     [doc.status, '`apps/web`; 89 tests including'], [doc.status, '`accounts.test.mjs` (16 tests)'],
-    [doc.status, '199.64 kB'], [doc.status, '61.59 kB gzip'], [doc.status, '`test/render.test.mjs` (28 tests)'],
+    [doc.status, '199.64 kB'], [doc.status, '61.59 kB gzip'], [doc.status, '`test/render.test.mjs` (29 tests)'],
     [doc.setup, 'all three suites (1209 tests)'], [doc.setup, 'npm run test:core         # 545'],
     [doc.setup, 'npm run test:web          # 89'], [doc.setup, '| **Core service** | 545 tests pass'],
     [doc.setup, '| **Web app** | `npm ci`, 89 tests'], [doc.setup, 'npm test             # 89 tests'],
@@ -715,33 +715,33 @@ test('the status doc reports the real test totals', () => {
   // media workflow, the industry packs, the benchmark harness and the release verifier.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 80)
-  assert.equal(count('apps/web/test', /\.test\.mjs$/), 5)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 65)
+  assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**1038 tests**'), 'core test inventory must be stated')
+  assert.ok(status.includes('**963 tests**'), 'core test inventory must be stated')
   assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
-  assert.ok(status.includes('**100 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1960 cases across the three suites'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('**99 tests**'), 'web test inventory must be stated')
+  assert.ok(status.includes('1884 cases across the three suites'), 'the grand total must equal the sum of the suites')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1960 tests: core 1038, web 100, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('1884 tests: core 963, web 99, fabric 822'),
     'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1960 run in CI'),
+  assert.ok(squash(doc.readme()).includes('All 1884 run in CI'),
     'README must state the same totals where it describes CI')
   assert.ok(status.includes('(42 files'), 'the file count must move with the suite')
 
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(1038), `core heading must say 1038, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(963), `core heading must say 963, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(100), `web heading must say 100, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(99), `web heading must say 99, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1960,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1960`,
+    1884,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1884`,
   )
 })
 
@@ -1473,6 +1473,28 @@ test('the Markdown model card keeps the two limitation lists distinct', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Docker-only deployment: obsolete hosted integrations stay out of the release
+// ---------------------------------------------------------------------------
+
+test('deployment integrations and hosted-only instructions are absent from the repository', () => {
+  for (const path of [
+    'apps/web/api/[...path].js', 'apps/web/vercel.json',
+    'services/core/api/[...path].js', 'services/core/vercel.json',
+    'services/core/src/vercel', 'services/core/src/storage/supabase-admin.mjs',
+    'services/core/src/online/supabase-context.mjs',
+    'services/core/src/knowledge/supabase-pipeline.mjs',
+    'supabase/migrations', 'docs/supabase-migration-plan.md',
+    'docs/deployment-status.md', 'scripts/production-smoke.mjs',
+  ]) assert.equal(exists(resolve(REPO, path)), false, `${path} must not ship in the Docker-only repository`)
+
+  const setup = doc.setup()
+  assert.ok(setup.includes('Docker Compose only'), 'end-user setup must state the supported deployment')
+  assert.ok(!/Vercel|Supabase|CORE_API_URL/.test(setup), 'setup must not instruct users to configure removed hosted integrations')
+  assert.ok(!/SUPABASE_(?:URL|SERVICE_ROLE_KEY)=/.test(read('.env.example')),
+    '.env.example must not retain hosted database credentials')
+})
+
+// ---------------------------------------------------------------------------
 // CI: the gate that keeps every number above honest
 // ---------------------------------------------------------------------------
 
@@ -1488,8 +1510,10 @@ test('CI exists, covers all three components, and is documented', () => {
   // The zero-dependency property of services/core is asserted in CI, not just here.
   assert.ok(workflow.includes('services/core declares zero dependencies'))
   assert.ok(workflow.includes('services/core/node_modules'), 'CI must reject an install step appearing in core')
-  assert.ok(workflow.includes("node --check 'services/core/api/[...path].js'"),
-    'CI must syntax-check the hosted Core Function entrypoint')
+  assert.ok(workflow.includes('node --check scripts/self-host-smoke.mjs'),
+    'CI must syntax-check the Docker Compose smoke entrypoint')
+  assert.ok(!workflow.includes('services/core/api/[...path].js'),
+    'CI must not retain a hosted Core Function check')
 
   // Nothing may install torch: services/fabric is NumPy-only by design, and on a
   // GPU-less runner pip resolves torch to the CUDA build.

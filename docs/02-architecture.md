@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 39,952 source lines, 26,298 test lines
+### `services/core` — 37,147 source lines, 24,607 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -84,9 +84,9 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `online/context-routes.mjs` | 260 | Authenticated context and reviewed read-only tool routes |
 | `online/gateway.mjs` | 222 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
 | `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
-| `online/http.mjs` | 50 | Bounded JSON requests and no-store responses |
+| `online/http.mjs` | 32 | Bounded streamed JSON requests and no-store responses |
 | `online/klyvaron.mjs` | 87 | Klyvaron product tiers in the online build: resolve a tier to a saved connection and a listed model, refuse an unconfigured tier by name, and name the third-party provider and model as provenance |
-| `online/store.mjs` | 432 | Multi-connection encrypted store (schema 2): one sealed credential per connection, an active id, a store-wide revision, native first-party model selection persistence, and optional Klyvaron tier presets |
+| `online/store.mjs` | 409 | Multi-connection encrypted local store (schema 2): one sealed credential per connection, an active id, a store-wide revision, native first-party model selection persistence, and optional Klyvaron tier presets |
 | `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `klyvaron/format.mjs` | 721 | The Klyvaron artifact format: manifest validation, character and learned Byte-BPE vocabulary digests, differentiator head metadata, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
@@ -129,20 +129,11 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `memory/store.mjs` | 656 | Local SQLite implementation of user-approved memory, approval-gated candidates, and session recall with citations |
 | `memory/fabric.mjs` | 790 | Seven layers, each entry carrying assertion and verification as separate records, required provenance rows, a confidence with a required basis, scope and readers enforced on read, and deletion that takes the provenance with it |
 | `memory/bridge.mjs` | 138 | Approved memory entering the fabric as a claim (never a fact), and fabric entries leaving as candidates a person must approve; one direction, because the schema refuses the other |
-| `memory/contracts.mjs` | 42 | Storage-independent memory invariants, limits, states, and coded error contract shared by local and hosted stores |
+| `memory/contracts.mjs` | 42 | Storage-independent memory invariants, limits, states, and coded error contract shared by the local stores |
 | `skills/permissions.mjs` | 272 | The permission block of a SKILL.md: parsed, refused when malformed or wildcarded, bounded against the runtime grant, and used as the scope the procedure runs with — a caller cannot widen it |
 | `skills/evaluation.mjs` | 274 | EVALUATE and DIAGNOSE: an append-only digest-chained verdict log, the incumbent's passing checks as the regression set, and a closed set of diagnoses (regression, regression_not_run, new_failure) so a rejection says which kind it was |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
-| `storage/supabase-admin.mjs` | 106 | Server-only Supabase REST client with fixed-origin, endpoint, header, timeout and credential-redaction guards |
-| `storage/supabase-account-repository.mjs` | 138 | Account-scoped PostgREST operations that force owner filters and reject identity changes |
-| `storage/supabase-session-store.mjs` | 117 | Durable server-side sessions that store only SHA-256 hashes of opaque browser tokens |
-| `storage/supabase-account-store.mjs` | 286 | Supabase-backed account records, scrypt authentication, password recovery and distributed login throttles |
-| `storage/supabase-style-store.mjs` | 81 | Async account-filtered style preference persistence with validated IDs and explicit-null semantics |
-| `storage/supabase-memory-store.mjs` | 559 | Account-filtered async memory/session repository with BM25 rebuilt from approved rows and transactional SQL RPCs for approval, deletion, and append semantics; selected by the hosted Vercel startup factory |
-| `storage/supabase-knowledge-store.mjs` | 422 | Account-filtered async knowledge repository with bounded scans, bulk ACL reads, transactional document/chunk/ACL insertion and purge, opaque embeddings, and exact statistics |
-| `knowledge/supabase-pipeline.mjs` | 344 | Async account-scoped BM25 pipeline preserving ACL/classification filtering, citations, grounded evidence, evaluation, purge, and stats; refreshes bounded persistent snapshots per search for serverless cross-instance visibility |
-| `knowledge/pipeline-utils.mjs` | 68 | Shared pure file validation and token-overlap helpers, re-exported by the local SQLite pipeline and used by the Supabase pipeline without importing `node:sqlite` |
-| `online/supabase-context.mjs` | 40 | Builds per-account Supabase memory/knowledge stores for the injectable async context factory; requires an explicit deployment-specific media queue rather than claiming local-disk durability |
+| `knowledge/pipeline-utils.mjs` | 68 | Pure file-validation and token-overlap helpers shared by the local SQLite knowledge pipeline without importing `node:sqlite` |
 | `klyvaron/tiers.mjs` | 1,140 | Separated subscription tiers, 8 first-party Klyvaron model identities (`pro` & `max` across Chat, Image, Video, Voice), programmatic runtime capability readiness (`ready`, `partially_available`, `missing_artifact`, `runtime_unqualified`, `training_required`, `unsupported_hardware`), and separate Pro/Max capability manifests |
 | `klyvaron/plan.mjs` | 187 | The development plan: thirteen per-tier gates derived from the tier records, including the stance, the two differentiators, modality separation and `own_weights`, each open gate with its reason |
 | `klyvaron/trends.mjs` | 186 | Dated, sourced observations that expire and abstain; the mechanism `trend.awareness` is defined against, with no model behind it |
@@ -220,11 +211,6 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/wires/runway-video.mjs` | 125 | Runway: the mandatory `X-Runway-Version` header, `text_to_video`, ratio mapping, `duration` only for the gen4 family, bounded task polling, output download and `DELETE` cancellation |
 | `providers/wires/luma-video.mjs` | 109 | Luma Dream Machine: `POST /generations`, `queued`/`dreaming`/`completed`/`failed` translation, `assets.video` download without the key, and `DELETE` cancellation |
 | `providers/wires/firefly-images.mjs` | 126 | Adobe Firefly: a validated two-part OAuth client credential, an in-memory IMS token exchange and cache, `x-api-key` plus Bearer generation, and a delivery download that carries neither secret |
-| `storage/supabase-audit-ledger.mjs` | 66 | Append-only hosted audit writes, retained for idempotent retry until response flush |
-| `storage/supabase-media-queue.mjs` | 304 | Account-scoped Postgres job metadata and private Storage artifacts; bounded synchronous image/video execution |
-| `storage/supabase-provider-store.mjs` | 123 | Encrypted provider snapshot, revision-checked updates, warm-instance rehydration and response flush |
-| `vercel/handler.mjs` | 64 | Vercel Node Function adapter, warm app reuse, parsed-body limits and safe initialization failure |
-| `vercel/hosted-app.mjs` | 114 | Hosted startup wiring for Supabase repositories, owner bootstrap and local-only route gates |
 
 ### `services/fabric` — 17,241 source lines, 10,540 test lines
 
@@ -237,11 +223,11 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 5,443 source lines, 2,240 test lines
+### `apps/web` — 5,443 source lines, 2,016 test lines
 
 Five area components, three sign-in pages (sign in, create account, reset
 password), the account card and the Klyvaron tier panel, a shell, shared primitives,
-an API client and five test files. The sign-in pages are not areas and add no navigation
+an API client and four test files. The sign-in pages are not areas and add no navigation
 entry; see [20 — Accounts and sign-in](20-accounts-and-sign-in.md). Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).
 

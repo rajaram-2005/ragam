@@ -6,7 +6,7 @@
 
 Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog and an explicit persistent model picker. Inference is online-only; there are no active local-runtime, hardware-tier, training or task-diagnostic panels. Optional history, approved memory, text-file knowledge and reviewed procedures remain.
 
-Run `npm run core` and `npm run web`, with `AETHERIS_OWNER_EMAIL` configured for the first owner, then create an account at `#/signup` and sign in at `#/signin`. Sign-in is traditional — an email address and a password, on three pages (sign in, create account, reset password) — and it is the only way in: the operator access-token file and its login route have been removed. Only the configured owner email can bootstrap the first account; member registration is closed by default and must be deliberately enabled by the operator. See the [Docker Compose self-hosting guide](docs/22-self-hosted-deployment.md) for persistent storage, health checks, backup/restore and cutover safeguards. Then open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. On HTTP-only local development, start Core with `AETHERIS_COOKIE_SECURE=false`; keep secure cookies enabled for HTTPS deployments. If the web app is served inside another site's iframe, also start Core with `AETHERIS_COOKIE_SAMESITE=none` — a strict session cookie is never sent cross-site, so sign-in would appear to work and every request after it would be a `401`. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md).
+**Deployment is Docker Compose only.** Each end user runs an independent stack on their own computer with local persistent storage; there is no shared developer-operated backend. Use the [Docker Compose self-hosting guide](docs/22-self-hosted-deployment.md), including the Windows double-click launcher, for setup, health checks and backup/restore. Once running, create an account for the owner at `#/signup`, then sign in at `#/signin`. The operator's access-token file and its login route have been removed. Only the configured owner email can bootstrap the first account; member registration is closed by default and must be deliberately enabled by the operator. Open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md). The Node/Vite commands below are for repository development, not deployment.
 
 Current release: **0.2.0** — [release note](docs/26-release.md), [changelog](CHANGELOG.md), version in [`VERSION`](VERSION). Provider Settings shows a read-only [provider matrix](docs/27-provider-framework.md): it distinguishes native vendor, OpenAI-compatible, and gateway-routed APIs; the fourteen audited Chat adapters are contract-tested but live verification is pending. Model-level capabilities stay unknown unless the vendor catalogue reports evidence. The release carries the adaptive core (ten phases, code and tests) as a library; the product surface described above is unchanged by it.
 
@@ -59,7 +59,7 @@ internal service promoted to a navigation entry, fails the build.
 
 ---
 
-## Quick start
+## Developer quick start
 
 ```bash
 # Core uses Node's standard library; it has no dependency install step.
@@ -92,7 +92,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 1960 tests: core 1038, web 100, fabric 822
+npm test          # 1884 tests: core 963, web 99, fabric 822
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -107,15 +107,14 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1960 run in CI on every push and pull request
+All 1884 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) across six jobs: one per
 component, a Docker Compose build/health/persistence/restore smoke, documentation
 checks, and release verification against the suite counts. The
 Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
 
-Full instructions, environment variables and troubleshooting:
-[`docs/04-setup.md`](docs/04-setup.md). Hosted Core requirements and deployment status are documented in [`docs/deployment-status.md`](docs/deployment-status.md).
+End-user setup and troubleshooting: [`docs/22-self-hosted-deployment.md`](docs/22-self-hosted-deployment.md). Developer environment variables and repository setup: [`docs/04-setup.md`](docs/04-setup.md).
 
 > **Do not `pip install torch` for normal development or tests.** The Fabric service
 > is NumPy-only. Only the explicit optional LoRA command above bootstraps torch and
@@ -169,9 +168,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 39,952 | 26,298 | **zero npm packages** | 1038 |
+| `services/core` | Node 22 ESM | 37,147 | 24,607 | **zero npm packages** | 963 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 5,443 | 2,240 | react, react-dom | 100 |
+| `apps/web` | React 18 + Vite | 5,443 | 2,016 | react, react-dom | 99 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

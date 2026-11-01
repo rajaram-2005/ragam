@@ -165,11 +165,11 @@ export class OnlineApp {
     // ledger as everything else, naming the account id — which is the difference
     // between "the gateway was changed" and "this account changed the gateway".
     this.accounts = accountStore ?? new AccountStore({ dir: this.dir, maxAccounts, ownerEmail, registrationEnabled, onResetCode, audit: (event) => this.ledger.record(event) })
-    this.remoteAccountStore = Boolean(accountStore)
-    // Account context is opened on first use. The local path keeps isolated SQLite stores;
-    // an injected async factory can provide durable, account-filtered repositories for a
-    // serverless runtime. Cache in-flight factories too, so simultaneous first requests do
-    // not open duplicate stores or race migrations.
+    this.injectedAccountStore = Boolean(accountStore)
+    // Account context is opened on first use. The Docker path keeps isolated SQLite stores;
+    // the optional factory is an extension seam for an explicitly injected storage backend.
+    // Cache in-flight factories too, so simultaneous first requests do not open duplicate
+    // stores or race initialization.
     this.contexts = new Map()
     // Skills are installation-wide reviewed procedures, separate from plugins: a skill is text a
     // person selects, not code this service executes.
@@ -1398,8 +1398,8 @@ export class OnlineApp {
    * Two buckets because one is not enough. The per-address bucket is what stops one
    * person's password being guessed at; the installation-wide bucket is what stops the
    * endpoint being used to keep scrypt busy, since each attempt costs a hash whether or
-   * not the address exists. The local AccountStore path uses process-local windows; the
-   * hosted store implements the same two buckets with shared atomic Postgres RPCs.
+   * not the address exists. The default local AccountStore uses process-local windows;
+   * an explicitly injected store may provide its own durable implementation.
    */
   throttleAuth(action, email, { perAddress = 12, perInstallation = 60, windowMs = 60_000 } = {}) {
     if (typeof this.accounts.throttleAuth === 'function') return this.accounts.throttleAuth(action, email, { perAddress, perInstallation, windowMs })
@@ -1418,8 +1418,8 @@ export class OnlineApp {
   }
   server() {
     const server = createServer(async (req, res) => {
-      // Hosted stores queue writes from legacy synchronous call sites. Do not let a serverless
-      // response finish until provider state and audit events are durable. If persistence fails,
+      // Local stores may queue writes from synchronous mutation handlers. Do not finish the
+      // response until provider state and audit events are durable. If persistence fails,
       // terminate the response rather than claim a successful mutation that will vanish.
       const originalEnd = res.end.bind(res)
       let endRequested = false
@@ -1468,7 +1468,7 @@ export class OnlineApp {
           const body = await readBody(req)
           await this.throttleAuth('register', body.email)
           const account = await this.accounts.register({ email: body.email, password: body.password })
-          if (!this.remoteAccountStore) this.adoptLegacyContext(account)
+          if (!this.injectedAccountStore) this.adoptLegacyContext(account)
           // Registering signs you in. Making a person repeat a password they typed ten
           // seconds ago is not a security control, it is a form.
           const token = await this.createSession(account)

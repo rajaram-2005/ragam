@@ -13,7 +13,7 @@ Every command below was run on the host described in
 |---|---|---|
 | `services/core` | **Node ≥ 22.5.0** (for `node:sqlite`). Zero npm dependencies | Node v22.22.3 |
 | `services/fabric` | **Python ≥ 3.11** + **NumPy** | Python 3.11.2, NumPy 2.1.3 |
-| `apps/web` | Node 22.x and npm. Vite 8 requires ≥ 20.19 or ≥ 22.12; the Vercel function runtime is pinned to Node 22. 2 runtime packages, 23 installed in total | Vite 8.3.4, React 18.3.1 |
+| `apps/web` | Node 22.x and npm. Vite 8 requires ≥ 20.19 or ≥ 22.12. 2 runtime packages, 23 installed in total | Vite 8.3.4, React 18.3.1 |
 | Tests | Python 3.11 with NumPy, JAX, PyAV and Pillow plus the pinned first-party Pro/Max packages for the full Core suite; `pytest` for Fabric; nothing extra for Web | Python 3.11.2, NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0, Pillow 13.0.0, pytest 9.1.1 |
 
 No GPU is required for anything in this repository. No model weights are downloaded or needed to run the platform — see §7 for what that means in practice. The full Core acceptance suite is different: five tests exercise genuine released Pro/Max packages and several worker tests import Python multimodal dependencies. Those test-only prerequisites are described in §4; they are kept outside Git.
@@ -26,6 +26,8 @@ No GPU is required for anything in this repository. No model weights are downloa
 ---
 
 ## 2. Quick start
+
+**End-user deployment is Docker Compose only.** Use the [self-hosted Docker guide](22-self-hosted-deployment.md), including the Windows double-click launcher, to run an independent local instance with persistent storage. The Node/Vite steps below are for repository development and tests, not a separate deployment target.
 
 ```bash
 git clone https://github.com/rajaram-2005/ragam.git aetheris-omni
@@ -80,15 +82,15 @@ npm run core
 |---|---|---|
 | `AETHERIS_CORE_HOST` | `0.0.0.0` | Bind address. Use `127.0.0.1` for a single-user machine |
 | `AETHERIS_CORE_PORT` | `8790` | Explicit bind-port override; when unset, the active entry uses the host-provided `PORT` before falling back to `8790` |
-| `PORT` | *(managed host supplied)* | The hosting platform supplies the listening port; ignored when `AETHERIS_CORE_PORT` is explicitly set |
+| `PORT` | *(optional)* | Generic Node hosting port; ignored when `AETHERIS_CORE_PORT` is explicitly set. Docker Compose sets the Core port explicitly. |
 | `AETHERIS_ONLINE_DATA_DIR` | `./.aetheris-data/online` | Active online account/provider/SQLite data directory; place on persistent storage in production |
 | `AETHERIS_OWNER_EMAIL` | unset | Required to bootstrap the first self-hosted owner; no email means registration stays closed |
 | `AETHERIS_ALLOW_ACCOUNT_REGISTRATION` | `false` | Explicit opt-in to member registration after owner creation |
 | `AETHERIS_MAX_ACCOUNTS` | `1` self-hosted | Account cap; deliberately increase before enabling members |
-| `AETHERIS_TRUSTED_WEB_ORIGINS` | *(empty)* | Exact HTTPS browser origins accepted through the Vercel same-origin API proxy; comma-separated, no wildcard |
+| `AETHERIS_TRUSTED_WEB_ORIGINS` | *(empty)* | Optional exact HTTPS origins for a frontend served on a separate origin; comma-separated, no paths or wildcards. The Docker Compose app is same-origin and needs no entry. |
 | `AETHERIS_COOKIE_SECURE` | `true` | Keep Secure on for production HTTPS cookies |
-| `AETHERIS_COOKIE_SAMESITE` | `strict` | Safe with the Vercel same-origin proxy; `none` is only for genuinely cross-site embedding and requires Secure |
-| `AETHERIS_ONLINE_TIMEOUT_MS` | `120000` | Upstream gateway time budget; when using the 60-second Vercel proxy, configure Core below the proxy's function limit |
+| `AETHERIS_COOKIE_SAMESITE` | `strict` | Same-origin default; `none` is only for genuinely cross-site embedding and requires Secure |
+| `AETHERIS_ONLINE_TIMEOUT_MS` | `120000` | Upstream gateway time budget |
 | `AETHERIS_MODEL_CATALOG_FILE` | unset | Optional operator-owned versioned catalog-source JSON; metadata only, no automatic remote refresh. See [17](./17-model-catalog.md) |
 | `AETHERIS_DATA_DIR` | `./.aetheris-data` | SQLite files, media artifacts, audit ledger |
 | `AETHERIS_RUNTIME_POLICY` | `strict_offline` | `strict_offline` \| `hybrid` \| `online_enabled` |
@@ -106,15 +108,13 @@ npm install          # 62 packages, ~12 s
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 101 web tests
+npm test             # 99 web tests
 ```
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `WEB_PORT` | `5173` | Dev/preview server port |
 | `AETHERIS_CORE_URL` | `http://127.0.0.1:8790` | Dev-server proxy target only. Node-side; never reaches the browser |
-| `NODE_ENV` | `development` locally; `production` on Vercel | The Vercel proxy permits loopback HTTP only in development; production requires HTTPS |
-| `CORE_API_URL` | *(Vercel project variable)* | `/api` function's fixed HTTPS Core origin; never exposed to the browser |
 
 The dev server binds `0.0.0.0` with `allowedHosts: true` so it works behind a
 container port-forward or a preview proxy. Browser-facing code uses relative
@@ -125,18 +125,6 @@ appears in `src/`.
 proxy `/api` to the core service (nginx, Caddy, or the core itself behind a
 reverse proxy). No absolute backend URL is baked into the bundle, so the same
 build works against any origin that proxies `/api`.
-
-### Vercel + Supabase (hosted Preview path)
-
-The repository now has a Vercel Node Function entrypoint at `services/core/api/[...path].js`; create the Core Vercel project with **Root Directory** `services/core`. It uses Supabase for account/session state, provider settings, audit events, per-account memory/knowledge, and image/video job metadata and private artifacts. Generation runs synchronously inside a bounded Function request (45 seconds); it is not a background worker. Local Klyvaron training/artifacts stay local, and hosted Voice routes are intentionally disabled.
-
-The frontend remains a separate Vercel project with **Root Directory** `apps/web`. Its same-origin `/api/*` proxy requires `CORE_API_URL` set to the Core deployment's exact HTTPS origin, with no path or trailing slash. The Core project must allow the exact frontend Preview/Production origins through `AETHERIS_TRUSTED_WEB_ORIGINS`.
-
-Before deploying a Preview, apply the Supabase migration files in order through the Dashboard SQL Editor: baseline `20261030000100_initial_core.sql`, memory RPCs `20261031000100_memory_rpcs.sql`, knowledge RPCs `20261101000100_knowledge_rpcs.sql`, then provider snapshot/private media storage `20261102000100_provider_snapshot.sql`. The user reports the baseline has already returned “Success. No rows returned”; do not run it again. The follow-on migrations are not yet confirmed on the hosted project, and no live Supabase integration test has been run.
-
-Set these variables **only in the Core Vercel project**, initially for Preview: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AETHERIS_PROVIDER_ENCRYPTION_KEY` (32 random bytes as 64 hex characters or base64), and `AETHERIS_OWNER_EMAIL`. Never put the service-role or encryption key in frontend `VITE_*` variables or chat. Account registration is closed by default after the first owner is created; enable it only deliberately with `AETHERIS_ALLOW_ACCOUNT_REGISTRATION=true`. Password-reset delivery is disabled until a real delivery channel is configured.
-
-Set `CORE_API_URL` in the **frontend** Vercel project to the Core Preview origin. Deploy and test Preview first; keep Production variables/traffic unchanged until sign-in, ownership isolation, chat, knowledge search/deletion, provider settings, media upload/download/deletion, and Function timeout behavior pass. Supabase remains on the Free plan in London; verify current quotas in its dashboard and do not upgrade. No hosted migrations beyond the baseline, data transfer, Vercel variables, or deployment have been performed by this agent.
 
 ### Fabric service
 
@@ -270,12 +258,12 @@ curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed4
 PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
 ```
 
-The pinned archive includes the model manifests and checksum list. A full successful run validates all 1038 Core cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
+The pinned archive includes the model manifests and checksum list. A full successful run validates all 963 Core cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-npm test                  # all three suites (1960 tests)
-npm run test:core         # 1038
-npm run test:web          # 100
+npm test                  # all three suites (1884 tests)
+npm run test:core         # 963
+npm run test:web          # 99
 npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
 
@@ -329,11 +317,11 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 1038 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41300147257](https://github.com/rajaram-2005/ragam/actions/runs/41300147257) passed Core and release verification; the separate Compose job also passed its startup, API-through-Caddy, cold backup and restore checks. This does not verify any persistent deployment or hosted-data migration. |
+| **Core service** | Current suite: 963 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41304923904](https://github.com/rajaram-2005/ragam/actions/runs/41304923904) passed Core and release verification; the separate Compose job also passed its startup, API-through-Caddy, cold backup and restore checks. This does not verify any persistent deployment or hosted-data migration. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 100 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
-| **Docker Compose** | Run [41299063491](https://github.com/rajaram-2005/ragam/actions/runs/41299063491) passed: builds both images, starts Core/web/Caddy, verifies owner bootstrap and authenticated API through Caddy, then cold-backs up and restores the named volume and verifies persisted data. This is a synthetic CI smoke, not a production or hosted-data migration check. |
-| **Docs** | The 49-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
+| **Web app** | `npm ci`, 99 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Docker Compose** | Run [41304923904](https://github.com/rajaram-2005/ragam/actions/runs/41304923904) passed: builds both images, starts Core/web/Caddy, verifies owner bootstrap and authenticated API through Caddy, then cold-backs up and restores the named volume and verifies persisted data. This is a synthetic CI smoke, not a production or hosted-data migration check. |
+| **Docs** | The 50-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |
 
 The Fabric job's release-gate step is the one worth reading, because it asserts the
