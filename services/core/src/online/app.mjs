@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { mkdirSync, existsSync, readFileSync, readdirSync, renameSync, statSync } from 'node:fs'
+import { chmodSync, mkdirSync, existsSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes, randomUUID } from 'node:crypto'
@@ -55,6 +55,51 @@ export const SESSIONS = Object.freeze({ ttlMs: 8 * 3600_000, perAccount: 8, inst
  * top-level navigation from another site.
  */
 export const COOKIE_SAME_SITE = Object.freeze(['strict', 'lax', 'none'])
+
+const LOCAL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isLoopbackWebHost(value) {
+  try {
+    const hostname = new URL(`http://${String(value ?? '')}`).hostname.toLowerCase()
+    return ['localhost', '127.0.0.1', '[::1]'].includes(hostname)
+  } catch {
+    return false
+  }
+}
+
+function localIdentityFor(dir, accounts) {
+  const file = join(dir, 'local-identity.json')
+  let saved = null
+  if (existsSync(file)) {
+    try {
+      saved = JSON.parse(readFileSync(file, 'utf8'))
+    } catch {
+      throw failure('local_identity_invalid', 'The local workspace identity file is unreadable. No account data was changed.', 503)
+    }
+    if (!saved || !LOCAL_ID_PATTERN.test(String(saved.accountId ?? ''))) {
+      throw failure('local_identity_invalid', 'The local workspace identity file is invalid. No account data was changed.', 503)
+    }
+  }
+  const existing = accounts.list()
+  if (existing.length > 1) {
+    throw failure('local_mode_multiple_accounts', 'Local single-user mode cannot safely combine multiple existing accounts. No account data was changed; switch back to account mode and export or remove accounts individually before retrying.', 503)
+  }
+  if (saved && existing[0] && existing[0].id !== saved.accountId) {
+    throw failure('local_identity_mismatch', 'The saved local workspace identity does not match the existing account. No account data was changed.', 503)
+  }
+  const accountId = saved?.accountId ?? existing[0]?.id ?? randomUUID()
+  if (!saved) {
+    const temp = `${file}.${randomBytes(6).toString('hex')}.tmp`
+    writeFileSync(temp, `${JSON.stringify({ version: 1, accountId })}\n`, { mode: 0o600, flag: 'wx' })
+    renameSync(temp, file)
+    chmodSync(file, 0o600)
+  }
+  const retiredId = accounts.prepareLocalSingleUser()
+  if (retiredId && retiredId !== accountId) {
+    throw failure('local_identity_mismatch', 'The existing account changed while local mode was starting. No account data was changed.', 503)
+  }
+  return accountId
+}
 
 /**
  * The provider routes, one per runtime. Written out as literals, so the route a request
@@ -124,7 +169,7 @@ export function readInstallationDoc(name) {
 
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, ownerEmail = undefined, registrationEnabled = true, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null, providerStore = null, auditLedger = null }) {
+  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, ownerEmail = undefined, registrationEnabled = true, onResetCode = null, localSingleUser = false, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null, providerStore = null, auditLedger = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
     // should refuse without leaving a half-written data directory behind.
     const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
@@ -167,6 +212,17 @@ export class OnlineApp {
     // between "the gateway was changed" and "this account changed the gateway".
     this.accounts = accountStore ?? new AccountStore({ dir: this.dir, maxAccounts, ownerEmail, registrationEnabled, onResetCode, audit: (event) => this.ledger.record(event) })
     this.injectedAccountStore = Boolean(accountStore)
+    this.localSingleUser = localSingleUser === true
+    this.localAccountId = null
+    if (this.localSingleUser) {
+      try {
+        this.localAccountId = localIdentityFor(this.dir, this.accounts)
+      } catch (error) {
+        this.accounts.close()
+        if (!auditLedger) this.ledger.close()
+        throw error
+      }
+    }
     // Account context is opened on first use. The Docker path keeps isolated SQLite stores;
     // the optional factory is an extension seam for an explicitly injected storage backend.
     // Cache in-flight factories too, so simultaneous first requests do not open duplicate
@@ -1387,6 +1443,7 @@ export class OnlineApp {
   }
   /** The live session behind a request, or null: `{ token, accountId, email, role, expires }`. */
   sessionFor(req) {
+    if (this.localSingleUser) return { token: 'local', accountId: this.localAccountId, role: ROLES.OWNER, mode: 'local', expires: Number.MAX_SAFE_INTEGER }
     if (this.sessionStore) {
       const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]
       return token ? this.sessionStore.get(token) : null
@@ -1397,6 +1454,11 @@ export class OnlineApp {
   }
   /** What the unauthenticated world is allowed to know: whether this cookie is signed in. */
   authStatus(req) {
+    if (this.localSingleUser) return {
+      authenticated: true,
+      mode: 'local',
+      account: { id: this.localAccountId, mode: 'local', label: 'Local workspace', role: ROLES.OWNER },
+    }
     const session = this.sessionFor(req)
     const status = (value) => ({ authenticated: Boolean(value), mode: 'accounts', account: value ? { id: value.accountId, email: value.email, role: value.role } : null })
     return session && typeof session.then === 'function' ? session.then(status) : status(session)
@@ -1478,6 +1540,9 @@ export class OnlineApp {
       try {
         if (typeof this.store.refresh === 'function') await this.store.refresh()
         const url = new URL(req.url, 'http://core.invalid'), path = url.pathname
+        if (this.localSingleUser && !isLoopbackWebHost(req.headers.host)) {
+          throw failure('local_only', 'This single-user workspace is restricted to localhost.', 403)
+        }
         if (req.method === 'GET' && path === '/api/health') return sendJson(res, 200, { status: 'ok', policy: 'online_only' })
         // Browser mutations require same-origin and a non-simple custom header.
         if (!['GET','HEAD'].includes(req.method)) {
@@ -1495,6 +1560,9 @@ export class OnlineApp {
         // phish, no shared secret to leak in a screenshot, and no way to be signed in
         // without an account this installation created.
         if (req.method === 'GET' && path === '/api/auth') return sendJson(res, 200, await this.authStatus(req))
+        if (this.localSingleUser && path.startsWith('/api/auth/')) {
+          throw failure('accounts_disabled', 'Sign-in, account creation and email recovery are disabled for this local workspace.', 404)
+        }
         if (req.method === 'POST' && path === '/api/auth/register') {
           const body = await readBody(req)
           await this.throttleAuth('register', body.email)
@@ -1539,7 +1607,7 @@ export class OnlineApp {
           await this.revokeSessions(account.id, session.token)
           return sendJson(res, 200, { changed: true, account })
         }
-        if (req.method === 'GET' && path === '/api/config') return sendJson(res, 200, { policy: 'online_only', offlineEnforced: false, auth: { mode: 'accounts', account: { email: session.email, role: session.role } } })
+        if (req.method === 'GET' && path === '/api/config') return sendJson(res, 200, { policy: 'online_only', offlineEnforced: false, auth: this.localSingleUser ? { mode: 'local', account: { role: session.role } } : { mode: 'accounts', account: { email: session.email, role: session.role } } })
         if (req.method === 'GET' && path === '/api/ready') return sendJson(res, 200, this.readiness())
         if (req.method === 'GET' && path === '/api/providers') return sendJson(res, 200, this.store.public())
         // Read-only meta-information about providers, separate from the installation's connection.

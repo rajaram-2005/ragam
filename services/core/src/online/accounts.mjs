@@ -29,7 +29,7 @@
 // node:crypto for scrypt.
 
 import { DatabaseSync } from 'node:sqlite'
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto'
 
@@ -199,6 +199,32 @@ export class AccountStore {
   }
 
   close() { try { this.db.close() } catch { /* already closed */ } }
+
+  /**
+   * Retire legacy email accounts when the installation is explicitly switched to
+   * local single-user mode. The sole account id is retained as the principal for its
+   * existing history, memory and knowledge stores; the account row, password reset
+   * codes and email are removed. Multiple accounts are ambiguous, so refuse without
+   * changing any data rather than merging private workspaces.
+   */
+  prepareLocalSingleUser() {
+    const rows = this.db.prepare('SELECT id FROM accounts ORDER BY created_at ASC').all()
+    if (rows.length > 1) {
+      throw failure('local_mode_multiple_accounts', 'Local single-user mode cannot safely combine multiple existing accounts. No account data was changed; switch back to account mode and export or remove accounts individually before retrying.', 503)
+    }
+    const id = rows[0]?.id ?? null
+    this.db.exec('PRAGMA secure_delete = ON')
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db.exec('DELETE FROM password_resets; DELETE FROM accounts; COMMIT')
+    } catch (error) {
+      try { this.db.exec('ROLLBACK') } catch { /* transaction already rolled back */ }
+      throw error
+    }
+    this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    if (existsSync(this.resetFile)) rmSync(this.resetFile, { force: true })
+    return id
+  }
 
   #public(row) {
     if (!row) return null

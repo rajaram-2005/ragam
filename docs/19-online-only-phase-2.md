@@ -2,7 +2,7 @@
 
 Date: 2026-10-14. This supersedes the earlier offline-first product direction.
 
-**Historical snapshot, updated 2026-11-01:** this document records the 2026-10-14 increment, not the entire current UI. The provider framework later added native chat, image and video adapters and several saved connections from a 39-entry catalogue; see [27-provider-framework.md](./27-provider-framework.md). The current app also has an explicit user-computer training/adaptation workflow in Chat, owner-managed MCP Streamable HTTP connections, and the Ragam HTTP plugin contract. See [28-user-managed-servers.md](./28-user-managed-servers.md) for the current server workflows. Historical statements below about training and remote plugins/MCP are superseded.
+**Historical snapshot, updated 2026-11-01:** this document records the 2026-10-14 increment, not the entire current UI. The provider framework later added native chat, image and video adapters and several saved connections from a 39-entry catalogue; see [27-provider-framework.md](./27-provider-framework.md). The current app also has an explicit user-computer training/adaptation workflow in Chat, owner-managed MCP Streamable HTTP connections, and the Ragam HTTP plugin contract. The standard end-user Docker deployment now opens directly into a localhost-only single-user workspace with no email or account flow; its security and provider setup are in [22-self-hosted-deployment.md](./22-self-hosted-deployment.md). Direct-Core account-mode details below are retained for development and regression coverage. See [28-user-managed-servers.md](./28-user-managed-servers.md) for the current server workflows. Historical statements below about training and remote plugins/MCP are superseded.
 
 ## Agreed scope and delivered change
 

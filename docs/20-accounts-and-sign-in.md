@@ -1,8 +1,10 @@
 # Accounts and traditional sign-in
 
-Date: 2026-10-14. This supersedes the operator-token sign-in described in
-[docs/19](19-online-only-phase-2.md) and is the current account model for the online
-product.
+Date: 2026-10-14. This records the retained direct-Core account mode and its tests.
+
+> **Not used by the end-user Docker deployment.** The standard Compose stack starts in
+> local single-user mode: no email, account creation, sign-in or password recovery, and
+> the UI/API are restricted to localhost. See [the Docker deployment guide](22-self-hosted-deployment.md).
 
 ## What changed, and why
 

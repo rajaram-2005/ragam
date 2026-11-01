@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// End-to-end smoke against the public Caddy URL. Synthetic account only; never use
-// production credentials or real user data with this script.
-const base = (process.env.RAGAM_SMOKE_URL || 'http://127.0.0.1').replace(/\/$/, '')
-const email = process.env.RAGAM_SMOKE_EMAIL || 'owner@example.test'
-const password = process.env.RAGAM_SMOKE_PASSWORD || 'a-long-smoke-test-password'
+// End-to-end smoke against the loopback-only Caddy URL. No account or provider
+// credentials are created; the checks prove the default local workspace contract.
+import { readFileSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+
+const base = (process.env.RAGAM_SMOKE_URL || 'http://localhost').replace(/\/$/, '')
 const mode = process.env.RAGAM_SMOKE_MODE || 'bootstrap'
+const identityFile = process.env.RAGAM_SMOKE_ID_FILE || null
 const deadline = Date.now() + 60_000
 
 async function health() {
@@ -15,41 +17,64 @@ async function health() {
     } catch { /* Compose services are still becoming healthy. */ }
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
-  throw new Error('Core health did not become ready through the edge proxy.')
-}
-
-async function register(account) {
-  return fetch(`${base}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-aetheris-request': '1' },
-    body: JSON.stringify(account),
-  })
+  throw new Error('Core health did not become ready through the local edge proxy.')
 }
 
 await health()
+const status = await fetch(`${base}/api/auth`)
+if (status.status !== 200) throw new Error(`Local workspace status returned HTTP ${status.status}.`)
+const auth = await status.json()
+if (auth.authenticated !== true || auth.mode !== 'local' || auth.account?.mode !== 'local' || auth.account?.role !== 'owner') {
+  throw new Error('The default Compose stack did not open a local single-user workspace.')
+}
+if ('email' in auth.account || status.headers.get('set-cookie')) {
+  throw new Error('Local mode exposed an email identity or issued an account session cookie.')
+}
+
+const configResponse = await fetch(`${base}/api/config`)
+if (configResponse.status !== 200) throw new Error(`Local config returned HTTP ${configResponse.status}.`)
+const config = await configResponse.json()
+if (config.auth?.mode !== 'local' || 'email' in (config.auth?.account ?? {})) {
+  throw new Error('The config response exposed account/email authentication in local mode.')
+}
+
+const catalogueResponse = await fetch(`${base}/api/providers/catalog`)
+if (catalogueResponse.status !== 200) throw new Error(`Provider catalogue returned HTTP ${catalogueResponse.status}.`)
+const catalogue = await catalogueResponse.json()
+for (const id of ['openai', 'gemini', 'anthropic', 'xai']) {
+  if (!catalogue.providers?.some((provider) => provider.id === id)) throw new Error(`Provider adapter '${id}' is missing from the catalogue.`)
+}
+
+const register = await fetch(`${base}/api/auth/register`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-aetheris-request': '1' },
+  body: JSON.stringify({ username: 'unexpected', password: 'not-a-real-account' }),
+})
+if (register.status !== 404) throw new Error(`Account creation should be disabled, got HTTP ${register.status}.`)
+
 if (mode === 'bootstrap') {
-  const owner = await register({ email, password })
-  if (owner.status !== 201) throw new Error(`Owner bootstrap returned HTTP ${owner.status}.`)
-  const payload = await owner.json()
-  if (payload.account?.role !== 'owner') throw new Error('The configured first account was not assigned the owner role.')
-  const member = await register({ email: 'member@example.test', password: 'a-long-member-test-password' })
-  if (member.status !== 403 || (await member.json()).error !== 'registration_closed') {
-    throw new Error('Member registration was not closed by default.')
+  const title = `Ragam CI restore marker ${randomUUID()}`
+  const sessionResponse = await fetch(`${base}/api/sessions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-aetheris-request': '1' },
+    body: JSON.stringify({ title }),
+  })
+  if (sessionResponse.status !== 201) throw new Error(`Could not create a local restore marker, got HTTP ${sessionResponse.status}.`)
+  const session = await sessionResponse.json()
+  if (!session.id || session.title !== title) throw new Error('The restore marker response had no persistent session id or title.')
+  if (identityFile) writeFileSync(identityFile, `${JSON.stringify({ accountId: auth.account.id, sessionId: session.id, title })}\n`)
+} else if (mode === 'verify') {
+  if (!identityFile) throw new Error('RAGAM_SMOKE_ID_FILE is required in verify mode.')
+  const expected = JSON.parse(readFileSync(identityFile, 'utf8'))
+  if (auth.account.id !== expected.accountId) throw new Error('The local workspace identity did not survive the cold-volume restore.')
+  const sessionsResponse = await fetch(`${base}/api/sessions`)
+  if (sessionsResponse.status !== 200) throw new Error(`Session history returned HTTP ${sessionsResponse.status} after restore.`)
+  const sessions = await sessionsResponse.json()
+  if (!sessions.sessions?.some((session) => session.id === expected.sessionId && session.title === expected.title)) {
+    throw new Error('The SQLite conversation-history marker did not survive the cold-volume restore.')
   }
-} else if (mode !== 'verify') {
+} else {
   throw new Error('RAGAM_SMOKE_MODE must be bootstrap or verify.')
 }
 
-const login = await fetch(`${base}/api/auth/login`, {
-  method: 'POST',
-  headers: { 'content-type': 'application/json', 'x-aetheris-request': '1' },
-  body: JSON.stringify({ email, password }),
-})
-if (login.status !== 200) throw new Error(`Owner sign-in returned HTTP ${login.status}.`)
-const cookie = login.headers.get('set-cookie')?.split(';', 1)[0]
-if (!cookie) throw new Error('Core did not issue an owner session cookie.')
-const auth = await fetch(`${base}/api/auth`, { headers: { cookie } })
-if (auth.status !== 200 || (await auth.json()).authenticated !== true) {
-  throw new Error('The authenticated session did not survive an API request.')
-}
-console.log(`Self-host ${mode} smoke passed: health, owner sign-in, session, and closed registration.`)
+console.log(`Self-host ${mode} smoke passed: localhost-only workspace, no account/email/cookie, provider catalogue, and restored SQLite history.`)

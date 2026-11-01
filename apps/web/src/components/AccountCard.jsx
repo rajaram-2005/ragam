@@ -25,7 +25,7 @@ export default function AccountCard({ account, onSignOut }) {
   const [notice, setNotice] = useState('')
   const mismatch = confirm.length > 0 && confirm !== nextPassword
 
-  if (!account) return null
+  if (!account || account.mode === 'local') return null
 
   const close = () => {
     dialog.current?.close()

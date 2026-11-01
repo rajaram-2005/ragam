@@ -75,6 +75,11 @@ export default function App() {
 
   useEffect(() => { if (!account) return; refresh(); const id = setInterval(refresh, 20000); return () => clearInterval(id) }, [account, refresh])
 
+  if (checking) return <main className="auth-check" aria-busy="true" aria-live="polite">
+    <span className="auth-check-mark" aria-hidden="true">R</span>
+    <p>Opening your local workspace…</p>
+  </main>
+
   if (!account) {
     const shared = { checking, error: authError, onError: setAuthError }
     if (page === 'signup') return <SignUpPage {...shared} onSignedIn={signedIn} />

@@ -1,6 +1,6 @@
 # 02 — Architecture
 
-> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research **service** code remains for reference and regression tests; it is not loaded by `npm run core`. Superseded UI components were deleted on 2026-10-17, not retained. Suite totals include retained legacy coverage.
+> **Active product: online-only (Phase 2), Docker Compose.** The standard end-user stack is a localhost-only single-user workspace with no account/email flow; see [the deployment guide](22-self-hosted-deployment.md). Direct-Core account pages remain in source for development/regression coverage but are not exposed by Compose. Legacy local/research **service** code remains for regression tests. Suite totals include retained coverage.
 
 How the three upstream repositories became one system, what each component owns,
 and where the enforcement points are.
@@ -71,15 +71,15 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 37,627 source lines, 24,878 test lines
+### `services/core` — 37,726 source lines, 25,031 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
 | `hardware/detect.mjs` | 61 | OS memory, CPU features, disk and optional bounded GPU probes |
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
-| `online/accounts.mjs` | 413 | Accounts, scrypt password hashes, lockouts, throttling, owner bootstrap and host-delivered reset codes |
-| `online/app.mjs` | 1,928 | Authenticated online application, awaitable per-account storage contexts, verified native Klyvaron Pro/Max multimodal local inference, runtime qualification & manifest endpoints, and user-computer training worker controls alongside exact-model external gateway routing |
+| `online/accounts.mjs` | 439 | Accounts, scrypt password hashes, lockouts, throttling, owner bootstrap and host-delivered reset codes |
+| `online/app.mjs` | 1,996 | Online application with a local single-user security boundary, retained direct-Core account mode, awaitable storage contexts, verified native Klyvaron Pro/Max inference, runtime qualification and manifest endpoints, and exact-model gateway routing |
 | `online/native-klyvaron.mjs` | 469 | First-party Klyvaron Pro (27,559,946 params) and Klyvaron Max (92,077,066 params) SHA-256 verification, preset-architecture enforcement, startup live inference self-test, and fail-closed selector gating |
 | `online/context-routes.mjs` | 282 | Authenticated context, reviewed read-only tool routes, and owner-managed remote server routes |
 | `online/gateway.mjs` | 255 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
@@ -119,7 +119,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `config.mjs` | 248 | Environment → config, secret loading, `publicConfig` redaction |
 | `policy/egress.mjs` | 253 | The egress guard, runtime policies, data classes, `*` allow-all, global fetch hook |
 | `providers/klyvaron.mjs` | 295 | The first-party provider adapter: `klyvaron-chat-v1` multi-turn rendering, freshness age conditioning, local worker execution, and explicit limitations carried into every response |
-| `server.mjs` | 111 | Entry point, owner bootstrap policy, startup banner and graceful shutdown |
+| `server.mjs` | 116 | Entry point, direct-Core owner bootstrap or local single-user policy, startup banner and graceful shutdown |
 | `knowledge/text.mjs` | 147 | Tokeniser, stemmer, sentence splitter, chunker |
 | `media/validate.mjs` | 199 | Magic-byte sniffing, video genuineness check |
 | `media/workflow.mjs` | 487 | Image and video generation as a workflow rather than an attempt: routed through the provider fabric so an unservable request is refused by name, authorised through the broker when the provider is external, measured from the artifact's own header (PNG/GIF/JPEG dimensions, MP4 `mvhd` duration) before it is described, and a still image returned for a video request refused as a substitution rather than delivered |
@@ -224,12 +224,9 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 5,526 source lines, 2,018 test lines
+### `apps/web` — 5,657 source lines, 2,038 test lines
 
-Five area components, three sign-in pages (sign in, create account, reset
-password), the account card and the Klyvaron tier panel, a shell, shared primitives,
-an API client and four test files. The sign-in pages are not areas and add no navigation
-entry; see [20 — Accounts and sign-in](20-accounts-and-sign-in.md). Design tokens and the shell's visual structure come from upstream Aetheris
+Five area components, three retained direct-Core account pages, a local-first app shell, shared primitives, an API client and four test files. The account pages are not product areas and are not used by the standard Docker deployment; see [20 — Accounts and sign-in](20-accounts-and-sign-in.md) for their regression-tested legacy mode. Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).
 
 ---

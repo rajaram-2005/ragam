@@ -1,4 +1,4 @@
-{$RAGAM_SITE_ADDRESS} {
+http://localhost {
   encode zstd gzip
 
   @health path /healthz

@@ -29,20 +29,7 @@ if errorlevel 1 (
 
 if not exist ".env" (
   copy /y ".env.example" ".env" >nul
-  echo Created the local .env settings file from .env.example.
-  echo Enter your email on the AETHERIS_OWNER_EMAIL= line, save, and close Notepad.
-  start "" notepad.exe ".env"
-  echo Then double-click Start-Ragam.cmd again. No password or provider key is needed here.
-  pause
-  exit /b 0
-)
-
-findstr /r /c:"^AETHERIS_OWNER_EMAIL=." ".env" >nul
-if errorlevel 1 (
-  echo Set AETHERIS_OWNER_EMAIL to your email address in .env before starting Ragam.
-  start "" notepad.exe ".env"
-  pause
-  exit /b 1
+  echo Created the local .env settings file from .env.example. No email or account setup is needed.
 )
 
 echo Checking the Compose configuration...
