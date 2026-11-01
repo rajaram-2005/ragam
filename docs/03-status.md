@@ -7,11 +7,11 @@ something does not work, it says so and says why.
 
 **Core test environment used for the verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test totals: 1911 cases across the three suites.** The last fully green pre-migration CI run was [41215729276](https://github.com/rajaram-2005/ragam/actions/runs/41215729276) at `ae86ddb`. The follow-up at `3741d30` passed Release verification, Docs, Fabric and Web, but the separate Core job exited 1; its signed log was not retrievable here, so its cause is unknown. The current worktree adds the async Supabase memory/session store and staged transactional RPC migration. The full Core suite now passes **988/988 locally** with the documented Python environment; the Docs and Release suites pass **63/63**. No tests were skipped or weakened, no weights or results were fabricated, and no model or environment artifacts are committed. No hosted Supabase migration or Vercel deployment has occurred.
+**Test totals: 1923 cases across the three suites.** Latest successful CI run [41226412042](https://github.com/rajaram-2005/ragam/actions/runs/41226412042) at `0dc0339` passed all five jobs, including Core and Release verification; the earlier Core failure at `fe7490a` had no retrievable assertion details, and its root cause remains unknown. The current changes add an account-scoped async Supabase knowledge repository and staged transactional RPC migration. Its adapter/schema tests pass locally, and the three knowledge RPCs were exercised in disposable PGlite; this validates local SQL behavior only. The full Core suite passes **1000/1000 locally** and the Docs/Release checks pass **63/63**; CI for these latest knowledge changes is still pending. No tests were skipped or weakened, no weights or results were fabricated, and no model or environment artifacts are committed. No hosted Supabase migration or Vercel deployment has occurred.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **988 tests** (71 files; full local run: **988 / 988 passed**) |
+| `services/core` | `node --test test/*.test.mjs` | **1000 tests** (72 files; full local run: **1000 / 1000 passed**) |
 | `services/fabric` | `pytest -q` | **822 tests** (42 files; full GitHub Actions suite passed) |
 | `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; local and GitHub Actions runs passed) |
 | `apps/web` build | `vite build` | production bundle built successfully locally and in GitHub Actions |
@@ -242,7 +242,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (988 tests)
+### `services/core` — Implemented and tested (1000 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -256,7 +256,8 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 | Ollama / llama.cpp, online entry | **Implemented and tested against a loopback fixture** | Same transport as LiteLLM; keyless by default; exact trusted origin required. No real runtime qualified here |
 | Klyvaron development plan | **Implemented and tested** | Per-tier gates derived from the tier records, `klyvaron.mjs plan`; see [docs/11](11-klyvaron-family.md) §1.5 |
 | Klyvaron CPU execution | **Implemented and tested** | Single worker, bounded incremental streaming, cancellation/deadlines, one-model residency; see doc 15 |
-| Knowledge pipeline | **Implemented and tested** | SQLite + filesystem + in-memory rebuildable BM25 |
+| Knowledge pipeline | **Implemented and tested** | SQLite + filesystem + in-memory rebuildable BM25; hosted Supabase storage is not wired into the pipeline yet |
+| Supabase knowledge repository | **Implemented and tested as an adapter** | Account-filtered and bounded async reads; transactional Postgres RPCs for insert/dedup/chunk/ACL and hard-delete receipts; PGlite exercises insert, dedup, exact stats, and purge. Staged only; not applied to hosted Supabase or wired into the Vercel function path |
 | Media queue & validation | **Implemented and tested** | Progress, cancellation, timeouts, retry-after, state history; an optional state file makes a terminal job and its artifact survive a restart, and a job interrupted mid-run is recorded as `failed` with `interrupted`, never replayed as running |
 | Plugin registry & manifests | **Implemented and tested** | Preflight vs invoke distinction; uninstall keeps a record |
 | MCP layer & schema validator | **Implemented and tested** | Risk tiers, approval gates, output neutralisation, per-tool timeouts |

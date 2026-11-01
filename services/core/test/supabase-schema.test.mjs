@@ -6,6 +6,8 @@ const migrationPath = new URL('../../../supabase/migrations/20261030000100_initi
 const migration = readFileSync(migrationPath, 'utf8')
 const memoryRpcPath = new URL('../../../supabase/migrations/20261031000100_memory_rpcs.sql', import.meta.url)
 const memoryRpcMigration = readFileSync(memoryRpcPath, 'utf8')
+const knowledgeRpcPath = new URL('../../../supabase/migrations/20261101000100_knowledge_rpcs.sql', import.meta.url)
+const knowledgeRpcMigration = readFileSync(knowledgeRpcPath, 'utf8')
 
 test('memory RPC migration keeps compound operations transactional and service-role-only', () => {
   const functions = [
@@ -29,6 +31,26 @@ test('memory RPC migration keeps compound operations transactional and service-r
   assert.match(memoryRpcMigration, /training_use/)
   assert.match(memoryRpcMigration, /INSERT INTO public\.ragam_memory_deletions/)
   assert.ok(memoryRpcMigration.includes('This migration remains local/staged; do not apply it to hosted ragam-core yet'))
+})
+
+test('knowledge RPC migration keeps document, chunk, ACL and deletion changes atomic and server-only', () => {
+  const functions = [
+    ['ragam_knowledge_insert_document', 'text,jsonb,jsonb,jsonb,bigint'],
+    ['ragam_knowledge_purge_document', 'text,text,text,text,bigint'],
+    ['ragam_knowledge_stats', 'text'],
+  ]
+  for (const [name, signature] of functions) {
+    const body = new RegExp(`CREATE FUNCTION public\\.${name}\\([\\s\\S]*?\\$\\$;`).exec(knowledgeRpcMigration)?.[0]
+    assert.ok(body, `${name} must be defined in the staged migration`)
+    assert.match(body, /SECURITY DEFINER SET search_path = ''/)
+    assert.match(knowledgeRpcMigration, new RegExp(`REVOKE ALL ON FUNCTION public\\.${name}\\(${signature}\\) FROM PUBLIC, anon, authenticated;`))
+    assert.match(knowledgeRpcMigration, new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${name}\\(${signature}\\) TO service_role;`))
+  }
+  assert.match(knowledgeRpcMigration, /pg_advisory_xact_lock/, 'concurrent account inserts serialize deduplication')
+  assert.match(knowledgeRpcMigration, /INSERT INTO public\.ragam_knowledge_chunks/)
+  assert.match(knowledgeRpcMigration, /INSERT INTO public\.ragam_knowledge_acl/)
+  assert.match(knowledgeRpcMigration, /INSERT INTO public\.ragam_knowledge_deletions/)
+  assert.ok(knowledgeRpcMigration.includes('do not apply it to hosted ragam-core yet'))
 })
 
 test('initial Supabase schema is additive, fail-closed, and keeps account data scoped', () => {

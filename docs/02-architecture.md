@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 38,366 source lines, 25,196 test lines
+### `services/core` — 38,751 source lines, 25,436 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -139,6 +139,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `storage/supabase-account-store.mjs` | 275 | Supabase-backed account records, scrypt authentication, password recovery and distributed login throttles |
 | `storage/supabase-style-store.mjs` | 81 | Async account-filtered style preference persistence with validated IDs and explicit-null semantics; tested but not yet wired into `OnlineApp` |
 | `storage/supabase-memory-store.mjs` | 559 | Account-filtered async memory/session repository with BM25 rebuilt from approved rows and transactional SQL RPCs for approval, deletion, and append semantics; implemented but not wired into startup |
+| `storage/supabase-knowledge-store.mjs` | 385 | Account-filtered async knowledge repository with bounded scans, transactional document/chunk/ACL insertion and purge, opaque embeddings, and exact statistics; implemented but not wired into the BM25 pipeline |
 | `klyvaron/tiers.mjs` | 1,140 | Separated subscription tiers, 8 first-party Klyvaron model identities (`pro` & `max` across Chat, Image, Video, Voice), programmatic runtime capability readiness (`ready`, `partially_available`, `missing_artifact`, `runtime_unqualified`, `training_required`, `unsupported_hardware`), and separate Pro/Max capability manifests |
 | `klyvaron/plan.mjs` | 187 | The development plan: thirteen per-tier gates derived from the tier records, including the stance, the two differentiators, modality separation and `own_weights`, each open gate with its reason |
 | `klyvaron/trends.mjs` | 186 | Dated, sourced observations that expire and abstain; the mechanism `trend.awareness` is defined against, with no model behind it |
