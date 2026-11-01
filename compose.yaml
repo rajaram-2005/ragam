@@ -52,10 +52,6 @@ services:
     image: ragam/web:local
     restart: unless-stopped
     init: true
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     expose:
       - "8080"
     healthcheck:
@@ -84,13 +80,6 @@ services:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    # Caddy needs bind-service for ports 80/443; restore only that capability.
-    cap_add:
-      - NET_BIND_SERVICE
     healthcheck:
       test: [CMD-SHELL, "wget -q --spider http://127.0.0.1:2019/config/ || exit 1"]
       interval: 30s
