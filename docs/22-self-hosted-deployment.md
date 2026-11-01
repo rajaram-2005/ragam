@@ -1,12 +1,13 @@
 # Self-hosted deployment (Docker Compose)
 
-This is intended to run on **your own computer** using its Docker Engine and Compose—not on
-an Arena or paid cloud host. It deploys the **existing** online Core and Vite-built web app.
-Caddy serves the web bundle and proxies `/api/*` to Core. All app databases, generated files,
-and Caddy state live in named Docker volumes on that computer (`ragam-data`,
-`ragam-caddy-data`, and `ragam-caddy-config`). Nothing here redirects app storage to
-Supabase. It does not add local model inference, migrate hosted data, or change any external
-account.
+This deployment model is **one independent instance per end user**: each person runs the
+Compose stack on their own computer using its Docker Engine, rather than connecting to the
+maintainer's computer or a shared cloud backend. It deploys the **existing** online Core and
+Vite-built web app. Caddy serves the web bundle and proxies `/api/*` to Core. Each instance's
+app databases, generated files, and Caddy state live in that person's local Docker volumes
+(`ragam-data`, `ragam-caddy-data`, and `ragam-caddy-config`). Nothing here redirects app
+storage to Supabase. This does not add local model inference, migrate hosted data, or change
+any external account.
 
 ## Scope and safety
 
