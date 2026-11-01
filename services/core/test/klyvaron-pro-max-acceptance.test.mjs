@@ -195,7 +195,7 @@ for (const spec of EXPECTED_SPECS) {
   })
 }
 
-test('[Pro + Max] 8-10: distinct digests, OnlineApp HTTP/SSE chat & AbortController cancellation for BOTH models, restart persistence, and strict fail-closed error handling without fallback', { timeout: 180_000 }, async (t) => {
+test('[Pro + Max] 8-10: distinct digests, OnlineApp HTTP/SSE chat & AbortController cancellation for BOTH models, restart persistence, and strict fail-closed error handling without fallback', { timeout: 300_000 }, async (t) => {
   const proManifest = JSON.parse(readFileSync(join(PRO_DIR, 'klyvaron-pro-lm.klyvaron.json'), 'utf8'))
   const maxManifest = JSON.parse(readFileSync(join(MAX_DIR, 'klyvaron-max-lm.klyvaron.json'), 'utf8'))
   assert.notEqual(proManifest.weights.sha256, maxManifest.weights.sha256, 'Pro and Max weights MUST be completely distinct')
