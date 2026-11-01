@@ -38,6 +38,15 @@ this repository's CI only validates a temporary stack in GitHub Actions. Use the
 to build and run this repository with persistent named volumes; no separate server or cloud
 storage is required. Keep the same environment values and backup cautions below.
 
+**Windows + Docker Desktop, without typing commands:** from File Explorer, double-click
+`scripts/Start-Ragam.cmd`. On first run it creates `.env` from `.env.example` and opens it in
+Notepad. Fill in `AETHERIS_OWNER_EMAIL`, save and close Notepad, then double-click the
+launcher again. It builds and starts the stack and opens `http://localhost`. To stop the
+containers later without deleting local data, double-click `scripts/Stop-Ragam.cmd`; it
+keeps all named volumes. Docker Desktop must be open and its Engine running.
+
+For a Compose UI or other platform, use these manual configuration steps instead:
+
 1. Copy `.env.example` to `.env` using your host's file manager or deployment UI.
 2. Set `AETHERIS_OWNER_EMAIL` to the one address allowed to create the first account.
    Do not put a password, provider key, Supabase key or database password in this file.
