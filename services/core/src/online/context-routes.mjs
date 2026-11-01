@@ -5,7 +5,7 @@
 // which is that account's own database — so "your conversations" means yours, and there
 // is no request field that can widen it. Plugins and MCP stay installation-wide: they
 // are reviewed read-only built-ins, not personal data.
-import { CANDIDATE_STATES } from '../memory/store.mjs'
+import { CANDIDATE_STATES } from '../memory/contracts.mjs'
 import { validateManifest } from '../plugins/manifest.mjs'
 import { readBody, sendJson } from './http.mjs'
 import { STYLES, STYLE_PROHIBITIONS } from './styles.mjs'
@@ -105,7 +105,7 @@ export async function contextRoutes(request, response, app, session) {
 
   // --- knowledge ----------------------------------------------------------
   if (method === 'POST' && path === '/api/knowledge/ingest') return sendJson(response, 201, await knowledge.ingestText({ ...await readJson(), owner: accountId, principals: [] }), app)
-  if (method === 'POST' && path === '/api/knowledge/search') return sendJson(response, 200, await knowledge.search(await readJson()), app)
+  if (method === 'POST' && path === '/api/knowledge/search') return sendJson(response, 200, await knowledge.search({ ...await readJson(), principal: accountId }), app)
   if (method === 'POST' && path === '/api/knowledge/reindex') return sendJson(response, 200, await knowledge.rebuildIndex(), app)
   if (method === 'GET' && path === '/api/knowledge/stats') return sendJson(response, 200, await knowledge.stats(), app)
   if (method === 'GET' && path === '/api/knowledge/documents') return sendJson(response, 200, { documents: await knowledge.store.listDocuments({}) }, app)

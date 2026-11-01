@@ -129,6 +129,22 @@ test('style and account-context routes await injected stores for hosted persiste
   assert.deepEqual(calls, [['get', accountId], ['set', accountId, 'cautious'], ['get', accountId]])
 })
 
+test('knowledge search principal is the signed-in account, never the request body', async (t) => {
+  const searches = []
+  const contextStoreFactory = async () => ({
+    memory: {},
+    knowledge: { async search(input) { searches.push(input); return { query: input.query, results: [], citations: [], method: 'bm25', accessControlled: true } } },
+    media: {},
+  })
+  const f = await fixture(t, { contextStoreFactory })
+  await f.login()
+  const accountId = (await f.request('GET', '/api/auth')).data.account.id
+  const result = await f.request('POST', '/api/knowledge/search', { query: 'deployment notes', principal: '*', topK: 3 })
+  assert.equal(result.status, 200)
+  assert.equal(searches[0].principal, accountId)
+  assert.equal(searches[0].topK, 3)
+})
+
 test('nothing selects a style for the user, even when the message is emotional', async (t) => {
   const f = await fixture(t); await f.configure()
   const r = await f.request('POST', '/api/chat', f.chat({ prompt: 'I am exhausted and everything is going wrong.' }))

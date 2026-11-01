@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 38,751 source lines, 25,436 test lines
+### `services/core` — 39,155 source lines, 25,744 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -104,7 +104,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `mcp/layer.mjs` | 624 | Servers, tools, risk tiers, approval gates, allowlist, output neutralisation |
 | `mcp/authority.mjs` | 537 | The data/instruction boundary: provenance on every tool, plugin, resource and prompt output, an authority that only a user turn can mint, and a consequential action refused when its only reason is data — with the classifier kept as audit evidence precisely so the refusal does not depend on it |
 | `shared/timeout.mjs` | 46 | The one timeout-and-cancellation race, shared by the MCP layer and the plugin registry: a thunk so the clock starts where the work does, a `{ once: true }` abort listener so a signal cannot reject a promise nobody is waiting for, and the timer cleared on every path — with each caller supplying its own error type, because the failure's type is contract and the mechanism is not |
-| `knowledge/pipeline.mjs` | 470 | Ingest, dedupe, chunk, index, search, grounded context, purge |
+| `knowledge/pipeline.mjs` | 384 | Local SQLite ingest, dedupe, chunk, index, search, grounded context, purge |
 | `knowledge/store.mjs` | 385 | SQLite metadata, chunks, ACL rows, deletion records |
 | `mcp/schema.mjs` | 246 | JSON Schema subset: validation of schemas *and* of arguments/output |
 | `catalog/registry.mjs` | 126 | Versioned discovery-only model records, provenance, bounded snapshots, TTL and search |
@@ -139,7 +139,10 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `storage/supabase-account-store.mjs` | 275 | Supabase-backed account records, scrypt authentication, password recovery and distributed login throttles |
 | `storage/supabase-style-store.mjs` | 81 | Async account-filtered style preference persistence with validated IDs and explicit-null semantics; tested but not yet wired into `OnlineApp` |
 | `storage/supabase-memory-store.mjs` | 559 | Account-filtered async memory/session repository with BM25 rebuilt from approved rows and transactional SQL RPCs for approval, deletion, and append semantics; implemented but not wired into startup |
-| `storage/supabase-knowledge-store.mjs` | 385 | Account-filtered async knowledge repository with bounded scans, transactional document/chunk/ACL insertion and purge, opaque embeddings, and exact statistics; implemented but not wired into the BM25 pipeline |
+| `storage/supabase-knowledge-store.mjs` | 423 | Account-filtered async knowledge repository with bounded scans, bulk ACL reads, transactional document/chunk/ACL insertion and purge, opaque embeddings, and exact statistics |
+| `knowledge/supabase-pipeline.mjs` | 344 | Async account-scoped BM25 pipeline preserving ACL/classification filtering, citations, grounded evidence, evaluation, purge, and stats; refreshes bounded persistent snapshots per search for serverless cross-instance visibility |
+| `knowledge/pipeline-utils.mjs` | 68 | Shared pure file validation and token-overlap helpers, re-exported by the local SQLite pipeline and used by the Supabase pipeline without importing `node:sqlite` |
+| `online/supabase-context.mjs` | 40 | Builds per-account Supabase memory/knowledge stores for the injectable async context factory; requires an explicit deployment-specific media queue rather than claiming local-disk durability |
 | `klyvaron/tiers.mjs` | 1,140 | Separated subscription tiers, 8 first-party Klyvaron model identities (`pro` & `max` across Chat, Image, Video, Voice), programmatic runtime capability readiness (`ready`, `partially_available`, `missing_artifact`, `runtime_unqualified`, `training_required`, `unsupported_hardware`), and separate Pro/Max capability manifests |
 | `klyvaron/plan.mjs` | 187 | The development plan: thirteen per-tier gates derived from the tier records, including the stance, the two differentiators, modality separation and `own_weights`, each open gate with its reason |
 | `klyvaron/trends.mjs` | 186 | Dated, sourced observations that expire and abstain; the mechanism `trend.awareness` is defined against, with no model behind it |

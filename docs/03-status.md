@@ -7,11 +7,11 @@ something does not work, it says so and says why.
 
 **Core test environment used for the verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test totals: 1923 cases across the three suites.** Latest successful CI run [41266048467](https://github.com/rajaram-2005/ragam/actions/runs/41266048467) at `67c1a88` passed all five jobs, including Core and Release verification; the earlier Core failure at `fe7490a` had no retrievable assertion details, and its root cause remains unknown. The current changes add an account-scoped async Supabase knowledge repository and staged transactional RPC migration. Its adapter/schema tests pass locally, and the three knowledge RPCs were exercised in disposable PGlite; this validates local SQL behavior only. The full Core suite passes **1000/1000 locally** and the Docs/Release checks pass **63/63**. No tests were skipped or weakened, no weights or results were fabricated, and no model or environment artifacts are committed. No hosted Supabase migration or Vercel deployment has occurred.
+**Test totals: 1935 cases across the three suites.** The latest successful CI run [41266633317](https://github.com/rajaram-2005/ragam/actions/runs/41266633317) at `f906454` passed all five jobs; that run predates these async pipeline/context changes, so CI for this work is pending. Locally, the current full Core suite passes **1012/1012** and Docs/Release passes **63/63**. The implementation adds the account-scoped async Supabase BM25 pipeline, injectable per-account context factory, bulk ACL filtering, paged reads below PostgREST row caps, and an authenticated-principal override at the knowledge search route. Pipeline tests use a mocked PostgREST harness; the transactional knowledge RPCs were separately exercised in disposable PGlite. No hosted Supabase migration, data transfer, Vercel configuration change, or deployment has occurred.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **1000 tests** (72 files; full local run: **1000 / 1000 passed**) |
+| `services/core` | `node --test test/*.test.mjs` | **1012 tests** (73 files; full local run pending the refreshed docs assertions) |
 | `services/fabric` | `pytest -q` | **822 tests** (42 files; full GitHub Actions suite passed) |
 | `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; local and GitHub Actions runs passed) |
 | `apps/web` build | `vite build` | production bundle built successfully locally and in GitHub Actions |
@@ -242,7 +242,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (1000 tests)
+### `services/core` — Implemented and tested (1012 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|

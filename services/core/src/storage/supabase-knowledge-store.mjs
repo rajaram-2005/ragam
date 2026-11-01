@@ -115,6 +115,8 @@ export class SupabaseKnowledgeStore {
     this.#now = now
   }
 
+  get accountId() { return this.#accountId }
+
   async #rows(table, parameters, code, { maximum = MAX_PAGE_ROWS, order = null, rejectOverflow = true } = {}) {
     const entries = [
       ['select', '*'],
@@ -131,6 +133,25 @@ export class SupabaseKnowledgeStore {
   async #one(table, parameters, code) {
     const result = await this.#rows(table, parameters, code, { maximum: 1 })
     return result[0] ?? null
+  }
+
+  async #scanRows(table, parameters, code, { maximum = MAX_SCAN_ROWS, order = null } = {}) {
+    const collected = []
+    while (collected.length <= maximum) {
+      const pageLimit = Math.min(MAX_PAGE_ROWS, maximum + 1 - collected.length)
+      const selection = parameters.find(([key]) => key === 'select')?.[1] ?? '*'
+      const filters = parameters.filter(([key]) => key !== 'select')
+      const entries = [
+        ['select', selection], ['account_id', `eq.${this.#accountId}`], ...filters,
+        ...(order ? [['order', order]] : []), ['limit', String(pageLimit)], ['offset', String(collected.length)],
+      ]
+      const page = rows(await this.#client.request(`rest/v1/${table}`, { method: 'GET', query: query(entries) }), code, this.#accountId)
+      if (page.length > pageLimit) throw new SupabaseKnowledgeStoreError(code.replace(/_invalid$/, '_limit'))
+      collected.push(...page)
+      if (collected.length > maximum) throw new SupabaseKnowledgeStoreError(code.replace(/_invalid$/, '_limit'))
+      if (page.length < pageLimit) break
+    }
+    return collected
   }
 
   async listDocuments({ status = 'active', limit = 200 } = {}) {
@@ -199,12 +220,18 @@ export class SupabaseKnowledgeStore {
       throw new SupabaseKnowledgeStoreError(result?.code ?? 'supabase_knowledge_insert_invalid')
     }
     const stored = hydrateDocument({ ...result.document, account_id: this.#accountId })
-    return { duplicate: result.duplicate, document: stored, reason: result.reason ?? null, chunkIds: result.chunk_ids ?? [] }
+    const chunkIds = result.chunk_ids ?? (result.duplicate ? [] : null)
+    if (!Array.isArray(chunkIds) || chunkIds.some((chunkId) => typeof chunkId !== 'string' || !UUID.test(chunkId))
+      || new Set(chunkIds).size !== chunkIds.length
+      || (result.duplicate ? chunkIds.length !== 0 : chunkIds.length !== stored.chunkCount)) {
+      throw new SupabaseKnowledgeStoreError('supabase_knowledge_insert_invalid')
+    }
+    return { duplicate: result.duplicate, document: stored, reason: result.reason ?? null, chunkIds }
   }
 
   async getChunks(documentId) {
     const key = validId(documentId, 'supabase_knowledge_id_invalid')
-    const result = await this.#rows('ragam_knowledge_chunks', [['document_id', `eq.${key}`]], 'supabase_knowledge_chunks_invalid', {
+    const result = await this.#scanRows('ragam_knowledge_chunks', [['document_id', `eq.${key}`]], 'supabase_knowledge_chunks_invalid', {
       maximum: MAX_SCAN_ROWS, order: 'idx.asc',
     })
     return result.map(hydrateChunk)
@@ -217,16 +244,9 @@ export class SupabaseKnowledgeStore {
   }
 
   async allChunks() {
-    const maximum = MAX_SCAN_ROWS
-    const entries = [
-      ['select', '*,ragam_knowledge_documents!inner(title,classification,source_label,mime,status,sha256)'],
-      ['account_id', `eq.${this.#accountId}`],
-      ['ragam_knowledge_documents.status', 'eq.active'],
-      ['order', 'document_id.asc,idx.asc'],
-      ['limit', String(maximum + 1)],
-    ]
-    const result = rows(await this.#client.request('rest/v1/ragam_knowledge_chunks', { method: 'GET', query: query(entries) }), 'supabase_knowledge_chunks_invalid', this.#accountId)
-    if (result.length > maximum) throw new SupabaseKnowledgeStoreError('supabase_knowledge_chunk_limit')
+    const result = await this.#scanRows('ragam_knowledge_chunks', [['select', '*,ragam_knowledge_documents!inner(title,classification,source_label,mime,status,sha256)'], ['ragam_knowledge_documents.status', 'eq.active']], 'supabase_knowledge_chunks_invalid', {
+      maximum: MAX_SCAN_ROWS, order: 'document_id.asc,idx.asc',
+    })
     return result.map((row) => {
       const chunk = hydrateChunk(row)
       const document = row.ragam_knowledge_documents
@@ -272,12 +292,26 @@ export class SupabaseKnowledgeStore {
 
   async aclFor(documentId) {
     const id = validId(documentId, 'supabase_knowledge_id_invalid')
-    const result = await this.#rows('ragam_knowledge_acl', [['document_id', `eq.${id}`]], 'supabase_knowledge_acl_invalid', { maximum: MAX_PAGE_ROWS })
+    const result = await this.#scanRows('ragam_knowledge_acl', [['document_id', `eq.${id}`]], 'supabase_knowledge_acl_invalid', {
+      maximum: MAX_SCAN_ROWS, order: 'principal.asc,permission.asc',
+    })
     return result.map((row) => {
       if (typeof row.principal !== 'string' || !PERMISSIONS.includes(row.permission) || !Number.isSafeInteger(row.granted_at)) {
         throw new SupabaseKnowledgeStoreError('supabase_knowledge_acl_invalid')
       }
       return { principal: row.principal, permission: row.permission, granted_at: row.granted_at }
+    })
+  }
+
+  async allAcl() {
+    const result = await this.#scanRows('ragam_knowledge_acl', [], 'supabase_knowledge_acl_invalid', {
+      maximum: MAX_SCAN_ROWS, order: 'document_id.asc,principal.asc,permission.asc',
+    })
+    return result.map((row) => {
+      if (!UUID.test(row.document_id) || typeof row.principal !== 'string' || !PERMISSIONS.includes(row.permission) || !Number.isSafeInteger(row.granted_at)) {
+        throw new SupabaseKnowledgeStoreError('supabase_knowledge_acl_invalid')
+      }
+      return { document_id: row.document_id, principal: row.principal, permission: row.permission, granted_at: row.granted_at }
     })
   }
 
@@ -312,7 +346,9 @@ export class SupabaseKnowledgeStore {
   async getEmbeddings(model = null) {
     if (model !== null && (typeof model !== 'string' || !model)) throw new SupabaseKnowledgeStoreError('supabase_knowledge_embedding_invalid')
     const parameters = model ? [['model', `eq.${model}`]] : []
-    const result = await this.#rows('ragam_knowledge_embeddings', parameters, 'supabase_knowledge_embeddings_invalid', { maximum: MAX_SCAN_ROWS })
+    const result = await this.#scanRows('ragam_knowledge_embeddings', parameters, 'supabase_knowledge_embeddings_invalid', {
+      maximum: MAX_SCAN_ROWS, order: 'chunk_id.asc',
+    })
     return result.map((row) => {
       if (!UUID.test(row.chunk_id) || typeof row.model !== 'string' || !Number.isSafeInteger(row.dim) || row.dim < 1) {
         throw new SupabaseKnowledgeStoreError('supabase_knowledge_embedding_invalid')
@@ -341,7 +377,9 @@ export class SupabaseKnowledgeStore {
   async applyRetention({ olderThanMs, reason = 'retention policy', requestedBy = this.#accountId } = {}) {
     if (!Number.isSafeInteger(olderThanMs) || olderThanMs < 0) throw new SupabaseKnowledgeStoreError('supabase_knowledge_retention_invalid')
     const cutoff = this.#now() - olderThanMs
-    const selected = await this.#rows('ragam_knowledge_documents', [['ingested_at', `lte.${cutoff}`]], 'supabase_knowledge_rows_invalid', { maximum: MAX_SCAN_ROWS })
+    const selected = await this.#scanRows('ragam_knowledge_documents', [['ingested_at', `lte.${cutoff}`]], 'supabase_knowledge_rows_invalid', {
+      maximum: MAX_SCAN_ROWS, order: 'ingested_at.asc,id.asc',
+    })
     const results = []
     for (const row of selected) results.push(await this.purgeDocument(row.id, { reason, requestedBy }))
     return { purged: results.filter((item) => item.deleted).length, cutoff, results }

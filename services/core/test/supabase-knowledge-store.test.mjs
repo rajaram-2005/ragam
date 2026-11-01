@@ -134,6 +134,30 @@ test('index hydration selects only active documents and preserves citation metad
   assert.equal(rows[0].title, 'Runbook')
   assert.equal(rows[0].source_path, 'guide.md')
   assert.equal(rows[0].owner, ACCOUNT)
+
+  const manyChunks = Array.from({ length: 501 }, (_, idx) => ({
+    ...chunkRow({ id: `${CHUNK.slice(0, -12)}${String(idx + 1).padStart(12, '0')}`, idx }),
+    ragam_knowledge_documents: { title: 'Runbook', classification: 'internal', source_label: null, mime: 'text/plain', status: 'active', sha256: 'a'.repeat(64) },
+  }))
+  const pagedChunksClient = fakeClient((_endpoint, options) => {
+    const params = new URLSearchParams(options.query)
+    return manyChunks.slice(Number(params.get('offset')), Number(params.get('offset')) + Number(params.get('limit')))
+  })
+  const pagedChunks = await new SupabaseKnowledgeStore({ client: pagedChunksClient, accountId: ACCOUNT }).allChunks()
+  assert.equal(pagedChunks.length, 501)
+  assert.equal(pagedChunksClient.calls.length, 2, 'corpus scans page below Supabase PostgREST row caps')
+  assert.equal(new URLSearchParams(pagedChunksClient.calls[1].options.query).get('offset'), '500')
+
+  const manyAcl = Array.from({ length: 501 }, (_, idx) => ({
+    account_id: ACCOUNT, document_id: DOCUMENT, principal: `principal:${idx}`, permission: 'read', granted_at: idx,
+  }))
+  const pagedAclClient = fakeClient((_endpoint, options) => {
+    const params = new URLSearchParams(options.query)
+    return manyAcl.slice(Number(params.get('offset')), Number(params.get('offset')) + Number(params.get('limit')))
+  })
+  const pagedAcl = await new SupabaseKnowledgeStore({ client: pagedAclClient, accountId: ACCOUNT }).allAcl()
+  assert.equal(pagedAcl.length, 501)
+  assert.equal(pagedAclClient.calls.length, 2)
 })
 
 test('ACL grants, revocations and access checks stay scoped to this account', async () => {
