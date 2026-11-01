@@ -237,7 +237,7 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 5,594 source lines, 2,248 test lines
+### `apps/web` — 5,443 source lines, 2,240 test lines
 
 Five area components, three sign-in pages (sign in, create account, reset
 password), the account card and the Klyvaron tier panel, a shell, shared primitives,
@@ -438,10 +438,10 @@ advertise a system tool.
 `looksLikeTextPayload` catches a JSON or HTML error page masquerading as media — a
 common provider failure path. For video, `assertGenuineVideo` additionally rejects
 a payload whose sniffed kind is an image, and one below 8 KB. **A still image is
-never presented as a generated video**: the job fails with the reason recorded,
-and `MediaPreview` refuses to embed anything whose sniffed kind is not video even
-if an artifact somehow exists. Every stored artifact carries format, mime, byte
-length and sha256.
+never presented as a generated video**: the backend fails the job with the reason
+recorded, and the Video area renders only succeeded jobs with an artifact. The browser
+relies on backend validation; it does not independently re-sniff artifact bytes. Every
+stored artifact carries format, mime, byte length and sha256.
 
 ### 5.7 God Core
 

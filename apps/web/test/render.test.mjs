@@ -100,7 +100,6 @@ async function loadComponents() {
     "export { ResetRequestForm, ResetConfirmForm } from '../../src/pages/ForgotPasswordPage.jsx'",
     "export { default as AccountCard } from '../../src/components/AccountCard.jsx'",
     "export { Shell, StatusCard } from '../../src/components/Shell.jsx'",
-    "export { JobTable, JobDetail } from '../../src/components/Jobs.jsx'",
     "export * as ui from '../../src/components/ui.jsx'",
   ].join('\n'))
 
@@ -422,13 +421,6 @@ test('the media areas render their validation surface', () => {
     // still image off as video is a requirement, not a nicety.
     assert.ok(/job|generat/i.test(markup), `${name} must render its generation surface`)
   }
-})
-
-test('the job table renders an empty state rather than crashing', () => {
-  const markup = render('JobTable (empty)', React.createElement(components.JobTable, {
-    jobs: [], onSelect: noop, selectedId: null, kind: 'image',
-  }))
-  assert.ok(markup.length > 0)
 })
 
 test('the shared UI primitives all render', () => {

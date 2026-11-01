@@ -273,9 +273,9 @@ PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
 The pinned archive includes the model manifests and checksum list. A full successful run validates all 1038 Core cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-npm test                  # all three suites (1961 tests)
+npm test                  # all three suites (1960 tests)
 npm run test:core         # 1038
-npm run test:web          # 101
+npm run test:web          # 100
 npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
 
@@ -331,7 +331,7 @@ when something else changes would not notice.
 |---|---|
 | **Core service** | Current suite: 1038 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41300147257](https://github.com/rajaram-2005/ragam/actions/runs/41300147257) passed Core and release verification; the separate Compose job also passed its startup, API-through-Caddy, cold backup and restore checks. This does not verify any persistent deployment or hosted-data migration. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 101 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Web app** | `npm ci`, 100 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docker Compose** | Run [41299063491](https://github.com/rajaram-2005/ragam/actions/runs/41299063491) passed: builds both images, starts Core/web/Caddy, verifies owner bootstrap and authenticated API through Caddy, then cold-backs up and restores the named volume and verifies persisted data. This is a synthetic CI smoke, not a production or hosted-data migration check. |
 | **Docs** | The 49-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |

@@ -7,13 +7,13 @@ something does not work, it says so and says why.
 
 **Core test environment used for the verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test totals: 1961 cases across the three suites** (Core 1038, Web 101, Fabric 822). GitHub Actions run [41300147257](https://github.com/rajaram-2005/ragam/actions/runs/41300147257) passed all six jobs, including Core, Web, Fabric, documentation, release verification, and the Compose stack's owner/API-through-Caddy plus cold backup/restore checks. This verifies the self-hosted smoke path, not a persistent production deployment. A read-only inventory of the hosted `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket; its migration-history API returned no entries. No data or schema export/import was run, and no hosted service or project was changed. Thus no application records were present to transfer at inventory time, but the absence of a permanent self-hosted deployment means cutover is not complete. Supabase Preview was skipped. In this workspace the focused owner/bootstrap and account tests pass (23/23), documentation tests pass (49/49), Web tests pass (101/101), and the Vite production build succeeds. The full Core suite was attempted locally: 1027/1038 passed, with 11 environment-dependent failures because the pinned Pro/Max model artifacts and Python NumPy dependencies are not installed here. Docker/Podman are unavailable locally. No Vercel/Supabase settings or deployments have been changed.
+**Test totals: 1960 cases across the three suites** (Core 1038, Web 100, Fabric 822). GitHub Actions run [41300147257](https://github.com/rajaram-2005/ragam/actions/runs/41300147257) passed all six jobs, including Core, Web, Fabric, documentation, release verification, and the Compose stack's owner/API-through-Caddy plus cold backup/restore checks. This verifies the self-hosted smoke path, not a persistent production deployment. A read-only inventory of the hosted `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket; its migration-history API returned no entries. No data or schema export/import was run, and no hosted service or project was changed. Thus no application records were present to transfer at inventory time, but the absence of a permanent self-hosted deployment means cutover is not complete. Supabase Preview was skipped. In this workspace the focused owner/bootstrap and account tests pass (23/23), documentation tests pass (49/49), Web tests pass (100/100), and the Vite production build succeeds. The full Core suite was attempted locally: 1027/1038 passed, with 11 environment-dependent failures because the pinned Pro/Max model artifacts and Python NumPy dependencies are not installed here. Docker/Podman are unavailable locally. No Vercel/Supabase settings or deployments have been changed.
 
 | Suite | Command | Result |
 |---|---|---|
 | `services/core` | `node --test test/*.test.mjs` | **1038 tests** (80 files; this workspace: 1027 passed, 11 environment failures; the focused self-host bootstrap/account tests passed 23/23) |
 | `services/fabric` | `PATH=.venv/bin:$PATH npm run test:fabric` | **822 tests** (42 files; local run passed) |
-| `apps/web` | `npm run test:web` | **101 tests** (5 files; 101/101 passed locally) |
+| `apps/web` | `npm run test:web` | **100 tests** (5 files; 100/100 passed locally) |
 | `apps/web` build | `npm run build --prefix apps/web` | production bundle built successfully locally |
 
 **Released first-party Klyvaron Pro and Max multimodal artifacts (all 8 trained from scratch, `baseCheckpoint: null`, verified by SHA-256 on load):**
@@ -381,7 +381,7 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (101 tests)
+### `apps/web` — Implemented and tested (100 tests)
 
 | Area | Status |
 |---|---|
@@ -493,6 +493,13 @@ cleared on every path.
 No untracked or ignored artefacts were found in the tree beyond the empty, gitignored
 `.aetheris-data/`. The suite after the change: **831 / 831** core, 48/48 docs, 93/93 web (run with
 `npm ci`), 814 fabric.
+
+**Follow-up dependency audit (2026-11-01):** removed `apps/web/src/components/Jobs.jsx` and its
+empty-table-only render test. The component had no production importer; Image and Video render
+their own job surfaces. Remaining JavaScript files with no importers were reviewed as application
+entry points, manually-run scripts, generated-fixture tools, or documented legacy code. In
+particular, the Vercel/Supabase entry points and migrations remain while the hosted production path
+is retained for safe cutover. No test fixtures, model evidence, licences, or hosted data were deleted.
 
 ### Phases 9–10 — industry packs, and a release that verifies its own numbers
 
