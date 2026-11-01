@@ -4,6 +4,13 @@ import { Banner, Button, CopyButton, Field, Panel } from '../components/ui.jsx'
 import { KnowledgePanel, MemoryPanel, HistoryPanel, SkillsPanel } from '../components/ContextPanels.jsx'
 import UserTrainingPanel from '../components/UserTrainingPanel.jsx'
 
+const STARTER_PROMPTS = [
+  { number: '01', title: 'Make a complex idea clear', detail: 'Build an explanation from first principles', prompt: 'Explain this idea clearly, starting with the basics: ' },
+  { number: '02', title: 'Shape a first draft', detail: 'Turn rough notes into a useful starting point', prompt: 'Help me turn these rough notes into a clear first draft: ' },
+  { number: '03', title: 'Compare the options', detail: 'Lay out trade-offs without choosing for me', prompt: 'Compare these options and explain the trade-offs without choosing for me: ' },
+  { number: '04', title: 'Make a practical plan', detail: 'Break a goal into manageable next steps', prompt: 'Help me make a practical plan for this goal: ' },
+]
+
 export default function ChatArea({ provider, readiness, refreshReadiness, onSettings, account }) {
   const firstPartyAll = readiness?.firstPartyModels?.models ?? []
   const firstPartyReady = firstPartyAll.filter((entry) => entry.status === 'ready' && entry.selectorEnabled)
@@ -16,7 +23,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
   const [model, setModel] = useState(preferredDefault), [saving, setSaving] = useState(false)
   const [useKnowledge, setUseKnowledge] = useState(false), [useMemory, setUseMemory] = useState(false), [allowSensitive, setAllowSensitive] = useState(false)
   const [temperature, setTemperature] = useState('0.2'), [maxTokens, setMaxTokens] = useState('512'), [sessionId, setSessionId] = useState(null), [skill, setSkill] = useState(''), [style, setStyle] = useState(''), [styles, setStyles] = useState([])
-  const abort = useRef(null), thread = useRef(null)
+  const abort = useRef(null), thread = useRef(null), composerInput = useRef(null)
 
   useEffect(() => {
     setModel(readiness?.provider?.selectedModel || provider?.selectedModel || firstPartyReady[0]?.id || '')
@@ -85,12 +92,15 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     setPrompt(failedUser.content)
   }
 
+  const useStarter = (value) => { setPrompt(value); composerInput.current?.focus() }
+
   return <div className="online-chat">
     {!provider?.configured && firstPartyReady.length === 0 ? <Banner tone="info" title="Connect your online provider"><p>Add an online gateway (LiteLLM, or an Ollama or llama.cpp server on this Core host) to start chatting. Requests are sent to that endpoint, so none of them stay on this machine.</p><Button onClick={onSettings}>Open Provider Settings</Button></Banner> : null}
-    <Panel title="Conversation" actions={<Button disabled={busy} onClick={() => { setMessages([]); setSessionId(null); setError(null) }}>New conversation</Button>}>
-      <div className="row between">
+    <Panel className="chat-panel" title="Conversation">
+      <div className="row between chat-toolbar">
+        <div className="chat-model-fields">
         <Field label="Provider">
-          <span className="chip">{selectedFirstParty ? 'Klyvaron Native' : (provider?.name ?? 'Gateway')}</span>
+          <span className="chat-provider-value"><i className="chat-provider-dot" aria-hidden="true" />{selectedFirstParty ? 'Klyvaron Native' : (provider?.name ?? 'No provider connected')}</span>
         </Field>
         <Field label="Model" hint="Your exact selection is used. No silent substitution. The default is shared by everyone signed in here.">
           <select aria-label="Model" className="select" value={model} disabled={busy || saving || !hasSelectableModels} onChange={async (e) => { const next = e.target.value; setSaving(true); setError(null); try { await api.selectModel(next); setModel(next); await refreshReadiness?.() } catch (err) { setError(err) } finally { setSaving(false) } }}>
@@ -100,14 +110,19 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
             {gatewayModels.map((id) => <option key={id} value={id}>{id}</option>)}
           </select>
         </Field>
-        <Button disabled={busy} onClick={onSettings}>Provider Settings</Button>
+        </div>
+        <div className="chat-toolbar-actions">
+          <span className="chat-online-label"><i aria-hidden="true" />Online</span>
+          <Button disabled={busy} onClick={() => { setMessages([]); setSessionId(null); setError(null); setPrompt('') }}>New conversation</Button>
+          <Button className="chat-settings-button" disabled={busy} onClick={onSettings}>Provider Settings</Button>
+        </div>
       </div>
-      <p className="small">
+      <p className="small chat-model-note">
         {selectedFirstParty
           ? `First-party weights ${selectedFirstParty.id} (${selectedFirstParty.parameters.toLocaleString('en-US')} params · SHA-256 ${selectedFirstParty.weightsSha256.slice(0, 16)}…) · verified in-host without external transfer.`
           : `${provider?.baseUrl || 'No gateway configured'} · Listed models are not inference-verified until a request succeeds.`}
       </p>
-      <div className="thread" ref={thread} aria-live="polite">
+      <div className="thread" ref={thread} aria-live="polite" aria-label="Conversation transcript">
         {messages.length ? messages.map((m, i) => (
           <div className={`message ${m.role}`} data-role={m.role} key={i}>
             <div className="message-head">
@@ -124,17 +139,31 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
             {m.meta?.styleAudit && !m.meta.styleAudit.ok ? <small>Style check: {m.meta.styleAudit.violations.join(', ')}. The answer is shown unchanged; it was not rewritten.</small> : null}
             {m.meta?.grounding?.citations?.length ? <details><summary>File references sent with this request</summary><ul>{m.meta.grounding.citations.map((c, index) => <li key={index}>{c.ref} · {c.title ?? c.documentId}</li>)}</ul></details> : null}
           </div>
-        )) : <p className="muted">Choose a model and start a conversation.</p>}
+        )) : <div className="chat-welcome">
+          <div className="chat-welcome-mark" aria-hidden="true"><span>R</span><i /></div>
+          <p className="chat-welcome-eyebrow">RAGAM · YOUR WORKSPACE</p>
+          <h2>What would you like to work through?</h2>
+          <p className="chat-welcome-copy">Choose an available model, then start with a question or one of these ideas. Nothing is sent until you press Send.</p>
+          <div className="chat-starter-grid" aria-label="Draft prompt ideas">
+            {STARTER_PROMPTS.map((item) => <button className="chat-starter" type="button" key={item.number} onClick={() => useStarter(item.prompt)}>
+              <span className="chat-starter-number">{item.number}</span>
+              <span className="chat-starter-copy"><strong>{item.title}</strong><small>{item.detail}</small></span>
+              <span className="chat-starter-arrow" aria-hidden="true">↗</span>
+            </button>)}
+          </div>
+        </div>}
       </div>
       {error ? <Banner tone="bad" title={error.message} /> : null}
       <form onSubmit={send}>
         <div className="composer">
           <div className="composer-row">
             <textarea
+              ref={composerInput}
               className="textarea"
+              aria-label="Message your selected model"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ask your selected model…"
+              placeholder="Message your selected model…"
               maxLength={100000}
               disabled={busy}
               rows={1}
@@ -165,7 +194,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
             {busy ? <Button variant="danger" onClick={() => abort.current?.abort()}>Stop generation</Button> : <Button type="submit" variant="primary" disabled={saving || !model || !prompt.trim()}>Send</Button>}
           </div>
         </div>
-        <p className="small" style={{ marginTop: 8 }}>{selectedFirstParty ? 'First-party Klyvaron weights process this conversation on this Core host with zero third-party network transfer or fallback.' : 'Send transmits this conversation and any selected context to the gateway and its configured upstream provider. Provider charges and retention policies apply.'}</p>
+        <div className="chat-composer-foot"><span>Enter to send <b>·</b> Shift + Enter for a new line</span><span>{selectedFirstParty ? 'Processed on this Core host · no external transfer' : 'Sent to the selected provider · charges and retention policies may apply'}</span></div>
       </form>
     </Panel>
     <details className="context-section">

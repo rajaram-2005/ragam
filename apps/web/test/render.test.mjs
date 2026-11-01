@@ -534,6 +534,20 @@ test('Chat renders the saved exact model and identifies the online recipient', (
 
 })
 
+test('Chat home offers original draft starters and keeps sending under the user’s control', () => {
+  const markup = render('ChatArea (welcome)', React.createElement(components.ChatArea, {
+    provider: { kind: 'litellm', name: 'LiteLLM', configured: true, models: ['model-a'], selectedModel: 'model-a' },
+  }))
+  assert.match(markup, /What would you like to work through\?/)
+  assert.match(markup, /Make a complex idea clear/)
+  assert.match(markup, /Shape a first draft/)
+  assert.match(markup, /Compare the options/)
+  assert.match(markup, /Make a practical plan/)
+  assert.match(markup, /Nothing is sent until you press Send/)
+  assert.match(markup, /aria-label="Message your selected model"/)
+  assert.match(markup, /Shift \+ Enter for a new line/)
+})
+
 
 test('the provider catalogue shows status, never a control, and nothing when unloaded', () => {
   const catalog = {

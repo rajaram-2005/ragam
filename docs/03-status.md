@@ -7,13 +7,13 @@ something does not work, it says so and says why.
 
 **Core test environment used for the verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test totals: 1891 cases across the three suites** (Core 970, Web 99, Fabric 822). GitHub Actions run [41313605025](https://github.com/rajaram-2005/ragam/actions/runs/41313605025) passed all six jobs, including the complete Core suite, release verification, Web, Fabric, documentation and Docker Compose checks. The Core job used the pinned first-party artifacts and Python/NumPy multimodal prerequisites; this validates the suite, not general model performance or live external inference. The Compose check is a synthetic smoke path, not a permanent deployment. A read-only inventory of the external `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket; its migration-history API returned no entries. No data or schema export/import was run, and no external service, project, deployment, account, setting, or data was changed. This is historical inventory evidence, not a live integration test. Locally, focused owner/bootstrap and account tests pass (23/23), documentation tests pass (50/50), Web tests pass (99/99), and the Vite production build succeeds; the full Core suite needs the pinned artifacts and Python multimedia dependencies supplied in CI. Docker/Podman are unavailable locally. Vercel/Supabase repository integrations have now been removed; external resources remain under their owners' control and untouched.
+**Test totals: 1892 cases across the three suites** (Core 970, Web 100, Fabric 822). The preceding all-green CI run [41314136607](https://github.com/rajaram-2005/ragam/actions/runs/41314136607) passed Core, Fabric, the prior 99-test Web suite, docs, release verification and Docker Compose checks. This Chat UI update adds one Web test: the current 100-test Web suite and production build pass locally; CI for the UI update is pending. The Core job used pinned first-party artifacts and Python/NumPy multimodal prerequisites; tests do not establish general model performance or live external inference. The Compose check is a synthetic smoke path, not a permanent deployment. A read-only inventory of the external `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket; its migration-history API returned no entries. No data or schema export/import was run, and no external service, project, deployment, account, setting, or data was changed. This is historical inventory evidence, not a live integration test. Locally, focused owner/bootstrap and account tests pass (23/23), documentation tests pass (50/50), Web tests pass (100/100), and the Vite production build succeeds; the full Core suite needs the pinned artifacts and Python multimedia dependencies supplied in CI. Docker/Podman are unavailable locally. Vercel/Supabase repository integrations have now been removed; external resources remain under their owners' control and untouched.
 
 | Suite | Command | Result |
 |---|---|---|
 | `services/core` | `node --test test/*.test.mjs` | **970 tests** (68 files; full suite passed in CI with pinned Pro/Max artifacts and Python multimodal prerequisites; local runs without them may fail environment-dependent worker/artifact tests; focused self-host bootstrap/account tests pass 23/23) |
 | `services/fabric` | `PATH=.venv/bin:$PATH npm run test:fabric` | **822 tests** (42 files; local run passed) |
-| `apps/web` | `npm run test:web` | **99 tests** (4 files; 99/99 passed locally) |
+| `apps/web` | `npm run test:web` | **100 tests** (4 files; 100/100 passed locally) |
 | `apps/web` build | `npm run build --prefix apps/web` | production bundle built successfully locally |
 
 **Released first-party Klyvaron Pro and Max multimodal artifacts (all 8 trained from scratch, `baseCheckpoint: null`, verified by SHA-256 on load):**
@@ -379,7 +379,7 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (99 tests)
+### `apps/web` — Implemented and tested (100 tests)
 
 | Area | Status |
 |---|---|
