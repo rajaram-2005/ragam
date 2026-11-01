@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Read-only with respect to accounts: signs into a pre-provisioned, dedicated smoke-test
-// account, checks the public Vercel -> Render path, then signs out. Optional persistence
+// account, checks the public Vercel -> configured Core path, then signs out. Optional persistence
 // modes create/verify/delete one harmless memory marker for an explicit restart test.
 
 function fail(message) {

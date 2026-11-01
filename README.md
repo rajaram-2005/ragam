@@ -62,17 +62,37 @@ internal service promoted to a navigation entry, fails the build.
 ## Quick start
 
 ```bash
+# Core uses Node's standard library; it has no dependency install step.
 node services/core/src/server.mjs        # core API on :8790
-cd apps/web && npm install && npm run dev # UI, proxies /api to core
+
+# In another terminal, install the locked Web dependencies and start the UI.
+npm ci --prefix apps/web
+npm run web                               # UI, proxies /api to core
 ```
+
+For the optional Fabric service and its test tools, install into an isolated
+virtual environment (macOS/Linux):
+
+```bash
+python3 -m venv services/fabric/.venv
+services/fabric/.venv/bin/python -m pip install -e 'services/fabric[dev]'
+# Point the test runner at that environment when running all suites:
+AETHERIS_PYTHON="$PWD/services/fabric/.venv/bin/python" npm test
+```
+
+The root `package.json` is a script runner, not a dependency workspace. The only
+npm dependency tree is `apps/web`; `npm ci --prefix apps/web` installs it from the
+lockfile. Core has zero npm dependencies. Fabric needs NumPy at runtime and pytest
+for tests; the `[dev]` extra installs both. **Do not install PyTorch** for normal
+setup or tests—no GPU or model weights are required.
 
 Requirements: **Node ≥ 22.12** — the core service needs ≥ 22.5 for `node:sqlite`
 and the web app's build tooling (Vite 8) needs ≥ 22.12, so the higher bound
-applies — and, for the training service,
-**Python ≥ 3.11 + NumPy**. No GPU. No model weights are downloaded.
+applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weights are
+downloaded.
 
 ```bash
-npm test          # 1875 tests: core 952, web 101, fabric 822
+npm test          # 1958 tests: core 1035, web 101, fabric 822
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -87,7 +107,7 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1875 run in CI on every push and pull request
+All 1958 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as five jobs — one per
 component, plus one that fails if this documentation stops matching the code, plus one
 that counts what the suites reported and verifies the release against those counts. The
@@ -95,7 +115,7 @@ Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
 
 Full instructions, environment variables and troubleshooting:
-[`docs/04-setup.md`](docs/04-setup.md). The manual Render + Vercel deployment, smoke-test, persistent-disk verification, backup/restore and rollback procedure is in [`docs/deployment-render-vercel.md`](docs/deployment-render-vercel.md).
+[`docs/04-setup.md`](docs/04-setup.md). Hosted Core requirements and deployment status are documented in [`docs/deployment-status.md`](docs/deployment-status.md).
 
 > **Do not `pip install torch` for normal development or tests.** The Fabric service
 > is NumPy-only. Only the explicit optional LoRA command above bootstraps torch and
@@ -149,9 +169,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 37,051 | 24,353 | **zero npm packages** | 952 |
+| `services/core` | Node 22 ESM | 39,915 | 26,212 | **zero npm packages** | 1035 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 5,595 | 2,253 | react, react-dom | 101 |
+| `apps/web` | React 18 + Vite | 5,595 | 2,247 | react, react-dom | 101 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

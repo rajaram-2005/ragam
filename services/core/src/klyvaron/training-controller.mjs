@@ -854,9 +854,9 @@ export class UserTrainingController {
       const recordId = randomUUID()
       let storedMemoryEntry = null
       if (spec.selectedMode === 'memory_or_retrieval' && this.contextFor && actor && spec.trainExamples[0]) {
-        const ctx = this.contextFor(actor)
+        const ctx = await this.contextFor(actor)
         const ex = spec.trainExamples[0]
-        const remembered = ctx.memory.remember({
+        const remembered = await ctx.memory.remember({
           text: `Q: ${ex.input}\nVerified correction: ${ex.target}`,
           kind: 'fact',
           subject: spec.intendedBehavior,

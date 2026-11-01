@@ -26,12 +26,6 @@ test('Vercel proxy preserves bodies, cookies, status, streaming, and fails close
   const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
   assert.equal(vercel.outputDirectory, 'dist')
   assert.equal(vercel.functions['api/**/*.js'].maxDuration, 60)
-  const render = readFileSync(new URL('../../../render.yaml', import.meta.url), 'utf8')
-  assert.match(render, /autoDeploy: false/)
-  assert.match(render, /healthCheckPath: \/api\/health/)
-  assert.match(render, /mountPath: \/var\/data/)
-  assert.match(render, /value: \/var\/data\/online/)
-
   let seen = null
   const upstream = createServer(async (req, res) => {
     if (req.url === '/api/health') {

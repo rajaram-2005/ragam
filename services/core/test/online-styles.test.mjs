@@ -20,7 +20,7 @@ import { STYLE_IDS } from '../src/online/styles.mjs'
 const listen = (s) => new Promise((done) => s.listen(0, '127.0.0.1', () => done(`http://127.0.0.1:${s.address().port}`)))
 const close = (s) => new Promise((done) => { s.closeAllConnections(); s.close(done) })
 
-async function fixture(t) {
+async function fixture(t, { styleStore = null, contextStoreFactory = null } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'aetheris-styles-test-'))
   const f = { calls: [], dir, reply: 'Synthetic answer for the question.' }
   const gateway = createServer(async (req, res) => {
@@ -31,7 +31,7 @@ async function fixture(t) {
     return res.end(JSON.stringify({ model: body.model, choices: [{ message: { content: f.reply } }] }))
   })
   f.gatewayUrl = await listen(gateway)
-  const create = () => new OnlineApp({ dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: 2000 })
+  const create = () => new OnlineApp({ dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: 2000, ...(styleStore ? { styleStore } : {}), ...(contextStoreFactory ? { contextStoreFactory } : {}) })
   f.app = create(); const server = f.app.server(); f.server = server; f.url = await listen(server)
   f.shutdown = async () => { if (server.listening) await close(server); f.app.close() }
   let cookie = ''
@@ -79,6 +79,70 @@ test('the seven styles are the directive list and every instruction carries the 
   assert.match(r.data.prohibitions, /permission/i)
   assert.equal(r.data.preference.style, null, 'no style is the default')
   assert.equal(r.data.preference.explicit, false)
+})
+
+test('style and account-context routes await injected stores for hosted persistence', async (t) => {
+  const values = new Map()
+  const calls = []
+  const contextAccounts = []
+  const contextStoreFactory = async ({ accountId }) => {
+    contextAccounts.push(accountId)
+    return {
+      memory: {
+        async listMemories() { return [{ id: 'memory-1', text: 'user-approved' }] },
+        async listCandidates() { return [] },
+        async stats() { return { memories: 1 } },
+      },
+      knowledge: {},
+      media: {},
+    }
+  }
+  const styleStore = {
+    async get(accountId) {
+      calls.push(['get', accountId])
+      return values.get(accountId) ?? { style: null, explicit: false }
+    },
+    async set(accountId, style) {
+      calls.push(['set', accountId, style])
+      const preference = { style, explicit: true }
+      values.set(accountId, preference)
+      return preference
+    },
+  }
+  const f = await fixture(t, { styleStore, contextStoreFactory })
+  await f.login()
+  const identity = await f.request('GET', '/api/auth')
+  const accountId = identity.data.account.id
+  const [firstMemoryRead, secondMemoryRead] = await Promise.all([
+    f.request('GET', '/api/memory'),
+    f.request('GET', '/api/memory'),
+  ])
+  assert.equal(firstMemoryRead.status, 200)
+  assert.equal(firstMemoryRead.data.memories[0].text, 'user-approved')
+  assert.deepEqual(secondMemoryRead.data.stats, { memories: 1 })
+  assert.deepEqual(contextAccounts, [accountId], 'concurrent route access should reuse the one async account store context')
+  assert.equal((await f.request('GET', '/api/styles')).data.preference.explicit, false)
+  assert.deepEqual(await f.request('PUT', '/api/styles', { style: 'cautious' }).then((result) => result.data),
+    { style: 'cautious', explicit: true })
+  assert.deepEqual((await f.request('GET', '/api/styles')).data.preference,
+    { style: 'cautious', explicit: true })
+  assert.deepEqual(calls, [['get', accountId], ['set', accountId, 'cautious'], ['get', accountId]])
+})
+
+test('knowledge search principal is the signed-in account, never the request body', async (t) => {
+  const searches = []
+  const contextStoreFactory = async () => ({
+    memory: {},
+    knowledge: { async search(input) { searches.push(input); return { query: input.query, results: [], citations: [], method: 'bm25', accessControlled: true } } },
+    media: {},
+  })
+  const f = await fixture(t, { contextStoreFactory })
+  await f.login()
+  const accountId = (await f.request('GET', '/api/auth')).data.account.id
+  const result = await f.request('POST', '/api/knowledge/search', { query: 'deployment notes', principal: '*', topK: 3 })
+  assert.equal(result.status, 200)
+  assert.equal(searches[0].principal, accountId)
+  assert.equal(searches[0].topK, 3)
 })
 
 test('nothing selects a style for the user, even when the message is emotional', async (t) => {

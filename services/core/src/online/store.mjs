@@ -114,7 +114,19 @@ function normaliseRecord(id, record = {}) {
 }
 
 export class OnlineStore {
-  constructor(dir) {
+  #persistQueue = Promise.resolve()
+  #onPersist
+
+  constructor(dir, { initialState = undefined, encryptionKey = null, onPersist = null } = {}) {
+    if (dir === null) {
+      if (!(encryptionKey instanceof Uint8Array) || encryptionKey.byteLength !== 32) throw Error('Hosted provider encryption key must be exactly 32 bytes')
+      if (onPersist !== null && typeof onPersist !== 'function') throw new TypeError('onPersist must be a function')
+      this.file = null
+      this.key = Buffer.from(encryptionKey)
+      this.#onPersist = onPersist
+      this.data = migrateState(initialState ?? null)
+      return
+    }
     mkdirSync(dir, { recursive: true, mode: 0o700 }); chmodSync(dir, 0o700)
     this.file = join(dir, 'provider.json')
     const master = join(dir, 'master.key')
@@ -155,9 +167,24 @@ export class OnlineStore {
   kind() { return this.data.active }
 
   #persist() {
+    if (this.#onPersist) {
+      const snapshot = structuredClone(this.data)
+      this.#persistQueue = this.#persistQueue.then(() => this.#onPersist(snapshot))
+      void this.#persistQueue.catch(() => {})
+      return
+    }
     const temp = `${this.file}.${randomBytes(8).toString('hex')}.tmp`
     writeFileSync(temp, JSON.stringify(this.data), { mode: 0o600, flag: 'wx' }); renameSync(temp, this.file)
   }
+
+  replaceState(raw) {
+    this.data = migrateState(raw)
+    return this.public()
+  }
+
+  flush() { return this.#persistQueue }
+  recoverPersistence() { this.#persistQueue = Promise.resolve() }
+  close() { return this.flush() }
 
   seal(secret) {
     const iv = randomBytes(12), cipher = createCipheriv('aes-256-gcm', this.key, iv)

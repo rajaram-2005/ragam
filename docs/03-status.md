@@ -5,20 +5,16 @@
 Every claim below is tied to a test, a measurement or a named limitation. Where
 something does not work, it says so and says why.
 
-**Host used for all of this work:** 2 CPUs · 3.85 GB RAM · **no GPU** ·
-Node v22.22.3 (`node:sqlite` verified) · Python 3.11.2 · NumPy 2.1.3 ·
-pytest 9.1.1. Reachable: `github.com`, `codeload.github.com`, `api.github.com`,
-`registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:
-`download.pytorch.org`, `huggingface.co`.**
+**Core test environment used for the verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test totals: 1875 cases across the three suites.** GitHub Actions run [40849516343](https://github.com/rajaram-2005/ragam/actions/runs/40849516343) passed all five jobs, including the full Core, Fabric, Web, documentation and measured-release checks. A previous full local Core attempt had 11 environment-dependent failures: six required genuine Pro/Max model artifacts absent from that checkout, and five required NumPy in the default system Python. CI supplied its configured dependencies and verified artifacts. Its existing Fabric release-gate reproduction ran as part of CI; this deployment change did not train Klyvaron models or add model artifacts/evidence.
+**Test totals: 1958 cases across the three suites** (Core 1035, Web 101, Fabric 822). The last successful GitHub Actions run before the current hosted-function work was [41271512048](https://github.com/rajaram-2005/ragam/actions/runs/41271512048) at `1dbbf51`; the current Vercel/Supabase integration changes have not yet completed CI. The current full Core, Web, and Fabric suites have all passed locally; the focused Supabase/docs/schema set also passed. The repository now contains the Vercel Core Function entrypoint and Supabase account/session, provider, audit, memory/knowledge, styles, and bounded private-media wiring. The user reports that only the baseline SQL migration has been applied in Supabase; no subsequent migration has been verified, no data has been transferred, and no Vercel project settings or deployment have been changed by the agent.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **952 tests** (64 files; full GitHub Actions suite passed; prior local attempt: 941 pass, 11 environment-dependent failures) |
-| `services/fabric` | `pytest -q` | **822 tests** (42 files; full GitHub Actions suite passed) |
-| `apps/web` | `node --test test/*.test.mjs` | **101 tests** (101 / 101 pass; 5 files; local and GitHub Actions runs passed) |
-| `apps/web` build | `vite build` | production bundle built successfully locally and in GitHub Actions |
+| `services/core` | `PATH=.venv/bin:$PATH node --test test/*.test.mjs` | **1035 tests** (80 files; 1035/1035 passed with Python multimodal dependencies and the pinned Pro/Max artifact archive installed outside Git and checksum-verified) |
+| `services/fabric` | `PATH=.venv/bin:$PATH npm run test:fabric` | **822 tests** (42 files; local run passed) |
+| `apps/web` | `npm run test:web` | **101 tests** (5 files; 101/101 passed locally) |
+| `apps/web` build | `npm run build --prefix apps/web` | production bundle built successfully locally |
 
 **Released first-party Klyvaron Pro and Max multimodal artifacts (all 8 trained from scratch, `baseCheckpoint: null`, verified by SHA-256 on load):**
 
@@ -55,7 +51,7 @@ data (`docs/experiments/differentiator-prototype.json`, 900 steps, CPU). No weig
 tiers stay `unbuilt` — see [24 — Own models](./24-own-models.md).
 
 For the accounts increment, the operator-token sign-in was **removed rather than
-supplemented**: `services/core/test/accounts.test.mjs` (18 tests) covers scrypt password
+supplemented**: `services/core/test/accounts.test.mjs` (20 tests) covers scrypt password
 storage, lockout scope, enumeration resistance, throttling, session bounds, owner-only
 gateway control and per-account data isolation, and the web suite grew by 8 tests for the
 three sign-in pages. `online.test.mjs` now signs in with an account. See
@@ -246,21 +242,23 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (952 tests)
+### `services/core` — Implemented and tested (1035 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|
 | Egress policy & guard | **Implemented and tested** | Three policies; fails safe to `strict_offline` on a blank/invalid value |
 | Data classification & redaction | **Implemented and tested** | Whole-identifier patterns catch `AWS_SECRET_ACCESS_KEY`-style names |
 | Audit ledger | **Implemented and tested** | Append-only SQLite; refusals audited; NDJSON export; subject purge |
-| Accounts & sign-in (online entry) | **Implemented and tested** | 18 tests; scrypt hashes with no reversible copy, per-account lockout and throttling, owner/member roles, host-delivered reset codes, per-account stores; see doc 20 |
+| Accounts & sign-in (online entry) | **Implemented and tested** | 20 tests; scrypt hashes with no reversible copy, per-account lockout and throttling, owner/member roles, host-delivered reset codes, per-account stores; see doc 20 |
 | Model registry & router | **Implemented and tested** | Capability gating before scoring; unknown latency scores 0.5, not 0 |
 | Native provider adapters | **Implemented and tested against local fixtures; no live call** | Twenty-one wires. Chat: OpenAI-compatible, Anthropic Messages, Gemini generateContent, Cohere Chat v2, Azure OpenAI v1, Vertex AI and Bedrock Converse. Image: OpenAI Images, Gemini Images, Stability AI, Recraft, Ideogram, Black Forest Labs, fal.ai, Replicate and Adobe Firefly. Video: Veo, Runway, Luma, fal.ai and Replicate. Cohere paginates discovery; Azure uses `api-key` and the deployment name; Vertex exchanges a service-account JWT for a cached OAuth token; Bedrock signs with SigV4 against AWS's published vector and is non-streaming by contract; Firefly exchanges a two-part client credential for a cached IMS token. Structured credentials are validated and compacted at save time. See [docs/27](27-provider-framework.md) §4.1 and §5 |
 | Ollama / llama.cpp, legacy entry | **Implemented and tested against a fixture server** | `providers/local.mjs`, used by the retained legacy service only. The online entry uses the `/v1` routes of the same runtimes; see [docs/19](19-online-only-phase-2.md) |
 | Ollama / llama.cpp, online entry | **Implemented and tested against a loopback fixture** | Same transport as LiteLLM; keyless by default; exact trusted origin required. No real runtime qualified here |
 | Klyvaron development plan | **Implemented and tested** | Per-tier gates derived from the tier records, `klyvaron.mjs plan`; see [docs/11](11-klyvaron-family.md) §1.5 |
 | Klyvaron CPU execution | **Implemented and tested** | Single worker, bounded incremental streaming, cancellation/deadlines, one-model residency; see doc 15 |
-| Knowledge pipeline | **Implemented and tested** | SQLite + filesystem + in-memory rebuildable BM25 |
+| Knowledge pipeline | **Implemented and tested** | SQLite remains the local default; the hosted Vercel factory injects account-scoped Supabase memory/knowledge stores with bounded BM25 refresh, ACL filtering, and grounded citations |
+| Supabase knowledge repository | **Implemented and tested as an adapter** | Account-filtered bounded reads; transactional Postgres RPCs for insert/dedup/chunk/ACL and hard-delete receipts; PGlite exercises insert, dedup, exact stats, and purge. Its RPC migration is staged but the user has not confirmed applying it to hosted Supabase |
+| Vercel Core handler | **Implemented; not deployed** | Node Function entrypoint, parsed-body limits, warm-instance reuse, Supabase startup wiring and same-origin frontend proxy. No live Supabase round-trip or Vercel Preview test yet |
 | Media queue & validation | **Implemented and tested** | Progress, cancellation, timeouts, retry-after, state history; an optional state file makes a terminal job and its artifact survive a restart, and a job interrupted mid-run is recorded as `failed` with `interrupted`, never replayed as running |
 | Plugin registry & manifests | **Implemented and tested** | Preflight vs invoke distinction; uninstall keeps a record |
 | MCP layer & schema validator | **Implemented and tested** | Risk tiers, approval gates, output neutralisation, per-tool timeouts |

@@ -56,7 +56,7 @@ async function fixture(t, options = {}) {
   const create = () => new OnlineApp({
     dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: options.timeoutMs ?? 2000,
     maxAccounts: options.maxAccounts, secureCookie: options.secureCookie,
-    cookieSameSite: options.cookieSameSite, onResetCode: (info) => f.resetCodes.push(info),
+    cookieSameSite: options.cookieSameSite, onResetCode: (info) => f.resetCodes.push(info), sessionStore: options.sessionStore, accountStore: options.accountStore,
   })
   f.app = create()
   f.server = f.app.server()
@@ -159,6 +159,72 @@ test('password policy is length and denylist, and every rejection names the prob
 // ---------------------------------------------------------------------------
 // Roles, and the removal of the token
 // ---------------------------------------------------------------------------
+
+test('auth routes delegate session creation, lookup and logout to the durable session store', async (t) => {
+  const token = 'session-token-that-is-long-enough-for-the-cookie'
+  const live = new Map()
+  const operations = []
+  const sessionStore = {
+    async create(account) {
+      operations.push(['create', account.id])
+      live.set(token, { token, accountId: account.id, email: account.email, role: account.role, expires: Date.now() + 60_000 })
+      return token
+    },
+    async get(value) { operations.push(['get', value]); return live.get(value) ?? null },
+    async revoke(value) { operations.push(['revoke', value]); return live.delete(value) },
+    async revokeAccount(accountId, exceptToken = null) {
+      operations.push(['revokeAccount', accountId, exceptToken])
+      let count = 0
+      for (const [key, session] of live) if (session.accountId === accountId && key !== exceptToken) { live.delete(key); count += 1 }
+      return count
+    },
+  }
+  const f = await fixture(t, { sessionStore })
+  const registered = await f.register()
+  assert.equal(registered.status, 201)
+  assert.equal(cookieOf(registered), `aetheris_session=${token}`)
+  assert.equal(f.app.sessions.size, 0, 'durable sessions must not also be held in the process-local Map')
+  const auth = await f.request('GET', '/api/auth', undefined, { cookie: cookieOf(registered) })
+  assert.equal(auth.status, 200)
+  assert.deepEqual(auth.data.account, { id: registered.data.account.id, email: OWNER.email, role: 'owner' })
+  const logout = await f.request('POST', '/api/auth/logout', {}, { cookie: cookieOf(registered) })
+  assert.equal(logout.status, 200)
+  assert.equal(live.size, 0)
+  assert.ok(operations.some(([name]) => name === 'create'))
+  assert.ok(operations.some(([name]) => name === 'get'))
+  assert.ok(operations.some(([name]) => name === 'revoke'))
+})
+
+test('auth routes await an injected hosted account store and do not adopt local legacy files', async (t) => {
+  const account = { id: '74007a44-19b0-4ba7-a9a6-a417338b0182', email: OWNER.email, role: 'owner' }
+  const token = 'hosted-session-token-with-enough-length-123456'
+  const calls = []
+  const accountStore = {
+    async throttleAuth(action) { calls.push(['throttleAuth', action]) },
+    async register(input) { calls.push(['register', input.email]); return account },
+    async count() { return 1 },
+    countForReadiness() { return null },
+    async owner() { return account },
+    close() {},
+  }
+  const sessionStore = {
+    async create(value) { calls.push(['createSession', value.id]); return token },
+    async get(value) { calls.push(['getSession', value]); return value === token ? { token, accountId: account.id, email: account.email, role: account.role, expires: Date.now() + 60_000 } : null },
+    async revoke() { return true },
+    async revokeAccount() { return 0 },
+  }
+  const f = await fixture(t, { accountStore, sessionStore })
+  const result = await f.register()
+  assert.equal(result.status, 201)
+  assert.equal(result.data.account.id, account.id)
+  assert.equal(cookieOf(result), `aetheris_session=${token}`)
+  assert.deepEqual(calls.slice(0, 3), [['throttleAuth', 'register'], ['register', OWNER.email], ['createSession', account.id]])
+  assert.equal(f.app.authAttempts.size, 0, 'hosted rate limits must not be held only in the function process')
+  const status = await f.request('GET', '/api/auth', undefined, { cookie: cookieOf(result) })
+  assert.equal(status.status, 200)
+  assert.equal(status.data.authenticated, true)
+  assert.equal(f.app.sessions.size, 0)
+})
 
 test('the first account owns the installation, later ones are members, and no caller can ask for a role', async (t) => {
   const f = await fixture(t)
@@ -316,7 +382,7 @@ test('the cookie SameSite policy is an operator choice, and the unusable combina
   assert.deepEqual([...COOKIE_SAME_SITE], ['strict', 'lax', 'none'], 'the accepted values are documented in docs/20')
 })
 
-test('the production entrypoint binds Render PORT and Vercel proxy sign-in/API is same-origin and secure', async (t) => {
+test('the production entrypoint binds the managed PORT and Vercel proxy sign-in/API is same-origin and secure', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'aetheris-entry-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   const frontendOrigin = 'https://ragam.example'
@@ -330,8 +396,8 @@ test('the production entrypoint binds Render PORT and Vercel proxy sign-in/API i
   t.after(() => running.shutdown())
   assert.equal(running.config.cookieSameSite, 'strict')
   assert.deepEqual(running.config.trustedWebOrigins, [frontendOrigin])
-  assert.equal(running.config.dataDir, dir, 'Render must point Core at the persistent data mount')
-  assert.ok(running.server.address().port > 0, 'Render-provided PORT must be used when AETHERIS_CORE_PORT is absent')
+  assert.equal(running.config.dataDir, dir, 'The configured data directory must be used')
+  assert.ok(running.server.address().port > 0, 'Managed PORT must be used when AETHERIS_CORE_PORT is absent')
   assert.deepEqual(parseTrustedWebOrigins(`${frontendOrigin},${frontendOrigin}`), [frontendOrigin])
   assert.throws(() => parseTrustedWebOrigins('https://ragam.example/path'), /exact HTTPS origins/)
   assert.throws(() => parseTrustedWebOrigins('http://public.example'), /exact HTTPS origins/)
