@@ -107,6 +107,9 @@ function varsReadByCode() {
   }
   scan(resolve(CORE, 'src'))
   scan(resolve(REPO, 'apps/web'))
+  // Compose interpolation is also a live deployment configuration surface.
+  const compose = readFileSync(resolve(REPO, 'compose.yaml'), 'utf8')
+  for (const match of compose.matchAll(/\$\{([A-Z][A-Z0-9_]*)/g)) found.add(match[1])
   return found
 }
 
@@ -717,28 +720,28 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**1035 tests**'), 'core test inventory must be stated')
+  assert.ok(status.includes('**1038 tests**'), 'core test inventory must be stated')
   assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
   assert.ok(status.includes('**101 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1958 cases across the three suites'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('1961 cases across the three suites'), 'the grand total must equal the sum of the suites')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1958 tests: core 1035, web 101, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('1961 tests: core 1038, web 101, fabric 822'),
     'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1958 run in CI'),
+  assert.ok(squash(doc.readme()).includes('All 1961 run in CI'),
     'README must state the same totals where it describes CI')
   assert.ok(status.includes('(42 files'), 'the file count must move with the suite')
 
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(1035), `core heading must say 1035, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(1038), `core heading must say 1038, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(101), `web heading must say 101, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1958,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1958`,
+    1961,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1961`,
   )
 })
 
@@ -798,7 +801,8 @@ test('the account and sign-in document describes the code that implements it', (
   assert.match(accounts, /export const RESET_CODE_TTL_MS = 15 \* 60_000/)
   assert.ok(text.includes('fifteen minutes'), 'docs/20 states the reset lifetime in the words the page uses')
   assert.equal(number(accounts, 'DEFAULT_MAX_ACCOUNTS'), 64)
-  assert.ok(new RegExp('^AETHERIS_MAX_ACCOUNTS=64$', 'm').test(doc.env()), '.env.example must state the real default')
+  assert.ok(new RegExp('^AETHERIS_MAX_ACCOUNTS=1$', 'm').test(doc.env()), '.env.example must state the single-user self-host default')
+  assert.ok(new RegExp('^AETHERIS_ALLOW_ACCOUNT_REGISTRATION=false$', 'm').test(doc.env()), 'member registration must be opt-in')
   assert.ok(new RegExp('^AETHERIS_PRINT_RESET_CODES=false$', 'm').test(doc.env()), '.env.example must ship the console-printing switch off')
 
   // The cookie policy an embedded deployment needs, and the refusal that keeps the
@@ -834,8 +838,9 @@ test('the account and sign-in document describes the code that implements it', (
   assert.ok(readme.includes('create an account'), 'the README must tell the reader how to get in now')
   assert.doesNotMatch(squash(doc.phase2()), /paste it into the \*\*installation sign-in form\*\*/)
   assert.ok(squash(doc.phase2()).includes('Sign-in is an account, not a token'), 'docs/19 must point at the change')
-  assert.ok(text.includes('Sign-up is open'), 'the account model states that registration is open')
-  assert.ok(text.includes('first account created is the owner'), 'the owner rule is documented')
+  assert.ok(text.includes('Self-hosted signup is closed by default'), 'the account model states the secure self-host default')
+  assert.ok(text.includes('AETHERIS_OWNER_EMAIL'), 'the owner bootstrap setting is documented')
+  assert.ok(text.includes('AETHERIS_ALLOW_ACCOUNT_REGISTRATION=true'), 'member registration opt-in is documented')
 
   // Reset delivery is the part most likely to be over-claimed, so the denial is checked
   // as carefully as the claim: no mail transport means no "check your inbox".
@@ -1554,15 +1559,17 @@ test('the CI workflow is valid YAML with the structure it claims', () => {
   assert.equal(cron[1].split(/\s+/).length, 5, `cron must have five fields, got ${cron[1]}`)
 
   // Scope to the jobs: block. The on: trigger block is indented the same way, so an
-  // unscoped /^  ([a-z]+):$/ also matched 'push:' and reported five jobs. The list is
-  // written out rather than counted so a job cannot be added without this noticing.
+  // unscoped pattern also matches 'push:'. The explicit list catches additions, including
+  // the hyphenated self-hosted integration job.
   const jobsBlock = workflow.slice(workflow.indexOf('\njobs:'))
-  const jobs = [...jobsBlock.matchAll(/^  ([a-z]+):$/gm)].map((m) => m[1])
-  assert.deepEqual(jobs, ['core', 'fabric', 'web', 'release', 'docs'], `unexpected job list: ${jobs.join(', ')}`)
+  const jobs = [...jobsBlock.matchAll(/^  ([a-z-]+):$/gm)].map((m) => m[1])
+  assert.deepEqual(jobs, ['core', 'fabric', 'web', 'self-hosted', 'release', 'docs'], `unexpected job list: ${jobs.join(', ')}`)
+  assert.ok(jobsBlock.includes('docker compose -f compose.yaml config -q'), 'self-host CI must validate Compose')
+  assert.ok(jobsBlock.includes('Cold-backup the named volume'), 'self-host CI must test persistence and restoration')
 
   // Every job must check the code out before doing anything with it.
-  const perJob = jobsBlock.split(/^  [a-z]+:$/m).slice(1)
-  assert.equal(perJob.length, 5)
+  const perJob = jobsBlock.split(/^  [a-z-]+:$/m).slice(1)
+  assert.equal(perJob.length, 6)
   for (const [index, body] of perJob.entries()) {
     assert.ok(body.includes('actions/checkout@'), `job ${jobs[index]} must check out the repository`)
     assert.ok(body.includes('run:'), `job ${jobs[index]} must actually run something`)

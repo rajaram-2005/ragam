@@ -15,7 +15,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -55,7 +55,8 @@ async function fixture(t, options = {}) {
   f.gatewayUrl = await listen(gateway)
   const create = () => new OnlineApp({
     dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: options.timeoutMs ?? 2000,
-    maxAccounts: options.maxAccounts, secureCookie: options.secureCookie,
+    maxAccounts: options.maxAccounts, ownerEmail: options.ownerEmail, registrationEnabled: options.registrationEnabled,
+    secureCookie: options.secureCookie,
     cookieSameSite: options.cookieSameSite, onResetCode: (info) => f.resetCodes.push(info), sessionStore: options.sessionStore, accountStore: options.accountStore,
   })
   f.app = create()
@@ -382,6 +383,83 @@ test('the cookie SameSite policy is an operator choice, and the unusable combina
   assert.deepEqual([...COOKIE_SAME_SITE], ['strict', 'lax', 'none'], 'the accepted values are documented in docs/20')
 })
 
+test('self-hosted entrypoint fails closed until the configured owner signs up, then closes registration', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'aetheris-bootstrap-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const baseEnv = {
+    AETHERIS_ONLINE_DATA_DIR: dir,
+    AETHERIS_CORE_HOST: '127.0.0.1',
+    AETHERIS_CORE_PORT: '0',
+    AETHERIS_COOKIE_SECURE: 'false',
+  }
+  const invalidDir = join(dir, 'invalid-config-data')
+  await assert.rejects(main({ env: { ...baseEnv, AETHERIS_ONLINE_DATA_DIR: invalidDir, AETHERIS_MAX_ACCOUNTS: '0' }, stdout: () => {} }), /AETHERIS_MAX_ACCOUNTS must be a whole number/)
+  assert.equal(existsSync(invalidDir), false, 'invalid account caps must fail before creating persistent state')
+  const start = async (env) => {
+    const running = await main({ env, stdout: () => {} })
+    return { running, url: `http://127.0.0.1:${running.server.address().port}` }
+  }
+  const postRegister = (url, account) => fetch(`${url}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-aetheris-request': '1' },
+    body: JSON.stringify(account),
+  })
+
+  const unconfigured = await start(baseEnv)
+  t.after(() => unconfigured.running.shutdown())
+  const closed = await postRegister(unconfigured.url, OWNER)
+  assert.equal(closed.status, 503)
+  assert.equal((await closed.json()).error, 'owner_bootstrap_unconfigured')
+  await unconfigured.running.shutdown()
+
+  const configured = await start({ ...baseEnv, AETHERIS_OWNER_EMAIL: OWNER.email })
+  t.after(() => configured.running.shutdown())
+  assert.equal(configured.running.config.maxAccounts, 1, 'the self-host entrypoint defaults to one account')
+  const stranger = await postRegister(configured.url, { ...OWNER, email: 'stranger@example.test' })
+  assert.equal(stranger.status, 403)
+  assert.equal((await stranger.json()).error, 'owner_email_mismatch')
+  assert.equal(configured.running.app.accounts.count(), 0)
+
+  const owner = await postRegister(configured.url, OWNER)
+  assert.equal(owner.status, 201)
+  assert.equal((await owner.json()).account.role, ROLES.OWNER)
+  const later = await postRegister(configured.url, { ...MEMBER, email: 'second@example.test' })
+  assert.equal(later.status, 403)
+  assert.equal((await later.json()).error, 'registration_closed')
+  assert.equal(configured.running.app.accounts.count(), 1)
+})
+
+test('a cold copy of the persistent account directory restores the owner and remains closed to sign-up', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'aetheris-account-restore-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const source = join(root, 'source')
+  const backup = join(root, 'restored')
+  const original = new AccountStore({ dir: source, ownerEmail: OWNER.email, registrationEnabled: false, maxAccounts: 1 })
+  original.register(OWNER)
+  original.close()
+
+  // This models a stopped-service, cold backup: the whole persistent data directory,
+  // including SQLite state, is copied before a fresh Core store opens the restored copy.
+  cpSync(source, backup, { recursive: true })
+  const restored = new AccountStore({ dir: backup, ownerEmail: OWNER.email, registrationEnabled: false, maxAccounts: 1 })
+  t.after(() => restored.close())
+  assert.equal(restored.count(), 1)
+  assert.equal(restored.authenticate(OWNER).role, ROLES.OWNER)
+  assert.throws(() => restored.register(MEMBER), (error) => error.code === 'registration_closed')
+})
+
+test('member registration requires explicit opt-in and remains bounded by the configured account cap', async (t) => {
+  const f = await fixture(t, { ownerEmail: OWNER.email, registrationEnabled: true, maxAccounts: 2 })
+  assert.equal((await f.register(OWNER)).status, 201)
+  const member = await f.register(MEMBER)
+  assert.equal(member.status, 201)
+  assert.equal(member.data.account.role, ROLES.MEMBER)
+  const overCap = await f.register({ ...MEMBER, email: 'third@example.test' })
+  assert.equal(overCap.status, 429)
+  assert.equal(overCap.data.error, 'account_limit')
+  assert.equal(f.app.accounts.count(), 2)
+})
+
 test('the production entrypoint binds the managed PORT and Vercel proxy sign-in/API is same-origin and secure', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'aetheris-entry-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
@@ -390,6 +468,7 @@ test('the production entrypoint binds the managed PORT and Vercel proxy sign-in/
     AETHERIS_ONLINE_DATA_DIR: dir, AETHERIS_CORE_HOST: '127.0.0.1', PORT: '0',
     AETHERIS_COOKIE_SECURE: 'true', AETHERIS_COOKIE_SAMESITE: 'strict',
     AETHERIS_TRUSTED_WEB_ORIGINS: frontendOrigin,
+    AETHERIS_OWNER_EMAIL: OWNER.email, AETHERIS_ALLOW_ACCOUNT_REGISTRATION: 'true', AETHERIS_MAX_ACCOUNTS: '3',
   }
   const lines = []
   let running = await main({ env, stdout: (line) => lines.push(line) })

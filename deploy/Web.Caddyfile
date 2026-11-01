@@ -1,0 +1,9 @@
+:8080 {
+  @health path /healthz
+  respond @health 200
+
+  root * /srv
+  encode zstd gzip
+  try_files {path} /index.html
+  file_server
+}

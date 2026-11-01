@@ -33,7 +33,7 @@ or one sign-in page (signed out).
 | Page | Address | Component | What it does |
 |---|---|---|---|
 | Sign in | `#/signin` | `apps/web/src/pages/SignInPage.jsx` | Email address and password. Links to the other two pages. |
-| Create account | `#/signup` | `apps/web/src/pages/SignUpPage.jsx` | Open registration, states the password rules, confirms the password client-side, signs you in on success. |
+| Create account | `#/signup` | `apps/web/src/pages/SignUpPage.jsx` | Operator-controlled first-owner bootstrap; member registration is closed unless explicitly enabled. States password rules and confirms the password client-side. |
 | Reset password | `#/forgot-password` | `apps/web/src/pages/ForgotPasswordPage.jsx` | Two steps: request a single-use code, then set a new password with it. |
 
 The shared frame is `pages/AuthLayout.jsx`; the signed-in identity, password change and
@@ -43,19 +43,22 @@ counts the navigation entries and fails if one appears.
 
 ## Account model
 
-**Sign-up is open.** Anybody who can reach the installation can create an account on it.
-That is a deliberate choice with two consequences, both stated on the sign-up page
-rather than left to be discovered:
+**Self-hosted signup is closed by default.** The operator must set `AETHERIS_OWNER_EMAIL`
+for the first account. Only that normalized address may claim the owner role. Once the
+owner exists, `AETHERIS_ALLOW_ACCOUNT_REGISTRATION=true` is required to admit members;
+the default account cap is one (`AETHERIS_MAX_ACCOUNTS=1`). If the owner email is absent,
+registration fails closed instead of allowing a visitor to become owner. The hosted
+Vercel/Supabase adapter retains its independent `AETHERIS_BOOTSTRAP_EMAIL` and
+`AETHERIS_REGISTRATION_ENABLED` controls and its existing account-cap default.
 
-- **The first account created is the owner.** The role is decided by the store, never by
-  the request body — a registration that could ask for `owner` would let the second
-  person to arrive take the installation from the first. Only the owner can change the
-  gateway connection or its key (`PUT`/`DELETE /api/providers/{litellm,ollama,llamacpp}`,
+- **The first account is the owner.** The role is decided by the store, never by the
+  request body. Only the owner can change the gateway connection or its key
+  (`PUT`/`DELETE /api/providers/{litellm,ollama,llamacpp}`,
   `POST /api/providers/{litellm,ollama,llamacpp}/test`, `POST /api/models/probe`); a member who tries gets
   `403 owner_required`, and Provider Settings says so instead of offering inert controls.
 - **Every account chats through the one configured gateway**, so whoever configured it is
-  paying for all of them. `AETHERIS_MAX_ACCOUNTS` (default 64) bounds how many accounts
-  an open sign-up page can create.
+  responsible for its upstream use. Set an explicit cap above one when enabling member
+  registrations; do not expose member signup without understanding that shared gateway.
 
 Shared by the installation, on purpose: the gateway connection and its encrypted key
 (members can use it, cannot read it, cannot change it), the listed models and the default
@@ -179,7 +182,7 @@ history to forget about. Later accounts start empty.
 | Method and path | Who | Purpose |
 |---|---|---|
 | `GET /api/auth` | public | `{ authenticated, mode: 'accounts', account }` — no more than that |
-| `POST /api/auth/register` | public | Create an account; first one is the owner; signs the caller in (`201`) |
+| `POST /api/auth/register` | public | Create the configured first owner, or an opted-in member; signs the caller in (`201`) |
 | `POST /api/auth/login` | public | Email address and password (`200`) |
 | `POST /api/auth/password-reset/request` | public | Ask for a host-delivered code (`202`, identical answer either way) |
 | `POST /api/auth/password-reset/confirm` | public | Set a new password with a code; revokes that account's sessions |
@@ -195,7 +198,9 @@ header; nothing about CSRF handling changed.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `AETHERIS_MAX_ACCOUNTS` | `64` | Hard cap on accounts an open sign-up page can create |
+| `AETHERIS_OWNER_EMAIL` | unset | Required by the self-hosted Core entrypoint to bootstrap the first owner; signup remains closed until configured |
+| `AETHERIS_ALLOW_ACCOUNT_REGISTRATION` | `false` | Explicitly opt into member registrations after owner creation |
+| `AETHERIS_MAX_ACCOUNTS` | `1` self-hosted; `64` hosted adapter | Hard cap; self-host accepts 1–10000; raise above one deliberately when enabling members |
 | `AETHERIS_PRINT_RESET_CODES` | `false` | Also print a password-reset code on the Core console |
 | `AETHERIS_COOKIE_SECURE` | `true` | Unchanged; `false` only for deliberate HTTP local development |
 | `AETHERIS_COOKIE_SAMESITE` | `strict` | `strict`, `lax` or `none`. Use `none` when the web app is embedded in another site; it requires `AETHERIS_COOKIE_SECURE=true`, and Core refuses to start without it |

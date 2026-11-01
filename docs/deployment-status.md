@@ -24,6 +24,6 @@ The proxy's serverless function limit is 60 seconds; Core's upstream time budget
 
 ## Security gate
 
-Public registration is currently open, and the first account becomes owner. There is no controlled owner bootstrap or registration lock. Do not expose this service for real users until that is fixed and tested. `AETHERIS_TRUSTED_WEB_ORIGINS` is a browser-origin/CSRF control, not an authentication boundary; direct HTTP clients can forge an `Origin` header.
+The self-hosted Core entrypoint now requires an operator-configured `AETHERIS_OWNER_EMAIL` for first-owner bootstrap and closes member registration by default; repository tests cover both. The Vercel/Supabase adapter remains a separate preserved deployment path with its existing `AETHERIS_BOOTSTRAP_EMAIL` and `AETHERIS_REGISTRATION_ENABLED` controls; no live hosted deployment verification has been performed here. Before exposing either deployment, verify its actual environment settings and account policy. `AETHERIS_TRUSTED_WEB_ORIGINS` is a browser-origin/CSRF control, not an authentication boundary; direct HTTP clients can forge an `Origin` header.
 
 The smoke script `scripts/production-smoke.mjs` checks a pre-provisioned dedicated account through the configured Vercel-to-Core path. It does not create or delete accounts. Persistence modes write and remove a synthetic marker and should only be used with a dedicated test account after the security gate is resolved; never use a real user's account or content.

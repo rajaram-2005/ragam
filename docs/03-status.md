@@ -7,11 +7,11 @@ something does not work, it says so and says why.
 
 **Core test environment used for the verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test totals: 1958 cases across the three suites** (Core 1035, Web 101, Fabric 822). The last successful GitHub Actions run before the current hosted-function work was [41271512048](https://github.com/rajaram-2005/ragam/actions/runs/41271512048) at `1dbbf51`; the current Vercel/Supabase integration changes have not yet completed CI. The current full Core, Web, and Fabric suites have all passed locally; the focused Supabase/docs/schema set also passed. The repository now contains the Vercel Core Function entrypoint and Supabase account/session, provider, audit, memory/knowledge, styles, and bounded private-media wiring. The user reports that only the baseline SQL migration has been applied in Supabase; no subsequent migration has been verified, no data has been transferred, and no Vercel project settings or deployment have been changed by the agent.
+**Test totals: 1961 cases across the three suites** (Core 1038, Web 101, Fabric 822). The last successful GitHub Actions run before this self-hosted change was [41282221806](https://github.com/rajaram-2005/ragam/actions/runs/41282221806); Supabase Preview was skipped, and no hosted-service verification has been performed. In this workspace the focused owner/bootstrap and account tests pass (23/23), documentation tests pass (49/49), Web tests pass (101/101), and the Vite production build succeeds. The full Core suite was attempted: 1027/1038 passed, with 11 environment-dependent failures because the pinned Pro/Max model artifacts and Python NumPy dependencies are not installed here. Docker/Podman are unavailable locally; the new GitHub Actions Compose build, health, persistence and restore job has not yet run. No hosted data has been transferred, and no Vercel/Supabase settings or deployments have been changed.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `PATH=.venv/bin:$PATH node --test test/*.test.mjs` | **1035 tests** (80 files; 1035/1035 passed with Python multimodal dependencies and the pinned Pro/Max artifact archive installed outside Git and checksum-verified) |
+| `services/core` | `node --test test/*.test.mjs` | **1038 tests** (80 files; this workspace: 1027 passed, 11 environment failures; the focused self-host bootstrap/account tests passed 23/23) |
 | `services/fabric` | `PATH=.venv/bin:$PATH npm run test:fabric` | **822 tests** (42 files; local run passed) |
 | `apps/web` | `npm run test:web` | **101 tests** (5 files; 101/101 passed locally) |
 | `apps/web` build | `npm run build --prefix apps/web` | production bundle built successfully locally |
@@ -242,7 +242,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Implemented and tested (1035 tests)
+### `services/core` — Implemented and tested (1038 tests)
 
 | Subsystem | Status | Notes |
 |---|---|---|

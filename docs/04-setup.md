@@ -31,25 +31,28 @@ No GPU is required for anything in this repository. No model weights are downloa
 git clone https://github.com/rajaram-2005/ragam.git aetheris-omni
 cd aetheris-omni
 
-cp .env.example .env                    # optional — every value has a default
+cp .env.example .env                    # reference for values; Node does not load .env automatically
 
-# 1. the core service (Node, no install step)
-node services/core/src/server.mjs
+# 1. the core service (Node, no install step); configure this before the first launch
+AETHERIS_OWNER_EMAIL=you@example.com node services/core/src/server.mjs
 
 # 2. the web app (separate terminal)
 cd apps/web && npm install && npm run dev
 ```
 
 Open the URL Vite prints. It proxies `/api` to the core service, so the browser
-never needs to know where the backend lives. Then **create the first account** at
-`#/signup` — it becomes the owner, and only the owner can connect a gateway (§7).
+never needs to know where the backend lives. The first account must use the exact
+`AETHERIS_OWNER_EMAIL` configured for Core; it becomes the owner, and only the owner
+can connect a gateway (§7). Member registration is closed until the operator
+explicitly enables it. For Docker deployment, persistent volumes and backup/restore,
+see [the self-hosted deployment guide](22-self-hosted-deployment.md).
 
 Expected startup banner from the core, on a fresh installation:
 
 ```
 Aetheris online-only API listening on 0.0.0.0:8790
   data dir   /home/you/aetheris-omni/.aetheris-data/online
-  sign-in    no accounts yet — open the web app and create the first one; it becomes the owner
+  sign-in    owner bootstrap is limited to AETHERIS_OWNER_EMAIL; member registration is closed by default
 Configure an online gateway (LiteLLM, Ollama or llama.cpp server) in Provider Settings. No local inference or automatic model downloads.
 ```
 
@@ -79,6 +82,9 @@ npm run core
 | `AETHERIS_CORE_PORT` | `8790` | Explicit bind-port override; when unset, the active entry uses the host-provided `PORT` before falling back to `8790` |
 | `PORT` | *(managed host supplied)* | The hosting platform supplies the listening port; ignored when `AETHERIS_CORE_PORT` is explicitly set |
 | `AETHERIS_ONLINE_DATA_DIR` | `./.aetheris-data/online` | Active online account/provider/SQLite data directory; place on persistent storage in production |
+| `AETHERIS_OWNER_EMAIL` | unset | Required to bootstrap the first self-hosted owner; no email means registration stays closed |
+| `AETHERIS_ALLOW_ACCOUNT_REGISTRATION` | `false` | Explicit opt-in to member registration after owner creation |
+| `AETHERIS_MAX_ACCOUNTS` | `1` self-hosted | Account cap; deliberately increase before enabling members |
 | `AETHERIS_TRUSTED_WEB_ORIGINS` | *(empty)* | Exact HTTPS browser origins accepted through the Vercel same-origin API proxy; comma-separated, no wildcard |
 | `AETHERIS_COOKIE_SECURE` | `true` | Keep Secure on for production HTTPS cookies |
 | `AETHERIS_COOKIE_SAMESITE` | `strict` | Safe with the Vercel same-origin proxy; `none` is only for genuinely cross-site embedding and requires Secure |
@@ -264,11 +270,11 @@ curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed4
 PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
 ```
 
-The pinned archive includes the model manifests and checksum list. A full successful run validates all 1035 cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
+The pinned archive includes the model manifests and checksum list. A full successful run validates all 1038 Core cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-npm test                  # all three suites (1958 tests)
-npm run test:core         # 1035
+npm test                  # all three suites (1961 tests)
+npm run test:core         # 1038
 npm run test:web          # 101
 npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
@@ -323,7 +329,7 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 1035 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. The last green CI before the current hosted-function changes was [41271512048](https://github.com/rajaram-2005/ragam/actions/runs/41271512048) at `1dbbf51`; the current integration changes still need CI and live Preview verification. |
+| **Core service** | Current suite: 1038 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. The latest pre-self-host CI run was [41282221806](https://github.com/rajaram-2005/ragam/actions/runs/41282221806); the current Compose build/restore job and any live deployment still require separate verification. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 101 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docs** | The 49-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |

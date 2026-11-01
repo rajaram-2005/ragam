@@ -123,7 +123,7 @@ export function readInstallationDoc(name) {
 
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null, providerStore = null, auditLedger = null }) {
+  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, ownerEmail = undefined, registrationEnabled = true, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null, providerStore = null, auditLedger = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
     // should refuse without leaving a half-written data directory behind.
     const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
@@ -164,7 +164,7 @@ export class OnlineApp {
     // Accounts replace the operator token file. Every auth event lands in the same
     // ledger as everything else, naming the account id — which is the difference
     // between "the gateway was changed" and "this account changed the gateway".
-    this.accounts = accountStore ?? new AccountStore({ dir: this.dir, maxAccounts, onResetCode, audit: (event) => this.ledger.record(event) })
+    this.accounts = accountStore ?? new AccountStore({ dir: this.dir, maxAccounts, ownerEmail, registrationEnabled, onResetCode, audit: (event) => this.ledger.record(event) })
     this.remoteAccountStore = Boolean(accountStore)
     // Account context is opened on first use. The local path keeps isolated SQLite stores;
     // an injected async factory can provide durable, account-filtered repositories for a
