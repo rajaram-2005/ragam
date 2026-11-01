@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 39,916 source lines, 26,212 test lines
+### `services/core` — 39,915 source lines, 26,212 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -139,7 +139,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `storage/supabase-account-store.mjs` | 286 | Supabase-backed account records, scrypt authentication, password recovery and distributed login throttles |
 | `storage/supabase-style-store.mjs` | 81 | Async account-filtered style preference persistence with validated IDs and explicit-null semantics |
 | `storage/supabase-memory-store.mjs` | 559 | Account-filtered async memory/session repository with BM25 rebuilt from approved rows and transactional SQL RPCs for approval, deletion, and append semantics; selected by the hosted Vercel startup factory |
-| `storage/supabase-knowledge-store.mjs` | 423 | Account-filtered async knowledge repository with bounded scans, bulk ACL reads, transactional document/chunk/ACL insertion and purge, opaque embeddings, and exact statistics |
+| `storage/supabase-knowledge-store.mjs` | 422 | Account-filtered async knowledge repository with bounded scans, bulk ACL reads, transactional document/chunk/ACL insertion and purge, opaque embeddings, and exact statistics |
 | `knowledge/supabase-pipeline.mjs` | 344 | Async account-scoped BM25 pipeline preserving ACL/classification filtering, citations, grounded evidence, evaluation, purge, and stats; refreshes bounded persistent snapshots per search for serverless cross-instance visibility |
 | `knowledge/pipeline-utils.mjs` | 68 | Shared pure file validation and token-overlap helpers, re-exported by the local SQLite pipeline and used by the Supabase pipeline without importing `node:sqlite` |
 | `online/supabase-context.mjs` | 40 | Builds per-account Supabase memory/knowledge stores for the injectable async context factory; requires an explicit deployment-specific media queue rather than claiming local-disk durability |
