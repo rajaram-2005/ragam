@@ -280,9 +280,9 @@ Generated media is validated by **magic bytes**, not by a provider's claim.
   generation"*) and one below 8 KB (*"too small to be a genuine generated clip"*).
 
 The job fails with those reasons recorded, the refusal is audited, and the UI shows
-the rejection reasons instead of a placeholder frame. `MediaPreview` additionally
-refuses to embed anything whose sniffed kind is not video — a second, independent
-check, so a stored artifact can never be rendered as video it is not.
+the failure instead of a placeholder frame. The Video area renders only a succeeded
+job that has an artifact; it relies on the backend's validation result and does not
+independently re-sniff artifact bytes.
 
 Every stored artifact carries format, mime, byte length and **sha256**, which is
 what makes "this is a generated video" checkable rather than asserted.

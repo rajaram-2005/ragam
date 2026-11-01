@@ -107,6 +107,9 @@ function varsReadByCode() {
   }
   scan(resolve(CORE, 'src'))
   scan(resolve(REPO, 'apps/web'))
+  // Compose interpolation is also a live deployment configuration surface.
+  const compose = readFileSync(resolve(REPO, 'compose.yaml'), 'utf8')
+  for (const match of compose.matchAll(/\$\{([A-Z][A-Z0-9_]*)/g)) found.add(match[1])
   return found
 }
 
@@ -390,7 +393,7 @@ test('every document that restates a suite total agrees with docs/03', () => {
     [doc.status, '**545 / 545**'], [doc.status, '**89 / 89**'], [doc.status, '**Test totals: 1209 passing'],
     [doc.status, 'Implemented and tested (545 tests)'], [doc.status, 'Implemented and tested (89 tests)'],
     [doc.status, '`apps/web`; 89 tests including'], [doc.status, '`accounts.test.mjs` (16 tests)'],
-    [doc.status, '199.64 kB'], [doc.status, '61.59 kB gzip'], [doc.status, '`test/render.test.mjs` (28 tests)'],
+    [doc.status, '199.64 kB'], [doc.status, '61.59 kB gzip'], [doc.status, '`test/render.test.mjs` (29 tests)'],
     [doc.setup, 'all three suites (1209 tests)'], [doc.setup, 'npm run test:core         # 545'],
     [doc.setup, 'npm run test:web          # 89'], [doc.setup, '| **Core service** | 545 tests pass'],
     [doc.setup, '| **Web app** | `npm ci`, 89 tests'], [doc.setup, 'npm test             # 89 tests'],
@@ -712,33 +715,33 @@ test('the status doc reports the real test totals', () => {
   // media workflow, the industry packs, the benchmark harness and the release verifier.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 80)
-  assert.equal(count('apps/web/test', /\.test\.mjs$/), 5)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 68)
+  assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**1035 tests**'), 'core test inventory must be stated')
+  assert.ok(status.includes('**970 tests**'), 'core test inventory must be stated')
   assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
-  assert.ok(status.includes('**101 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1958 cases across the three suites'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('**99 tests**'), 'web test inventory must be stated')
+  assert.ok(status.includes('1891 cases across the three suites'), 'the grand total must equal the sum of the suites')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1958 tests: core 1035, web 101, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('1891 tests: core 970, web 99, fabric 822'),
     'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1958 run in CI'),
+  assert.ok(squash(doc.readme()).includes('All 1891 run in CI'),
     'README must state the same totals where it describes CI')
-  assert.ok(status.includes('(42 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(68 files'), 'the file count must move with the suite')
 
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(1035), `core heading must say 1035, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(970), `core heading must say 970, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(101), `web heading must say 101, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(99), `web heading must say 99, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1958,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1958`,
+    1891,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1891`,
   )
 })
 
@@ -798,7 +801,8 @@ test('the account and sign-in document describes the code that implements it', (
   assert.match(accounts, /export const RESET_CODE_TTL_MS = 15 \* 60_000/)
   assert.ok(text.includes('fifteen minutes'), 'docs/20 states the reset lifetime in the words the page uses')
   assert.equal(number(accounts, 'DEFAULT_MAX_ACCOUNTS'), 64)
-  assert.ok(new RegExp('^AETHERIS_MAX_ACCOUNTS=64$', 'm').test(doc.env()), '.env.example must state the real default')
+  assert.ok(new RegExp('^AETHERIS_MAX_ACCOUNTS=1$', 'm').test(doc.env()), '.env.example must state the single-user self-host default')
+  assert.ok(new RegExp('^AETHERIS_ALLOW_ACCOUNT_REGISTRATION=false$', 'm').test(doc.env()), 'member registration must be opt-in')
   assert.ok(new RegExp('^AETHERIS_PRINT_RESET_CODES=false$', 'm').test(doc.env()), '.env.example must ship the console-printing switch off')
 
   // The cookie policy an embedded deployment needs, and the refusal that keeps the
@@ -832,10 +836,19 @@ test('the account and sign-in document describes the code that implements it', (
   assert.ok(readme.includes('access-token file and its login route have been removed'),
     'the README must state that the token sign-in is gone')
   assert.ok(readme.includes('create an account'), 'the README must tell the reader how to get in now')
+  assert.ok(readme.includes('## Supported user interfaces'), 'the README must document end-user entry points')
+  assert.ok(readme.includes('scripts/Start-Ragam.cmd') && readme.includes('scripts/Stop-Ragam.cmd'),
+    'the README must link the Windows start and stop launchers')
+  assert.ok(readme.includes('http://localhost') && readme.includes('same-origin `/api`'),
+    'the README must describe the browser UI and its local API route')
+  for (const path of ['scripts/Start-Ragam.cmd', 'scripts/Stop-Ragam.cmd', 'compose.yaml']) {
+    assert.ok(exists(resolve(REPO, path)), `the README-supported interface artifact ${path} must exist`)
+  }
   assert.doesNotMatch(squash(doc.phase2()), /paste it into the \*\*installation sign-in form\*\*/)
   assert.ok(squash(doc.phase2()).includes('Sign-in is an account, not a token'), 'docs/19 must point at the change')
-  assert.ok(text.includes('Sign-up is open'), 'the account model states that registration is open')
-  assert.ok(text.includes('first account created is the owner'), 'the owner rule is documented')
+  assert.ok(text.includes('Self-hosted signup is closed by default'), 'the account model states the secure self-host default')
+  assert.ok(text.includes('AETHERIS_OWNER_EMAIL'), 'the owner bootstrap setting is documented')
+  assert.ok(text.includes('AETHERIS_ALLOW_ACCOUNT_REGISTRATION=true'), 'member registration opt-in is documented')
 
   // Reset delivery is the part most likely to be over-claimed, so the denial is checked
   // as carefully as the claim: no mail transport means no "check your inbox".
@@ -1468,6 +1481,28 @@ test('the Markdown model card keeps the two limitation lists distinct', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Docker-only deployment: obsolete hosted integrations stay out of the release
+// ---------------------------------------------------------------------------
+
+test('deployment integrations and hosted-only instructions are absent from the repository', () => {
+  for (const path of [
+    'apps/web/api/[...path].js', 'apps/web/vercel.json',
+    'services/core/api/[...path].js', 'services/core/vercel.json',
+    'services/core/src/vercel', 'services/core/src/storage/supabase-admin.mjs',
+    'services/core/src/online/supabase-context.mjs',
+    'services/core/src/knowledge/supabase-pipeline.mjs',
+    'supabase/migrations', 'docs/supabase-migration-plan.md',
+    'docs/deployment-status.md', 'scripts/production-smoke.mjs',
+  ]) assert.equal(exists(resolve(REPO, path)), false, `${path} must not ship in the Docker-only repository`)
+
+  const setup = doc.setup()
+  assert.ok(setup.includes('Docker Compose only'), 'end-user setup must state the supported deployment')
+  assert.ok(!/Vercel|Supabase|CORE_API_URL/.test(setup), 'setup must not instruct users to configure removed hosted integrations')
+  assert.ok(!/SUPABASE_(?:URL|SERVICE_ROLE_KEY)=/.test(read('.env.example')),
+    '.env.example must not retain hosted database credentials')
+})
+
+// ---------------------------------------------------------------------------
 // CI: the gate that keeps every number above honest
 // ---------------------------------------------------------------------------
 
@@ -1483,8 +1518,10 @@ test('CI exists, covers all three components, and is documented', () => {
   // The zero-dependency property of services/core is asserted in CI, not just here.
   assert.ok(workflow.includes('services/core declares zero dependencies'))
   assert.ok(workflow.includes('services/core/node_modules'), 'CI must reject an install step appearing in core')
-  assert.ok(workflow.includes("node --check 'services/core/api/[...path].js'"),
-    'CI must syntax-check the hosted Core Function entrypoint')
+  assert.ok(workflow.includes('node --check scripts/self-host-smoke.mjs'),
+    'CI must syntax-check the Docker Compose smoke entrypoint')
+  assert.ok(!workflow.includes('services/core/api/[...path].js'),
+    'CI must not retain a hosted Core Function check')
 
   // Nothing may install torch: services/fabric is NumPy-only by design, and on a
   // GPU-less runner pip resolves torch to the CUDA build.
@@ -1554,15 +1591,17 @@ test('the CI workflow is valid YAML with the structure it claims', () => {
   assert.equal(cron[1].split(/\s+/).length, 5, `cron must have five fields, got ${cron[1]}`)
 
   // Scope to the jobs: block. The on: trigger block is indented the same way, so an
-  // unscoped /^  ([a-z]+):$/ also matched 'push:' and reported five jobs. The list is
-  // written out rather than counted so a job cannot be added without this noticing.
+  // unscoped pattern also matches 'push:'. The explicit list catches additions, including
+  // the hyphenated self-hosted integration job.
   const jobsBlock = workflow.slice(workflow.indexOf('\njobs:'))
-  const jobs = [...jobsBlock.matchAll(/^  ([a-z]+):$/gm)].map((m) => m[1])
-  assert.deepEqual(jobs, ['core', 'fabric', 'web', 'release', 'docs'], `unexpected job list: ${jobs.join(', ')}`)
+  const jobs = [...jobsBlock.matchAll(/^  ([a-z-]+):$/gm)].map((m) => m[1])
+  assert.deepEqual(jobs, ['core', 'fabric', 'web', 'self-hosted', 'release', 'docs'], `unexpected job list: ${jobs.join(', ')}`)
+  assert.ok(jobsBlock.includes('docker compose -f compose.yaml config -q'), 'self-host CI must validate Compose')
+  assert.ok(jobsBlock.includes('Cold-backup the named volume'), 'self-host CI must test persistence and restoration')
 
   // Every job must check the code out before doing anything with it.
-  const perJob = jobsBlock.split(/^  [a-z]+:$/m).slice(1)
-  assert.equal(perJob.length, 5)
+  const perJob = jobsBlock.split(/^  [a-z-]+:$/m).slice(1)
+  assert.equal(perJob.length, 6)
   for (const [index, body] of perJob.entries()) {
     assert.ok(body.includes('actions/checkout@'), `job ${jobs[index]} must check out the repository`)
     assert.ok(body.includes('run:'), `job ${jobs[index]} must actually run something`)

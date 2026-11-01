@@ -100,7 +100,6 @@ async function loadComponents() {
     "export { ResetRequestForm, ResetConfirmForm } from '../../src/pages/ForgotPasswordPage.jsx'",
     "export { default as AccountCard } from '../../src/components/AccountCard.jsx'",
     "export { Shell, StatusCard } from '../../src/components/Shell.jsx'",
-    "export { JobTable, JobDetail } from '../../src/components/Jobs.jsx'",
     "export * as ui from '../../src/components/ui.jsx'",
   ].join('\n'))
 
@@ -253,7 +252,8 @@ test('the create-account page states the rules before the form is submitted', ()
   assert.match(markup, /autoComplete="new-password"/)
   assert.equal((markup.match(/type="password"/g) ?? []).length, 2, 'a password and its confirmation')
   assert.match(markup, /Confirm password/)
-  assert.match(markup, /first account created on an installation becomes its/, 'who owns the installation is stated where the account is made')
+  assert.match(markup, /operator must configure the first account/, 'the operator-controlled owner bootstrap is explained')
+  assert.match(markup, /Registration is closed after owner setup/, 'member registration is clearly opt-in')
   assert.match(markup, /href="#\/signin"/)
 })
 
@@ -382,12 +382,13 @@ test('the Klyvaron panel names the provider behind each tier and offers no model
   assert.doesNotMatch(markup, /<(button|select)\b/)
 })
 
-test('Plugins does not offer executable unreviewed sample installations', () => {
-  const markup=render('PluginsArea',React.createElement(components.PluginsArea))
-  assert.match(markup,/Arbitrary extension installation and execution are disabled/)
-  assert.match(markup,/No reviewed plugin is loaded/)
-  assert.doesNotMatch(markup,/Demo Text Tools|Install plugin/)
-
+test('Plugins offers the bounded remote contract without executable code installation', () => {
+  const markup = render('PluginsArea', React.createElement(components.PluginsArea, { account: { role: 'owner' } }))
+  assert.match(markup, /Connect a Ragam HTTP plugin server/)
+  assert.ok(markup.includes('ragam-plugin/1'))
+  assert.ok(markup.includes('service.external'))
+  assert.match(markup, /Remote code is never installed/)
+  assert.doesNotMatch(markup, /Demo Text Tools|Install plugin/)
 })
 
 test('the policy is displayed but never rendered as a control', () => {
@@ -404,12 +405,11 @@ test('the policy is displayed but never rendered as a control', () => {
   }
 })
 
-test('MCP renders honestly before any server is loaded', () => {
-  const markup=render('McpArea',React.createElement(components.McpArea))
-  assert.match(markup,/No tool matches/)
-  assert.match(markup,/No remote MCP connection is configured/)
-  assert.match(markup,/enforced server-side/)
-
+test('MCP describes remote calls as external and results as untrusted', () => {
+  const markup = render('McpArea', React.createElement(components.McpArea))
+  assert.match(markup, /No tool matches/)
+  assert.match(markup, /arguments are sent to that endpoint only after you approve each call/)
+  assert.match(markup, /untrusted data/)
 })
 
 test('the media areas render their validation surface', () => {
@@ -421,13 +421,6 @@ test('the media areas render their validation surface', () => {
     // still image off as video is a requirement, not a nicety.
     assert.ok(/job|generat/i.test(markup), `${name} must render its generation surface`)
   }
-})
-
-test('the job table renders an empty state rather than crashing', () => {
-  const markup = render('JobTable (empty)', React.createElement(components.JobTable, {
-    jobs: [], onSelect: noop, selectedId: null, kind: 'image',
-  }))
-  assert.ok(markup.length > 0)
 })
 
 test('the shared UI primitives all render', () => {
@@ -693,7 +686,7 @@ test('UserTrainingPanel defaults to unpaired user-computer-first mode and never 
   }))
   assert.match(unpaired, /No local worker is paired\. Your computer is not connected/)
   assert.match(unpaired, /never runs neural weight training silently from ordinary chat messages/)
-  assert.match(unpaired, /max 120s including finalization/)
+  assert.match(unpaired, /max 120s including setup &amp; finalization/)
 })
 
 test('UserTrainingPanel discloses real paired worker hardware, mode-downgrade approval gate, and rollback control', () => {

@@ -19,6 +19,7 @@ import { classifyText, redactDeep } from '../policy/classify.mjs'
 import { mostSensitiveDataClass } from '../policy/egress.mjs'
 import { PluginRegistry } from '../plugins/registry.mjs'
 import { McpRegistry, RISK, SERVER_KINDS } from '../mcp/layer.mjs'
+import { RemoteServerManager } from './remote-servers.mjs'
 import { PROVIDERS, catalogueReport, describeProvider } from '../providers/catalog.mjs'
 import { normaliseCredential, wireFor } from '../providers/wires/index.mjs'
 import { KLYVARON_TIERS, MODALITIES, KLYVARON_NOTE, tierFor, provenanceFor, resolveTier } from './klyvaron.mjs'
@@ -123,7 +124,7 @@ export function readInstallationDoc(name) {
 
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null, providerStore = null, auditLedger = null }) {
+  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, ownerEmail = undefined, registrationEnabled = true, onResetCode = null, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null, providerStore = null, auditLedger = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
     // should refuse without leaving a half-written data directory behind.
     const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
@@ -164,12 +165,12 @@ export class OnlineApp {
     // Accounts replace the operator token file. Every auth event lands in the same
     // ledger as everything else, naming the account id — which is the difference
     // between "the gateway was changed" and "this account changed the gateway".
-    this.accounts = accountStore ?? new AccountStore({ dir: this.dir, maxAccounts, onResetCode, audit: (event) => this.ledger.record(event) })
-    this.remoteAccountStore = Boolean(accountStore)
-    // Account context is opened on first use. The local path keeps isolated SQLite stores;
-    // an injected async factory can provide durable, account-filtered repositories for a
-    // serverless runtime. Cache in-flight factories too, so simultaneous first requests do
-    // not open duplicate stores or race migrations.
+    this.accounts = accountStore ?? new AccountStore({ dir: this.dir, maxAccounts, ownerEmail, registrationEnabled, onResetCode, audit: (event) => this.ledger.record(event) })
+    this.injectedAccountStore = Boolean(accountStore)
+    // Account context is opened on first use. The Docker path keeps isolated SQLite stores;
+    // the optional factory is an extension seam for an explicitly injected storage backend.
+    // Cache in-flight factories too, so simultaneous first requests do not open duplicate
+    // stores or race initialization.
     this.contexts = new Map()
     // Skills are installation-wide reviewed procedures, separate from plugins: a skill is text a
     // person selects, not code this service executes.
@@ -178,8 +179,11 @@ export class OnlineApp {
     // guesses a state from a message; this surface never does: no preference means no
     // instruction, and the chat route never infers one from what the user wrote.
     this.styles = styleStore ?? new StyleStore({ dir: join(this.dir, 'styles') })
-    this.plugins = new PluginRegistry({ ledger: this.ledger, grantedScopes: [], requireSignature: false })
-    this.mcp = new McpRegistry({ ledger: this.ledger, allowedRisks: [RISK.READ_ONLY] })
+    // User-managed HTTP plugins may request only service.external; calls still require
+    // explicit per-invocation approval. No local filesystem, terminal, credential or device
+    // scopes are made available to remote code.
+    this.plugins = new PluginRegistry({ ledger: this.ledger, grantedScopes: ['service.external'], requireSignature: false })
+    this.mcp = new McpRegistry({ ledger: this.ledger, allowedRisks: [RISK.READ_ONLY, RISK.EXTERNAL] })
     // One reviewed in-process server makes the MCP area a working surface without pretending a
     // remote connection exists. It reads the documentation shipped with this build; it cannot
     // write, reach the network or see an account's data, and its risk tier is read-only.
@@ -209,6 +213,33 @@ export class OnlineApp {
     this.plugins.install({ manifestVersion: 1, id: 'aetheris.online-status', name: 'Online connection status', version: '1.0.0', protocol: 'local_tool', builtin: true, author: 'Aetheris', license: 'MIT', scopes: [], description: 'Reviewed built-in: reads connection metadata only, never credentials.', capabilities: [{ name: 'status', description: 'Read online connection status.', readOnly: true, inputSchema: schema }] }, { handler: { status: () => this.readiness() } })
     this.plugins.enable('aetheris.online-status')
     this.mcp.registerServer({ id: 'aetheris.online', name: 'Aetheris online tools', kind: SERVER_KINDS.IN_PROCESS, tools: [{ name: 'connection.status', description: 'Read connection state, without credentials or network requests.', risk: RISK.READ_ONLY, scopes: [], inputSchema: schema, handler: () => this.readiness() }] })
+    this.mcp.registerServer({
+      id: 'aetheris.procedures',
+      name: 'Reviewed procedure catalogue',
+      kind: SERVER_KINDS.IN_PROCESS,
+      version: '1.0.0',
+      tools: [{
+        name: 'list-procedures',
+        description: 'List reviewed installation procedures and their state. Procedure text is not executed or treated as training.',
+        inputSchema: schema,
+        risk: RISK.READ_ONLY,
+        handler: () => ({ procedures: this.skills.list().skills.map(({ name, description, state, version, enabled }) => ({ name, description, state, version, enabled })) }),
+      }],
+    })
+    this.plugins.install({
+      manifestVersion: 1, id: 'aetheris.installation-guides', name: 'Installation guides', version: '1.0.0',
+      protocol: 'local_tool', builtin: true, author: 'Aetheris', license: 'MIT', scopes: [],
+      description: 'Reviewed in-process tools for reading the Markdown guides shipped with this installation.',
+      capabilities: [
+        { name: 'list.guides', description: 'List installed Markdown guides and their byte sizes.', readOnly: true, inputSchema: schema },
+        { name: 'read.guide', description: 'Read one installed guide by file name; output is bounded.', readOnly: true, inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'], additionalProperties: false } },
+      ],
+    }, { handler: {
+      'list.guides': () => ({ documents: listInstallationDocs() }),
+      'read.guide': ({ name }) => readInstallationDoc(name),
+    } })
+    this.plugins.enable('aetheris.installation-guides')
+    this.remoteServers = new RemoteServerManager({ dir: this.dir, gateway: this.gateway, credentialStore: this.store, mcp: this.mcp, plugins: this.plugins, ledger: this.ledger })
     this.nativeKlyvaron = new NativeKlyvaronHost({ root: join(this.dir, 'klyvaron'), dataDir: this.dir, ledger: this.ledger })
     this.qualificationRegistry = new RuntimeQualificationRegistry({
       statePath: join(this.dir, 'klyvaron', 'qualified-runtimes.json'),
@@ -1398,8 +1429,8 @@ export class OnlineApp {
    * Two buckets because one is not enough. The per-address bucket is what stops one
    * person's password being guessed at; the installation-wide bucket is what stops the
    * endpoint being used to keep scrypt busy, since each attempt costs a hash whether or
-   * not the address exists. The local AccountStore path uses process-local windows; the
-   * hosted store implements the same two buckets with shared atomic Postgres RPCs.
+   * not the address exists. The default local AccountStore uses process-local windows;
+   * an explicitly injected store may provide its own durable implementation.
    */
   throttleAuth(action, email, { perAddress = 12, perInstallation = 60, windowMs = 60_000 } = {}) {
     if (typeof this.accounts.throttleAuth === 'function') return this.accounts.throttleAuth(action, email, { perAddress, perInstallation, windowMs })
@@ -1418,8 +1449,8 @@ export class OnlineApp {
   }
   server() {
     const server = createServer(async (req, res) => {
-      // Hosted stores queue writes from legacy synchronous call sites. Do not let a serverless
-      // response finish until provider state and audit events are durable. If persistence fails,
+      // Local stores may queue writes from synchronous mutation handlers. Do not finish the
+      // response until provider state and audit events are durable. If persistence fails,
       // terminate the response rather than claim a successful mutation that will vanish.
       const originalEnd = res.end.bind(res)
       let endRequested = false
@@ -1468,7 +1499,7 @@ export class OnlineApp {
           const body = await readBody(req)
           await this.throttleAuth('register', body.email)
           const account = await this.accounts.register({ email: body.email, password: body.password })
-          if (!this.remoteAccountStore) this.adoptLegacyContext(account)
+          if (!this.injectedAccountStore) this.adoptLegacyContext(account)
           // Registering signs you in. Making a person repeat a password they typed ten
           // seconds ago is not a security control, it is a form.
           const token = await this.createSession(account)
@@ -1625,11 +1656,16 @@ export class OnlineApp {
         }
         if (req.method === 'POST' && path === '/api/klyvaron/worker/execute') {
           requireOwner()
+          // This absolute deadline begins at the user's Execute action, before request parsing
+          // and controller setup. The controller applies it only if planning selects interactive
+          // lightweight adaptation; other training modes remain separately disclosed.
+          const deadlineAt = Date.now() + 120_000
           const body = await readBody(req, { principal: session.accountId })
           return sendJson(res, 202, await this.trainingController.startAuthorizedJob({
             request: body?.request ?? {},
             consent: body?.consent ?? null,
             actor: session.accountId,
+            deadlineAt,
           }))
         }
         if (req.method === 'POST' && path === '/api/klyvaron/worker/infer') {

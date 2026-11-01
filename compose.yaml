@@ -1,0 +1,96 @@
+name: ragam
+
+services:
+  core:
+    build:
+      context: .
+      dockerfile: Dockerfile.core
+    image: ragam/core:local
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    environment:
+      NODE_ENV: production
+      AETHERIS_CORE_HOST: 0.0.0.0
+      AETHERIS_CORE_PORT: 8790
+      AETHERIS_ONLINE_DATA_DIR: /var/lib/ragam/online
+      AETHERIS_OWNER_EMAIL: ${AETHERIS_OWNER_EMAIL:-}
+      AETHERIS_ALLOW_ACCOUNT_REGISTRATION: ${AETHERIS_ALLOW_ACCOUNT_REGISTRATION:-false}
+      AETHERIS_MAX_ACCOUNTS: ${AETHERIS_MAX_ACCOUNTS:-1}
+      AETHERIS_COOKIE_SECURE: ${AETHERIS_COOKIE_SECURE:-true}
+      AETHERIS_COOKIE_SAMESITE: ${AETHERIS_COOKIE_SAMESITE:-strict}
+      AETHERIS_PRINT_RESET_CODES: ${AETHERIS_PRINT_RESET_CODES:-false}
+      AETHERIS_TRUSTED_ORIGINS: ${AETHERIS_TRUSTED_ORIGINS:-}
+      AETHERIS_LITELLM_TRUSTED_ORIGINS: ${AETHERIS_LITELLM_TRUSTED_ORIGINS:-}
+      AETHERIS_ONLINE_TIMEOUT_MS: ${AETHERIS_ONLINE_TIMEOUT_MS:-120000}
+    volumes:
+      - ragam-data:/var/lib/ragam
+    expose:
+      - "8790"
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8790/api/health').then(r => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: ragam/web:local
+    restart: unless-stopped
+    init: true
+    expose:
+      - "8080"
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/healthz]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    init: true
+    depends_on:
+      core:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    environment:
+      RAGAM_SITE_ADDRESS: ${RAGAM_SITE_ADDRESS:-http://localhost}
+    ports:
+      - "${RAGAM_BIND_ADDRESS:-127.0.0.1}:80:80"
+      - "${RAGAM_BIND_ADDRESS:-127.0.0.1}:443:443"
+      - "${RAGAM_BIND_ADDRESS:-127.0.0.1}:443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: [CMD-SHELL, "wget -q --spider http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  ragam-data:
+    name: ragam-data
+  caddy-data:
+    name: ragam-caddy-data
+  caddy-config:
+    name: ragam-caddy-config

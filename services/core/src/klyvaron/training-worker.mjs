@@ -346,6 +346,7 @@ export class LocalTrainingWorkerManager {
 
   /** Start a consent-verified local training worker process with enforced limits. */
   startJob({ planRequest = {}, consent = null, resumeFromJobId = null, actor = null } = {}) {
+    const requestStartedAt = Date.now()
     if ([...this.processes.values()].length > 0) {
       throw new TrainingWorkerError('Another local training worker is already running on this host.', {
         code: 'worker_busy',
@@ -354,6 +355,9 @@ export class LocalTrainingWorkerManager {
     }
 
     const prepared = this.prepareSetupPlan(planRequest)
+    const interactiveDeadlineAt = prepared.plan.mode === 'interactive_adaptation'
+      ? requestStartedAt + prepared.plan.resourceLimits.maxDurationMs
+      : null
 
     // Consent verification: bind to the stable preflight snapshot, not to live
     // resource measurements that fluctuate between prepareSetupPlan() and startJob().
@@ -465,6 +469,11 @@ export class LocalTrainingWorkerManager {
     if (resumeFromJobId) args.push('--resume')
 
     const threads = String(prepared.plan.resourceLimits.maxCpuThreads)
+    if (interactiveDeadlineAt !== null && Date.now() >= interactiveDeadlineAt) {
+      throw new TrainingWorkerError('Interactive adaptation reached its 120-second deadline during setup; no worker process was started.', {
+        code: 'interactive_adaptation_deadline', status: 408,
+      })
+    }
     const child = spawn(prepared.environment.software.pythonBinary, args, {
       cwd: REPO_ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -484,7 +493,7 @@ export class LocalTrainingWorkerManager {
       mode: prepared.plan.mode,
       state: 'running',
       actor,
-      authorizedAt: new Date().toISOString(),
+      authorizedAt: new Date(requestStartedAt).toISOString(),
       disclosureDigest: prepared.disclosureDigest,
       resumed: Boolean(resumeFromJobId),
       pid: child.pid ?? null,
@@ -507,15 +516,24 @@ export class LocalTrainingWorkerManager {
       detail: { jobId, preset: job.preset, mode: job.mode, disclosureDigest: job.disclosureDigest },
     })
 
+    const deadlineDelayMs = interactiveDeadlineAt === null
+      ? prepared.plan.resourceLimits.maxDurationMs
+      : Math.max(1, interactiveDeadlineAt - Date.now())
     const deadlineTimer = setTimeout(() => {
-      if (this.processes.has(jobId)) {
+      const processRecord = this.processes.get(jobId)
+      if (processRecord) {
+        job.timedOut = true
         job.cancelReason = `Reached configured ${job.mode} duration ceiling (${job.resourceLimits.maxDurationMs} ms).`
         child.kill('SIGTERM')
+        processRecord.killTimer = setTimeout(() => {
+          if (this.processes.has(jobId)) child.kill('SIGKILL')
+        }, 250)
+        processRecord.killTimer.unref()
       }
-    }, prepared.plan.resourceLimits.maxDurationMs)
+    }, deadlineDelayMs)
     deadlineTimer.unref()
 
-    this.processes.set(jobId, { child, deadlineTimer })
+    this.processes.set(jobId, { child, deadlineTimer, killTimer: null })
 
     const appendLine = (raw) => {
       for (const line of String(raw).split(/\r?\n/).filter(Boolean)) {
@@ -539,11 +557,18 @@ export class LocalTrainingWorkerManager {
     child.stderr.on('data', appendLine)
     child.on('exit', (code, sig) => {
       clearTimeout(deadlineTimer)
+      clearTimeout(this.processes.get(jobId)?.killTimer)
       this.processes.delete(jobId)
       job.exitCode = code
       job.completedAt = new Date().toISOString()
       const ckptExists = existsSync(checkpointPath)
-      if (code === 0) {
+      if (job.timedOut) {
+        job.state = 'failed_time_limit'
+        job.error = {
+          code: job.mode === 'interactive_adaptation' ? 'exceeded_interactive_120s_limit' : 'duration_limit_reached',
+          message: job.cancelReason ?? 'The configured training deadline was reached.',
+        }
+      } else if (code === 0) {
         job.state = 'completed'
       } else if (job.cancelRequested || code === 130 || sig === 'SIGTERM') {
         job.state = ckptExists ? 'cancelled_checkpointed' : 'cancelled'
@@ -661,6 +686,7 @@ export class LocalTrainingWorkerManager {
     this.closed = true
     for (const [jobId, entry] of this.processes.entries()) {
       clearTimeout(entry.deadlineTimer)
+      clearTimeout(entry.killTimer)
       const job = this.jobs.get(jobId)
       if (job) job.cancelRequested = true
       try { entry.child.kill('SIGTERM') } catch {}

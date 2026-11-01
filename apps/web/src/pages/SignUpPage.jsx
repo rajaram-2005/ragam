@@ -6,12 +6,10 @@ import AuthLayout, { AuthLink } from './AuthLayout.jsx'
 
 // The create-account page.
 //
-// Sign-up is open: anybody who can reach this installation can make an account on it.
-// That is a deliberate choice and it has two consequences the page states instead of
-// hiding. The first account created owns the installation and is the only one that can
-// change its gateway connection, so whoever sets the product up keeps the keys; and
-// every account chats through that one gateway, so its operator is paying for all of
-// them. Both are said here, in the place where the decision is being made.
+// The operator controls the first-owner bootstrap and member registration is closed
+// by default. State that here rather than implying the public form is always available:
+// only the configured email can create the owner, and the operator must explicitly opt
+// into member accounts after that. Every account shares the installation's gateway.
 //
 // The confirm field is a client-side convenience. It is not sent to the server, which
 // takes one password and judges it by its own policy — a rule the client cannot weaken.
@@ -78,9 +76,10 @@ export default function SignUpPage({ checking = false, error = null, onError = (
         </div>
       </form>
       <p className="small auth-note">
-        The first account created on an installation becomes its <strong>owner</strong> and is the only one
-        that can change the gateway connection or its key. Later accounts are members: they can chat, keep
-        their own history, memory and knowledge, and use the gateway the owner configured.
+        The operator must configure the first account's email address. That account becomes the <strong>owner</strong>
+        and can change the gateway connection or its key. Registration is closed after owner setup unless the
+        operator explicitly enables member accounts; members share the configured gateway but keep their own
+        history, memory and knowledge.
       </p>
     </AuthLayout>
   )

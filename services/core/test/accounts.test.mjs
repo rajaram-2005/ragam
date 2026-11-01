@@ -15,14 +15,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 import { COOKIE_SAME_SITE, OnlineApp, SESSIONS, RESET_REQUESTED_MESSAGE } from '../src/online/app.mjs'
 import { main, parseTrustedWebOrigins } from '../src/server.mjs'
-import { proxyRequest } from '../../../apps/web/api/[...path].js'
 import {
   AccountStore, MAX_FAILED_LOGINS, PASSWORD_MIN_LENGTH, ROLES, RESET_CODE_TTL_MS,
   hashPassword, normalizeEmail, passwordProblems, verifyPassword,
@@ -55,7 +54,8 @@ async function fixture(t, options = {}) {
   f.gatewayUrl = await listen(gateway)
   const create = () => new OnlineApp({
     dataDir: dir, trustedOrigins: [f.gatewayUrl], timeoutMs: options.timeoutMs ?? 2000,
-    maxAccounts: options.maxAccounts, secureCookie: options.secureCookie,
+    maxAccounts: options.maxAccounts, ownerEmail: options.ownerEmail, registrationEnabled: options.registrationEnabled,
+    secureCookie: options.secureCookie,
     cookieSameSite: options.cookieSameSite, onResetCode: (info) => f.resetCodes.push(info), sessionStore: options.sessionStore, accountStore: options.accountStore,
   })
   f.app = create()
@@ -195,9 +195,9 @@ test('auth routes delegate session creation, lookup and logout to the durable se
   assert.ok(operations.some(([name]) => name === 'revoke'))
 })
 
-test('auth routes await an injected hosted account store and do not adopt local legacy files', async (t) => {
+test('auth routes await an injected account store and do not adopt local legacy files', async (t) => {
   const account = { id: '74007a44-19b0-4ba7-a9a6-a417338b0182', email: OWNER.email, role: 'owner' }
-  const token = 'hosted-session-token-with-enough-length-123456'
+  const token = 'injected-session-token-with-enough-length-123456'
   const calls = []
   const accountStore = {
     async throttleAuth(action) { calls.push(['throttleAuth', action]) },
@@ -219,7 +219,7 @@ test('auth routes await an injected hosted account store and do not adopt local 
   assert.equal(result.data.account.id, account.id)
   assert.equal(cookieOf(result), `aetheris_session=${token}`)
   assert.deepEqual(calls.slice(0, 3), [['throttleAuth', 'register'], ['register', OWNER.email], ['createSession', account.id]])
-  assert.equal(f.app.authAttempts.size, 0, 'hosted rate limits must not be held only in the function process')
+  assert.equal(f.app.authAttempts.size, 0, 'injected-store rate limits must not be held only in the process')
   const status = await f.request('GET', '/api/auth', undefined, { cookie: cookieOf(result) })
   assert.equal(status.status, 200)
   assert.equal(status.data.authenticated, true)
@@ -382,7 +382,84 @@ test('the cookie SameSite policy is an operator choice, and the unusable combina
   assert.deepEqual([...COOKIE_SAME_SITE], ['strict', 'lax', 'none'], 'the accepted values are documented in docs/20')
 })
 
-test('the production entrypoint binds the managed PORT and Vercel proxy sign-in/API is same-origin and secure', async (t) => {
+test('self-hosted entrypoint fails closed until the configured owner signs up, then closes registration', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'aetheris-bootstrap-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const baseEnv = {
+    AETHERIS_ONLINE_DATA_DIR: dir,
+    AETHERIS_CORE_HOST: '127.0.0.1',
+    AETHERIS_CORE_PORT: '0',
+    AETHERIS_COOKIE_SECURE: 'false',
+  }
+  const invalidDir = join(dir, 'invalid-config-data')
+  await assert.rejects(main({ env: { ...baseEnv, AETHERIS_ONLINE_DATA_DIR: invalidDir, AETHERIS_MAX_ACCOUNTS: '0' }, stdout: () => {} }), /AETHERIS_MAX_ACCOUNTS must be a whole number/)
+  assert.equal(existsSync(invalidDir), false, 'invalid account caps must fail before creating persistent state')
+  const start = async (env) => {
+    const running = await main({ env, stdout: () => {} })
+    return { running, url: `http://127.0.0.1:${running.server.address().port}` }
+  }
+  const postRegister = (url, account) => fetch(`${url}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-aetheris-request': '1' },
+    body: JSON.stringify(account),
+  })
+
+  const unconfigured = await start(baseEnv)
+  t.after(() => unconfigured.running.shutdown())
+  const closed = await postRegister(unconfigured.url, OWNER)
+  assert.equal(closed.status, 503)
+  assert.equal((await closed.json()).error, 'owner_bootstrap_unconfigured')
+  await unconfigured.running.shutdown()
+
+  const configured = await start({ ...baseEnv, AETHERIS_OWNER_EMAIL: OWNER.email })
+  t.after(() => configured.running.shutdown())
+  assert.equal(configured.running.config.maxAccounts, 1, 'the self-host entrypoint defaults to one account')
+  const stranger = await postRegister(configured.url, { ...OWNER, email: 'stranger@example.test' })
+  assert.equal(stranger.status, 403)
+  assert.equal((await stranger.json()).error, 'owner_email_mismatch')
+  assert.equal(configured.running.app.accounts.count(), 0)
+
+  const owner = await postRegister(configured.url, OWNER)
+  assert.equal(owner.status, 201)
+  assert.equal((await owner.json()).account.role, ROLES.OWNER)
+  const later = await postRegister(configured.url, { ...MEMBER, email: 'second@example.test' })
+  assert.equal(later.status, 403)
+  assert.equal((await later.json()).error, 'registration_closed')
+  assert.equal(configured.running.app.accounts.count(), 1)
+})
+
+test('a cold copy of the persistent account directory restores the owner and remains closed to sign-up', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'aetheris-account-restore-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const source = join(root, 'source')
+  const backup = join(root, 'restored')
+  const original = new AccountStore({ dir: source, ownerEmail: OWNER.email, registrationEnabled: false, maxAccounts: 1 })
+  original.register(OWNER)
+  original.close()
+
+  // This models a stopped-service, cold backup: the whole persistent data directory,
+  // including SQLite state, is copied before a fresh Core store opens the restored copy.
+  cpSync(source, backup, { recursive: true })
+  const restored = new AccountStore({ dir: backup, ownerEmail: OWNER.email, registrationEnabled: false, maxAccounts: 1 })
+  t.after(() => restored.close())
+  assert.equal(restored.count(), 1)
+  assert.equal(restored.authenticate(OWNER).role, ROLES.OWNER)
+  assert.throws(() => restored.register(MEMBER), (error) => error.code === 'registration_closed')
+})
+
+test('member registration requires explicit opt-in and remains bounded by the configured account cap', async (t) => {
+  const f = await fixture(t, { ownerEmail: OWNER.email, registrationEnabled: true, maxAccounts: 2 })
+  assert.equal((await f.register(OWNER)).status, 201)
+  const member = await f.register(MEMBER)
+  assert.equal(member.status, 201)
+  assert.equal(member.data.account.role, ROLES.MEMBER)
+  const overCap = await f.register({ ...MEMBER, email: 'third@example.test' })
+  assert.equal(overCap.status, 429)
+  assert.equal(overCap.data.error, 'account_limit')
+  assert.equal(f.app.accounts.count(), 2)
+})
+
+test('the production entrypoint binds the managed PORT and Core sign-in/API remains secure', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'aetheris-entry-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   const frontendOrigin = 'https://ragam.example'
@@ -390,6 +467,7 @@ test('the production entrypoint binds the managed PORT and Vercel proxy sign-in/
     AETHERIS_ONLINE_DATA_DIR: dir, AETHERIS_CORE_HOST: '127.0.0.1', PORT: '0',
     AETHERIS_COOKIE_SECURE: 'true', AETHERIS_COOKIE_SAMESITE: 'strict',
     AETHERIS_TRUSTED_WEB_ORIGINS: frontendOrigin,
+    AETHERIS_OWNER_EMAIL: OWNER.email, AETHERIS_ALLOW_ACCOUNT_REGISTRATION: 'true', AETHERIS_MAX_ACCOUNTS: '3',
   }
   const lines = []
   let running = await main({ env, stdout: (line) => lines.push(line) })
@@ -416,32 +494,19 @@ test('the production entrypoint binds the managed PORT and Vercel proxy sign-in/
   assert.ok(invalidConfigLogs.some((line) => line.includes('"event":"configuration_invalid"')))
   assert.equal(invalidConfigLogs.some((line) => line.includes('secret')), false)
 
-  let coreOrigin = `http://127.0.0.1:${running.server.address().port}`
-  const proxy = createServer((req, res) => {
-    void (async () => {
-      // Simulate the Node serverless adapter pre-parsing JSON into req.body.
-      if (req.method === 'POST') {
-        const chunks = []
-        for await (const chunk of req) chunks.push(chunk)
-        req.body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
-      }
-      await proxyRequest(req, res, { coreOrigin, allowLoopbackForTests: true })
-    })()
-  })
-  const proxyUrl = await listen(proxy)
-  t.after(() => close(proxy))
+  let coreUrl = `http://127.0.0.1:${running.server.address().port}`
   const browserHeaders = {
     origin: frontendOrigin,
     'sec-fetch-site': 'same-origin',
     'x-aetheris-request': '1',
   }
 
-  const health = await fetch(`${proxyUrl}/api/health`, { headers: browserHeaders })
+  const health = await fetch(`${coreUrl}/api/health`, { headers: browserHeaders })
   assert.equal(health.status, 200)
   assert.match(health.headers.get('x-request-id'), /^[0-9a-f-]{36}$/i)
   assert.equal((await health.json()).status, 'ok')
 
-  const registered = await fetch(`${proxyUrl}/api/auth/register`, {
+  const registered = await fetch(`${coreUrl}/api/auth/register`, {
     method: 'POST',
     headers: { ...browserHeaders, 'content-type': 'application/json' },
     body: JSON.stringify({ email: OWNER.email, password: OWNER.password }),
@@ -453,33 +518,33 @@ test('the production entrypoint binds the managed PORT and Vercel proxy sign-in/
   assert.match(registrationCookie, /SameSite=Strict/)
   assert.match(registrationCookie, /Path=\/api/)
 
-  const loggedIn = await fetch(`${proxyUrl}/api/auth/login`, {
+  const loggedIn = await fetch(`${coreUrl}/api/auth/login`, {
     method: 'POST',
     headers: { ...browserHeaders, 'content-type': 'application/json' },
     body: JSON.stringify({ email: OWNER.email, password: OWNER.password }),
   })
   assert.equal(loggedIn.status, 200, await loggedIn.text())
   const cookie = loggedIn.headers.get('set-cookie')
-  assert.match(cookie, /Secure/, 'the login cookie must also survive the Vercel proxy')
+  assert.match(cookie, /Secure/, 'the login cookie remains Secure')
 
-  const auth = await fetch(`${proxyUrl}/api/auth`, { headers: { cookie } })
+  const auth = await fetch(`${coreUrl}/api/auth`, { headers: { cookie } })
   assert.equal(auth.status, 200)
   assert.equal((await auth.json()).authenticated, true, 'proxy must preserve the session cookie on the next request')
-  const providers = await fetch(`${proxyUrl}/api/providers`, { headers: { cookie } })
+  const providers = await fetch(`${coreUrl}/api/providers`, { headers: { cookie } })
   assert.equal(providers.status, 200, 'an authenticated application API call must survive the proxy')
 
-  const forged = await fetch(`${proxyUrl}/api/auth/logout`, {
+  const forged = await fetch(`${coreUrl}/api/auth/logout`, {
     method: 'POST',
     headers: { ...browserHeaders, origin: 'https://untrusted.example', cookie, 'content-type': 'application/json' },
     body: '{}',
   })
-  assert.equal(forged.status, 403, 'Core must reject origins not explicitly trusted for the Vercel proxy')
+  assert.equal(forged.status, 403, 'Core must reject origins not explicitly trusted')
   const originFailureLog = lines.map((line) => { try { return JSON.parse(line) } catch { return null } })
     .find((entry) => entry?.event === 'http_request_failed' && entry.errorCode === 'origin_rejected')
   assert.ok(originFailureLog?.requestId, 'API rejection logs carry a correlation id')
   assert.equal(JSON.stringify(originFailureLog).includes(OWNER.password), false, 'request logs must not include credentials')
 
-  const logout = await fetch(`${proxyUrl}/api/auth/logout`, {
+  const logout = await fetch(`${coreUrl}/api/auth/logout`, {
     method: 'POST',
     headers: { ...browserHeaders, cookie, 'content-type': 'application/json' },
     body: '{}',
@@ -487,18 +552,18 @@ test('the production entrypoint binds the managed PORT and Vercel proxy sign-in/
   assert.equal(logout.status, 200)
   assert.match(logout.headers.get('set-cookie'), /Max-Age=0/)
   assert.match(logout.headers.get('set-cookie'), /Secure/)
-  const signedOut = await fetch(`${proxyUrl}/api/auth`, { headers: { cookie } })
+  const signedOut = await fetch(`${coreUrl}/api/auth`, { headers: { cookie } })
   assert.equal((await signedOut.json()).authenticated, false, 'logout must revoke the server-side session')
-  const deniedAfterLogout = await fetch(`${proxyUrl}/api/providers`, { headers: { cookie } })
+  const deniedAfterLogout = await fetch(`${coreUrl}/api/providers`, { headers: { cookie } })
   assert.equal(deniedAfterLogout.status, 401)
 
   assert.equal(existsSync(join(dir, 'accounts.sqlite')), true, 'registration must be stored under the configured data directory')
   await running.shutdown()
   running = await main({ env, stdout: () => {} })
-  coreOrigin = `http://127.0.0.1:${running.server.address().port}`
-  const afterRestart = await fetch(`${proxyUrl}/api/auth`, { headers: { cookie } })
+  coreUrl = `http://127.0.0.1:${running.server.address().port}`
+  const afterRestart = await fetch(`${coreUrl}/api/auth`, { headers: { cookie } })
   assert.equal((await afterRestart.json()).authenticated, false, 'the in-memory session must not survive a Core restart')
-  const persistentLogin = await fetch(`${proxyUrl}/api/auth/login`, {
+  const persistentLogin = await fetch(`${coreUrl}/api/auth/login`, {
     method: 'POST',
     headers: { ...browserHeaders, 'content-type': 'application/json' },
     body: JSON.stringify({ email: OWNER.email, password: OWNER.password }),
@@ -513,7 +578,7 @@ test('the production entrypoint binds the managed PORT and Vercel proxy sign-in/
   }
   let databaseFailure
   try {
-    databaseFailure = await fetch(`${proxyUrl}/api/auth/register`, {
+    databaseFailure = await fetch(`${coreUrl}/api/auth/register`, {
       method: 'POST',
       headers: { ...browserHeaders, 'content-type': 'application/json' },
       body: JSON.stringify({ email: 'db-error@example.test', password: 'a-long-database-password' }),

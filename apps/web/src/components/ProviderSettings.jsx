@@ -4,9 +4,9 @@ import { Banner, Button, Field } from './ui.jsx'
 import ProviderCatalogue from './ProviderCatalogue.jsx'
 import KlyvaronTiers from './KlyvaronTiers.jsx'
 // `account` decides what this dialog offers. The gateway connection and its key belong to
-// the installation, so only the owner account may change them: with an open sign-up page,
-// letting any member re-point the connection or delete the stored key would hand a
-// stranger the owner's provider credentials. A member still sees the connection and can
+// the installation, so only the owner account may change them: if the operator enables
+// member registration, letting a member re-point the connection or delete the stored key
+// would hand that member control of the owner's provider connection. A member still sees the connection and can
 // use it, and is told why the controls are disabled rather than finding them inert.
 //
 // The runtime is a choice of destination, not a setting of the model. Each option is ONLINE

@@ -237,6 +237,10 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     <details className="context-section"><summary>Optional files & knowledge</summary><KnowledgePanel /></details>
     <details className="context-section"><summary>Optional approved memory</summary><MemoryPanel /></details>
     <details className="context-section"><summary>Reviewed procedure (optional)</summary><SkillsPanel value={skill} onChange={setSkill} account={account} model={model} provider={provider} /></details>
-    <details className="context-section"><summary>Local training worker (your computer, explicit consent only)</summary><UserTrainingPanel readiness={readiness} refreshReadiness={refreshReadiness} /></details>
+    <details className="context-section">
+      <summary>Create or adapt model weights (your computer · explicit opt-in)</summary>
+      <p className="small">Provider Settings registers existing inference endpoints and their listed models. This separate workflow plans user-authorized adaptation or training on your paired computer; it does not create a provider endpoint or mark third-party weights as Klyvaron.</p>
+      <UserTrainingPanel readiness={readiness} refreshReadiness={refreshReadiness} />
+    </details>
   </div>
 }

@@ -306,7 +306,7 @@ export class UserTrainingController {
     renameSync(tmp, this.statePath)
   }
 
-  async #workerRpc(op, params = {}) {
+  async #workerRpc(op, params = {}, { timeoutMs = 125_000 } = {}) {
     if (!this.workerConnection) {
       throw new UserTrainingControllerError(
         'No authenticated local worker is connected on the user computer. Start `klyvaron-local-worker` and complete pairing first.',
@@ -328,7 +328,7 @@ export class UserTrainingController {
           authorization: `Bearer ${this.workerConnection.sessionToken}`,
         },
         body: JSON.stringify({ op, params }),
-        signal: AbortSignal.timeout(125_000),
+        signal: AbortSignal.timeout(Math.max(1, timeoutMs)),
       })
     } catch (cause) {
       this.workerConnection.reachable = false
@@ -797,9 +797,18 @@ export class UserTrainingController {
   }
 
   /** Execute an evaluated request (non-parametric update OR real job on the paired local worker). */
-  async startAuthorizedJob({ request, consent, actor } = {}) {
+  async startAuthorizedJob({ request, consent, actor, deadlineAt: requestedDeadlineAt = null } = {}) {
+    const requestStartedAt = Date.now()
     const evaluated = this.evaluateRequest(request)
     const { spec, disclosureDigest } = evaluated
+    const adaptationDeadlineAt = spec.selectedMode === 'lightweight_adapter'
+      ? Math.min(Number.isSafeInteger(requestedDeadlineAt) ? requestedDeadlineAt : requestStartedAt + INTERACTIVE_ADAPTER_WALL_LIMIT_MS, requestStartedAt + INTERACTIVE_ADAPTER_WALL_LIMIT_MS)
+      : null
+    if (adaptationDeadlineAt !== null && adaptationDeadlineAt <= Date.now()) {
+      throw new UserTrainingControllerError('Interactive adaptation reached its 120-second deadline during setup; no worker job was started.', {
+        code: 'interactive_adaptation_deadline', status: 408,
+      })
+    }
 
     // Separate error codes for clarity when unapproved mode downgrade or missing worker blocks execution!
     if (!spec.localWorkerConnected && PARAMETER_UPDATING_MODES.includes(spec.selectedMode)) {
@@ -839,6 +848,12 @@ export class UserTrainingController {
         'Explicit user consent matching `disclosureDigest` is required before modifying weights or storing authorized data.',
         { code: 'training_consent_required', status: 403, detail: { expectedDisclosureDigest: disclosureDigest } },
       )
+    }
+
+    if (adaptationDeadlineAt !== null && adaptationDeadlineAt <= Date.now()) {
+      throw new UserTrainingControllerError('Interactive adaptation reached its 120-second deadline before worker setup completed; no weights were changed.', {
+        code: 'interactive_adaptation_deadline', status: 408,
+      })
     }
 
     // Record data authorization provenance cleanly.
@@ -885,7 +900,7 @@ export class UserTrainingController {
     this.modelGateHistory.set(spec.modelId, hist)
 
     const jobId = randomUUID()
-    const workerJob = await this.#workerRpc('training.create', {
+    const workerPayload = {
       jobId,
       mode: spec.selectedMode,
       modality: spec.modality,
@@ -903,7 +918,21 @@ export class UserTrainingController {
       trainExamples: spec.trainExamples,
       validationExamples: spec.validationExamples,
       stepDelayMs: spec.stepDelayMs,
-    })
+      ...(adaptationDeadlineAt !== null ? { deadlineAt: adaptationDeadlineAt } : {}),
+    }
+    let workerJob
+    try {
+      workerJob = await this.#workerRpc('training.create', workerPayload, {
+        timeoutMs: adaptationDeadlineAt === null ? 125_000 : Math.max(1, adaptationDeadlineAt - Date.now()),
+      })
+    } catch (error) {
+      if (adaptationDeadlineAt !== null && Date.now() >= adaptationDeadlineAt) {
+        throw new UserTrainingControllerError('Interactive adaptation reached its 120-second deadline; the worker was stopped and no fallback was attempted.', {
+          code: 'interactive_adaptation_deadline', status: 408,
+        })
+      }
+      throw error
+    }
 
     const tracked = {
       jobId,

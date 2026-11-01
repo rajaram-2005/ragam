@@ -2,7 +2,7 @@
 
 Date: 2026-10-14. This supersedes the earlier offline-first product direction.
 
-**Update (2026-10-17):** the provider framework now ships native chat, image and video adapters and several saved connections from a 39-entry catalogue; see [27-provider-framework.md](./27-provider-framework.md). The phase-2 text below records the 2026-10-14 increment. Where it says Image and Video have no adapter, or that Provider Settings saves one endpoint, docs/27 and the Image/Video rows of [03-status.md](./03-status.md) are current.
+**Historical snapshot, updated 2026-11-01:** this document records the 2026-10-14 increment, not the entire current UI. The provider framework later added native chat, image and video adapters and several saved connections from a 39-entry catalogue; see [27-provider-framework.md](./27-provider-framework.md). The current app also has an explicit user-computer training/adaptation workflow in Chat, owner-managed MCP Streamable HTTP connections, and the Ragam HTTP plugin contract. See [28-user-managed-servers.md](./28-user-managed-servers.md) for the current server workflows. Historical statements below about training and remote plugins/MCP are superseded.
 
 ## Agreed scope and delivered change
 
@@ -10,12 +10,12 @@ The user selected **five areas with simplified Chat**, and **LiteLLM gateway fir
 The active `npm run core` entry now loads `online/app.mjs`, not the legacy offline-first application.
 
 - **Chat, Image, Video, Plugins, MCP** remain the only primary areas. Provider Settings is a dialog reached from the sidebar and Chat.
-- No local/hybrid inference mode, local runtime startup, model downloads, Klyvaron tier/hardware panel, training panel, benchmark panel, God Core dashboard, or local inference fallback in the active product.
+- At the 2026-10-14 snapshot there was no local/hybrid inference mode, local runtime startup, model downloads, Klyvaron tier/hardware panel, training panel, benchmark panel, God Core dashboard, or local inference fallback. The later Chat training/adaptation workflow is documented in [28-user-managed-servers.md](./28-user-managed-servers.md).
 - Authenticated Provider Settings saves one online endpoint: a LiteLLM gateway (key required), or an Ollama or llama.cpp server (key optional). Tests connection by fetching `/models`; refreshes listings; removes the connection/key. Configuration is server-owned and persists across restart.
 - A visible model picker saves an exact model ID. Unknown/unavailable selections fail rather than silently choosing another model. Model listings are labelled unverified; successful text inference is recorded separately. A gateway alias may itself route upstream; Aetheris does not attest to the gateway's internal routing policy.
 - Real OpenAI-compatible `/chat/completions` transport with SSE, cancellation, total body-inclusive timeout, response/request limits, no redirects, no retries, and at most two concurrent chat requests per installation.
 - Conversation history, optional approved memory and text-file knowledge remain. Files are limited to supported plain-text formats up to 1 MiB in the UI; no PDF/Office parsing. Context is sent only when selected for the request. Sensitive data needs explicit per-request authorization; credential-shaped content is redacted. Classification covers the entire assembled request and cannot be lowered by a caller's `public` label.
-- Plugins/MCP retain reviewed read-only built-ins. Arbitrary extension installs, trust-key modifications, external MCP registration and agent-driven tool execution are disabled in this increment. Built-ins are trusted because they are part of reviewed application source, not because of a publisher signature or a claimed in-process sandbox.
+- At the 2026-10-14 snapshot, Plugins/MCP retained reviewed read-only built-ins and arbitrary installs, trust-key modifications, external MCP registration and agent-driven tool execution were disabled. This historical limitation is superseded by the owner-managed protocols in [28-user-managed-servers.md](./28-user-managed-servers.md); downloaded code remains disabled.
 
 **Not delivered on 2026-10-14:** real online Image/Video generation adapters, direct native provider integrations (Ollama's `/api/chat` and llama.cpp's native protocols are not used online; both runtimes are reached over `/v1`), cloud deployment, durable autonomous tasks, or a qualified Sparsiz training loop. Image/Video clearly stated that their adapters were not connected; no synthetic output was substituted. On 2026-10-17 the image and video adapters landed (docs/27); cloud deployment and a qualified Sparsiz loop remain undone, and no live vendor call has been made.
 
@@ -35,7 +35,7 @@ Core binds `0.0.0.0:8790`; Web uses relative `/api` requests through the Vite pr
 AETHERIS_COOKIE_SECURE=false npm run core
 ```
 
-**Sign-in is an account, not a token.** The operator token file this increment originally created (`.aetheris-data/online/access-token`) has been **removed**, together with its `{ token }` login route: there is one way in. Open the web app, choose **Create account** (`#/signup`), and sign in with an email address and a password. The first account created owns the installation and is the only one that can change the gateway connection; later accounts are members. Accounts, scrypt password hashes, sessions, per-account data isolation and the host-delivered password-reset flow are specified in [docs/20](20-accounts-and-sign-in.md). Sign-in still creates an HttpOnly, eight-hour cookie whose `SameSite` is `Strict` by default (`AETHERIS_COOKIE_SAMESITE=none` opts in for an installation embedded in another site, and requires secure cookies), sessions are still bounded and revoked on restart, and sign-out still invalidates the current session.
+**Sign-in is an account, not a token.** The operator token file this increment originally created (`.aetheris-data/online/access-token`) has been **removed**, together with its `{ token }` login route: there is one way in. The operator must configure `AETHERIS_OWNER_EMAIL` before the first account can be created; the matching address becomes owner. Member sign-up is closed by default and requires an explicit operator opt-in. Accounts, scrypt password hashes, sessions, per-account data isolation and the host-delivered password-reset flow are specified in [docs/20](20-accounts-and-sign-in.md). Sign-in still creates an HttpOnly, eight-hour cookie whose `SameSite` is `Strict` by default (`AETHERIS_COOKIE_SAMESITE=none` opts in for an installation embedded in another site, and requires secure cookies), sessions are still bounded and revoked on restart, and sign-out still invalidates the current session.
 
 Then:
 
@@ -58,7 +58,9 @@ Export environment variables into the process; the new entry does not load legac
 | `AETHERIS_ONLINE_DATA_DIR` | `.aetheris-data/online` | Separate settings, accounts, history, memory and knowledge directory |
 | `AETHERIS_COOKIE_SECURE` | `true` | Set `false` only for deliberate HTTP local development |
 | `AETHERIS_COOKIE_SAMESITE` | `strict` | `none` when the web app is served inside another site's iframe; requires secure cookies |
-| `AETHERIS_MAX_ACCOUNTS` | `64` | Cap on accounts an open sign-up page can create |
+| `AETHERIS_OWNER_EMAIL` | unset | Required first-owner email; unset means self-hosted registration fails closed |
+| `AETHERIS_ALLOW_ACCOUNT_REGISTRATION` | `false` | Opt in to member sign-ups after owner bootstrap |
+| `AETHERIS_MAX_ACCOUNTS` | `1` self-hosted | Account cap; increase explicitly before enabling members |
 | `AETHERIS_PRINT_RESET_CODES` | `false` | Also print a password-reset code on the Core console |
 | `AETHERIS_TRUSTED_ORIGINS` | empty | Comma-separated exact origins trusted for a private gateway or a local Ollama / llama.cpp server |
 | `AETHERIS_LITELLM_TRUSTED_ORIGINS` | empty | Older name for the same list; still read |
@@ -71,7 +73,7 @@ The provider key is encrypted with AES-256-GCM in `provider.json`, using the ser
 
 ## Security boundary and remaining limitations
 
-This installation has **accounts**, and sign-up is open to anybody who can reach it. Conversation, memory and file knowledge are per account (separate databases, not filters); the gateway connection and its key belong to the installation and can be changed only by its owner account. All settings, conversation, memory, knowledge and tool APIs require authentication. Mutations require a same-origin request and non-simple request header; no permissive CORS is emitted. Only health, sign-in status, registration, sign-in and password reset are public. No client-provided principal grants access to another identity. Sign-in is rate-limited and locks an account after repeated failures; account count, session count, request sizes, provider responses and inference concurrency are bounded. See [docs/20](20-accounts-and-sign-in.md) for the full account model and for what password reset without a mail transport does and does not protect against.
+This installation has **accounts**. The self-hosted Core requires a configured first-owner email, then closes registration by default; member registration is an explicit operator choice. Conversation, memory and file knowledge are per account (separate databases, not filters); the gateway connection and its key belong to the installation and can be changed only by its owner account. All settings, conversation, memory, knowledge and tool APIs require authentication. Mutations require a same-origin request and non-simple request header; no permissive CORS is emitted. Only health, sign-in status, registration, sign-in and password reset are public. No client-provided principal grants access to another identity. Sign-in is rate-limited and locks an account after repeated failures; account count, session count, request sizes, provider responses and inference concurrency are bounded. See [docs/20](20-accounts-and-sign-in.md) for the full account model and for what password reset without a mail transport does and does not protect against.
 
 Provider credentials remain server-side, but inference data necessarily leaves the deployment when sent. The UI explicitly identifies the gateway; upstream disclosure, budget enforcement, retention and training policies must be configured/verified in LiteLLM. No free-access, privacy, quota or price guarantee is inferred from its model list. Prompt injection is not solved by classification: external context remains untrusted, and model outputs do not automatically execute tools.
 

@@ -400,7 +400,7 @@ export class McpRegistry {
     try {
       const raw = await withTimeout(
         () => (server.kind === SERVER_KINDS.TRANSPORT
-          ? server.transport({ method: 'tools/call', params: { name: toolName, arguments: inputCheck.value }, serverId, callId })
+          ? server.transport({ method: 'tools/call', params: { name: toolName, arguments: inputCheck.value }, serverId, callId, signal })
           : tool.handler(inputCheck.value, { serverId, callId, signal, risk: tool.risk, scopes: tool.scopes })),
         {
           timeoutMs: budget,

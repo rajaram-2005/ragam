@@ -4,13 +4,24 @@
 
 ## Current product
 
-Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog and an explicit persistent model picker. Inference is online-only; there are no active local-runtime, hardware-tier, training or task-diagnostic panels. Optional history, approved memory, text-file knowledge and reviewed procedures remain.
+Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog and an explicit model picker. Inference is online-only. Provider Settings registers existing inference endpoints and lists their models; Chat separately exposes an opt-in user-computer workflow for authorized adaptation/training. Optional history, approved memory, text-file knowledge and reviewed procedures remain. No sixth Training area is added.
 
-Run `npm run core` and `npm run web`, then **create an account** at `#/signup` and sign in with it at `#/signin`. Sign-in is traditional — an email address and a password, on three pages (sign in, create account, reset password) — and it is the only way in: the operator access-token file and its login route have been removed. The first account created owns the installation and is the only one that can change the gateway connection; later accounts are members with their own history, memory and knowledge. Then open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. On HTTP-only local development, start Core with `AETHERIS_COOKIE_SECURE=false`; keep secure cookies enabled for HTTPS deployments. If the web app is served inside another site's iframe, also start Core with `AETHERIS_COOKIE_SAMESITE=none` — a strict session cookie is never sent cross-site, so sign-in would appear to work and every request after it would be a `401`. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md).
+**Deployment is Docker Compose only.** Each end user runs an independent stack on their own computer with local persistent storage; there is no shared developer-operated backend. Use the [Docker Compose self-hosting guide](docs/22-self-hosted-deployment.md), including the Windows double-click launcher, for setup, health checks and backup/restore. Once running, create an account for the owner at `#/signup`, then sign in at `#/signin`. The operator's access-token file and its login route have been removed. Only the configured owner email can bootstrap the first account; member registration is closed by default and must be deliberately enabled by the operator. Open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md). The Node/Vite commands below are for repository development, not deployment.
+
+## Supported user interfaces
+
+| Interface | What an end user uses it for |
+|---|---|
+| **Windows launcher** | Double-click [`scripts/Start-Ragam.cmd`](scripts/Start-Ragam.cmd). On first launch it creates `.env` from `.env.example` and opens it in Notepad; set `AETHERIS_OWNER_EMAIL`, save, then launch again. Docker Desktop must be running. |
+| **Browser app** | Open `http://localhost` after the stack starts. Sign up with the configured owner email, then use the five areas: Chat, Image, Video, Plugins and MCP. Caddy serves the app and forwards same-origin `/api` requests to that user's local Core. |
+| **Stop without deleting data** | Double-click [`scripts/Stop-Ragam.cmd`](scripts/Stop-Ragam.cmd). It stops the containers and keeps the Docker volumes and local data. |
+| **Other Compose-compatible platforms** | Use the checked-in [`compose.yaml`](compose.yaml) and local `.env` through a Docker Compose-compatible UI. Each end user's stack and volumes remain independent. |
+
+Ragam is not a hosted/shared service or a separately installed native desktop app. Docker Compose is the deployment; the browser is its user interface. See the [self-hosting guide](docs/22-self-hosted-deployment.md) for security, persistence and backup details.
 
 Current release: **0.2.0** — [release note](docs/26-release.md), [changelog](CHANGELOG.md), version in [`VERSION`](VERSION). Provider Settings shows a read-only [provider matrix](docs/27-provider-framework.md): it distinguishes native vendor, OpenAI-compatible, and gateway-routed APIs; the fourteen audited Chat adapters are contract-tested but live verification is pending. Model-level capabilities stay unknown unless the vendor catalogue reports evidence. The release carries the adaptive core (ten phases, code and tests) as a library; the product surface described above is unchanged by it.
 
-**Current limits:** image generation has nine adapters (OpenAI Images, Gemini Images, Stability, Recraft, Ideogram, FLUX, fal.ai, Replicate and Adobe Firefly) and video has five (Veo, Runway, Luma, fal.ai video and Replicate video); remote MCP servers are not connected. All 37 non-pending provider entries have contract-tested code paths: 23 are `ready`, and 14 audited Chat providers retain `gateway_only` for catalogue compatibility while using individually defined adapters. No real vendor credential or deployment has been qualified live, and no generation has been purchased. Synthetic fixtures are used only in tests. Accounts have no email delivery, no second factor and no self-service deletion. See the [Phase 2 guide](docs/19-online-only-phase-2.md) for security boundaries and setup, and [accounts and sign-in](docs/20-accounts-and-sign-in.md) for the account model.
+**Current limits:** image generation has nine adapters (OpenAI Images, Gemini Images, Stability, Recraft, Ideogram, FLUX, fal.ai, Replicate and Adobe Firefly) and video has five (Veo, Runway, Luma, fal.ai video and Replicate video). Owner-managed MCP Streamable HTTP connections and Ragam HTTP plugin endpoints are supported; every remote tool/capability call requires explicit data-transfer approval, and Ragam never executes downloaded plugin code. There is not yet a curated external-server marketplace. All 37 non-pending provider entries have contract-tested code paths: 23 are `ready`, and 14 audited Chat providers retain `gateway_only` for catalogue compatibility while using individually defined adapters. No real vendor credential or deployment has been qualified live, and no generation has been purchased. Synthetic fixtures are used only in tests. Accounts have no email delivery, no second factor and no self-service deletion. See the [user-managed server protocol guide](docs/28-user-managed-servers.md), the [Phase 2 guide](docs/19-online-only-phase-2.md), and [accounts and sign-in](docs/20-accounts-and-sign-in.md).
 
 ## Retained legacy architecture and verification history
 
@@ -45,6 +56,18 @@ services** surfaced inside the five areas that need them. The mapping is recorde
 in code (`apps/web/src/areas.js`) and enforced by a test — a sixth area, or any
 internal service promoted to a navigation entry, fails the build.
 
+| Area | What it does | Current boundary |
+|---|---|---|
+| **Chat** | Sends prompts to the explicitly selected model through the configured provider; supports streaming, optional conversation history, approved memory, and text-file knowledge with citations. | Inference is online-only. A reachable provider and its own credentials are required; no silent model fallback. |
+| **Image** | Submits image-generation jobs through the supported provider adapters and shows job state and validated output. | Requires a configured provider. Adapters are contract-tested; live vendor qualification is still pending. |
+| **Video** | Submits video-generation jobs, exposes progress/cancellation, and validates that the result is genuine video rather than a still image. | Requires a configured provider. No video model or inference runtime is bundled locally. |
+| **Plugins** | Reviewed built-ins plus owner-managed Ragam HTTP plugin connections, with manifest/schema validation and permission preflight. | Remote plugin code is never downloaded or executed. The remote endpoint receives arguments only after per-call consent; only `service.external` scope is grantable. |
+| **MCP** | Reviewed in-process servers plus owner-managed Streamable HTTP connections, discovered tools, schema checks and risk gates. | Remote tool calls are always classified as external and require per-call approval. Remote results remain untrusted data. |
+
+Image and Video requests go to the provider you choose; their adapters and synthetic
+fixtures do not establish live-provider performance. Provider Settings and the model
+picker are controls inside the app, not additional product areas.
+
 | Internal service | Where it appears |
 |---|---|
 | Model routing | Chat → routing decision, candidates, rejection reasons |
@@ -55,15 +78,15 @@ internal service promoted to a navigation entry, fails the build.
 | Resource management | Sidebar hardware card; Image and Video echoes |
 | Media validation | Image/Video → job detail, rejection reasons, artifact sha256 |
 | Execution control | Image/Video job cancellation; Chat generation Stop; task pause/resume/cancel |
-| Training & benchmarking | Not in the web app. Separate service; results published as model cards |
+| User-authorized adaptation/training | Chat → “Create or adapt model weights”; paired user-computer worker, explicit disclosure/consent, verified-base and resource gates. Interactive lightweight adaptation is capped at 120 seconds from the Execute action through worker setup/finalization. Foundation pretraining is a separate mode; research benchmarking and model-card publication remain separate workflows. |
 
 ---
 
-## Quick start
+## Developer quick start
 
 ```bash
 # Core uses Node's standard library; it has no dependency install step.
-node services/core/src/server.mjs        # core API on :8790
+AETHERIS_OWNER_EMAIL=you@example.com node services/core/src/server.mjs  # Core on :8790; only this email can bootstrap owner
 
 # In another terminal, install the locked Web dependencies and start the UI.
 npm ci --prefix apps/web
@@ -92,7 +115,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 1958 tests: core 1035, web 101, fabric 822
+npm test          # 1891 tests: core 970, web 99, fabric 822
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -107,15 +130,14 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1958 run in CI on every push and pull request
-([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) as five jobs — one per
-component, plus one that fails if this documentation stops matching the code, plus one
-that counts what the suites reported and verifies the release against those counts. The
+All 1891 run in CI on every push and pull request
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) across six jobs: one per
+component, a Docker Compose build/health/persistence/restore smoke, documentation
+checks, and release verification against the suite counts. The
 Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
 
-Full instructions, environment variables and troubleshooting:
-[`docs/04-setup.md`](docs/04-setup.md). Hosted Core requirements and deployment status are documented in [`docs/deployment-status.md`](docs/deployment-status.md).
+End-user setup and troubleshooting: [`docs/22-self-hosted-deployment.md`](docs/22-self-hosted-deployment.md). Developer environment variables and repository setup: [`docs/04-setup.md`](docs/04-setup.md).
 
 > **Do not `pip install torch` for normal development or tests.** The Fabric service
 > is NumPy-only. Only the explicit optional LoRA command above bootstraps torch and
@@ -169,9 +191,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 39,915 | 26,212 | **zero npm packages** | 1035 |
+| `services/core` | Node 22 ESM | 37,627 | 24,878 | **zero npm packages** | 970 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 5,595 | 2,247 | react, react-dom | 101 |
+| `apps/web` | React 18 + Vite | 5,526 | 2,018 | react, react-dom | 99 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

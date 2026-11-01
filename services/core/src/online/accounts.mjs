@@ -170,16 +170,21 @@ export class AccountStore {
    * @param {object} options
    * @param {string} options.dir online data directory
    * @param {number} [options.maxAccounts] hard cap on registered accounts
+   * @param {string|null|undefined} [options.ownerEmail] configured first-owner email; undefined preserves the direct-store compatibility mode, null closes bootstrap
+   * @param {boolean} [options.registrationEnabled] explicitly allow members after owner bootstrap
    * @param {(info: {email: string, code: string, expiresAt: number, file: string}) => void} [options.onResetCode]
    *   host-side delivery hook; `server.mjs` uses it to print a code when the operator asks
    * @param {(info: object) => void} [options.audit] optional audit sink
    */
-  constructor({ dir, maxAccounts = DEFAULT_MAX_ACCOUNTS, onResetCode = null, audit = null }) {
+  constructor({ dir, maxAccounts = DEFAULT_MAX_ACCOUNTS, ownerEmail = undefined, registrationEnabled = true, onResetCode = null, audit = null }) {
+    const normalizedOwnerEmail = ownerEmail === undefined ? undefined : (ownerEmail ? normalizeEmail(ownerEmail) : null)
     this.dir = dir
     mkdirSync(dir, { recursive: true, mode: 0o700 })
     this.file = join(dir, 'accounts.sqlite')
     this.resetFile = join(dir, 'password-resets.json')
     this.maxAccounts = Number.isInteger(maxAccounts) && maxAccounts > 0 ? maxAccounts : DEFAULT_MAX_ACCOUNTS
+    this.ownerEmail = normalizedOwnerEmail
+    this.registrationEnabled = registrationEnabled === true
     this.onResetCode = onResetCode
     this.audit = audit
     this.db = new DatabaseSync(this.file)
@@ -230,24 +235,45 @@ export class AccountStore {
     const address = normalizeEmail(email)
     const problems = passwordProblems(password, address)
     if (problems.length) throw failure('weak_password', problems.join(' '), 400)
-    if (this.count() >= this.maxAccounts) {
-      throw failure('account_limit', `This installation already has ${this.maxAccounts} accounts. Ask its owner to raise AETHERIS_MAX_ACCOUNTS.`, 429)
-    }
-    if (this.findByEmail(address)) throw failure('email_taken', 'An account on this installation already uses that email address.', 409)
+    // Do the expensive password hash before taking SQLite's write lock. The transaction
+    // then serializes first-owner decisions across requests and even separate Core
+    // processes sharing the same database file.
+    const passwordHash = hashPassword(password)
+    const accountId = randomUUID()
     const now = Date.now()
-    const account = {
-      id: randomUUID(),
-      email: address,
-      passwordHash: hashPassword(password),
-      role: this.count() === 0 ? ROLES.OWNER : ROLES.MEMBER,
-      createdAt: now,
+    let role
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const accountCount = this.count()
+      const owner = this.owner()
+      if (accountCount === 0) {
+        if (this.ownerEmail === null || (this.ownerEmail === undefined && !this.registrationEnabled)) {
+          throw failure('owner_bootstrap_unconfigured', 'Account creation is disabled until the operator configures AETHERIS_OWNER_EMAIL.', 503)
+        }
+        if (this.ownerEmail !== undefined && address !== this.ownerEmail) {
+          throw failure('owner_email_mismatch', 'The first account must use the owner email configured by the operator.', 403)
+        }
+        role = ROLES.OWNER
+      } else {
+        if (!owner) throw failure('owner_state_invalid', 'This installation has accounts but no owner. Contact its operator.', 503)
+        if (!this.registrationEnabled) throw failure('registration_closed', 'New account creation is closed on this installation.', 403)
+        role = ROLES.MEMBER
+      }
+      if (accountCount >= this.maxAccounts) {
+        throw failure('account_limit', `This installation already has ${this.maxAccounts} accounts. Ask its owner to raise AETHERIS_MAX_ACCOUNTS.`, 429)
+      }
+      if (this.findByEmail(address)) throw failure('email_taken', 'An account on this installation already uses that email address.', 409)
+      this.db.prepare(
+        `INSERT INTO accounts (id, email, password_hash, role, created_at, updated_at, last_login_at, failed_logins, locked_until)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, 0, NULL)`,
+      ).run(accountId, address, passwordHash, role, now, now)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      try { this.db.exec('ROLLBACK') } catch { /* transaction already rolled back */ }
+      throw error
     }
-    this.db.prepare(
-      `INSERT INTO accounts (id, email, password_hash, role, created_at, updated_at, last_login_at, failed_logins, locked_until)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, 0, NULL)`,
-    ).run(account.id, account.email, account.passwordHash, account.role, account.createdAt, account.createdAt)
-    this.audit?.({ category: 'auth', action: 'register', outcome: 'success', subject: account.id, detail: { role: account.role } })
-    return this.get(account.id)
+    this.audit?.({ category: 'auth', action: 'register', outcome: 'success', subject: accountId, detail: { role } })
+    return this.get(accountId)
   }
 
   /**

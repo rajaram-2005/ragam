@@ -1,0 +1,10 @@
+{$RAGAM_SITE_ADDRESS} {
+  encode zstd gzip
+
+  @health path /healthz
+  respond @health 200
+
+  @api path /api /api/*
+  reverse_proxy @api core:8790
+  reverse_proxy web:8080
+}
