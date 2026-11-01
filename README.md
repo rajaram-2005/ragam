@@ -56,6 +56,18 @@ services** surfaced inside the five areas that need them. The mapping is recorde
 in code (`apps/web/src/areas.js`) and enforced by a test — a sixth area, or any
 internal service promoted to a navigation entry, fails the build.
 
+| Area | What it does | Current boundary |
+|---|---|---|
+| **Chat** | Sends prompts to the explicitly selected model through the configured provider; supports streaming, optional conversation history, approved memory, and text-file knowledge with citations. | Inference is online-only. A reachable provider and its own credentials are required; no silent model fallback. |
+| **Image** | Submits image-generation jobs through the supported provider adapters and shows job state and validated output. | Requires a configured provider. Adapters are contract-tested; live vendor qualification is still pending. |
+| **Video** | Submits video-generation jobs, exposes progress/cancellation, and validates that the result is genuine video rather than a still image. | Requires a configured provider. No video model or inference runtime is bundled locally. |
+| **Plugins** | Surfaces reviewed built-in procedures with preflight and permission checks. | Arbitrary or unreviewed plugin code is not installed or executed by the current product. |
+| **MCP** | Provides the MCP tools/schema and risk-control surface. | Remote MCP server connections are not yet available. |
+
+Image and Video requests go to the provider you choose; their adapters and synthetic
+fixtures do not establish live-provider performance. Provider Settings and the model
+picker are controls inside the app, not additional product areas.
+
 | Internal service | Where it appears |
 |---|---|
 | Model routing | Chat → routing decision, candidates, rejection reasons |
