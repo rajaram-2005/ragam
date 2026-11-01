@@ -4,7 +4,7 @@
 
 ## Current product
 
-Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog and an explicit model picker. Inference is online-only. Provider Settings registers existing inference endpoints and lists their models; Chat separately exposes an opt-in user-computer workflow for authorized adaptation/training. Optional history, approved memory, text-file knowledge and reviewed procedures remain. No sixth Training area is added.
+Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog and an explicit model picker. Inference is online-only. Provider Settings registers existing inference endpoints and lists their models; Chat separately exposes an opt-in user-computer workflow for authorized adaptation/training. Optional history, approved memory, text-file knowledge and reviewed procedures remain. Users may enter a name and profession for browser-local, role-matched prompt ideas (not model rankings); profile details stay in that browser and outside Docker backups. Choosing an idea only fills the Chat draft—nothing reaches a provider unless the user presses Send. No sixth Training area is added.
 
 **Deployment is Docker Compose only.** Each end user runs an independent stack on their own computer with local persistent storage; there is no shared developer-operated backend. The standard Docker launch opens directly into a single-user workspace: no email, account creation or sign-in. The UI/API bind to this computer's `localhost` only. Use the [Docker Compose guide](docs/22-self-hosted-deployment.md), including the Windows double-click launcher, for setup and backup/restore. To use Chat, open **Provider Settings**, connect your own provider key, test the connection, then choose from the model IDs that provider actually returns. OpenAI (ChatGPT), Gemini, Anthropic Claude, xAI (Grok) and other adapters are available; vendor API usage may incur charges. No model list is fabricated and no calls occur until you configure a provider and send a request. Never paste provider credentials into a chat message. The Node/Vite commands below are for repository development, not deployment.
 
@@ -116,7 +116,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 1897 tests: core 975, web 100, fabric 822
+npm test          # 1906 tests: core 975, web 109, fabric 822
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -131,7 +131,7 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1897 run in CI on every push and pull request
+All 1906 run in CI on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) across six jobs: one per
 component, a Docker Compose build/health/persistence/restore smoke, documentation
 checks, and release verification against the suite counts. The
@@ -194,7 +194,7 @@ Status of every acceptance criterion, with evidence:
 |---|---|---|---|---|---|
 | `services/core` | Node 22 ESM | 37,726 | 25,031 | **zero npm packages** | 975 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 5,657 | 2,038 | react, react-dom | 100 |
+| `apps/web` | React 18 + Vite | 5,856 | 2,134 | react, react-dom | 109 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

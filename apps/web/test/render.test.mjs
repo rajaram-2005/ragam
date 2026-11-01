@@ -90,6 +90,7 @@ async function loadComponents() {
     "export { default as PluginsArea } from '../../src/areas/PluginsArea.jsx'",
     "export { default as McpArea } from '../../src/areas/McpArea.jsx'",
     "export { default as ProviderSettings } from '../../src/components/ProviderSettings.jsx'",
+    "export { default as ProfileSettings } from '../../src/components/ProfileSettings.jsx'",
     "export { default as ProviderCatalogue } from '../../src/components/ProviderCatalogue.jsx'",
     "export { default as KlyvaronTiers } from '../../src/components/KlyvaronTiers.jsx'",
     "export { default as UserTrainingPanel } from '../../src/components/UserTrainingPanel.jsx'",
@@ -548,6 +549,32 @@ test('Chat home offers original draft starters and keeps sending under the userâ
   assert.match(unconfigured, /model IDs that key can access/)
   assert.match(unconfigured, /Provider API use may incur charges/)
   assert.match(unconfigured, /Choose a provider/)
+})
+
+test('a chosen profession personalizes draft suggestions without silently selecting a model', () => {
+  const markup = render('ChatArea (teacher profile)', React.createElement(components.ChatArea, {
+    profile: { name: 'Ada', profession: 'Teacher' },
+    provider: { kind: 'litellm', name: 'LiteLLM', configured: true, models: [], selectedModel: '' },
+  }))
+  assert.match(markup, /What would you like to work through, Ada\?/)
+  assert.match(markup, /A few starting points for Teacher/)
+  assert.match(markup, /Plan a lesson/)
+  assert.match(markup, /Draft practice questions/)
+  assert.match(markup, /Choose one to draft a prompt; nothing is sent until you press Send/)
+  assert.match(markup, /aria-label="Model"[^>]*disabled/)
+})
+
+test('the profile dialog explains browser-only storage and offers editable name and profession fields', () => {
+  const markup = render('ProfileSettings', React.createElement(components.ProfileSettings, {
+    profile: { name: 'Ada', profession: 'Teacher' }, onSave: noop, onClose: noop,
+  }))
+  assert.match(markup, /Personalize recommendations/)
+  assert.match(markup, /Name/)
+  assert.match(markup, /Profession or role/)
+  assert.match(markup, /saved in this browser only/i)
+  assert.match(markup, /not included in Docker backups/)
+  assert.match(markup, /Save profile/)
+  assert.match(markup, /Clear profile/)
 })
 
 

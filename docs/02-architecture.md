@@ -224,9 +224,9 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 5,657 source lines, 2,038 test lines
+### `apps/web` — 5,856 source lines, 2,134 test lines
 
-Five area components, three retained direct-Core account pages, a local-first app shell, shared primitives, an API client and four test files. The account pages are not product areas and are not used by the standard Docker deployment; see [20 — Accounts and sign-in](20-accounts-and-sign-in.md) for their regression-tested legacy mode. Design tokens and the shell's visual structure come from upstream Aetheris
+Five area components, three retained direct-Core account pages, a local-first app shell, shared primitives, an API client and five test files. The account pages are not product areas and are not used by the standard Docker deployment; see [20 — Accounts and sign-in](20-accounts-and-sign-in.md) for their regression-tested legacy mode. Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).
 
 ---

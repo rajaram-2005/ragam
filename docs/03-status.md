@@ -7,13 +7,13 @@ something does not work, it says so and says why.
 
 **Core test environment used for the verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test totals: 1897 cases across the three suites** (Core 975, Web 100, Fabric 822). GitHub Actions run [41322036817](https://github.com/rajaram-2005/ragam/actions/runs/41322036817) passed all six jobs on this branch, including the full Core suite, Web tests/build/audits, Fabric, documentation and release verification, plus Compose health and cold-volume restore checks. The Compose smoke verified the loopback-only single-user workspace, disabled account creation, provider catalogue, restored workspace ID and a SQLite conversation-history marker; it is synthetic CI, not a permanent deployment or live-provider inference. Locally, focused owner/account and local-mode tests pass (28/28), documentation tests pass (50/50), Web tests pass (100/100), and the Vite production build succeeds. A read-only inventory of the external `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket. No external service, project, deployment, account, setting or data was changed. Vercel/Supabase repository integrations remain removed from the repo; external resources are untouched.
+**Test totals: 1906 cases across the three suites** (Core 975, Web 109, Fabric 822). The last full GitHub Actions run [41322036817](https://github.com/rajaram-2005/ragam/actions/runs/41322036817) passed all six jobs at the earlier Web total of 100; this profile change has passed the 109-test Web suite, production build, and 64 focused documentation/release tests locally, and a full CI rerun is pending. That CI run's Compose smoke verified the loopback-only single-user workspace, disabled account creation, provider catalogue, restored workspace ID and a SQLite conversation-history marker; it is synthetic CI, not a permanent deployment or live-provider inference. A read-only inventory of the external `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket. No external service, project, deployment, account, setting or data was changed. Vercel/Supabase repository integrations remain removed from the repo; external resources are untouched.
 
 | Suite | Command | Result |
 |---|---|---|
 | `services/core` | `node --test test/*.test.mjs` | **975 tests** (69 files; the previous 970-test suite passed in CI with pinned Pro/Max artifacts and Python prerequisites; the five new local single-user tests pass locally; the updated full suite is awaiting CI) |
 | `services/fabric` | `PATH=.venv/bin:$PATH npm run test:fabric` | **822 tests** (42 files; local run passed) |
-| `apps/web` | `npm run test:web` | **100 tests** (4 files; 100/100 passed locally) |
+| `apps/web` | `npm run test:web` | **109 tests** (5 files; 109/109 passed locally) |
 | `apps/web` build | `npm run build --prefix apps/web` | production bundle built successfully locally |
 
 **Released first-party Klyvaron Pro and Max multimodal artifacts (all 8 trained from scratch, `baseCheckpoint: null`, verified by SHA-256 on load):**
@@ -113,7 +113,7 @@ instead.
 |---|---|---|---|
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
-| 3 | Unified app, five areas | **Complete** | `apps/web`; 95 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
+| 3 | Unified app, five areas | **Complete** | `apps/web`; 109 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
 | 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,616-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 11, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 28 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
 | 5 | Online provider integration | **Contract-tested; live vendor qualification pending** | The online entry routes provider-specific chat, image and video wires through one guarded transport, with destination checks, per-revision consent, deadlines and size limits. Twenty-three catalogue entries are `ready`: three runtimes, six other native chat protocols, nine image adapters and five video adapters, each fixture-tested. The fourteen audited Chat providers now have distinct adapters classified as native vendor, OpenAI-compatible or gateway-routed APIs. Their live verification remains pending; no authorized vendor credentials or quotas were available in this sandbox |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
@@ -379,17 +379,17 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (100 tests)
+### `apps/web` — Implemented and tested (109 tests)
 
 | Area | Status |
 |---|---|
-| Chat | **Implemented and tested** — streaming SSE, routing panel, knowledge ingest/search/citations, task lifecycle |
+| Chat | **Implemented and tested** — streaming SSE, routing panel, knowledge ingest/search/citations, task lifecycle, optional browser-local profession-based prompt ideas (not model rankings; profile data is not transmitted by itself) |
 | Image | **Implemented** — job queue, validation display; generation refuses on this host |
 | Video | **Implemented** — as above, plus the genuineness rule |
 | Plugins | **Implemented and tested** — manifest validation, install, preflight, invoke, approvals |
 | MCP | **Implemented and tested** — servers, tools, risk gates, elevated-scope approvals |
 
-**Rendering is covered** by `test/render.test.mjs` (37 tests), added after an
+**Rendering is covered** by `test/render.test.mjs` (40 tests), added after an
 earlier revision of this document recorded the rendering layer as "implemented, not
 fully tested". There is no browser here, and adding `jsdom` would have meant a new
 dependency tree — so instead the test bundles the JSX with `rolldown` (already a Vite 8

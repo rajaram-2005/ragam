@@ -727,18 +727,18 @@ test('the status doc reports the real test totals', () => {
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
   assert.equal(count('services/core/test', /\.test\.mjs$/), 69)
-  assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
+  assert.equal(count('apps/web/test', /\.test\.mjs$/), 5)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
   assert.ok(status.includes('**975 tests**'), 'core test inventory must be stated')
   assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
-  assert.ok(status.includes('**100 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1897 cases across the three suites'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('**109 tests**'), 'web test inventory must be stated')
+  assert.ok(status.includes('1906 cases across the three suites'), 'the grand total must equal the sum of the suites')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1897 tests: core 975, web 100, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('1906 tests: core 975, web 109, fabric 822'),
     'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1897 run in CI'),
+  assert.ok(squash(doc.readme()).includes('All 1906 run in CI'),
     'README must state the same totals where it describes CI')
   assert.ok(status.includes('(69 files'), 'the file count must move with the suite')
 
@@ -747,12 +747,12 @@ test('the status doc reports the real test totals', () => {
   const fromHeadings = perComponent
   assert.ok(fromHeadings.includes(975), `core heading must say 975, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(100), `web heading must say 100, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(109), `web heading must say 109, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1897,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1897`,
+    1906,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1906`,
   )
 })
 

@@ -1114,6 +1114,10 @@ pre.code {
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
+.profile-dialog h2 { margin: 0; }
+.profile-privacy-note { color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
+.profile-actions { margin-top: 18px; }
+.profile-welcome-action { margin: -8px 0 16px; }
 
 /* ============================================================================
    CONTEXT SECTIONS

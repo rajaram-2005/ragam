@@ -3,20 +3,15 @@ import { api, streamChat } from '../api.js'
 import { Banner, Button, CopyButton, Field, Panel } from '../components/ui.jsx'
 import { KnowledgePanel, MemoryPanel, HistoryPanel, SkillsPanel } from '../components/ContextPanels.jsx'
 import UserTrainingPanel from '../components/UserTrainingPanel.jsx'
+import { recommendationsForProfile } from '../profile.js'
 
-const STARTER_PROMPTS = [
-  { number: '01', title: 'Make a complex idea clear', detail: 'Build an explanation from first principles', prompt: 'Explain this idea clearly, starting with the basics: ' },
-  { number: '02', title: 'Shape a first draft', detail: 'Turn rough notes into a useful starting point', prompt: 'Help me turn these rough notes into a clear first draft: ' },
-  { number: '03', title: 'Compare the options', detail: 'Lay out trade-offs without choosing for me', prompt: 'Compare these options and explain the trade-offs without choosing for me: ' },
-  { number: '04', title: 'Make a practical plan', detail: 'Break a goal into manageable next steps', prompt: 'Help me make a practical plan for this goal: ' },
-]
-
-export default function ChatArea({ provider, readiness, refreshReadiness, onSettings, account }) {
+export default function ChatArea({ provider, readiness, refreshReadiness, onSettings, onProfile, profile, account }) {
   const firstPartyAll = readiness?.firstPartyModels?.models ?? []
   const firstPartyReady = firstPartyAll.filter((entry) => entry.status === 'ready' && entry.selectorEnabled)
   const firstPartyUnavailable = firstPartyAll.filter((entry) => !(entry.status === 'ready' && entry.selectorEnabled))
   const gatewayModels = provider?.models ?? []
   const hasSelectableModels = firstPartyReady.length > 0 || gatewayModels.length > 0
+  const recommendations = recommendationsForProfile(profile)
   const preferredDefault = readiness?.provider?.selectedModel || provider?.selectedModel || firstPartyReady[0]?.id || ''
 
   const [messages, setMessages] = useState([]), [prompt, setPrompt] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(null)
@@ -142,10 +137,11 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
         )) : <div className="chat-welcome">
           <div className="chat-welcome-mark" aria-hidden="true"><span>R</span><i /></div>
           <p className="chat-welcome-eyebrow">RAGAM · YOUR WORKSPACE</p>
-          <h2>What would you like to work through?</h2>
-          <p className="chat-welcome-copy">Choose an available model, then start with a question or one of these ideas. Nothing is sent until you press Send.</p>
+          <h2>{profile?.name ? `What would you like to work through, ${profile.name}?` : 'What would you like to work through?'}</h2>
+          <p className="chat-welcome-copy">{profile?.profession ? `A few starting points for ${profile.profession}. Choose one to draft a prompt; nothing is sent until you press Send.` : 'Choose an available model, then start with a question or one of these ideas. Nothing is sent until you press Send.'}</p>
+          {!profile?.profession ? <Button className="ghost small profile-welcome-action" type="button" onClick={onProfile}>Add your name and profession for tailored ideas</Button> : null}
           <div className="chat-starter-grid" aria-label="Draft prompt ideas">
-            {STARTER_PROMPTS.map((item) => <button className="chat-starter" type="button" key={item.number} onClick={() => useStarter(item.prompt)}>
+            {recommendations.map((item) => <button className="chat-starter" type="button" key={item.id} onClick={() => useStarter(item.prompt)}>
               <span className="chat-starter-number">{item.number}</span>
               <span className="chat-starter-copy"><strong>{item.title}</strong><small>{item.detail}</small></span>
               <span className="chat-starter-arrow" aria-hidden="true">↗</span>
