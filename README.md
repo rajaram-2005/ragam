@@ -8,6 +8,17 @@ Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog
 
 **Deployment is Docker Compose only.** Each end user runs an independent stack on their own computer with local persistent storage; there is no shared developer-operated backend. Use the [Docker Compose self-hosting guide](docs/22-self-hosted-deployment.md), including the Windows double-click launcher, for setup, health checks and backup/restore. Once running, create an account for the owner at `#/signup`, then sign in at `#/signin`. The operator's access-token file and its login route have been removed. Only the configured owner email can bootstrap the first account; member registration is closed by default and must be deliberately enabled by the operator. Open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md). The Node/Vite commands below are for repository development, not deployment.
 
+## Supported user interfaces
+
+| Interface | What an end user uses it for |
+|---|---|
+| **Windows launcher** | Double-click [`scripts/Start-Ragam.cmd`](scripts/Start-Ragam.cmd). On first launch it creates `.env` from `.env.example` and opens it in Notepad; set `AETHERIS_OWNER_EMAIL`, save, then launch again. Docker Desktop must be running. |
+| **Browser app** | Open `http://localhost` after the stack starts. Sign up with the configured owner email, then use the five areas: Chat, Image, Video, Plugins and MCP. Caddy serves the app and forwards same-origin `/api` requests to that user's local Core. |
+| **Stop without deleting data** | Double-click [`scripts/Stop-Ragam.cmd`](scripts/Stop-Ragam.cmd). It stops the containers and keeps the Docker volumes and local data. |
+| **Other Compose-compatible platforms** | Use the checked-in [`compose.yaml`](compose.yaml) and local `.env` through a Docker Compose-compatible UI. Each end user's stack and volumes remain independent. |
+
+Ragam is not a hosted/shared service or a separately installed native desktop app. Docker Compose is the deployment; the browser is its user interface. See the [self-hosting guide](docs/22-self-hosted-deployment.md) for security, persistence and backup details.
+
 Current release: **0.2.0** — [release note](docs/26-release.md), [changelog](CHANGELOG.md), version in [`VERSION`](VERSION). Provider Settings shows a read-only [provider matrix](docs/27-provider-framework.md): it distinguishes native vendor, OpenAI-compatible, and gateway-routed APIs; the fourteen audited Chat adapters are contract-tested but live verification is pending. Model-level capabilities stay unknown unless the vendor catalogue reports evidence. The release carries the adaptive core (ten phases, code and tests) as a library; the product surface described above is unchanged by it.
 
 **Current limits:** image generation has nine adapters (OpenAI Images, Gemini Images, Stability, Recraft, Ideogram, FLUX, fal.ai, Replicate and Adobe Firefly) and video has five (Veo, Runway, Luma, fal.ai video and Replicate video); remote MCP servers are not connected. All 37 non-pending provider entries have contract-tested code paths: 23 are `ready`, and 14 audited Chat providers retain `gateway_only` for catalogue compatibility while using individually defined adapters. No real vendor credential or deployment has been qualified live, and no generation has been purchased. Synthetic fixtures are used only in tests. Accounts have no email delivery, no second factor and no self-service deletion. See the [Phase 2 guide](docs/19-online-only-phase-2.md) for security boundaries and setup, and [accounts and sign-in](docs/20-accounts-and-sign-in.md) for the account model.
@@ -168,7 +179,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 37,147 | 24,607 | **zero npm packages** | 963 |
+| `services/core` | Node 22 ESM | 37,147 | 24,615 | **zero npm packages** | 963 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
 | `apps/web` | React 18 + Vite | 5,443 | 2,016 | react, react-dom | 99 |
 

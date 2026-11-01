@@ -836,6 +836,14 @@ test('the account and sign-in document describes the code that implements it', (
   assert.ok(readme.includes('access-token file and its login route have been removed'),
     'the README must state that the token sign-in is gone')
   assert.ok(readme.includes('create an account'), 'the README must tell the reader how to get in now')
+  assert.ok(readme.includes('## Supported user interfaces'), 'the README must document end-user entry points')
+  assert.ok(readme.includes('scripts/Start-Ragam.cmd') && readme.includes('scripts/Stop-Ragam.cmd'),
+    'the README must link the Windows start and stop launchers')
+  assert.ok(readme.includes('http://localhost') && readme.includes('same-origin `/api`'),
+    'the README must describe the browser UI and its local API route')
+  for (const path of ['scripts/Start-Ragam.cmd', 'scripts/Stop-Ragam.cmd', 'compose.yaml']) {
+    assert.ok(exists(resolve(REPO, path)), `the README-supported interface artifact ${path} must exist`)
+  }
   assert.doesNotMatch(squash(doc.phase2()), /paste it into the \*\*installation sign-in form\*\*/)
   assert.ok(squash(doc.phase2()).includes('Sign-in is an account, not a token'), 'docs/19 must point at the change')
   assert.ok(text.includes('Self-hosted signup is closed by default'), 'the account model states the secure self-host default')
