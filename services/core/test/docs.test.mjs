@@ -852,7 +852,7 @@ test('the account and sign-in document describes the code that implements it', (
     'the README must link the Windows start and stop launchers')
   assert.ok(readme.includes('http://localhost') && readme.includes('same-origin `/api`'),
     'the README must describe the browser UI and its local API route')
-  for (const path of ['scripts/Start-Ragam.cmd', 'scripts/Stop-Ragam.cmd', 'scripts/Backup-Ragam.cmd', 'scripts/Restore-Ragam.cmd', 'scripts/Backup-Ragam.ps1', 'scripts/Restore-Ragam.ps1', 'scripts/Ragam-Volume.ps1', 'compose.yaml']) {
+  for (const path of ['scripts/Start-Ragam.cmd', 'scripts/Stop-Ragam.cmd', 'scripts/Backup-Ragam.cmd', 'scripts/Restore-Ragam.cmd', 'scripts/Backup-Ragam.ps1', 'scripts/Restore-Ragam.ps1', 'scripts/Ragam-Volume.ps1', 'compose.yaml', 'assets/aetheris-omni-logo.svg', 'assets/cta-download.gif', 'assets/cta-setup.gif', 'assets/cta-providers.gif']) {
     assert.ok(exists(resolve(REPO, path)), `the README-supported interface artifact ${path} must exist`)
   }
   const backupScript = read('scripts/Backup-Ragam.ps1')

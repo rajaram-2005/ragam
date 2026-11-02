@@ -8,10 +8,13 @@
 </p>
 
 <p align="center">
-  <a href="#download-and-run-on-windows">Download and run</a> ·
-  <a href="#how-aetheris-omni-is-different">How it differs</a> ·
-  <a href="docs/22-self-hosted-deployment.md">Deployment and security guide</a> ·
-  <a href="docs/27-provider-framework.md">Provider catalogue</a>
+  <a href="https://github.com/rajaram-2005/ragam/archive/refs/heads/arena/e51ae7e1-ragam.zip"><img src="assets/cta-download.gif" alt="Download the Aetheris Omni source ZIP" width="280" /></a>
+  <a href="#download-and-run-on-windows"><img src="assets/cta-setup.gif" alt="Open the Windows setup guide" width="280" /></a>
+  <a href="docs/27-provider-framework.md"><img src="assets/cta-providers.gif" alt="Explore the provider API catalogue" width="280" /></a>
+</p>
+
+<p align="center">
+  <sub><a href="https://github.com/rajaram-2005/ragam/archive/refs/heads/arena/e51ae7e1-ragam.zip">Download ZIP</a> · <a href="#download-and-run-on-windows">Windows setup steps</a> · <a href="docs/27-provider-framework.md">Provider catalogue</a></sub>
 </p>
 
 # Aetheris Omni
