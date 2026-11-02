@@ -159,9 +159,18 @@ test('one way in: the token sign-in and every third-party method are gone from t
     // a password this product does have.
     assert.doesNotMatch(source, /oauth|openid connect|magic link|passkey|webauthn|\bsaml\b|sign in with (?:google|github|apple|microsoft|sso|a passkey)/i,
       `${name} offers a sign-in method this product does not have`)
-    // Credentials belong in the request, never in storage the page can read back.
-    assert.doesNotMatch(source, /localStorage|sessionStorage|document\.cookie/,
-      `${name} stores something in the browser that the server should hold`)
+    // Credentials belong in the request, never in storage the page can read back. The
+    // sole exception is the explicitly user-entered, non-secret profession profile: it
+    // is stored under its own versioned key and must never contain provider credentials.
+    if (name.endsWith('/profile.js')) {
+      assert.match(source, /globalThis\.localStorage/)
+      assert.match(source, /ragam\.local-profile\.v1/)
+      assert.doesNotMatch(source, /\b(?:token|password|credential|api.?key|secret)\b/i,
+        'the browser-only profile store must never hold authentication or provider secrets')
+    } else {
+      assert.doesNotMatch(source, /localStorage|sessionStorage|document\.cookie/,
+        `${name} stores something in the browser that the server should hold`)
+    }
   }
   assert.match(read('pages/SignInPage.jsx'), /api\.login\(\{ email: email\.trim\(\), password \}\)/)
   assert.match(read('pages/SignUpPage.jsx'), /api\.register\(\{ email: email\.trim\(\), password \}\)/)

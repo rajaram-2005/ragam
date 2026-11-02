@@ -5,6 +5,8 @@ import { AREAS } from './areas.js'
 import { AUTH_PAGES, DEFAULT_AUTH_PAGE, SESSION_ENDED_NOTICE, authPageFromHash, isAuthHash } from './auth.js'
 import { Banner } from './components/ui.jsx'
 import ProviderSettings from './components/ProviderSettings.jsx'
+import ProfileSettings from './components/ProfileSettings.jsx'
+import { readProfile, writeProfile } from './profile.js'
 import SignInPage from './pages/SignInPage.jsx'
 import SignUpPage from './pages/SignUpPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
@@ -29,7 +31,8 @@ const goTo = (target) => { if (globalThis.location) globalThis.location.hash = t
 export default function App() {
   const [account, setAccount] = useState(null), [checking, setChecking] = useState(true)
   const [authError, setAuthError] = useState(null), [notice, setNotice] = useState('')
-  const [active, setActive] = useState(currentArea), [page, setPage] = useState(currentPage), [settings, setSettings] = useState(false)
+  const [active, setActive] = useState(currentArea), [page, setPage] = useState(currentPage), [settings, setSettings] = useState(false), [profileOpen, setProfileOpen] = useState(false)
+  const [profile, setProfile] = useState(readProfile)
   const [readiness, setReadiness] = useState(null), [provider, setProvider] = useState(null), [error, setError] = useState(null)
 
   // Both are `useCallback` with no dependencies because they touch only state setters,
@@ -75,6 +78,11 @@ export default function App() {
 
   useEffect(() => { if (!account) return; refresh(); const id = setInterval(refresh, 20000); return () => clearInterval(id) }, [account, refresh])
 
+  if (checking) return <main className="auth-check" aria-busy="true" aria-live="polite">
+    <span className="auth-check-mark" aria-hidden="true">R</span>
+    <p>Opening your local workspace…</p>
+  </main>
+
   if (!account) {
     const shared = { checking, error: authError, onError: setAuthError }
     if (page === 'signup') return <SignUpPage {...shared} onSignedIn={signedIn} />
@@ -83,7 +91,8 @@ export default function App() {
   }
 
   const area = AREAS.find((a) => a.id === active) ?? AREAS[0]
-  const shared = { provider, readiness, refreshReadiness: refresh, onSettings: () => setSettings(true), account }
+  const shared = { provider, readiness, refreshReadiness: refresh, onSettings: () => setSettings(true), onProfile: () => setProfileOpen(true), profile, account }
+  const updateProfile = (next) => setProfile(writeProfile(next))
   return <Shell
     active={area.id}
     onSelect={(id) => { setActive(id); goTo(`#/${id}`) }}
@@ -93,6 +102,7 @@ export default function App() {
     subtitle="Your gateway. Your models. Online inference only."
     account={account}
     onSettings={() => setSettings(true)}
+    onProfile={() => setProfileOpen(true)}
     onSignOut={async () => { try { await api.logout(); signedOut() } catch (e) { setError(e) } }}
   >
     {error ? <Banner tone="bad" title={error.message} /> : null}
@@ -102,5 +112,6 @@ export default function App() {
     {area.id === 'plugins' ? <PluginsArea {...shared} /> : null}
     {area.id === 'mcp' ? <McpArea {...shared} /> : null}
     {settings ? <ProviderSettings account={account} onClose={() => setSettings(false)} onChanged={refresh} /> : null}
+    {profileOpen ? <ProfileSettings profile={profile} onSave={updateProfile} onClose={() => setProfileOpen(false)} /> : null}
   </Shell>
 }

@@ -14,12 +14,7 @@ services:
       AETHERIS_CORE_HOST: 0.0.0.0
       AETHERIS_CORE_PORT: 8790
       AETHERIS_ONLINE_DATA_DIR: /var/lib/ragam/online
-      AETHERIS_OWNER_EMAIL: ${AETHERIS_OWNER_EMAIL:-}
-      AETHERIS_ALLOW_ACCOUNT_REGISTRATION: ${AETHERIS_ALLOW_ACCOUNT_REGISTRATION:-false}
-      AETHERIS_MAX_ACCOUNTS: ${AETHERIS_MAX_ACCOUNTS:-1}
-      AETHERIS_COOKIE_SECURE: ${AETHERIS_COOKIE_SECURE:-true}
-      AETHERIS_COOKIE_SAMESITE: ${AETHERIS_COOKIE_SAMESITE:-strict}
-      AETHERIS_PRINT_RESET_CODES: ${AETHERIS_PRINT_RESET_CODES:-false}
+      AETHERIS_LOCAL_SINGLE_USER: 'true'
       AETHERIS_TRUSTED_ORIGINS: ${AETHERIS_TRUSTED_ORIGINS:-}
       AETHERIS_LITELLM_TRUSTED_ORIGINS: ${AETHERIS_LITELLM_TRUSTED_ORIGINS:-}
       AETHERIS_ONLINE_TIMEOUT_MS: ${AETHERIS_ONLINE_TIMEOUT_MS:-120000}
@@ -70,12 +65,10 @@ services:
         condition: service_healthy
       web:
         condition: service_healthy
-    environment:
-      RAGAM_SITE_ADDRESS: ${RAGAM_SITE_ADDRESS:-http://localhost}
+    # The UI and unauthenticated single-user API are intentionally host-loopback only.
+    # Do not publish them on a LAN or public interface.
     ports:
-      - "${RAGAM_BIND_ADDRESS:-127.0.0.1}:80:80"
-      - "${RAGAM_BIND_ADDRESS:-127.0.0.1}:443:443"
-      - "${RAGAM_BIND_ADDRESS:-127.0.0.1}:443:443/udp"
+      - "127.0.0.1:80:80"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

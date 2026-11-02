@@ -88,9 +88,13 @@ test('the runtime family is closed: unknown ids and pending adapters are refused
   assert.equal(runtimeFor('bedrock').wire, 'aws_bedrock')
   assert.equal(runtimeFor('bedrock').credential, 'aws_credentials')
 
-  // A provider the catalogue marks pending is refused with the reason, not treated as unknown.
-  assert.throws(() => runtimeFor('comfyui'), (e) => e.code === 'adapter_pending')
-  // A media vendor that used to be pending is now a first-class connection with its own wire.
+  // ComfyUI is an optional keyless image connection; no local service is installed by the app.
+  assert.equal(runtimeFor('comfyui').wire, 'comfyui_images')
+  assert.equal(runtimeFor('comfyui').keyRequired, false)
+  assert.equal(runtimeFor('comfyui').credential, 'none')
+  // Diffusers remains pending until a concrete service/model integration is selected.
+  assert.throws(() => runtimeFor('diffusers'), (e) => e.code === 'adapter_pending')
+  // Media vendors use their own independently tested wires.
   assert.equal(runtimeFor('stability').wire, 'stability_images')
   assert.equal(runtimeFor('runway').wire, 'runway_video')
   // And anything the catalogue does not know is still refused rather than defaulted.

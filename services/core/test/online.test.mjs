@@ -18,6 +18,7 @@ async function fixture(t, options = {}) {
     f.calls.push({ path: req.url, body, authorization: req.headers.authorization })
     if (f.mode === 'redirect') { res.writeHead(302, { location: '/stolen' }); return res.end() }
     if (f.mode === 'auth') { res.writeHead(401); return res.end('NEVER SHOW synthetic-gateway-secret') }
+    if (req.url === '/system_stats') return res.end(JSON.stringify({ system: { os: 'Windows', argv: ['private'], ram_total: 999 }, devices: [{ name: 'fixture GPU', type: 'cuda', vram_total: 8, vram_free: 4 }] }))
     if (req.url.endsWith('/models')) return res.end(JSON.stringify({ data: [{ id: 'model-a' }, { id: 'model-b' }] }))
     if (f.mode === 'body-stall') { res.writeHead(200, { 'content-type': 'application/json' }); res.flushHeaders(); return setTimeout(() => res.end(JSON.stringify({ choices: [{ message: { content: 'late' } }] })), 250) }
     if (body.stream) {
@@ -68,16 +69,16 @@ test('the provider catalogue is authenticated, read-only and carries no secrets'
   const r = await f.request('GET', '/api/providers/catalog')
   assert.equal(r.status, 200)
   assert.equal(r.data.valid, true)
-  assert.equal(r.data.counts.ready, 23, 'three runtimes, six native chat wires, nine image wires and five video wires have a tested path')
+  assert.equal(r.data.counts.ready, 24, 'three runtimes, six native chat wires, nine cloud image wires, one local image wire and five video wires have a tested path')
   assert.ok(r.data.counts.pending > 0, 'the unimplemented adapters must be stated, not hidden')
-  assert.match(r.data.summary, /^23 ready/)
+  assert.match(r.data.summary, /^24 ready/)
   for (const provider of r.data.providers) {
     assert.ok(provider.docsUrl.startsWith('https://'), `${provider.id} must cite documentation`)
     // A descriptor has no credential field, so there is nothing to redact — but assert it anyway,
     // because "there is nothing to redact" is exactly the property that silently regresses.
     for (const field of ['apiKey', 'key', 'token', 'secret']) assert.equal(field in provider, false)
     // A kind is not a secret, and it must be one the form understands.
-    assert.ok(provider.credential === null || ['api_key', 'service_account', 'aws_credentials', 'client_credentials'].includes(provider.credential))
+    assert.ok(provider.credential === null || ['none', 'api_key', 'service_account', 'aws_credentials', 'client_credentials'].includes(provider.credential))
   }
   const text = JSON.stringify(r.data)
   assert.ok(!/sk-[A-Za-z0-9]|bearer\s+[a-z0-9]/i.test(text), 'the catalogue leaked a credential shape')
@@ -334,17 +335,27 @@ test('a second provider connection is stored beside the first, with its own key'
   assert.equal(f.app.store.config().apiKey, 'synthetic-gateway-secret')
 })
 
-test('a connection is refused when the catalogue says there is no adapter', async (t) => {
+test('ComfyUI is an optional keyless catalogue connection while unknown ids still refuse', async (t) => {
   const f = await fixture(t)
+  assert.equal((await f.request('GET', '/api/providers/comfyui/hardware')).status, 401, 'hardware inspection requires sign-in')
   await f.login()
-  // ComfyUI is still `pending`: it has no adapter. Stability and the other media vendors are not
-  // used here any more because they now have one, and a test that kept asserting the refusal
-  // would pin a falsehood.
-  const pending = await f.request('PUT', '/api/providers/comfyui', { baseUrl: 'https://example.test', apiKey: 'x' })
-  assert.equal(pending.status, 400)
-  assert.equal(pending.data.error, 'adapter_pending')
-  // A pending connection is not stored as a side effect of being refused.
-  assert.equal(f.app.store.connections.length, 0)
+  const saved = await f.request('PUT', '/api/providers/comfyui', { baseUrl: f.gatewayUrl })
+  assert.equal(saved.status, 200, JSON.stringify(saved.data))
+  assert.equal(saved.data.keyRequired, false)
+  assert.equal(saved.data.keyConfigured, false)
+  assert.equal(saved.data.connections.find((connection) => connection.id === 'comfyui').wire, 'comfyui_images')
+  assert.equal(f.app.store.config('comfyui').apiKey, null)
+  // Configuration only saves the user's endpoint. No model discovery or generation happens until
+  // the user presses Test or starts an image job.
+  assert.equal(f.calls.length, 0)
+
+  const hardware = await f.request('GET', '/api/providers/comfyui/hardware')
+  assert.equal(hardware.status, 200)
+  assert.equal(hardware.data.source, 'comfyui_system_stats')
+  assert.deepEqual(hardware.data.devices, [{ index: 0, name: 'fixture GPU', backend: 'cuda', vramTotalBytes: 8, vramFreeBytes: 4 }])
+  assert.equal(f.calls.at(-1).path, '/system_stats')
+  assert.equal(f.calls.at(-1).authorization, undefined, 'ComfyUI hardware inspection sends no credential')
+  assert.equal('system' in hardware.data, false, 'private OS and argv fields are not returned')
 
   const unknown = await f.request('PUT', '/api/providers/not-a-real-provider', { baseUrl: 'https://example.test', apiKey: 'x' })
   assert.equal(unknown.status, 400)

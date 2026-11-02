@@ -90,6 +90,7 @@ async function loadComponents() {
     "export { default as PluginsArea } from '../../src/areas/PluginsArea.jsx'",
     "export { default as McpArea } from '../../src/areas/McpArea.jsx'",
     "export { default as ProviderSettings } from '../../src/components/ProviderSettings.jsx'",
+    "export { default as ProfileSettings } from '../../src/components/ProfileSettings.jsx'",
     "export { default as ProviderCatalogue } from '../../src/components/ProviderCatalogue.jsx'",
     "export { default as KlyvaronTiers } from '../../src/components/KlyvaronTiers.jsx'",
     "export { default as UserTrainingPanel } from '../../src/components/UserTrainingPanel.jsx'",
@@ -195,16 +196,11 @@ test('authenticated shell keeps five areas and provides settings outside navigat
 
 })
 
-test('App renders the sign-in page before loading protected data', () => {
-  // Signed out is the first state anybody sees, and it must not be a wall around a
-  // half-loaded workspace: no area chrome, no thread, no navigation.
+test('App waits for the local authentication mode before rendering account forms or workspace data', () => {
+  // No email/create-account form may flash before Core reports local single-user mode.
   const markup = render('App', React.createElement(components.App))
-  assert.match(markup, /Sign in/)
-  assert.match(markup, /type="email"/)
-  assert.match(markup, /type="password"/)
-  assert.doesNotMatch(markup, /class="thread"|class="nav-item/)
-  // The removed mechanism must not survive in the signed-out view.
-  assert.doesNotMatch(markup, /access token|installation access|Sign in to this installation/i)
+  assert.match(markup, /Opening your local workspace/)
+  assert.doesNotMatch(markup, /type="email"|type="password"|Create your account|class="thread"|class="nav-item/)
 })
 
 test('the sign-in page is a traditional address-and-password form', () => {
@@ -347,6 +343,7 @@ test('the change-password dialog asks for the current password and warns about o
   // Without an account there is no card at all: the sidebar must not invent an identity.
   // `render()` rejects empty markup by design, so this one goes straight to the renderer.
   assert.equal(renderToStaticMarkup(React.createElement(components.AccountCard, { onSignOut: noop })), '')
+  assert.equal(renderToStaticMarkup(React.createElement(components.AccountCard, { account: { id: 'local', mode: 'local', role: 'owner' } })), '')
 })
 
 test('provider settings are read-only for a member account', () => {
@@ -534,6 +531,52 @@ test('Chat renders the saved exact model and identifies the online recipient', (
 
 })
 
+test('Chat home offers original draft starters and keeps sending under the user’s control', () => {
+  const markup = render('ChatArea (welcome)', React.createElement(components.ChatArea, {
+    provider: { kind: 'litellm', name: 'LiteLLM', configured: true, models: ['model-a'], selectedModel: 'model-a' },
+  }))
+  assert.match(markup, /What would you like to work through\?/)
+  assert.match(markup, /Make a complex idea clear/)
+  assert.match(markup, /Shape a first draft/)
+  assert.match(markup, /Compare the options/)
+  assert.match(markup, /Make a practical plan/)
+  assert.match(markup, /Nothing is sent until you press Send/)
+  assert.match(markup, /aria-label="Message your selected model"/)
+  assert.match(markup, /Shift \+ Enter for a new line/)
+
+  const unconfigured = render('ChatArea (no provider)', React.createElement(components.ChatArea))
+  for (const name of ['OpenAI (ChatGPT)', 'Google Gemini', 'Anthropic Claude', 'xAI (Grok)']) assert.ok(unconfigured.includes(name), name)
+  assert.match(unconfigured, /model IDs that key can access/)
+  assert.match(unconfigured, /Provider API use may incur charges/)
+  assert.match(unconfigured, /Choose a provider/)
+})
+
+test('a chosen profession personalizes draft suggestions without silently selecting a model', () => {
+  const markup = render('ChatArea (teacher profile)', React.createElement(components.ChatArea, {
+    profile: { name: 'Ada', profession: 'Teacher' },
+    provider: { kind: 'litellm', name: 'LiteLLM', configured: true, models: [], selectedModel: '' },
+  }))
+  assert.match(markup, /What would you like to work through, Ada\?/)
+  assert.match(markup, /A few starting points for Teacher/)
+  assert.match(markup, /Plan a lesson/)
+  assert.match(markup, /Draft practice questions/)
+  assert.match(markup, /Choose one to draft a prompt; nothing is sent until you press Send/)
+  assert.match(markup, /aria-label="Model"[^>]*disabled/)
+})
+
+test('the profile dialog explains browser-only storage and offers editable name and profession fields', () => {
+  const markup = render('ProfileSettings', React.createElement(components.ProfileSettings, {
+    profile: { name: 'Ada', profession: 'Teacher' }, onSave: noop, onClose: noop,
+  }))
+  assert.match(markup, /Personalize recommendations/)
+  assert.match(markup, /Name/)
+  assert.match(markup, /Profession or role/)
+  assert.match(markup, /saved in this browser only/i)
+  assert.match(markup, /not included in Docker backups/)
+  assert.match(markup, /Save profile/)
+  assert.match(markup, /Clear profile/)
+})
+
 
 test('the provider catalogue shows status, never a control, and nothing when unloaded', () => {
   const catalog = {
@@ -623,8 +666,20 @@ test('Provider Settings offers LiteLLM, Ollama and llama.cpp, and calls the loca
   assert.doesNotMatch(markup, /value="sk-/)
   // A signed-in workspace with no connection says so, and does not present an empty model list as ready.
   const chat = render('ChatArea (unconnected)', React.createElement(components.ChatArea, { provider: { kind: 'ollama', name: 'Ollama', configured: false, models: [] } }))
-  assert.match(chat, /Connect your online provider/)
+  assert.match(chat, /Connect a model provider/)
+  assert.match(chat, /OpenAI \(ChatGPT\)/)
+  assert.match(chat, /Google Gemini/)
+  assert.match(chat, /Anthropic Claude/)
+  assert.match(chat, /xAI \(Grok\)/)
   assert.match(chat, /Ollama/)
+
+  const comfySettings = render('ProviderSettings (ComfyUI hardware)', React.createElement(components.ProviderSettings, {
+    account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop,
+    provider: { kind: 'comfyui', connections: [{ id: 'comfyui', label: 'ComfyUI (local)', wire: 'comfyui_images', credential: 'none', keyRequired: false, configured: true, baseUrl: 'http://comfyui:8188', models: ['checkpoint-fixture.safetensors'] }] },
+  }))
+  assert.match(comfySettings, /ComfyUI hardware and checkpoints/)
+  assert.match(comfySettings, /Detect hardware/)
+  assert.match(comfySettings, /ComfyUI must be reachable from the Core container/)
 })
 
 test('ChatArea gates first-party Klyvaron models strictly on real inference verification and separates gateway models', () => {
@@ -667,7 +722,7 @@ test('ChatArea gates first-party Klyvaron models strictly on real inference veri
   assert.match(chat, /<option value="klyvaron-max-lm"[^>]*disabled[^>]*>Klyvaron Max \(klyvaron-max-lm\) — missing<\/option>/)
   assert.match(chat, /<option value="gpt-external-demo">gpt-external-demo<\/option>/)
   assert.match(chat, /Klyvaron Native/)
-  assert.doesNotMatch(chat, /Connect your online provider/)
+  assert.doesNotMatch(chat, /Connect a model provider/)
 })
 
 test('KlyvaronTiers keeps product routing tiers separate from first-party model identities', () => {

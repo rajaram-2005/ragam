@@ -35,31 +35,29 @@ cd aetheris-omni
 
 cp .env.example .env                    # reference for values; Node does not load .env automatically
 
-# 1. the core service (Node, no install step); configure this before the first launch
-AETHERIS_OWNER_EMAIL=you@example.com node services/core/src/server.mjs
+# 1. the core service (Node, no install step); local mode has no account/email flow
+AETHERIS_LOCAL_SINGLE_USER=true node services/core/src/server.mjs
 
 # 2. the web app (separate terminal)
 cd apps/web && npm install && npm run dev
 ```
 
-Open the URL Vite prints. It proxies `/api` to the core service, so the browser
-never needs to know where the backend lives. The first account must use the exact
-`AETHERIS_OWNER_EMAIL` configured for Core; it becomes the owner, and only the owner
-can connect a gateway (§7). Member registration is closed until the operator
-explicitly enables it. For Docker deployment, persistent volumes and backup/restore,
+Open the URL Vite prints. It proxies `/api` to Core, so the browser never needs to
+know where the backend lives. Local single-user mode is intended only for a trusted
+loopback connection. For Docker deployment, persistent volumes and backup/restore,
 see [the self-hosted deployment guide](22-self-hosted-deployment.md).
 
 Expected startup banner from the core, on a fresh installation:
 
 ```
-Aetheris online-only API listening on 0.0.0.0:8790
+Aetheris online-only API listening on 127.0.0.1:8790
   data dir   /home/you/aetheris-omni/.aetheris-data/online
-  sign-in    owner bootstrap is limited to AETHERIS_OWNER_EMAIL; member registration is closed by default
-Configure an online gateway (LiteLLM, Ollama or llama.cpp server) in Provider Settings. No local inference or automatic model downloads.
+  access     single-user workspace, localhost only; no account or email login
+Configure a supported provider in Provider Settings. Model ids are fetched from its configured account; no local inference, guessed model list or automatic fallback.
 ```
 
-Once an account exists, the third line reports the account count and whether an owner is configured, without logging an email address. A `cookie` line appears whenever the session cookie's SameSite policy is not the default. A `(node:NNNN) ExperimentalWarning: SQLite is an experimental feature` line
-above the banner comes from `node:sqlite` and is expected on Node 22.
+A `(node:NNNN) ExperimentalWarning: SQLite is an experimental feature` line above
+the banner comes from `node:sqlite` and is expected on Node 22.
 
 That banner, with no model listed anywhere in it, **is the correct output** on a
 fresh installation: this entry point performs no inference and installs nothing,
@@ -80,13 +78,11 @@ npm run core
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `AETHERIS_CORE_HOST` | `0.0.0.0` | Bind address. Use `127.0.0.1` for a single-user machine |
+| `AETHERIS_CORE_HOST` | `0.0.0.0` with account mode; `127.0.0.1` in local single-user mode | Bind address. Compose keeps Core private and exposes only localhost through Caddy |
 | `AETHERIS_CORE_PORT` | `8790` | Explicit bind-port override; when unset, the active entry uses the host-provided `PORT` before falling back to `8790` |
 | `PORT` | *(optional)* | Generic Node hosting port; ignored when `AETHERIS_CORE_PORT` is explicitly set. Docker Compose sets the Core port explicitly. |
-| `AETHERIS_ONLINE_DATA_DIR` | `./.aetheris-data/online` | Active online account/provider/SQLite data directory; place on persistent storage in production |
-| `AETHERIS_OWNER_EMAIL` | unset | Required to bootstrap the first self-hosted owner; no email means registration stays closed |
-| `AETHERIS_ALLOW_ACCOUNT_REGISTRATION` | `false` | Explicit opt-in to member registration after owner creation |
-| `AETHERIS_MAX_ACCOUNTS` | `1` self-hosted | Account cap; deliberately increase before enabling members |
+| `AETHERIS_ONLINE_DATA_DIR` | `./.aetheris-data/online` | Active online workspace/provider/SQLite data directory; place on persistent storage |
+| `AETHERIS_LOCAL_SINGLE_USER` | `false` for direct Core; fixed `true` in Compose | Opens directly without accounts; restricts browser Host headers to localhost and disables account endpoints |
 | `AETHERIS_TRUSTED_WEB_ORIGINS` | *(empty)* | Optional exact HTTPS origins for a frontend served on a separate origin; comma-separated, no paths or wildcards. The Docker Compose app is same-origin and needs no entry. |
 | `AETHERIS_COOKIE_SECURE` | `true` | Keep Secure on for production HTTPS cookies |
 | `AETHERIS_COOKIE_SAMESITE` | `strict` | Same-origin default; `none` is only for genuinely cross-site embedding and requires Secure |
@@ -258,12 +254,12 @@ curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed4
 PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
 ```
 
-The pinned archive includes the model manifests and checksum list. A full successful run validates all 970 Core cases; without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
+The pinned archive includes the model manifests and checksum list. The last verified full run covered 976 Core tests before the current provider batch added six fixture-only cases. The current suite contains 982 tests; the new adapters are covered by focused local fixtures, and a fresh full run is pending. Without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-npm test                  # all three suites (1891 tests)
-npm run test:core         # 970
-npm run test:web          # 99
+npm test                  # all three suites (1913 tests)
+npm run test:core         # 982
+npm run test:web          # 109
 npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
 
@@ -317,10 +313,10 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 970 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41313605025](https://github.com/rajaram-2005/ragam/actions/runs/41313605025) passed Core and release verification; the separate Compose job also passed its startup, API-through-Caddy, cold backup and restore checks. This does not verify any persistent deployment or hosted-data migration. |
+| **Core service** | Current suite: 982 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41324293475](https://github.com/rajaram-2005/ragam/actions/runs/41324293475) passed the prior 976-test suite with the pinned model artifacts and Python prerequisites; six newer provider-fixture tests have focused coverage, but no new full-suite result is claimed. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 99 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
-| **Docker Compose** | Run [41313605025](https://github.com/rajaram-2005/ragam/actions/runs/41313605025) passed: builds both images, starts Core/web/Caddy, verifies owner bootstrap and authenticated API through Caddy, then cold-backs up and restores the named volume and verifies persisted data. This is a synthetic CI smoke, not a production or hosted-data migration check. |
+| **Web app** | `npm ci`, 109 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Docker Compose** | Run [41324293475](https://github.com/rajaram-2005/ragam/actions/runs/41324293475) passed: builds both images, starts Core/web/Caddy on loopback, checks local-workspace health and the provider catalogue with account creation disabled, then cold-backs up and restores the named volume and verifies workspace identity plus a SQLite history marker. Synthetic CI only: no live provider inference or persistent-deployment guarantee. |
 | **Docs** | The 50-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |
 
@@ -375,38 +371,60 @@ Deterministic apart from `latencyMs`. Seeds: data `1`, model `7`. See the
 
 ---
 
-## 7. Making chat actually work
+## 7. Connecting Chat, Image and Video providers
 
 The active product — `npm run core`, which is `services/core/src/server.mjs` — performs
-**no local inference and downloads no models**. It sends chat to **one** configured online
-endpoint at a time, of one of three kinds: a **LiteLLM** gateway, an **Ollama** server, or a
-**llama.cpp** server (`llama-server`). All three are called the same way:
-`GET {base}/models` and `POST {base}/chat/completions`. A LiteLLM gateway always needs a
-Bearer key. Ollama and llama.cpp need one only if you set it (`llama-server --api-key`).
-Until a connection is saved, `/api/ready` reports `status: "setup_required"`
-with `capabilities.chat: false`, the model list is empty, and Chat says so in a banner
-rather than failing quietly. That empty state is not a defect and no amount of
-re-signing-in changes it: it is the product waiting for a gateway or runtime.
+**no local inference and downloads no models**. The catalogue includes direct Chat APIs
+(OpenAI, Anthropic Claude, Google Gemini, Google Vertex AI, Azure OpenAI, Amazon Bedrock,
+Cohere and other listed providers), separate Image APIs, and separate Video APIs. The
+full provider matrix and each connection's authentication/endpoint details are in
+[docs/27](./27-provider-framework.md). ChatGPT and Claude are product names; their API
+connections are OpenAI and Anthropic respectively. Google Gemini and Vertex AI are
+separate connection choices with different credential formats.
 
-Sign in as the **owner** account (the first one created on an installation), open
-**Provider Settings**, and enter:
+### Connect a Chat provider in the browser
 
-| Field | Value |
-|---|---|
-| Runtime | `LiteLLM gateway`, `Ollama` or `llama.cpp server`. Choosing one starts from an empty endpoint |
-| API base URL | your gateway's `/v1` base, e.g. `https://gateway.example/v1`; for Ollama `http://<core-host>:11434/v1`; for llama.cpp `http://<core-host>:8080/v1`. The `/v1` matters: Core appends `/models` and `/chat/completions` to whatever you enter |
-| API key | required for LiteLLM; optional for Ollama and llama.cpp. A saved key is never carried over to a different runtime or endpoint |
+1. Sign in to the local Ragam installation as its **owner** and open **Provider Settings**.
+2. Under **Add a connection**, select the API vendor (for example, OpenAI, Anthropic Claude
+   or Google Gemini). Enter that vendor's API base URL and credential in the fields shown.
+   Vertex AI, Bedrock and Fireworks may ask for structured credentials or extra account
+   metadata; follow the field labels and the provider's own documentation.
+3. Select **Save and use**, then **Test connection & refresh models**. This tests the model
+   catalogue only; it does not send a chat prompt or prove live inference compatibility.
+4. In Chat, explicitly choose a listed model and send a prompt. Ragam sends that request to
+   the selected connection, keeps the provider/model provenance, and does not silently switch
+   to another provider if the request fails. API calls may incur provider charges.
 
-A **local** Ollama or llama.cpp server is still **online** inference from the product's point
-of view: the request leaves Core for that endpoint, and the UI and the audit ledger say so.
-Because it is a loopback or private address, Core refuses it unless its exact origin is
-listed in `AETHERIS_TRUSTED_ORIGINS` on the Core host, for example
-`AETHERIS_TRUSTED_ORIGINS=http://127.0.0.1:11434`. Run Core with that variable set, then save.
+Enter credentials only in Provider Settings, never in chat or source files. Credentials are
+stored encrypted by the local Core and are not returned by its API. A consumer ChatGPT or
+Claude subscription should not be assumed to include API access or API usage; check the
+provider's current API terms and billing before sending prompts. No live provider is contacted
+merely by viewing the catalogue.
 
-**Save connection**, then **Test connection & refresh models**. The list fills with the
-ids the gateway reports; pick one in Chat. The model you pick is the model that is
-called — there is no substitution and no fallback, so a model that is listed but broken
-fails visibly instead of quietly answering from somewhere else.
+The catalogue currently has 44 entries: 24 `ready` entries with fixture-tested code paths,
+19 individually contract-tested Chat adapters that retain the historical `gateway_only`
+classification, and Diffusers as the sole `pending` entry. “Fixture-tested” is not a claim
+of live account access or model qualification. No vendor credentials or live quota were
+available for qualification in this repository. Synthetic fixtures prove request/response
+handling only.
+
+### Image and Video are separate connections
+
+Open **Image** or **Video**, choose **Provider Settings**, and add a provider that supports
+that modality; a Chat credential or model is not reused for media generation. Image has nine
+cloud adapters plus the local ComfyUI adapter. Video has five cloud adapters. Select a listed
+model in the relevant area and submit a generation explicitly; those requests can incur
+provider charges. Returned artifacts are validated before Ragam stores or displays them.
+
+ComfyUI is **local image generation only** in this integration. It needs a running ComfyUI
+HTTP service and an installed checkpoint; Ragam installs neither. After you save the endpoint and select **Test connection & refresh models**, Ragam also reads ComfyUI’s `/system_stats` report and shows the devices, backend labels, reported VRAM and installed checkpoint names. This is automatic hardware reporting from the connected ComfyUI process—not a hardware qualification or proof that a particular checkpoint fits. Ragam does not choose, download or silently substitute a model.
+
+The exact endpoint origin must be trusted by Core. In Docker, `localhost` refers to the Core container, not Windows, and `http://comfyui:8188` works only if a ComfyUI service named `comfyui` is on the same private Docker network. The default Compose stack does not start that service. Do not expose unauthenticated ComfyUI to the LAN or Internet. Diffusers remains pending until a concrete service/model and license are selected.
+
+Until a Chat connection is saved, `/api/ready` reports `status: "setup_required"` with
+`capabilities.chat: false`, and Chat explains that setup is required rather than failing
+quietly. Saving connections does not qualify a model: model-list success is not inference
+verification, and no fallback is performed.
 
 ### Local models behind a local gateway
 
@@ -474,18 +492,22 @@ controls described in §7 — set the runtime in Provider Settings, not in `.env
 ## 8. External providers and metadata catalogs
 
 **The active build routes Chat, Image and Video through one guarded online transport.** Its provider
-registry has 39 entries: 23 `ready` entries with tested code paths, fourteen audited Chat providers
+registry has 44 entries: 24 `ready` entries with tested code paths, nineteen individually adapted Chat providers
 with individually defined contract-tested adapters (retaining `gateway_only` for catalogue
-compatibility), and two `pending` local media stacks with no adapter. Contract tests do not qualify
-live vendor access. No vendor is contacted unless you save its endpoint and credential in Provider
-Settings, and every request goes only to the connection that names it. See
+compatibility), and one `pending` local media entry (Diffusers). The optional ComfyUI image adapter
+uses its local HTTP API and a built-in stock workflow; Ragam does not install ComfyUI or model
+checkpoints. Contract tests do not qualify live vendor access. No vendor is contacted unless you
+save its endpoint and credential in Provider Settings and explicitly test or send a request. See
 [docs/27](27-provider-framework.md); FreeLLMAPI remains excluded.
 
-**Image and video generation are real, for one provider each.** Save an OpenAI Images connection
-and a Google Veo connection, test each to list its models, then generate from the Image or Video
-area. Both are asynchronous durable jobs; the bytes are validated by the Core, stored under the
-account's data directory, and served only by the job that produced them. Video polls a
-long-running operation, can be cancelled, and never substitutes a still image or a simulated clip.
+**Image and video generation have separate provider adapters.** Ten image integrations (nine
+cloud providers plus ComfyUI) and five video providers have fixture-tested request/result paths;
+no vendor has been live-qualified here. Save the connection you choose, explicitly test it to list
+models, then submit a job from the Image or Video area. Jobs are durable and returned media bytes are
+validated by Core before storage and display. ComfyUI requires an already-running service reachable
+from Core and an exact-origin entry in `AETHERIS_TRUSTED_ORIGINS`; it uses installed checkpoints and
+does not download or choose weights. Keep an unauthenticated ComfyUI service off the LAN/Internet.
+Provider requests may incur charges; no calls happen merely because a catalogue entry is visible.
 
 Optional **metadata-only** sources are now configured using
 `AETHERIS_MODEL_CATALOG_FILE`; see [17 — Model catalog](./17-model-catalog.md).
@@ -493,12 +515,14 @@ Credentials stay in protected server-side files. An explicit refresh is separate
 from inference authorization, and Strict Offline blocks external catalog sources,
 even a loopback model gateway that could consult upstream services.
 
-Image and Video still report no generation provider: both answer
-`capability_unavailable` rather than substituting output, and the refusal is
-audited. Text inference through the LiteLLM gateway does ship, with the data
-policy, identity, streaming and cancellation that the online entry enforces
-([docs/19](19-online-only-phase-2.md)); what has not shipped is *more than one*
-provider, per-account provider connections, and any generation modality.
+A ComfyUI connection is not installed by the standard Compose stack. For an existing private ComfyUI
+service, configure its base URL in Provider Settings and add that exact origin to
+`AETHERIS_TRUSTED_ORIGINS` in the Core environment before restarting the stack. For example, use
+`http://host.docker.internal:8188` only when the service is reachable from the Core container and
+network/firewall policy keeps the unauthenticated endpoint private. Then select **ComfyUI (local)**,
+click **Test connection & refresh models**, and choose an enumerated checkpoint in the Image area.
+Saving only records the endpoint; Test performs local checkpoint discovery, and Generate submits the
+explicit user prompt. Diffusers remains unselectable until a concrete service API is chosen.
 
 ---
 
@@ -542,14 +566,14 @@ npm run worker -- --workspace ./.aetheris-data/worker-workspace --pairing-secret
 | Symptom | Cause | Fix |
 |---|---|---|
 | Empty model list, Chat disabled, `/api/ready` says `setup_required` | No gateway saved yet | §7 — Provider Settings, then **Test connection & refresh models** |
-| `400 endpoint_blocked` when saving a gateway | A loopback or private base URL whose origin is not trusted | §7 — set `AETHERIS_LITELLM_TRUSTED_ORIGINS` to the exact origin and restart Core |
+| `400 endpoint_blocked` when saving a provider | A loopback or private base URL whose exact origin is not trusted | For ComfyUI or another local endpoint, set `AETHERIS_TRUSTED_ORIGINS` to the exact origin and restart Core; do not expose an unauthenticated service to the LAN/Internet |
 | Sign-in succeeds, then the app returns to the sign-in page | The session cookie is not being sent — the app is inside another site's iframe and the cookie is `SameSite=Strict` | Start Core with `AETHERIS_COOKIE_SAMESITE=none` and `AETHERIS_COOKIE_SECURE=true`; see [docs/20](20-accounts-and-sign-in.md) |
 | `502 invalid_stream` on every message | The base URL is missing `/v1`, or the gateway answers with an error page | §7 — check the two `curl` calls against the gateway directly |
 | Web UI shows "Core service unreachable" | Core not running, or the proxy target is wrong | Start the core; check `AETHERIS_CORE_URL` |
 | UI works locally but not behind a proxy | Dev server rejecting the host | Already handled: `allowedHosts: true`. Check the proxy forwards `/api` |
 | `No module named pytest` | System interpreter has no pytest | `AETHERIS_PYTHON=/path/to/venv/bin/python` |
 | `Database opened` / sqlite errors | Node < 22.5 | Upgrade Node; `node:sqlite` is required |
-| Image says `provider_not_configured` | No OpenAI Images connection is saved | §8 — add an OpenAI Images connection and test it. Video has no adapter and still answers `capability_unavailable` |
+| Image says `provider_not_configured` | No usable image connection is saved | §8 — add and test a listed cloud image provider or an already-running trusted ComfyUI service |
 | Video refuses with `needs_hardware` | No local video runtime | Expected on this hardware class. The refusal never substitutes a still image |
 | Fabric `POST /pipeline/run` returns `failed` | Trained MRR below the 0.60 release floor | Correct behaviour. Raise `epochs`; see the model card's release requirements |
 | Fabric returns 413 | Body over 1 MB | Expected; this service takes small JSON commands, not datasets |

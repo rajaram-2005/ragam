@@ -1,5 +1,5 @@
-// Contract tests for the 14 audited Chat providers. These deterministic fixtures prove request
-// shapes and parsers only; they are deliberately not described as live vendor qualification.
+// Contract tests for individually catalogued Chat providers. These deterministic fixtures prove
+// request shapes and parsers only; they are deliberately not described as live vendor qualification.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { PROVIDERS, WIRE_FORMATS, providerById } from '../src/providers/catalog.mjs'
@@ -7,9 +7,14 @@ import { wireFor } from '../src/providers/wires/index.mjs'
 
 const cases = [
   { id: 'openai', wire: 'openai_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { data: [{ id: 'gpt-test' }] } },
+  { id: 'alibaba-model-studio', wire: 'alibaba_model_studio_chat', modelsPath: '/api/v1/models?page_no=1&page_size=100', chatPath: '/compatible-mode/v1/chat/completions', expectedModel: 'qwen3.8-max', list: { output: { total: 1, page_no: 1, page_size: 100, models: [{ model: 'qwen3.8-max', inference_metadata: { request_modality: ['Text'], response_modality: ['Text'] } }] } } },
   { id: 'openrouter', wire: 'openrouter_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { data: [{ id: 'vendor/model-test' }] } },
   { id: 'mistral', wire: 'mistral_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { data: [{ id: 'mistral-test' }] } },
   { id: 'deepseek', wire: 'deepseek_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { data: [{ id: 'deepseek-test', name: 'DeepSeek test', context_window: 65536, max_output_tokens: 4096, input_modalities: ['text', 'image'], output_modalities: ['text'] }] } },
+  { id: 'cerebras', wire: 'cerebras_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { object: 'list', data: [{ id: 'cerebras-test' }] } },
+  { id: 'deepinfra', wire: 'deepinfra_chat', modelsPath: '/models?filter=with_meta&sort_by=maf', chatPath: '/chat/completions', list: { data: [{ id: 'deepinfra-test', metadata: { tags: ['chat'] } }] } },
+  { id: 'minimax', wire: 'minimax_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { data: [{ id: 'MiniMax-M3' }] } },
+  { id: 'siliconflow', wire: 'siliconflow_chat', modelsPath: '/models?sub_type=chat', chatPath: '/chat/completions', list: { data: [{ id: 'Qwen/Qwen3-32B' }] } },
   { id: 'groq', wire: 'groq_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { data: [{ id: 'groq-test' }] } },
   { id: 'together', wire: 'together_chat', modelsPath: '/models', chatPath: '/chat/completions', list: [{ id: 'together-test', type: 'chat', context_length: 32768 }] },
   { id: 'fireworks', wire: 'fireworks_chat', modelsPath: '/v1/accounts/acct_test/models?pageSize=200', chatPath: '/inference/v1/chat/completions', list: { models: [{ id: 'accounts/acct_test/models/fw-test', name: 'fw-test-chat' }] }, options: { accountId: 'acct_test' } },
@@ -24,8 +29,8 @@ const cases = [
 
 const configFor = (entry) => ({ id: entry.id, kind: entry.id, wire: entry.wire, baseUrl: 'https://fixture.invalid', apiKey: 'fixture-secret-not-a-real-key', options: entry.options ?? {} })
 
-test('the exact 14 audit providers each have their own contract adapter and compatibility class', () => {
-  const expected = ['openai', 'openrouter', 'mistral', 'deepseek', 'groq', 'together', 'fireworks', 'xai', 'perplexity', 'novita', 'sambanova', 'huggingface', 'vllm', 'localai']
+test('the documented provider APIs each have their own contract adapter and compatibility class', () => {
+  const expected = ['openai', 'alibaba-model-studio', 'openrouter', 'mistral', 'deepseek', 'cerebras', 'deepinfra', 'minimax', 'siliconflow', 'groq', 'together', 'fireworks', 'xai', 'perplexity', 'novita', 'sambanova', 'huggingface', 'vllm', 'localai']
   const actual = PROVIDERS.filter((row) => row.adapterStatus === 'contract_tested').map((row) => row.id).sort()
   assert.deepEqual(actual, expected.sort())
   assert.equal(PROVIDERS.some((row) => /freellmapi/i.test(row.id)), false)
@@ -40,7 +45,7 @@ test('the exact 14 audit providers each have their own contract adapter and comp
   assert.equal(providerById('openai').integrationType, 'native-vendor')
   assert.equal(providerById('xai').integrationType, 'native-vendor')
   for (const id of ['openrouter', 'perplexity', 'huggingface']) assert.equal(providerById(id).integrationType, 'gateway-routed')
-  for (const id of ['mistral', 'deepseek', 'groq', 'together', 'fireworks', 'novita', 'sambanova', 'vllm', 'localai']) assert.equal(providerById(id).integrationType, 'openai-compatible')
+  for (const id of ['alibaba-model-studio', 'mistral', 'deepseek', 'cerebras', 'deepinfra', 'minimax', 'siliconflow', 'groq', 'together', 'fireworks', 'novita', 'sambanova', 'vllm', 'localai']) assert.equal(providerById(id).integrationType, 'openai-compatible')
 })
 
 test('model-list contracts retain only reported model metadata and never infer unreported features', async () => {
@@ -55,7 +60,7 @@ test('model-list contracts retain only reported model metadata and never infer u
     const details = await wire.modelCatalogue(transport, config)
     assert.equal(pathSeen, entry.modelsPath, entry.id)
     assert.equal(details.length, 1, entry.id)
-    assert.equal(details[0].id, entry.list.models?.[0]?.id ?? entry.list.data?.[0]?.id ?? entry.list[0]?.id, entry.id)
+    assert.equal(details[0].id, entry.expectedModel ?? entry.list.models?.[0]?.id ?? entry.list.data?.[0]?.id ?? entry.list[0]?.id, entry.id)
     assert.equal(headersSeen.authorization, `Bearer ${config.apiKey}`, entry.id)
     if (entry.id === 'deepseek') {
       assert.equal(details[0].capabilities.contextTokens, 65536)

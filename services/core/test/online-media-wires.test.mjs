@@ -88,6 +88,7 @@ test('the media wire registry names a modality, a credential kind and a non-empt
     runway_video: ['video', 'api_key'],
     luma_video: ['video', 'api_key'],
     firefly_images: ['image', 'client_credentials'],
+    comfyui_images: ['image', 'none'],
   }
   for (const [name, [modality, credential]] of Object.entries(expected)) {
     assert.ok(IMPLEMENTED.includes(name), `${name} must be registered`)
@@ -100,6 +101,66 @@ test('the media wire registry names a modality, a credential kind and a non-empt
   assert.equal(wireFor('replicate_images').SIZES.length, 0, 'no common size input across Replicate image models')
   assert.equal(wireFor('replicate_video').ASPECT_RATIOS.length, 0)
   assert.equal(wireFor('runway_video').RESOLUTIONS.length, 0, 'Runway does not document a resolution input here')
+})
+
+test('ComfyUI discovers installed checkpoints, submits a bounded stock workflow and validates the output path', async () => {
+  const calls = []
+  let historyReads = 0
+  const transport = async (config, path, options = {}) => {
+    calls.push({ config, path, options })
+    if (path === '/object_info/CheckpointLoaderSimple') {
+      return { CheckpointLoaderSimple: { input: { required: { ckpt_name: [['sdxl-base.safetensors']] } } } }
+    }
+    if (path === '/prompt') return { prompt_id: 'prompt_123' }
+    if (path === '/history/prompt_123') {
+      historyReads += 1
+      return historyReads === 1 ? {} : { prompt_123: { outputs: { '9': { images: [{ filename: 'ragam_00001_.png', subfolder: '', type: 'output' }] } } } }
+    }
+    if (path.startsWith('/view?') && options.binary) return { bytes: PNG, contentType: 'image/png' }
+    return undefined
+  }
+  const config = { id: 'comfyui', kind: 'comfyui', wire: 'comfyui_images', baseUrl: 'http://comfyui:8188', apiKey: null }
+  assert.deepEqual(await wireFor('comfyui_images').models(transport, config), ['sdxl-base.safetensors'])
+  const hardwareTransport = recorder(() => ({
+    system: { os: 'Windows', argv: ['private-launch-argument'], ram_total: 999 },
+    devices: [
+      { name: 'NVIDIA GeForce RTX fixture', type: 'cuda', vram_total: 12 * 1024 ** 3, vram_free: 10 * 1024 ** 3 },
+      { name: 'AMD Radeon fixture', type: 'rocm', vram_total: 8 * 1024 ** 3, vram_free: 6 * 1024 ** 3 },
+    ],
+  }))
+  const detected = await wireFor('comfyui_images').systemInfo(hardwareTransport.transport, config)
+  assert.equal(hardwareTransport.calls[0].path, '/system_stats')
+  assert.deepEqual(detected.devices, [
+    { index: 0, name: 'NVIDIA GeForce RTX fixture', backend: 'cuda', vramTotalBytes: 12 * 1024 ** 3, vramFreeBytes: 10 * 1024 ** 3 },
+    { index: 1, name: 'AMD Radeon fixture', backend: 'rocm', vramTotalBytes: 8 * 1024 ** 3, vramFreeBytes: 6 * 1024 ** 3 },
+  ])
+  assert.equal('system' in detected, false, 'OS, RAM, argv and paths are not exposed')
+  await assert.rejects(
+    wireFor('comfyui_images').systemInfo(async () => ({ devices: 'not a list' }), config),
+    (error) => error.code === 'invalid_hardware_report',
+  )
+  const result = await wireFor('comfyui_images').generate(transport, config, {
+    model: 'sdxl-base.safetensors', prompt: 'A green glass bird', size: '768x512',
+    poll: { initialMs: 1, factor: 1, maxMs: 1, attempts: 3 },
+  })
+  assert.deepEqual(result.bytes, PNG)
+  assert.equal(result.model, 'sdxl-base.safetensors')
+  assert.equal(result.operation, 'prompt_123')
+  const submit = calls.find((call) => call.path === '/prompt')
+  assert.equal(submit.options.headers.authorization, undefined, 'ComfyUI has no credential by default')
+  assert.deepEqual(submit.options.body.prompt['4'].inputs, { ckpt_name: 'sdxl-base.safetensors' })
+  assert.deepEqual(submit.options.body.prompt['5'].inputs, { width: 768, height: 512, batch_size: 1 })
+  assert.equal(submit.options.body.prompt['6'].inputs.text, 'A green glass bird')
+  assert.equal(calls.find((call) => call.path.startsWith('/view?')).path, '/view?filename=ragam_00001_.png&subfolder=&type=output')
+  assert.equal(calls.at(-1).options.maxResponseBytes, 24 * 1024 * 1024)
+
+  const unsafe = recorder(({ path }) => path === '/prompt' ? { prompt_id: 'prompt_123' }
+    : path === '/history/prompt_123' ? { prompt_123: { outputs: { '9': { images: [{ filename: '../secrets.png', subfolder: '', type: 'output' }] } } } }
+      : undefined)
+  await assert.rejects(wireFor('comfyui_images').generate(unsafe.transport, config, {
+    model: 'sdxl-base.safetensors', prompt: 'p',
+    poll: { initialMs: 1, factor: 1, maxMs: 1, attempts: 1 },
+  }), (error) => error.code === 'invalid_completion')
 })
 
 test('the Stability wire posts multipart, asks for image bytes, and rejects anything else', async () => {
@@ -353,10 +414,29 @@ test('the Image and Video areas route to the configured wire, not a hard-coded v
   const dir = mkdtempSync(join(tmpdir(), 'ragam-media-wires-'))
   const calls = []
   let base
+  let comfyHistoryReads = 0
   const vendor = createServer(async (req, res) => {
     const chunks = []
     for await (const chunk of req) chunks.push(chunk)
-    calls.push({ path: req.url, method: req.method, headers: req.headers })
+    let body = null
+    try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : null } catch { /* binary/multipart payload */ }
+    calls.push({ path: req.url, method: req.method, headers: req.headers, body })
+    if (req.url === '/object_info/CheckpointLoaderSimple') {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      return res.end(JSON.stringify({ CheckpointLoaderSimple: { input: { required: { ckpt_name: [['sdxl-base.safetensors']] } } } }))
+    }
+    if (req.url === '/prompt') {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      return res.end(JSON.stringify({ prompt_id: 'comfy-prompt-1' }))
+    }
+    if (req.url === '/history/comfy-prompt-1') {
+      comfyHistoryReads += 1
+      const result = comfyHistoryReads < 2 ? {} : { 'comfy-prompt-1': { outputs: { '9': { images: [{ filename: 'ragam_00001_.png', subfolder: '', type: 'output' }] } } } }
+      res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(result))
+    }
+    if (req.url === '/view?filename=ragam_00001_.png&subfolder=&type=output') {
+      res.writeHead(200, { 'content-type': 'image/png' }); return res.end(PNG)
+    }
     if (req.url === '/v2beta/stable-image/generate/core') {
       res.writeHead(200, { 'content-type': 'image/png' }); return res.end(PNG)
     }
@@ -372,7 +452,7 @@ test('the Image and Video areas route to the configured wire, not a hard-coded v
     res.writeHead(404, { 'content-type': 'application/json' }); res.end('{}')
   })
   base = await listen(vendor)
-  const app = new OnlineApp({ dataDir: dir, trustedOrigins: [base], timeoutMs: 3000 })
+  const app = new OnlineApp({ dataDir: dir, trustedOrigins: [base], timeoutMs: 3000, mediaPoll: { initialMs: 1, factor: 1, maxMs: 1, attempts: 3 } })
   const server = app.server()
   const url = await listen(server)
   const request = async (method, path, body) => {
@@ -437,6 +517,35 @@ test('the Image and Video areas route to the configured wire, not a hard-coded v
   assert.equal(videoJob.state, JOB_STATES.SUCCEEDED, JSON.stringify(videoJob))
   assert.equal(videoJob.artifact.format, 'mp4')
   assert.equal(videoJob.params.provider, 'runway')
+
+  // ComfyUI is a real selectable local adapter: no key is required, model discovery uses its
+  // checkpoint API, and the image route executes and validates the actual returned PNG bytes.
+  const removedStability = await request('DELETE', '/api/providers/stability', {})
+  assert.equal(removedStability.status, 200)
+  const savedComfy = await request('PUT', '/api/providers/comfyui', { baseUrl: base })
+  assert.equal(savedComfy.status, 200, JSON.stringify(savedComfy.data))
+  assert.equal(savedComfy.data.keyRequired, false)
+  assert.equal(savedComfy.data.keyConfigured, false)
+  const testedComfy = await request('POST', '/api/providers/comfyui/test', {})
+  assert.equal(testedComfy.status, 200, JSON.stringify(testedComfy.data))
+  assert.deepEqual(testedComfy.data.models, ['sdxl-base.safetensors'])
+  const comfyReady = await request('GET', '/api/ready')
+  assert.equal(comfyReady.data.media.image.connectionId, 'comfyui')
+  assert.equal(comfyReady.data.media.image.wire, 'comfyui_images')
+  assert.ok(comfyReady.data.media.image.sizes.includes('768x512'))
+  const comfyImage = await request('POST', '/api/image/generate', {
+    prompt: 'a small blue paper kite', model: 'sdxl-base.safetensors', size: '768x512',
+  })
+  assert.equal(comfyImage.status, 202, JSON.stringify(comfyImage.data))
+  const comfyJob = await wait('image', comfyImage.data.id)
+  assert.equal(comfyJob.state, JOB_STATES.SUCCEEDED, JSON.stringify(comfyJob))
+  assert.equal(comfyJob.params.provider, 'comfyui')
+  assert.equal(comfyJob.params.model, 'sdxl-base.safetensors')
+  const comfySubmit = calls.find((call) => call.path === '/prompt')
+  assert.equal(comfySubmit.body.prompt['6'].inputs.text, 'a small blue paper kite')
+  assert.equal(comfySubmit.body.prompt['4'].inputs.ckpt_name, 'sdxl-base.safetensors')
+  assert.equal(comfySubmit.headers.authorization, undefined, 'the local service receives no unrelated vendor credential')
+  assert.equal(calls.some((call) => call.path === '/interrupt'), false, 'cancellation must not interrupt another user’s ComfyUI job')
 
   // The multipart image request carried the credential. The clip URL here is the same origin as
   // the API, so carrying the key is permitted; the unit tests above prove a foreign delivery host

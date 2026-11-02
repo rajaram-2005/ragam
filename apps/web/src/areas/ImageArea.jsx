@@ -120,7 +120,7 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
   return <Panel title="Online image generation" actions={<Button onClick={onSettings}>Provider Settings</Button>}>
     {!connection
       ? <Banner tone="warn" title="No image provider is configured">
-          <p>Add an image-capable connection in Provider Settings (OpenAI Images, Gemini Images, Stability AI, Recraft, Ideogram, FLUX, fal.ai, Replicate or Adobe Firefly) and test it. A chat connection is not reused as an image provider: a model name in a chat list does not prove image generation.</p>
+          <p>Add an image-capable connection in Provider Settings (OpenAI Images, Gemini Images, Stability AI, Recraft, Ideogram, FLUX, fal.ai, Replicate, Adobe Firefly or ComfyUI) and test it. A chat connection is not reused as an image provider: a model name in a chat list does not prove image generation.</p>
           <p>No simulated output or local fallback is ever shown here.</p>
         </Banner>
       : null}

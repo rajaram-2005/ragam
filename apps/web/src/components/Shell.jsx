@@ -8,7 +8,7 @@ export function StatusCard({ readiness, error }) {
     <div className="fabric-status-meta"><span>{readiness ? `${readiness.models?.total ?? 0} models listed · ${readiness.models?.ready ?? 0} inference observed` : 'Checking connection…'}</span><span>No local inference or fallback</span></div>
   </div>
 }
-export function Shell({ active, onSelect, readiness, readinessError, children, title, subtitle, account, onSettings, onSignOut }) {
+export function Shell({ active, onSelect, readiness, readinessError, children, title, subtitle, account, onSettings, onProfile, onSignOut }) {
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const navRef = useRef(null)
@@ -81,6 +81,7 @@ export function Shell({ active, onSelect, readiness, readinessError, children, t
       <StatusCard readiness={readiness} error={readinessError} />
       <div className="sidebar-footer">
         <button className="btn block" type="button" onClick={onSettings}>Provider Settings</button>
+        <button className="btn block" type="button" onClick={onProfile}>Name &amp; profession</button>
         {/* Who is signed in, and what that person can do about it. Not a sixth area: an
             account menu is chrome, and the five areas stay the whole product surface. */}
         <AccountCard account={account} onSignOut={onSignOut} />

@@ -281,20 +281,27 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Parse the Windows backup and restore launchers
+        shell: pwsh
+        run: |
+          $paths = @('scripts/Ragam-Volume.ps1', 'scripts/Backup-Ragam.ps1', 'scripts/Restore-Ragam.ps1')
+          foreach ($path in $paths) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "${path}: $($_.Message)" }
+              exit 1
+            }
+          }
+          Write-Output 'All Windows backup and restore scripts parse successfully.'
+
       - name: Validate Compose configuration and build images
-        env:
-          AETHERIS_OWNER_EMAIL: owner@example.test
-          AETHERIS_COOKIE_SECURE: 'false'
-          RAGAM_SITE_ADDRESS: ':80'
         run: |
           docker compose -f compose.yaml config -q
           docker compose -f compose.yaml build
 
       - name: Start the self-hosted stack
-        env:
-          AETHERIS_OWNER_EMAIL: owner@example.test
-          AETHERIS_COOKIE_SECURE: 'false'
-          RAGAM_SITE_ADDRESS: ':80'
         run: |
           set +e
           output=$(docker compose -f compose.yaml up -d 2>&1)
@@ -308,19 +315,16 @@ jobs:
             exit "$status"
           fi
 
-      - name: Verify owner bootstrap and authenticated API through Caddy
+      - name: Verify the local single-user API through Caddy
         env:
-          RAGAM_SMOKE_URL: http://127.0.0.1
-          RAGAM_SMOKE_EMAIL: owner@example.test
-          RAGAM_SMOKE_PASSWORD: a-long-smoke-test-password
+          RAGAM_SMOKE_URL: http://localhost
+          RAGAM_SMOKE_ID_FILE: ${{ runner.temp }}/ragam-local-id
           RAGAM_SMOKE_MODE: bootstrap
         run: node scripts/self-host-smoke.mjs
 
       - name: Cold-backup the named volume, restore it, and verify persistence
         env:
-          AETHERIS_OWNER_EMAIL: owner@example.test
-          AETHERIS_COOKIE_SECURE: 'false'
-          RAGAM_SITE_ADDRESS: ':80'
+          RAGAM_SMOKE_ID_FILE: ${{ runner.temp }}/ragam-local-id
         run: |
           docker compose -f compose.yaml stop core
           mkdir -p "$RUNNER_TEMP/ragam-backup"
@@ -328,14 +332,10 @@ jobs:
           docker run --rm -v ragam-data:/target busybox:1.36 sh -c 'find /target -mindepth 1 -maxdepth 1 -exec rm -rf {} +'
           docker run --rm -v ragam-data:/target -v "$RUNNER_TEMP/ragam-backup:/backup:ro" busybox:1.36 sh -c 'tar -xzf /backup/ragam-data.tar.gz -C /target && chown -R 1000:1000 /target'
           docker compose -f compose.yaml start core
-          env RAGAM_SMOKE_URL=http://127.0.0.1 RAGAM_SMOKE_EMAIL=owner@example.test RAGAM_SMOKE_PASSWORD=a-long-smoke-test-password RAGAM_SMOKE_MODE=verify node scripts/self-host-smoke.mjs
+          RAGAM_SMOKE_URL=http://localhost RAGAM_SMOKE_MODE=verify node scripts/self-host-smoke.mjs
 
       - name: Show diagnostics and remove test stack
         if: always()
-        env:
-          AETHERIS_OWNER_EMAIL: owner@example.test
-          AETHERIS_COOKIE_SECURE: 'false'
-          RAGAM_SITE_ADDRESS: ':80'
         run: |
           docker compose -f compose.yaml ps || true
           docker compose -f compose.yaml logs --no-color || true

@@ -44,7 +44,7 @@ export const RUNTIMES = Object.freeze({
  * `keyRequired` is the only behavioural difference. Cloud vendors need a key; local servers
  * usually do not, and a key is sent only if one was stored.
  */
-const KEYLESS = Object.freeze(new Set(['ollama', 'llamacpp', 'vllm', 'localai', 'custom']))
+const KEYLESS = Object.freeze(new Set(['ollama', 'llamacpp', 'vllm', 'localai', 'comfyui', 'custom']))
 export function runtimeFor(kind = 'litellm') {
   if (typeof kind !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(kind)) {
     throw failure('invalid_runtime', 'Connection ids are lower-case words separated by single hyphens.', 400)
@@ -252,4 +252,10 @@ export class OnlineGateway {
     return ids.map((id) => ({ id, name: id, capabilities: { input: ['unknown'], output: ['unknown'], contextTokens: null, maxOutputTokens: null, streaming: 'unknown', tools: 'not_exposed_by_ragam', structuredOutput: 'not_exposed_by_ragam', imageInput: 'unknown', provenance: { source: 'unavailable', provider: config.id } } }))
   }
   async models(config) { return (await this.modelCatalogue(config)).map((record) => record.id) }
+  async systemInfo(config) {
+    const wireId = config.wire ?? runtimeFor(config.kind ?? config.id ?? 'litellm').wire
+    const wire = wireFor(wireId)
+    if (typeof wire.systemInfo !== 'function') throw failure('capability_unavailable', 'This provider does not report local hardware through its API.', 409)
+    return wire.systemInfo(this.request.bind(this), config)
+  }
 }

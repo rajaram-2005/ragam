@@ -6,15 +6,21 @@
 
 import { failure } from '../../online/failure.mjs'
 import * as anthropic from './anthropic.mjs'
+import * as alibaba from './alibaba.mjs'
 import * as azure from './azure.mjs'
 import * as bedrock from './bedrock.mjs'
 import * as bflImages from './bfl-images.mjs'
 import * as cohere from './cohere.mjs'
+import * as comfyuiImages from './comfyui-images.mjs'
 import * as falImages from './fal-images.mjs'
 import * as falVideo from './fal-video.mjs'
 import * as fireflyImages from './firefly-images.mjs'
 import * as gemini from './gemini.mjs'
 import * as deepseek from './deepseek.mjs'
+import * as cerebras from './cerebras.mjs'
+import * as deepinfra from './deepinfra.mjs'
+import * as minimax from './minimax.mjs'
+import * as siliconflow from './siliconflow.mjs'
 import * as fireworks from './fireworks.mjs'
 import * as groq from './groq.mjs'
 import * as huggingface from './huggingface.mjs'
@@ -42,9 +48,14 @@ import * as vertex from './vertex.mjs'
 
 const WIRES = Object.freeze({
   [openai.wire]: openai,
+  [alibaba.wire]: alibaba,
   [openrouter.wire]: openrouter,
   [mistral.wire]: mistral,
   [deepseek.wire]: deepseek,
+  [cerebras.wire]: cerebras,
+  [deepinfra.wire]: deepinfra,
+  [minimax.wire]: minimax,
+  [siliconflow.wire]: siliconflow,
   [groq.wire]: groq,
   [together.wire]: together,
   [fireworks.wire]: fireworks,
@@ -57,6 +68,7 @@ const WIRES = Object.freeze({
   [localai.wire]: localai,
   [anthropic.wire]: anthropic,
   [cohere.wire]: cohere,
+  [comfyuiImages.wire]: comfyuiImages,
   [gemini.wire]: gemini,
   [azure.wire]: azure,
   [bedrock.wire]: bedrock,
@@ -86,6 +98,7 @@ const WIRES = Object.freeze({
  */
 export const CREDENTIAL_KINDS = Object.freeze({
   API_KEY: 'api_key',
+  NONE: 'none',
   SERVICE_ACCOUNT: 'service_account',
   AWS_CREDENTIALS: 'aws_credentials',
   // A two-part OAuth client: public client id plus the secret. Used by Adobe Firefly, whose
@@ -103,6 +116,9 @@ export function credentialFor(wire) {
 export function normaliseCredential(wire, value) {
   const found = Object.hasOwn(WIRES, wire) ? WIRES[wire] : null
   if (!found) throw failure('wire_not_implemented', `No adapter for wire '${wire}' in this build.`, 400)
+  if ((found.credential ?? CREDENTIAL_KINDS.API_KEY) === CREDENTIAL_KINDS.NONE) {
+    throw failure('unexpected_credential', 'This provider does not accept an API credential.', 400)
+  }
   if ((found.credential ?? CREDENTIAL_KINDS.API_KEY) === CREDENTIAL_KINDS.API_KEY) return value
   const normalised = found.readCredential(value)
   // A wire may return its compacted document as an object (service account, AWS, Firefly)
