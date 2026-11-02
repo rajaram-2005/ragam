@@ -27,9 +27,17 @@ const CUSTOM_OPTION = { id: 'custom', label: 'Custom OpenAI-compatible endpoint'
 const ENDPOINT_FOR_WIRE = Object.freeze({
   azure_openai: { placeholder: 'https://<resource>.openai.azure.com', hint: 'The resource endpoint from the Azure portal. This client adds /openai/v1. The selected id is sent as `model`, so it must be the deployment name; the data-plane model list does not enumerate deployments.' },
   openai_chat: { placeholder: 'https://api.openai.com/v1', hint: 'OpenAI Chat Completions API base, including /v1. This contract adapter does not claim Responses-only features.' },
+  baidu_qianfan_chat: { placeholder: 'https://qianfan.baidubce.com/v2', hint: 'Baidu Qianfan OpenAI-compatible API. Model discovery filters the documented catalogue to chat models not marked offline. API use may incur charges.' },
+  alibaba_model_studio_chat: { placeholder: 'https://dashscope-intl.aliyuncs.com', hint: 'Alibaba Model Studio Singapore endpoint by default. The adapter lists text-input/text-output catalog entries and calls the OpenAI-compatible Chat endpoint; region, workspace, model access and API keys vary. Replace the host with the exact region/workspace endpoint documented for your account. API use may incur charges.' },
   openrouter_chat: { placeholder: 'https://openrouter.ai/api/v1', hint: 'OpenRouter routed API base, including /api/v1. Per-model capabilities are provider/model-dependent.' },
   mistral_chat: { placeholder: 'https://api.mistral.ai/v1', hint: 'Mistral API base, including /v1.' },
   deepseek_chat: { placeholder: 'https://api.deepseek.com', hint: 'DeepSeek API root. The adapter adds /models and /chat/completions.' },
+  cerebras_chat: { placeholder: 'https://api.cerebras.ai/v1', hint: 'Cerebras Inference API base; model discovery and Chat Completions are fixture-tested against the documented routes. Check current access terms; API use may incur charges.' },
+  deepinfra_chat: { placeholder: 'https://api.deepinfra.com/v1/openai', hint: 'DeepInfra OpenAI-compatible API base. Model discovery filters the documented catalog to chat-tagged models; API use may incur charges.' },
+  minimax_chat: { placeholder: 'https://api.minimax.io/v1', hint: 'MiniMax international OpenAI-compatible API. For a China-region account, use the API host documented for that account (api.minimaxi.com). API use may incur charges.' },
+  siliconflow_chat: { placeholder: 'https://api.siliconflow.com/v1', hint: 'SiliconFlow international OpenAI-compatible API. Model discovery requests only chat models; China-region accounts may require the documented api.siliconflow.cn host. API use may incur charges.' },
+  moonshot_chat: { placeholder: 'https://api.moonshot.ai/v1', hint: 'Moonshot AI Kimi API base. This adapter uses the documented OpenAI-compatible Chat Completions and model-list endpoints. API use may incur charges; check the API platform terms.' },
+  sarvam_chat: { placeholder: 'https://api.sarvam.ai/v2', hint: 'Sarvam Open-Source Models API. Model discovery is deployment-specific. This adapter sends the API key in the documented api-subscription-key header; the docs also list bearer auth as an alternative, which this adapter does not use. Usage may be billed.' },
   groq_chat: { placeholder: 'https://api.groq.com/openai/v1', hint: 'Groq OpenAI-compatible API base, including /openai/v1.' },
   together_chat: { placeholder: 'https://api.together.xyz/v1', hint: 'Together API base, including /v1.' },
   fireworks_chat: { placeholder: 'https://api.fireworks.ai', hint: 'Fireworks API root. Inference and account-scoped model listing use different documented API paths.' },
@@ -58,12 +66,14 @@ const ENDPOINT_FOR_WIRE = Object.freeze({
   runway_video: { placeholder: 'https://api.dev.runwayml.com', hint: 'Runway API base. Every request carries the documented X-Runway-Version header; cancellation is a DELETE on the task.' },
   luma_video: { placeholder: 'https://api.lumalabs.ai/dream-machine/v1', hint: 'Luma Dream Machine API base, including /v1. Generations are polled until completed, then the clip is downloaded without the key.' },
   firefly_images: { placeholder: 'https://firefly-api.adobe.io', hint: 'Adobe Firefly API base. The credential is a client id and secret; a short-lived IMS token is exchanged and cached in memory only.' },
+  comfyui_images: { placeholder: 'http://comfyui:8188', hint: 'ComfyUI must be reachable from the Core container. This hostname works only when a ComfyUI service named comfyui shares its private Docker network; the default Ragam Compose stack does not start one. Do not use localhost for a Windows host service or expose unauthenticated ComfyUI to the LAN/Internet. No credential or model is bundled. Trust only the exact private origin in AETHERIS_TRUSTED_ORIGINS.' },
 })
 const endpointFor = (wire) => ENDPOINT_FOR_WIRE[wire] ?? {
   placeholder: 'https://api.example.com/v1',
   hint: 'This endpoint\u2019s base URL, including /v1 if it needs it. Its key is sent only to this connection.',
 }
 const CREDENTIAL_FOR_KIND = Object.freeze({
+  none: { label: 'No credential', hint: 'This local service does not use an API credential.' },
   api_key: { label: 'API key', hint: 'Stored encrypted on the server; never saved in browser storage or returned by the API.' },
   service_account: { label: 'Service-account JSON', hint: 'Paste the downloaded service-account key file. It is validated and compacted on the server and encrypted at rest; the private key is never returned by the API.' },
   aws_credentials: { label: 'IAM credential JSON', hint: '{"accessKeyId":"\u2026","secretAccessKey":"\u2026"} with optional "sessionToken" and "region". The secret signs requests and is never returned by the API.' },
@@ -71,6 +81,7 @@ const CREDENTIAL_FOR_KIND = Object.freeze({
   client_credentials: { label: 'Adobe client JSON', hint: '{"clientId":"\u2026","clientSecret":"\u2026"} from the Adobe Developer Console. Both are sealed server-side; the secret is never returned.' },
 })
 const credentialFor = (kind) => CREDENTIAL_FOR_KIND[kind] ?? CREDENTIAL_FOR_KIND.api_key
+const gibibytes = (value) => Number.isSafeInteger(value) && value >= 0 ? `${(value / 1024 ** 3).toFixed(1)} GiB` : 'not reported'
 // A saved connection that is not one of the three runtimes still needs a label and a key rule on
 // screen. Deriving both from the record the server returned is the only way this stays true when a
 // catalogue entry is added: the client must not keep a second copy of the catalogue's facts.
@@ -91,6 +102,7 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
   const dialog = useRef(null)
   const [provider, setProvider] = useState(loaded), [kind, setKind] = useState(loaded?.kind ?? 'litellm'), [url, setUrl] = useState(loaded?.baseUrl ?? ''), [key, setKey] = useState('')
   const [busy, setBusy] = useState(false), [error, setError] = useState(null), [notice, setNotice] = useState('')
+  const [hardwareInfo, setHardwareInfo] = useState(null), [hardwareError, setHardwareError] = useState(null), [hardwareBusy, setHardwareBusy] = useState(false)
   // Non-fatal: the catalogue is information, and failing to load it must not stop somebody from
   // configuring or testing their connection.
   const [catalog, setCatalog] = useState(null)
@@ -142,14 +154,18 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
     return () => { dialog.current?.close() }
   }, [])
   const act = async (action) => {
-    setBusy(true); setError(null); setNotice('')
+    setBusy(true); setError(null); setNotice(''); setHardwareInfo(null); setHardwareError(null)
     try {
       const result = await action(); setProvider(result); setKind(result.kind ?? kind); setUrl(result.baseUrl); setKey(''); await onChanged?.()
       return result
     } catch (e) { setError(e); return null } finally { setBusy(false) }
   }
+  const inspectComfyHardware = async (connectionId = kind) => {
+    setHardwareBusy(true); setHardwareError(null)
+    try { setHardwareInfo(await api.providerHardware(connectionId)) } catch (e) { setHardwareError(e) } finally { setHardwareBusy(false) }
+  }
   const chooseRuntime = (id) => {
-    setKind(id); setKey(''); setError(null); setNotice('')
+    setKind(id); setKey(''); setError(null); setNotice(''); setHardwareInfo(null); setHardwareError(null)
     // A different runtime is a different recipient, so its endpoint is entered afresh, never copied from the old one.
     const saved = provider?.connections?.find((connection) => connection.id === id)
     setUrl(saved?.baseUrl ?? (provider && provider.kind === id ? provider.baseUrl : ''))
@@ -157,7 +173,7 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
   }
   return <dialog className="provider-dialog" ref={dialog} onCancel={(e) => { e.preventDefault(); if (!busy) onClose() }} aria-labelledby="provider-settings-title">
     <div className="row between"><h2 id="provider-settings-title">Provider Settings</h2><Button disabled={busy} onClick={onClose}>Close</Button></div>
-    <p>Connect an online gateway. Chat requests are sent to the endpoint you save here, and that recipient’s permissions, quota and retention decide what happens to them. A local Ollama or llama.cpp server on the Core host is also an online endpoint, and its exact origin must be listed in AETHERIS_TRUSTED_ORIGINS on that host.</p>
+    <p>Connect cloud APIs (OpenAI/ChatGPT, Anthropic/Claude, Google Gemini and others) or an operator-run local service. Chat, Image and Video use separate provider connections; each request goes to the selected connection with no automatic fallback. API access and charges are controlled by the provider; a ChatGPT or Claude consumer subscription should not be assumed to include API usage. Local Ollama, llama.cpp and ComfyUI endpoints must be reachable from Core and their exact origins listed in AETHERIS_TRUSTED_ORIGINS. Ragam does not install local services or model weights.</p>
     {owner ? null : <Banner tone="info" title="Read-only for this account"><p>Only the owner account of this installation can change its gateway connection or key. You can still choose a model and chat through the connection that is configured.</p></Banner>}
     {error ? <Banner tone="bad" title={error.message} /> : null}
     {notice ? <Banner tone="info" title={notice} /> : null}
@@ -171,7 +187,7 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
       {kind === 'fireworks' ? <Field label="Fireworks account ID" hint="Required to retrieve your account-scoped model list. Changing this account ID requires supplying the API key again because the destination changes.">
         <input className="input" type="text" required maxLength={128} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,127}" value={addAccountId} onChange={(e) => setAddAccountId(e.target.value)} disabled={busy || !provider || !owner} />
       </Field> : null}
-      <Field
+      {runtime.credential === 'none' ? <p className="small">{credentialFor(runtime.credential).hint}</p> : <Field
         label={`${credentialFor(runtime.credential).label}${runtime.keyRequired ? '' : ' (optional)'}`}
         hint={saved?.keyConfigured
           ? 'A credential is stored securely on the server. Leave blank to keep it for the same runtime and endpoint.'
@@ -180,13 +196,38 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
         {runtime.credential === 'api_key'
           ? <input className="input" type="password" autoComplete="new-password" value={key} maxLength={8192} onChange={(e) => setKey(e.target.value)} disabled={busy || !provider || !owner} />
           : <textarea className="textarea" autoComplete="off" spellCheck={false} rows={5} value={key} maxLength={16384} onChange={(e) => setKey(e.target.value)} disabled={busy || !provider || !owner} />}
-      </Field>
+      </Field>}
       <Button type="submit" variant="primary" busy={busy} disabled={!provider || !url || !owner}>Save connection</Button>
     </form>
     <div className="row" style={{ marginTop: 16 }}>
-      <Button busy={busy} disabled={!owner || !saved?.configured || url !== saved?.baseUrl || Boolean(key) || (kind === 'fireworks' && addAccountId !== saved?.options?.accountId)} onClick={async () => { const s = await act(() => api.testProvider(kind)); if (s) setNotice(`Connection checked: ${s.models.length} listed models. Inference and modality support are not yet verified.`) }}>Test connection & refresh models</Button>
+      <Button busy={busy} disabled={!owner || !saved?.configured || url !== saved?.baseUrl || Boolean(key) || (kind === 'fireworks' && addAccountId !== saved?.options?.accountId)} onClick={async () => {
+        const s = await act(() => api.testProvider(kind))
+        if (s) {
+          setNotice(`Connection checked: ${s.models.length} listed models. Inference and modality support are not yet verified.`)
+          if (kind === 'comfyui') await inspectComfyHardware(kind)
+        }
+      }}>Test connection & refresh models</Button>
       <Button variant="danger" disabled={busy || !owner || !saved} onClick={async () => { if (window.confirm('Remove the connection and any stored key? Your conversations are kept.')) { if (await act(() => api.removeProvider(kind))) setNotice('Connection and stored credential removed.') } }}>Remove connection</Button>
     </div>
+    {runtime.wire === 'comfyui_images' ? <section className="provider-hardware" aria-label="ComfyUI hardware report">
+      <div className="row between">
+        <strong>ComfyUI hardware and checkpoints</strong>
+        <Button busy={hardwareBusy} disabled={!owner || !saved?.configured || busy} onClick={() => inspectComfyHardware(kind)}>{hardwareInfo ? 'Refresh hardware report' : 'Detect hardware'}</Button>
+      </div>
+      <p className="small">After testing the connection, Ragam reads ComfyUI’s own device report. This works even when Core runs in Docker and cannot inspect the Windows host directly.</p>
+      {hardwareError ? <Banner tone="warn" title="Hardware report unavailable"><p>{hardwareError.message}</p></Banner> : null}
+      {hardwareInfo ? <>
+        {hardwareInfo.devices.length
+          ? <ul className="small">{hardwareInfo.devices.map((device) => <li key={`${device.index}-${device.name ?? 'device'}`}>
+              {device.name ?? `Device ${device.index + 1}`} · {device.backend ?? 'backend not reported'} · VRAM {gibibytes(device.vramTotalBytes)} total, {gibibytes(device.vramFreeBytes)} free at detection
+            </li>)}</ul>
+          : <p className="small">ComfyUI reported no accelerator devices. This does not prove that the service is CPU-only.</p>}
+        <p className="small"><strong>Installed checkpoints:</strong> {saved?.models?.length
+          ? `${saved.models.slice(0, 10).join(', ')}${saved.models.length > 10 ? `, and ${saved.models.length - 10} more (available in the Image model list)` : ''}`
+          : 'none listed; use Test connection & refresh models to discover them.'}</p>
+        <p className="small">This report does not qualify a checkpoint’s hardware compatibility or a Klyvaron tier. Ragam does not choose, download or silently substitute a model.</p>
+      </> : null}
+    </section> : null}
     {selectedEvidence ? <p className="small" aria-label="Selected model capability evidence">
       Catalogue evidence for <strong>{selectedEvidence.name}</strong>: input {selectedEvidence.capabilities.input.join(', ')}, output {selectedEvidence.capabilities.output.join(', ')}
       {selectedEvidence.capabilities.contextTokens ? `, context window ${selectedEvidence.capabilities.contextTokens.toLocaleString()} tokens` : ''}.
@@ -231,11 +272,11 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
         {nextAddKind === 'fireworks' ? <Field label="Fireworks account ID" hint="Required for the account-scoped model catalogue. This is configuration metadata, not a credential.">
           <input className="input" type="text" required maxLength={128} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,127}" value={addAccountId} onChange={(e) => setAddAccountId(e.target.value)} disabled={busy || !owner} />
         </Field> : null}
-        <Field label={addCredential.label} hint={`${addCredential.hint} Leave blank only for endpoints that need none.`}>
+        {nextAdd.credential === 'none' ? <p className="small">{addCredential.hint}</p> : <Field label={addCredential.label} hint={`${addCredential.hint} Leave blank only for endpoints that need none.`}>
           {nextAdd.credential === 'api_key'
             ? <input className="input" type="password" autoComplete="new-password" value={addKey} maxLength={8192} onChange={(e) => setAddKey(e.target.value)} disabled={busy || !owner} />
             : <textarea className="textarea" autoComplete="off" spellCheck={false} rows={5} value={addKey} maxLength={16384} onChange={(e) => setAddKey(e.target.value)} disabled={busy || !owner} />}
-        </Field>
+        </Field>}
         <Button type="submit" disabled={busy || !owner || !addUrl}>Save and use</Button>
       </form> : null}
     </details> : null}

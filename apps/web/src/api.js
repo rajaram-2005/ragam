@@ -89,6 +89,7 @@ export const api = {
   // so a name this client invents is refused there rather than trusted here.
   saveProvider: (kind, body) => request('PUT', `/api/providers/${encodeURIComponent(kind)}`, body),
   testProvider: (kind) => request('POST', `/api/providers/${encodeURIComponent(kind)}/test`, {}),
+  providerHardware: (kind) => request('GET', `/api/providers/${encodeURIComponent(kind)}/hardware`),
   removeProvider: (kind) => request('DELETE', `/api/providers/${encodeURIComponent(kind)}`, {}),
   activateProvider: (id) => request('PUT', '/api/providers/active', { id }),
   // Klyvaron product tiers are pointers to a saved connection and a listed model, not

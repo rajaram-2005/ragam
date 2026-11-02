@@ -140,17 +140,28 @@ function lockfileEntries() {
 // .env.example must describe the real configuration surface
 // ---------------------------------------------------------------------------
 
-test('.env.example documents exactly the variables the code reads', () => {
+test('.env.example documents active deployment variables without exposing account-mode settings', () => {
   // '# NAME=' counts as documented: an optional secret is deliberately shipped
-  // commented out so copying the file never activates it.
+  // commented out so copying the file never activates it. The single-user Compose
+  // mode is intentionally fixed in compose.yaml; legacy direct-Core account settings
+  // are documented only in docs/20, not in the end-user environment template.
   const documented = new Set([...doc.env().matchAll(/^#?\s*([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]))
   const real = varsReadByCode()
+  const directAccountMode = new Set([
+    'AETHERIS_LOCAL_SINGLE_USER', 'AETHERIS_MAX_ACCOUNTS', 'AETHERIS_OWNER_EMAIL',
+    'AETHERIS_ALLOW_ACCOUNT_REGISTRATION', 'AETHERIS_COOKIE_SECURE',
+    'AETHERIS_COOKIE_SAMESITE', 'AETHERIS_PRINT_RESET_CODES',
+  ])
+  const deployment = new Set([...real].filter((name) => !directAccountMode.has(name)))
 
-  const invented = [...documented].filter((name) => !real.has(name))
-  assert.deepEqual(invented, [], `.env.example documents variables nothing reads: ${invented.join(', ')}`)
+  const invented = [...documented].filter((name) => !deployment.has(name))
+  assert.deepEqual(invented, [], `.env.example documents variables not used by the active deployment: ${invented.join(', ')}`)
 
-  const missing = [...real].filter((name) => !documented.has(name))
-  assert.deepEqual(missing, [], `.env.example omits variables the code reads: ${missing.join(', ')}`)
+  const missing = [...deployment].filter((name) => !documented.has(name))
+  assert.deepEqual(missing, [], `.env.example omits active deployment variables: ${missing.join(', ')}`)
+  const compose = readFileSync(resolve(REPO, 'compose.yaml'), 'utf8')
+  assert.match(compose, /AETHERIS_LOCAL_SINGLE_USER:\s*'true'/, 'Compose must force the account-free mode')
+  assert.match(compose, /127\.0\.0\.1:80:80/, 'the no-login app must remain loopback-only')
 })
 
 test('.env.example states the real defaults, not plausible ones', async () => {
@@ -715,33 +726,36 @@ test('the status doc reports the real test totals', () => {
   // media workflow, the industry packs, the benchmark harness and the release verifier.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 68)
-  assert.equal(count('apps/web/test', /\.test\.mjs$/), 4)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 70)
+  assert.equal(count('apps/web/test', /\.test\.mjs$/), 5)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**970 tests**'), 'core test inventory must be stated')
+  assert.ok(status.includes('**985 tests**'), 'current core test inventory must be stated')
   assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
-  assert.ok(status.includes('**99 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1891 cases across the three suites'), 'the grand total must equal the sum of the suites')
+  assert.ok(status.includes('**109 tests**'), 'web test inventory must be stated')
+  assert.ok(status.includes('1916 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1891 tests: core 970, web 99, fabric 822'),
-    'README must state the same totals as docs/03')
-  assert.ok(squash(doc.readme()).includes('All 1891 run in CI'),
-    'README must state the same totals where it describes CI')
-  assert.ok(status.includes('(68 files'), 'the file count must move with the suite')
+  assert.ok(squash(doc.readme()).includes('1916 tests: core 985, web 109, fabric 822'),
+    'README must state the current inventory as docs/03 does')
+  assert.ok(squash(doc.readme()).includes('latest full CI run')
+    && squash(doc.readme()).includes('41394564087')
+    && squash(doc.readme()).includes('1,916 current tests')
+    && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
+  'README must identify the latest full CI run and its measured inventory')
+  assert.ok(status.includes('(70 files'), 'the file count must move with the suite')
 
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(970), `core heading must say 970, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(985), `core heading must say 985, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(99), `web heading must say 99, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(109), `web heading must say 109, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1891,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1891`,
+    1916,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1916`,
   )
 })
 
@@ -801,16 +815,13 @@ test('the account and sign-in document describes the code that implements it', (
   assert.match(accounts, /export const RESET_CODE_TTL_MS = 15 \* 60_000/)
   assert.ok(text.includes('fifteen minutes'), 'docs/20 states the reset lifetime in the words the page uses')
   assert.equal(number(accounts, 'DEFAULT_MAX_ACCOUNTS'), 64)
-  assert.ok(new RegExp('^AETHERIS_MAX_ACCOUNTS=1$', 'm').test(doc.env()), '.env.example must state the single-user self-host default')
-  assert.ok(new RegExp('^AETHERIS_ALLOW_ACCOUNT_REGISTRATION=false$', 'm').test(doc.env()), 'member registration must be opt-in')
-  assert.ok(new RegExp('^AETHERIS_PRINT_RESET_CODES=false$', 'm').test(doc.env()), '.env.example must ship the console-printing switch off')
+  const compose = readFileSync(resolve(REPO, 'compose.yaml'), 'utf8')
+  assert.match(compose, /AETHERIS_LOCAL_SINGLE_USER:\s*'true'/, 'the end-user Docker deployment must not use account mode')
+  assert.match(compose, /127\.0\.0\.1:80:80/, 'account-free access must be loopback-only')
 
-  // The cookie policy an embedded deployment needs, and the refusal that keeps the
-  // unusable combination from being served. Both are claims about code, so both are read
-  // out of it: a documented `none` next to a service that only accepts `strict` would send
-  // an operator chasing a variable that does nothing.
+  // The retained direct-Core account mode has a cookie policy; it is intentionally not
+  // exposed through the end-user Compose configuration.
   assert.match(online, /export const COOKIE_SAME_SITE = Object\.freeze\(\['strict', 'lax', 'none'\]\)/)
-  assert.ok(new RegExp('^AETHERIS_COOKIE_SAMESITE=strict$', 'm').test(doc.env()), '.env.example must ship the strict cookie default')
   assert.ok(text.includes('`SameSite=Strict` by default'), 'docs/20 must state the default cookie policy')
   assert.ok(text.includes('AETHERIS_COOKIE_SAMESITE=none'), 'docs/20 must state how an embedded deployment opts in')
   assert.ok(text.includes('refuses to start'), 'docs/20 must say the unusable combination is refused, not served')
@@ -833,22 +844,28 @@ test('the account and sign-in document describes the code that implements it', (
   const readme = squash(doc.readme())
   assert.doesNotMatch(readme, /Sign in using the Core host|paste it (?:here|into)/i,
     'the README must not instruct the removed token sign-in')
-  assert.ok(readme.includes('access-token file and its login route have been removed'),
-    'the README must state that the token sign-in is gone')
-  assert.ok(readme.includes('create an account'), 'the README must tell the reader how to get in now')
+  assert.ok(readme.includes('no email, account creation or sign-in'),
+    'the README must state that the end-user Docker app has no account flow')
+  assert.ok(readme.includes('connect your own provider key'), 'the README must tell the reader how to connect a real model provider')
   assert.ok(readme.includes('## Supported user interfaces'), 'the README must document end-user entry points')
   assert.ok(readme.includes('scripts/Start-Ragam.cmd') && readme.includes('scripts/Stop-Ragam.cmd'),
     'the README must link the Windows start and stop launchers')
   assert.ok(readme.includes('http://localhost') && readme.includes('same-origin `/api`'),
     'the README must describe the browser UI and its local API route')
-  for (const path of ['scripts/Start-Ragam.cmd', 'scripts/Stop-Ragam.cmd', 'compose.yaml']) {
+  for (const path of ['scripts/Start-Ragam.cmd', 'scripts/Stop-Ragam.cmd', 'scripts/Backup-Ragam.cmd', 'scripts/Restore-Ragam.cmd', 'scripts/Backup-Ragam.ps1', 'scripts/Restore-Ragam.ps1', 'scripts/Ragam-Volume.ps1', 'compose.yaml', 'assets/aetheris-omni-logo.svg', 'assets/cta-download.gif', 'assets/cta-setup.gif', 'assets/cta-providers.gif']) {
     assert.ok(exists(resolve(REPO, path)), `the README-supported interface artifact ${path} must exist`)
   }
+  const backupScript = read('scripts/Backup-Ragam.ps1')
+  const restoreScript = read('scripts/Restore-Ragam.ps1')
+  assert.ok(backupScript.includes('Save-RagamVolumeArchive') && backupScript.includes("'stop', 'core'"), 'the GUI backup must take a cold archive')
+  assert.ok(restoreScript.includes('ragam-before-restore-') && restoreScript.includes('Restore-RagamVolumeArchive'), 'the GUI restore must preserve the prior volume before replacing it')
+  assert.ok(restoreScript.includes('Wait-RagamLocalWorkspace'), 'the GUI restore must verify health and restored identity')
   assert.doesNotMatch(squash(doc.phase2()), /paste it into the \*\*installation sign-in form\*\*/)
   assert.ok(squash(doc.phase2()).includes('Sign-in is an account, not a token'), 'docs/19 must point at the change')
-  assert.ok(text.includes('Self-hosted signup is closed by default'), 'the account model states the secure self-host default')
-  assert.ok(text.includes('AETHERIS_OWNER_EMAIL'), 'the owner bootstrap setting is documented')
-  assert.ok(text.includes('AETHERIS_ALLOW_ACCOUNT_REGISTRATION=true'), 'member registration opt-in is documented')
+  assert.ok(text.includes('Not used by the end-user Docker deployment'), 'the account guide must distinguish legacy account mode from local Compose')
+  assert.ok(text.includes('AETHERIS_OWNER_EMAIL'), 'the retained direct-Core owner bootstrap setting is documented')
+  assert.ok(text.includes('AETHERIS_ALLOW_ACCOUNT_REGISTRATION=true'), 'the retained direct-Core member registration opt-in is documented')
+  assert.ok(squash(read('docs/22-self-hosted-deployment.md')).includes('no email, account creation, sign-in or password recovery'), 'the Docker guide must describe the no-account flow')
 
   // Reset delivery is the part most likely to be over-claimed, so the denial is checked
   // as carefully as the claim: no mail transport means no "check your inbox".
@@ -1598,6 +1615,10 @@ test('the CI workflow is valid YAML with the structure it claims', () => {
   assert.deepEqual(jobs, ['core', 'fabric', 'web', 'self-hosted', 'release', 'docs'], `unexpected job list: ${jobs.join(', ')}`)
   assert.ok(jobsBlock.includes('docker compose -f compose.yaml config -q'), 'self-host CI must validate Compose')
   assert.ok(jobsBlock.includes('Cold-backup the named volume'), 'self-host CI must test persistence and restoration')
+  const smoke = read('scripts/self-host-smoke.mjs')
+  assert.ok(smoke.includes("fetch(`${base}/api/sessions`)"), 'the smoke must verify durable SQLite session data, not only a detached identity file')
+  assert.ok(smoke.includes('SQLite conversation-history marker did not survive'), 'the smoke must fail when restored history is missing')
+  assert.ok(smoke.includes('RAGAM_SMOKE_ID_FILE'), 'the cold restore check must compare the restored workspace identity')
 
   // Every job must check the code out before doing anything with it.
   const perJob = jobsBlock.split(/^  [a-z-]+:$/m).slice(1)

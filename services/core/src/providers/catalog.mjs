@@ -12,7 +12,7 @@ import { CREDENTIAL_KINDS, IMPLEMENTED, credentialFor } from './wires/index.mjs'
 //
 //   ready         this build has a tested code path to it (the transports in online/gateway.mjs).
 //                 Requires `source: 'test'` on every capability.
-//   gateway_only  legacy status for the fourteen Step 2 Chat adapters. Their own modules are
+//   gateway_only  legacy status for the provider-specific Chat adapters. Their own modules are
 //                 fixture-tested, but this does not mean any authorized live vendor call succeeded.
 //                 `integrationType`, `adapterStatus`, and `liveVerification` disambiguate the state.
 //   pending       it needs a wire adapter this build does not have. It cannot be selected, and
@@ -30,6 +30,7 @@ import { CREDENTIAL_KINDS, IMPLEMENTED, credentialFor } from './wires/index.mjs'
 export const AUTH_KINDS = Object.freeze({
   BEARER: 'bearer',
   X_API_KEY: 'x_api_key',
+  API_SUBSCRIPTION_KEY: 'api_subscription_key',
   OAUTH2: 'oauth2',
   AWS_SIGV4: 'aws_sigv4',
   GCP_ADC: 'gcp_adc',
@@ -38,9 +39,10 @@ export const AUTH_KINDS = Object.freeze({
 
 /** Wire contracts implemented by the shared guarded transport and their individual adapters. */
 export const WIRE_FORMATS = Object.freeze({
-  OPENAI_CHAT: 'openai_chat',
+  OPENAI_CHAT: 'openai_chat', BAIDU_QIANFAN_CHAT: 'baidu_qianfan_chat', ALIBABA_MODEL_STUDIO_CHAT: 'alibaba_model_studio_chat',
   OPENROUTER_CHAT: 'openrouter_chat', MISTRAL_CHAT: 'mistral_chat', DEEPSEEK_CHAT: 'deepseek_chat',
   GROQ_CHAT: 'groq_chat', TOGETHER_CHAT: 'together_chat', FIREWORKS_CHAT: 'fireworks_chat',
+  CEREBRAS_CHAT: 'cerebras_chat', DEEPINFRA_CHAT: 'deepinfra_chat', MINIMAX_CHAT: 'minimax_chat', SILICONFLOW_CHAT: 'siliconflow_chat', MOONSHOT_CHAT: 'moonshot_chat', SARVAM_CHAT: 'sarvam_chat',
   XAI_RESPONSES: 'xai_responses', PERPLEXITY_ROUTER: 'perplexity_router', NOVITA_CHAT: 'novita_chat',
   SAMBANOVA_CHAT: 'sambanova_chat', HUGGINGFACE_CHAT: 'huggingface_chat', VLLM_CHAT: 'vllm_chat', LOCALAI_CHAT: 'localai_chat',
   ANTHROPIC_MESSAGES: 'anthropic_messages',
@@ -63,6 +65,7 @@ export const WIRE_FORMATS = Object.freeze({
   RUNWAY_VIDEO: 'runway_video',
   LUMA_VIDEO: 'luma_video',
   FIREFLY_IMAGES: 'firefly_images',
+  COMFYUI_IMAGES: 'comfyui_images',
 })
 
 /**
@@ -153,6 +156,19 @@ const imageNative = (id, label, doc, wire, auth) => Object.freeze({
   notes: 'Native image adapter, contract-tested against a local fixture. No live call has been made in this build; the key you save is sent only to the endpoint you configure.',
 })
 
+const localImageNative = (id, label, doc, wire) => Object.freeze({
+  id, label,
+  category: 'media',
+  wire,
+  auth: AUTH_KINDS.NONE,
+  credential: credentialFor(wire),
+  status: PROVIDER_STATUS.READY,
+  docsUrl: doc,
+  capabilities: Object.freeze([cap(CAPABILITIES.IMAGE_GENERATION, 'test', IMAGE_TESTS)]),
+  egress: Object.freeze({ https: false, operatorConfigured: true }),
+  notes: 'Optional local image service. The adapter is contract-tested; Ragam does not install the service or model checkpoints. The exact endpoint origin must be trusted by the Core operator.',
+})
+
 const videoNative = (id, label, doc, wire, auth) => Object.freeze({
   id, label,
   category: 'media',
@@ -195,14 +211,22 @@ export const PROVIDERS = Object.freeze([
   native('vertex', 'Google Vertex AI', 'https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations', WIRE_FORMATS.GCP_VERTEX, AUTH_KINDS.GCP_ADC),
   native('bedrock', 'Amazon Bedrock', 'https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html', WIRE_FORMATS.AWS_BEDROCK, AUTH_KINDS.AWS_SIGV4, { streaming: false, capabilities: [wireCancellation] }),
 
-  // Fourteen individual Chat providers. Each has a provider-specific contract adapter; the
-  // compatibility class identifies the API path, not successful live vendor access. Adapter
-  // contract tests use deterministic local fixtures, while liveVerification remains pending.
+  // Individual provider Chat APIs. Each has a provider-specific adapter; the compatibility class
+  // identifies the API path, not successful live vendor access. Adapter contract tests use
+  // deterministic local fixtures, while liveVerification remains pending.
   ...[
     ['openai', 'OpenAI', 'https://developers.openai.com/api/reference/chat-completions/overview', WIRE_FORMATS.OPENAI_CHAT, 'native-vendor'],
+    ['baidu-qianfan', 'Baidu Qianfan', 'https://cloud.baidu.com/doc/qianfan-api/s/3m7of64lb', WIRE_FORMATS.BAIDU_QIANFAN_CHAT, 'openai-compatible'],
+    ['alibaba-model-studio', 'Alibaba Cloud Model Studio', 'https://help.aliyun.com/en/model-studio/compatibility-of-openai-with-dashscope', WIRE_FORMATS.ALIBABA_MODEL_STUDIO_CHAT, 'openai-compatible'],
     ['openrouter', 'OpenRouter', 'https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request', WIRE_FORMATS.OPENROUTER_CHAT, 'gateway-routed'],
     ['mistral', 'Mistral AI', 'https://docs.mistral.ai/api/endpoint/chat/', WIRE_FORMATS.MISTRAL_CHAT, 'openai-compatible'],
     ['deepseek', 'DeepSeek', 'https://api-docs.deepseek.com/api/create-chat-completion/', WIRE_FORMATS.DEEPSEEK_CHAT, 'openai-compatible'],
+    ['cerebras', 'Cerebras Inference', 'https://inference-docs.cerebras.ai/api-reference/chat-completions', WIRE_FORMATS.CEREBRAS_CHAT, 'openai-compatible'],
+    ['deepinfra', 'DeepInfra', 'https://docs.deepinfra.com/api-reference/introduction', WIRE_FORMATS.DEEPINFRA_CHAT, 'openai-compatible'],
+    ['minimax', 'MiniMax', 'https://platform.minimax.io/docs/api-reference/text-openai-api', WIRE_FORMATS.MINIMAX_CHAT, 'openai-compatible'],
+    ['siliconflow', 'SiliconFlow', 'https://docs.siliconflow.com/en/api-reference/models/get-model-list', WIRE_FORMATS.SILICONFLOW_CHAT, 'openai-compatible'],
+    ['moonshot', 'Moonshot AI (Kimi API)', 'https://platform.kimi.ai/docs/api/chat', WIRE_FORMATS.MOONSHOT_CHAT, 'openai-compatible'],
+    ['sarvam', 'Sarvam AI Open-Source Models', 'https://docs.sarvam.ai/api-reference/chat/chat-completions-v2', WIRE_FORMATS.SARVAM_CHAT, 'openai-compatible', AUTH_KINDS.API_SUBSCRIPTION_KEY],
     ['groq', 'Groq', 'https://console.groq.com/docs/api-reference', WIRE_FORMATS.GROQ_CHAT, 'openai-compatible'],
     ['together', 'Together AI', 'https://docs.together.ai/reference/chat-completions', WIRE_FORMATS.TOGETHER_CHAT, 'openai-compatible'],
     ['fireworks', 'Fireworks AI', 'https://docs.fireworks.ai/api-reference/post-chatcompletions', WIRE_FORMATS.FIREWORKS_CHAT, 'openai-compatible'],
@@ -213,9 +237,9 @@ export const PROVIDERS = Object.freeze([
     ['huggingface', 'Hugging Face Inference Providers', 'https://huggingface.co/docs/inference-providers/tasks/chat-completion', WIRE_FORMATS.HUGGINGFACE_CHAT, 'gateway-routed'],
     ['vllm', 'vLLM (OpenAI-compatible server)', 'https://docs.vllm.ai/en/latest/serving/online_serving/', WIRE_FORMATS.VLLM_CHAT, 'openai-compatible'],
     ['localai', 'LocalAI', 'https://localai.io/docs/features/openai-functions/', WIRE_FORMATS.LOCALAI_CHAT, 'openai-compatible'],
-  ].map(([id, label, docsUrl, wire, integrationType]) => Object.freeze({
+  ].map(([id, label, docsUrl, wire, integrationType, auth = AUTH_KINDS.BEARER]) => Object.freeze({
     id, label, category: integrationType === 'native-vendor' ? 'native-vendor' : integrationType,
-    wire, auth: AUTH_KINDS.BEARER, credential: CREDENTIAL_KINDS.API_KEY,
+    wire, auth, credential: CREDENTIAL_KINDS.API_KEY,
     status: PROVIDER_STATUS.GATEWAY_ONLY, docsUrl, capabilities: Object.freeze([]),
     integrationType, adapterStatus: 'contract_tested', liveVerification: 'pending',
     egress: Object.freeze({ https: true, operatorConfigured: true }),
@@ -237,6 +261,7 @@ export const PROVIDERS = Object.freeze([
   imageNative('fal', 'fal.ai', 'https://docs.fal.ai/model-apis/model-endpoints/queue', WIRE_FORMATS.FAL_IMAGES, AUTH_KINDS.BEARER),
   imageNative('replicate', 'Replicate', 'https://replicate.com/docs/reference/http', WIRE_FORMATS.REPLICATE_IMAGES, AUTH_KINDS.BEARER),
   imageNative('firefly', 'Adobe Firefly', 'https://developer.adobe.com/firefly-services/docs/firefly-api/', WIRE_FORMATS.FIREFLY_IMAGES, AUTH_KINDS.OAUTH2),
+  localImageNative('comfyui', 'ComfyUI (local)', 'https://docs.comfy.org/development/comfyui-server/comms_routes', WIRE_FORMATS.COMFYUI_IMAGES),
 
   // Video vendors with a tested wire. Each adapter implements the vendor's own asynchronous
   // task contract, including bounded polling and cancellation.
@@ -250,7 +275,6 @@ export const PROVIDERS = Object.freeze([
   // developer/self-hosted options, not a fallback, and they are refused by name until an
   // adapter and its tests exist.
   ...[
-    ['comfyui', 'ComfyUI (local)', 'https://github.com/comfyanonymous/ComfyUI'],
     ['diffusers', 'Diffusers (local)', 'https://huggingface.co/docs/diffusers/index'],
   ].map(([id, label, docsUrl]) => Object.freeze({
     id,

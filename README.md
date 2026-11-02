@@ -1,27 +1,121 @@
-# Aetheris — online AI workspace
+<p align="center">
+  <img src="assets/aetheris-omni-logo.svg" alt="Aetheris Omni — your self-hosted AI workspace" width="760" />
+</p>
 
-> **Active product: online-only (Phase 2).** [Current setup, features and limitations](docs/19-online-only-phase-2.md) and [accounts and sign-in](docs/20-accounts-and-sign-in.md) supersede the offline-first product instructions below. Legacy local/research **service** code remains for reference and regression tests; it is not loaded by `npm run core`. Superseded UI components were deleted on 2026-10-17, not retained. Suite totals include retained legacy coverage.
+<p align="center">
+  <strong>One workspace. Running on your computer. Connected to the provider you choose.</strong><br />
+  <sub>Open-source · Docker Compose · Single-user · Localhost-only</sub>
+</p>
 
-## Current product
+<p align="center">
+  <a href="https://github.com/rajaram-2005/ragam/archive/refs/heads/arena/e51ae7e1-ragam.zip"><img src="assets/cta-download.gif" alt="Download the Aetheris Omni source ZIP" width="280" /></a>
+  <a href="#download-and-run-on-windows"><img src="assets/cta-setup.gif" alt="Open the Windows setup guide" width="280" /></a>
+  <a href="docs/27-provider-framework.md"><img src="assets/cta-providers.gif" alt="Explore the provider API catalogue" width="280" /></a>
+</p>
 
-Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog and an explicit model picker. Inference is online-only. Provider Settings registers existing inference endpoints and lists their models; Chat separately exposes an opt-in user-computer workflow for authorized adaptation/training. Optional history, approved memory, text-file knowledge and reviewed procedures remain. No sixth Training area is added.
+<p align="center">
+  <sub><a href="https://github.com/rajaram-2005/ragam/archive/refs/heads/arena/e51ae7e1-ragam.zip">Download ZIP</a> · <a href="#download-and-run-on-windows">Windows setup steps</a> · <a href="docs/27-provider-framework.md">Provider catalogue</a></sub>
+</p>
 
-**Deployment is Docker Compose only.** Each end user runs an independent stack on their own computer with local persistent storage; there is no shared developer-operated backend. Use the [Docker Compose self-hosting guide](docs/22-self-hosted-deployment.md), including the Windows double-click launcher, for setup, health checks and backup/restore. Once running, create an account for the owner at `#/signup`, then sign in at `#/signin`. The operator's access-token file and its login route have been removed. Only the configured owner email can bootstrap the first account; member registration is closed by default and must be deliberately enabled by the operator. Open **Provider Settings**, save your gateway URL/key, test the connection, and choose a model in Chat. Never paste provider credentials into a chat message. Password reset cannot be emailed — this product has no mail transport — so the single-use code is delivered on the Core host; see [docs/20](docs/20-accounts-and-sign-in.md). The Node/Vite commands below are for repository development, not deployment.
+# Aetheris Omni
+
+Aetheris Omni is a **self-hosted AI workspace**, not a model and not a shared cloud service. Its app, API and saved workspace run in Docker on your own computer. Open it in a browser at **http://localhost** and choose which supported AI provider to connect.
+
+> **Important distinction:** “hosted locally” describes where the Aetheris Omni app and its workspace run. It does **not** make every AI model local or offline. If you choose a cloud provider, the prompts you send go to that provider and its usage terms and charges apply. A local ComfyUI connection is optional for image generation; no model weights are bundled or downloaded by Aetheris Omni.
+
+**Five product areas:** Chat · Image · Video · Plugins · MCP<br>
+**Product version:** 0.2.0 · [Release notes](docs/26-release.md) · [MIT license](LICENSE)
+
+## How Aetheris Omni is different
+
+Aetheris Omni takes a deliberately self-hosted, provider-connected approach. These are architectural choices—not claims that every hosted AI product works the same way.
+
+| Design choice | What it means in practice |
+|---|---|
+| **Your computer hosts the workspace** | Docker runs the app and its persistent data on your own machine. There is no Aetheris-operated shared backend in this deployment. |
+| **You choose the AI connection** | Connect a supported provider and explicitly select a model it returns. Aetheris Omni does not silently switch providers or invent model listings. Provider API use may cost money; the app does not include or pay for it. |
+| **Local access is the security boundary** | The default Compose setup binds to `127.0.0.1` and has no account or sign-in screen. It is a single-user local workspace—not safe to expose to a LAN, public internet or remote reverse proxy as-is. |
+| **External tools require deliberate approval** | Remote MCP and plugin calls are shown as external actions and require per-call approval. Ragam does not download and execute remote plugin code. |
+| **Status is kept honest** | Contract-tested adapters and synthetic fixtures are not presented as live vendor verification or proof of model performance. |
+| **Five clear product areas** | Chat, Image, Video, Plugins and MCP are the five primary areas. Provider Settings is a dialog, not a sixth area. |
+
+### Where the app, data and prompts go
+
+- **App and workspace:** run on your computer in Docker. Conversation and workspace data, provider settings and generated files are kept in that local Docker volume. Protect the computer and any backups.
+- **Cloud AI requests:** when you configure and use a cloud provider, the request goes to that provider. Check its privacy, retention and pricing terms before sending sensitive information.
+- **Localhost is not offline AI:** the browser address `http://localhost` means the app is on your computer. Chat with a cloud model still needs internet and sends the request to the selected vendor. No model weights are included.
+- **No account flow:** the Compose app is intentionally single-user and has no email, account creation, sign-in or password reset. Keep the default loopback binding; do not expose it to other devices or the internet.
+
+## Download and run on Windows
+
+This is a source-code download, not a conventional `.exe` installer. The checked-in Windows launcher guides the local Docker setup; you do not need to type terminal commands.
+
+### Before downloading
+
+1. **Have Docker Desktop installed.** If it is already installed, skip this step. Otherwise, download it from the [official Docker Desktop page](https://www.docker.com/products/docker-desktop/) and follow Docker's on-screen installation instructions. Docker Desktop and licensing terms are managed by Docker, not by this repository.
+2. **Start Docker Desktop** and wait until it reports that its Engine is running. Leave Docker Desktop open while you use Aetheris Omni.
+3. A first start needs an internet connection so Docker can download the app's build dependencies and container images. It does **not** download AI model weights.
+
+### Download the project files
+
+1. Open the [Aetheris Omni source repository](https://github.com/rajaram-2005/ragam/tree/arena/e51ae7e1-ragam) in your browser.
+2. On GitHub, click **Code**, then **Download ZIP**. Save the ZIP somewhere you can find it, such as your Downloads folder.
+3. In File Explorer, open Downloads, right-click the ZIP, and select **Extract All…**. Choose a folder you can keep, then click **Extract**. Do not try to run the launcher from inside the ZIP preview.
+4. Open the extracted project folder. You should see files such as `compose.yaml` and the `scripts` folder. Keep this folder; it is the project source used to build and update the app.
+
+### Start the local app
+
+1. Confirm Docker Desktop still says its Engine is running.
+2. In the extracted folder, open **scripts**, then double-click **Start-Ragam.cmd**. The repository and launcher still use the technical name “Ragam”; the product name in this guide is **Aetheris Omni**.
+3. The launcher checks Docker, creates a local `.env` from safe defaults if needed, builds and starts the containers, and opens your browser at **http://localhost**. The first build can take a while. Let it finish; do not close Docker Desktop during startup.
+4. If the page does not appear immediately, wait for the build/startup to finish and refresh `http://localhost`. For errors, see the [Windows setup and troubleshooting guide](docs/22-self-hosted-deployment.md).
+5. The end-user Docker app has no email, account creation or sign-in flow; the workspace is ready without registration. Nothing contacts an AI provider until you configure/test a connection or send a request.
+
+### Connect a provider (optional)
+
+1. In the app, open **Provider Settings**.
+2. Choose a provider you already have access to and **connect your own provider key** by entering its API key in the provider form. Do not paste a key into a chat message, issue, or support request.
+3. Save the connection and explicitly choose **Test connection**. Provider API access is separate from consumer subscriptions (for example, ChatGPT or Claude subscriptions may not include API usage). Provider usage may incur charges; check its current terms and pricing directly.
+4. In Chat, choose a model returned by that provider. Aetheris Omni does not silently choose a replacement if the selected provider or model fails.
+
+The app itself does not provide a hosted AI subscription, provider credentials, paid tier or bundled inference. The [provider matrix](docs/27-provider-framework.md) distinguishes supported API contracts from live verification; no live vendor call is implied by a fixture test.
+
+### Stop, restart and protect your data
+
+- To stop the containers but keep your workspace, double-click **scripts/Stop-Ragam.cmd**. Start again with **scripts/Start-Ragam.cmd**.
+- To make a backup or restore one, double-click **scripts/Backup-Ragam.cmd** or **scripts/Restore-Ragam.cmd** and follow the file pickers. Store both the archive and checksum together on an encrypted drive; backups contain private workspace data and provider settings.
+- Do **not** delete the Docker volume or use a “remove volumes” option for routine stopping or updates. That volume holds your workspace.
+- Keep the default `127.0.0.1` binding. Because this app has no sign-in, do not change the bind address, forward port 80, expose it to a LAN/public network or put it behind a remote proxy. See the [security and persistence guide](docs/22-self-hosted-deployment.md).
 
 ## Supported user interfaces
 
-| Interface | What an end user uses it for |
+| Interface | What you use it for |
 |---|---|
-| **Windows launcher** | Double-click [`scripts/Start-Ragam.cmd`](scripts/Start-Ragam.cmd). On first launch it creates `.env` from `.env.example` and opens it in Notepad; set `AETHERIS_OWNER_EMAIL`, save, then launch again. Docker Desktop must be running. |
-| **Browser app** | Open `http://localhost` after the stack starts. Sign up with the configured owner email, then use the five areas: Chat, Image, Video, Plugins and MCP. Caddy serves the app and forwards same-origin `/api` requests to that user's local Core. |
-| **Stop without deleting data** | Double-click [`scripts/Stop-Ragam.cmd`](scripts/Stop-Ragam.cmd). It stops the containers and keeps the Docker volumes and local data. |
-| **Other Compose-compatible platforms** | Use the checked-in [`compose.yaml`](compose.yaml) and local `.env` through a Docker Compose-compatible UI. Each end user's stack and volumes remain independent. |
+| **Windows launcher** | Double-click [`scripts/Start-Ragam.cmd`](scripts/Start-Ragam.cmd). Docker Desktop must be running. |
+| **Browser app** | Open `http://localhost`. Caddy serves the UI and forwards same-origin `/api` requests to your local Core service. |
+| **Stop without deleting data** | Double-click [`scripts/Stop-Ragam.cmd`](scripts/Stop-Ragam.cmd). Docker volumes and data remain. |
+| **Backup / restore** | Double-click [`scripts/Backup-Ragam.cmd`](scripts/Backup-Ragam.cmd) or [`scripts/Restore-Ragam.cmd`](scripts/Restore-Ragam.cmd). Use an encrypted location for sensitive archives. |
+| **Other Compose-compatible platforms** | Use [`compose.yaml`](compose.yaml) with its loopback-only default. The same no-login security boundary applies. |
 
-Ragam is not a hosted/shared service or a separately installed native desktop app. Docker Compose is the deployment; the browser is its user interface. See the [self-hosting guide](docs/22-self-hosted-deployment.md) for security, persistence and backup details.
+Aetheris Omni is not a hosted/shared service or a separately installed native desktop app. Docker Compose is the deployment; the browser is its user interface. Each end user runs an independent instance on their own computer.
 
-Current release: **0.2.0** — [release note](docs/26-release.md), [changelog](CHANGELOG.md), version in [`VERSION`](VERSION). Provider Settings shows a read-only [provider matrix](docs/27-provider-framework.md): it distinguishes native vendor, OpenAI-compatible, and gateway-routed APIs; the fourteen audited Chat adapters are contract-tested but live verification is pending. Model-level capabilities stay unknown unless the vendor catalogue reports evidence. The release carries the adaptive core (ten phases, code and tests) as a library; the product surface described above is unchanged by it.
+## Product capabilities and current limits
 
-**Current limits:** image generation has nine adapters (OpenAI Images, Gemini Images, Stability, Recraft, Ideogram, FLUX, fal.ai, Replicate and Adobe Firefly) and video has five (Veo, Runway, Luma, fal.ai video and Replicate video). Owner-managed MCP Streamable HTTP connections and Ragam HTTP plugin endpoints are supported; every remote tool/capability call requires explicit data-transfer approval, and Ragam never executes downloaded plugin code. There is not yet a curated external-server marketplace. All 37 non-pending provider entries have contract-tested code paths: 23 are `ready`, and 14 audited Chat providers retain `gateway_only` for catalogue compatibility while using individually defined adapters. No real vendor credential or deployment has been qualified live, and no generation has been purchased. Synthetic fixtures are used only in tests. Accounts have no email delivery, no second factor and no self-service deletion. See the [user-managed server protocol guide](docs/28-user-managed-servers.md), the [Phase 2 guide](docs/19-online-only-phase-2.md), and [accounts and sign-in](docs/20-accounts-and-sign-in.md).
+The product has exactly **five primary areas: Chat, Image, Video, Plugins and MCP**. Provider Settings is a dialog; history, memory, safety and other internals stay inside the relevant areas.
+
+- **Chat:** 22 individually adapted Chat APIs have contract-tested integrations. Contract tests do not prove current live access, latency or model quality. Choose a provider and model explicitly; no silent fallback.
+- **Image and Video:** these use separate provider connections. Image has ten adapters (including optional local ComfyUI); Video has five. Model weights are not shipped with the app.
+- **Plugins and MCP:** reviewed built-ins plus owner-managed HTTP/Streamable HTTP connections. Remote calls need explicit approval; downloaded remote code is not executed.
+- **Provider catalogue:** currently 47 entries, including one pending entry. A listed consumer product is not automatically an API integration; only documented public APIs are represented. The catalogue is not an exhaustive inventory of every provider worldwide.
+- **Verification:** the catalogue distinguishes adapter status from live vendor verification. Tests use synthetic fixtures and make no vendor calls. No provider has been live-qualified as part of this repository work.
+
+For full evidence and technical details, see the [provider framework](docs/27-provider-framework.md), [product status](docs/03-status.md), [self-hosted deployment guide](docs/22-self-hosted-deployment.md), and [release notes](docs/26-release.md).
+
+## Project and engineering documentation
+
+This repository is named `ragam`, and some code, container and launcher filenames retain that implementation name. **Aetheris Omni** is the product-facing name used in this README. The stack is Docker Compose only; the Node/Vite commands later in this README are for repository development, not end-user installation.
+
+---
 
 ## Retained legacy architecture and verification history
 
@@ -86,7 +180,7 @@ picker are controls inside the app, not additional product areas.
 
 ```bash
 # Core uses Node's standard library; it has no dependency install step.
-AETHERIS_OWNER_EMAIL=you@example.com node services/core/src/server.mjs  # Core on :8790; only this email can bootstrap owner
+AETHERIS_LOCAL_SINGLE_USER=true node services/core/src/server.mjs  # Core on 127.0.0.1:8790; no account/email flow
 
 # In another terminal, install the locked Web dependencies and start the UI.
 npm ci --prefix apps/web
@@ -115,7 +209,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 1891 tests: core 970, web 99, fabric 822
+npm test          # 1916 tests: core 985, web 109, fabric 822
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -130,10 +224,14 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 # then inspect aetheris-smoke/status.json
 ```
 
-All 1891 run in CI on every push and pull request
+CI runs the full suites on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) across six jobs: one per
 component, a Docker Compose build/health/persistence/restore smoke, documentation
-checks, and release verification against the suite counts. The
+checks, and release verification against suite counts. The latest full CI run
+[41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all
+1,916 current tests (Core 985, Web 109, Fabric 822), plus release verification and the
+loopback-only Compose persistence/restore smoke. The eight added Chat APIs use deterministic
+contract fixtures; neither the tests nor CI made live vendor calls. The
 Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
 
@@ -191,9 +289,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 37,627 | 24,878 | **zero npm packages** | 970 |
+| `services/core` | Node 22 ESM | 38,119 | 25,286 | **zero npm packages** | 985 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 5,526 | 2,018 | react, react-dom | 99 |
+| `apps/web` | React 18 + Vite | 5,898 | 2,142 | react, react-dom | 109 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

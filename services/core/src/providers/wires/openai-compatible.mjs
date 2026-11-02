@@ -22,7 +22,9 @@ function capabilities(record, provider) {
     contextTokens: Number.isSafeInteger(record.context_window) ? record.context_window
       : Number.isSafeInteger(record.context_length) ? record.context_length
         : Number.isSafeInteger(record.contextLength) ? record.contextLength : null,
-    maxOutputTokens: Number.isSafeInteger(record.max_output_tokens) ? record.max_output_tokens : null,
+    maxOutputTokens: Number.isSafeInteger(record.max_output_tokens) ? record.max_output_tokens
+      : Number.isSafeInteger(record.max_completions_tokens) ? record.max_completions_tokens
+        : Number.isSafeInteger(record.max_tokens) ? record.max_tokens : null,
     streaming: state(record.capabilities?.streaming ?? record.streaming),
     tools: 'not_exposed_by_ragam',
     structuredOutput: 'not_exposed_by_ragam',
@@ -33,7 +35,8 @@ function capabilities(record, provider) {
 
 export function createOpenAICompatibleAdapter(spec) {
   const headers = (config) => ({
-    ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
+    ...(config.apiKey && !spec.omitBearer ? { authorization: `Bearer ${config.apiKey}` } : {}),
+    ...(config.apiKey && spec.apiKeyHeader ? { [spec.apiKeyHeader]: config.apiKey } : {}),
     ...(spec.headers?.(config) ?? {}),
   })
   const modelPath = (config) => typeof spec.modelPath === 'function' ? spec.modelPath(config) : spec.modelPath
@@ -53,7 +56,7 @@ export function createOpenAICompatibleAdapter(spec) {
       if (!safeId(id) || (spec.includeModel && !spec.includeModel(raw))) continue
       unique.set(id, {
         id,
-        name: typeof raw === 'object' ? (raw.name ?? raw.display_name ?? raw.displayName ?? raw.title ?? id) : id,
+        name: typeof raw === 'object' ? (raw.name ?? raw.model_name ?? raw.display_name ?? raw.displayName ?? raw.title ?? id) : id,
         capabilities: capabilities(typeof raw === 'object' ? raw : {}, spec.provider),
       })
     }

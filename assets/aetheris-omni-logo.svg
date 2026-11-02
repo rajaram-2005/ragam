@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="220" viewBox="0 0 920 220" role="img" aria-labelledby="title description">
+  <title id="title">Aetheris Omni</title>
+  <desc id="description">Aetheris Omni self-hosted AI workspace wordmark with an abstract orbit mark.</desc>
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10172d"/>
+      <stop offset="1" stop-color="#202442"/>
+    </linearGradient>
+    <linearGradient id="aurora" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7cf2e3"/>
+      <stop offset="0.52" stop-color="#8aa5ff"/>
+      <stop offset="1" stop-color="#c5a1ff"/>
+    </linearGradient>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="920" height="220" rx="30" fill="url(#surface)"/>
+  <path d="M30 184 C190 160 265 217 418 185 S714 161 889 188" fill="none" stroke="#fff" stroke-opacity=".055" stroke-width="1"/>
+  <g transform="translate(108 110)" fill="none" stroke="url(#aurora)" stroke-width="4">
+    <ellipse rx="59" ry="27" transform="rotate(-38)" opacity=".9"/>
+    <ellipse rx="59" ry="27" transform="rotate(38)" opacity=".68"/>
+    <circle r="38" stroke-opacity=".35" stroke-width="1.5"/>
+    <circle cx="-49" cy="-27" r="5" fill="#7cf2e3" stroke="none"/>
+    <circle cx="49" cy="-27" r="5" fill="#c5a1ff" stroke="none"/>
+    <path d="M0-19 19 0 0 19-19 0Z" fill="url(#aurora)" stroke="none" filter="url(#glow)"/>
+    <circle r="5" fill="#10172d" stroke="none"/>
+  </g>
+  <text x="205" y="105" fill="#f5f7ff" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="46" font-weight="750" letter-spacing="2.2">
+    AETHERIS<tspan fill="url(#aurora)" font-weight="650"> OMNI</tspan>
+  </text>
+  <text x="208" y="145" fill="#b9c3df" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="14" font-weight="600" letter-spacing="3.3">
+    YOUR WORKSPACE. YOUR COMPUTER. YOUR CHOICE.
+  </text>
+  <rect x="208" y="169" width="112" height="3" rx="1.5" fill="url(#aurora)" opacity=".85"/>
+  <text x="337" y="176" fill="#8591b2" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="12" letter-spacing="1.8">
+    SELF-HOSTED WITH DOCKER COMPOSE
+  </text>
+</svg>

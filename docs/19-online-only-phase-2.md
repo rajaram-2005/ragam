@@ -2,7 +2,7 @@
 
 Date: 2026-10-14. This supersedes the earlier offline-first product direction.
 
-**Historical snapshot, updated 2026-11-01:** this document records the 2026-10-14 increment, not the entire current UI. The provider framework later added native chat, image and video adapters and several saved connections from a 39-entry catalogue; see [27-provider-framework.md](./27-provider-framework.md). The current app also has an explicit user-computer training/adaptation workflow in Chat, owner-managed MCP Streamable HTTP connections, and the Ragam HTTP plugin contract. See [28-user-managed-servers.md](./28-user-managed-servers.md) for the current server workflows. Historical statements below about training and remote plugins/MCP are superseded.
+**Historical snapshot, updated 2026-11-01:** this document records the 2026-10-14 increment, not the entire current UI. The provider framework later added native chat, image and video adapters and several saved connections from a 39-entry catalogue; see [27-provider-framework.md](./27-provider-framework.md). The current app also has an explicit user-computer training/adaptation workflow in Chat, owner-managed MCP Streamable HTTP connections, and the Ragam HTTP plugin contract. The standard end-user Docker deployment now opens directly into a localhost-only single-user workspace with no email or account flow; its security and provider setup are in [22-self-hosted-deployment.md](./22-self-hosted-deployment.md). Direct-Core account-mode details below are retained for development and regression coverage. See [28-user-managed-servers.md](./28-user-managed-servers.md) for the current server workflows. Historical statements below about training and remote plugins/MCP are superseded.
 
 ## Agreed scope and delivered change
 
@@ -37,15 +37,9 @@ AETHERIS_COOKIE_SECURE=false npm run core
 
 **Sign-in is an account, not a token.** The operator token file this increment originally created (`.aetheris-data/online/access-token`) has been **removed**, together with its `{ token }` login route: there is one way in. The operator must configure `AETHERIS_OWNER_EMAIL` before the first account can be created; the matching address becomes owner. Member sign-up is closed by default and requires an explicit operator opt-in. Accounts, scrypt password hashes, sessions, per-account data isolation and the host-delivered password-reset flow are specified in [docs/20](20-accounts-and-sign-in.md). Sign-in still creates an HttpOnly, eight-hour cookie whose `SameSite` is `Strict` by default (`AETHERIS_COOKIE_SAMESITE=none` opts in for an installation embedded in another site, and requires secure cookies), sessions are still bounded and revoked on restart, and sign-out still invalidates the current session.
 
-Then:
+The original increment supported only LiteLLM, Ollama and llama.cpp; that workflow is retained as historical record, not the current provider list. For current browser-based setup across the catalogue—including OpenAI/ChatGPT, Anthropic/Claude, Google Gemini, image services and video services—follow [docs/04 §7](./04-setup.md#7-connecting-chat-image-and-video-providers) and the live [provider matrix](./27-provider-framework.md). Saving a connection does not itself send a prompt; model-list success is not live inference verification. Inference is an explicit user action, uses the selected provider/model without fallback, and may incur that provider's charges.
 
-1. Open **Provider Settings**.
-2. Choose the runtime (LiteLLM, Ollama or llama.cpp server), then enter its `/v1` base URL and, where the runtime needs one, its key.
-3. **Save connection**. Changing endpoint requires a new key; the old key is not forwarded to a new destination. Saving does not make a network request.
-4. **Test connection & refresh models**. This makes a metadata request, not a billed test completion. Any gateway-specific metadata charges remain the gateway operator's responsibility.
-5. In Chat, select a model. **Send** authorizes transmission of that conversation to the displayed gateway and its configured upstream services. Context and sensitive-content controls are separate. Model permission, quota, billing and retention are determined by your gateway and upstream provider.
-
-No provider credentials have been supplied or real external inference performed in this increment. This Arena sandbox's outbound destinations are restricted to GitHub/npm/PyPI infrastructure; arbitrary remote LiteLLM/provider connectivity is not available for live qualification here. Run/deploy on a host with authorized network access to your gateway to qualify actual inference. Local fixtures used in tests are explicitly synthetic, never exposed as user models in the preview.
+No provider credentials have been supplied or real external inference performed in this increment. This Arena sandbox's outbound destinations are restricted to GitHub/npm/PyPI infrastructure; arbitrary remote provider connectivity is not available for live qualification here. Run/deploy on a host with authorized network access to qualify actual inference. Local fixtures used in tests are explicitly synthetic, never exposed as user models in the preview.
 
 ## Active configuration
 

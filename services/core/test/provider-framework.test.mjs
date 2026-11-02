@@ -95,8 +95,9 @@ test('acceptance: strict offline policy never selects a remote provider', () => 
 })
 
 test('acceptance: a successful connection is not evidence of a capability', () => {
-  // Every OpenAI-compatible vendor is `gateway_only`: the wire is implemented, the vendor is not.
-  // Asking one of them for a capability is refused even though the vendor documents it.
+  // `gateway_only` is retained as a legacy status for provider-specific wires: fixtures exercise
+  // the adapter, but the vendor itself has not been called or live-qualified. Asking for an
+  // unproven capability is refused.
   for (const id of providersByStatus(PROVIDER_STATUS.GATEWAY_ONLY).slice(0, 3)) {
     const decision = selectProvider({ capabilities: [CAPABILITIES.STREAMING], ids: [id] })
     assert.equal(decision.chosen, null, `${id} should not be selectable`)
@@ -187,17 +188,17 @@ test('the catalogue refuses the excluded aggregator by name', () => {
 test('the report states the three counts and the honest headline', () => {
   const report = catalogueReport()
   assert.equal(report.valid, true)
-  assert.equal(report.counts.ready, 23)
-  assert.equal(report.counts.gateway_only, 14)
-  assert.equal(report.counts.pending, 2)
-  assert.match(report.summary, /^23 ready/)
+  assert.equal(report.counts.ready, 24)
+  assert.equal(report.counts.gateway_only, 22)
+  assert.equal(report.counts.pending, 1)
+  assert.match(report.summary, /^24 ready/)
   const matrix = capabilityMatrix()
   assert.equal(matrix.valid, true)
   // Catalogue order, not alphabetical: the matrix is a table a reader compares row by row.
   assert.deepEqual(matrix.tested, [
     'litellm', 'ollama', 'llamacpp', 'anthropic', 'gemini',
     'cohere', 'azure-openai', 'vertex', 'bedrock', 'openai-images', 'gemini-images',
-    'stability', 'recraft', 'ideogram', 'black-forest-labs', 'fal', 'replicate', 'firefly',
+    'stability', 'recraft', 'ideogram', 'black-forest-labs', 'fal', 'replicate', 'firefly', 'comfyui',
     'veo', 'runway', 'luma', 'fal-video', 'replicate-video',
   ])
   assert.ok(matrix.rows.every((row) => row.status !== PROVIDER_STATUS.READY || row.tested.length > 0))

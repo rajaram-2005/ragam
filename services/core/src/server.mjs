@@ -35,7 +35,9 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
     log({ event: 'configuration_invalid', variable: 'AETHERIS_MAX_ACCOUNTS', errorCode: 'invalid_max_accounts' })
     throw new Error('AETHERIS_MAX_ACCOUNTS must be a whole number from 1 to 10000.')
   }
+  const localSingleUser = env.AETHERIS_LOCAL_SINGLE_USER === 'true'
   const config = {
+    localSingleUser,
     dataDir: env.AETHERIS_ONLINE_DATA_DIR || resolve('.aetheris-data/online'),
     // Provider destinations are a separate allowlist from browser origins.
     trustedOrigins: [env.AETHERIS_TRUSTED_ORIGINS || '', env.AETHERIS_LITELLM_TRUSTED_ORIGINS || ''].join(',').split(',').map((s) => s.trim()).filter(Boolean),
@@ -47,13 +49,13 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
     // Public self-host installs begin with exactly one explicitly configured owner.
     // Additional accounts require an operator opt-in and a larger explicit cap.
     maxAccounts,
-    ownerEmail: env.AETHERIS_OWNER_EMAIL?.trim() || null,
-    registrationEnabled: env.AETHERIS_ALLOW_ACCOUNT_REGISTRATION === 'true',
+    ownerEmail: localSingleUser ? null : (env.AETHERIS_OWNER_EMAIL?.trim() || null),
+    registrationEnabled: !localSingleUser && env.AETHERIS_ALLOW_ACCOUNT_REGISTRATION === 'true',
     // A password reset cannot be emailed: this product has no mail transport. The code is
     // always written to `password-resets.json` inside the data directory (mode 0600, the
     // same boundary as the provider master key). Printing it too is an explicit operator
     // choice, because a console is very often somebody's log aggregator.
-    onResetCode: env.AETHERIS_PRINT_RESET_CODES === 'true'
+    onResetCode: !localSingleUser && env.AETHERIS_PRINT_RESET_CODES === 'true'
       ? ({ email, code, expiresAt }) => stdout(`password reset code for ${email}: ${code} (single use, expires ${new Date(expiresAt).toISOString()})`)
       : null,
   }
@@ -71,7 +73,7 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
   const server = app.server()
   // Render (and other managed web hosts) inject PORT. AETHERIS_CORE_PORT remains the
   // explicit override for local installs; PORT is the deployment-platform fallback.
-  const port = Number(env.AETHERIS_CORE_PORT || env.PORT || 8790), host = env.AETHERIS_CORE_HOST || '0.0.0.0'
+  const port = Number(env.AETHERIS_CORE_PORT || env.PORT || 8790), host = env.AETHERIS_CORE_HOST || (localSingleUser ? '127.0.0.1' : '0.0.0.0')
   try {
     await new Promise((done, reject) => { server.once('error', reject); server.listen(port, host, done) })
   } catch (error) {
@@ -82,16 +84,19 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
   log({ event: 'core_started', host, port: server.address().port, dataDir: config.dataDir, nodeVersion: process.versions.node })
   stdout(`Aetheris online-only API listening on ${host}:${server.address().port}`)
   stdout(`  data dir   ${config.dataDir}`)
-  const accounts = await app.accounts.count()
-  if (accounts === 0) {
-    stdout(config.ownerEmail
-      ? '  sign-in    owner bootstrap is limited to AETHERIS_OWNER_EMAIL; member registration is closed by default'
-      : '  sign-in    registration is closed; configure AETHERIS_OWNER_EMAIL before creating the owner account')
-  } else stdout(`  sign-in    ${accounts} account(s); owner ${(await app.accounts.owner()) ? 'configured' : 'missing'}`)
+  if (localSingleUser) stdout('  access     single-user workspace, localhost only; no account or email login')
+  else {
+    const accounts = await app.accounts.count()
+    if (accounts === 0) {
+      stdout(config.ownerEmail
+        ? '  sign-in    owner bootstrap is limited to AETHERIS_OWNER_EMAIL; member registration is closed by default'
+        : '  sign-in    registration is closed; configure AETHERIS_OWNER_EMAIL before creating the owner account')
+    } else stdout(`  sign-in    ${accounts} account(s); owner ${(await app.accounts.owner()) ? 'configured' : 'missing'}`)
+  }
   if (config.cookieSameSite !== 'strict') {
     stdout(`  cookie     SameSite=${config.cookieSameSite}${config.secureCookie ? ' + Secure' : ''} — the session is sent on cross-site requests, so this app can be embedded in another site; mutations still require the x-aetheris-request header`)
   }
-  stdout('Configure an online gateway (LiteLLM, Ollama or llama.cpp server) in Provider Settings. No local inference or automatic model downloads.')
+  stdout('Configure a supported provider in Provider Settings. Model ids are fetched from its configured account; no local inference, guessed model list or automatic fallback.')
   let closed = false
   const shutdown = async () => {
     if (closed) return
