@@ -89,7 +89,7 @@ test('a tool call validates arguments and returns untrusted data, never permissi
 
   const read = await f.request('POST', '/api/mcp/call', { server: 'installation-docs', tool: 'read-document', arguments: { name: '03-status.md' } })
   assert.equal(read.status, 200)
-  assert.match(read.data.output.text, /Test totals/)
+  assert.match(read.data.output.text, /Test inventory/)
   assert.ok(read.data.output.text.length <= 20_000, 'the read is bounded')
   assert.equal(read.data.output.truncated, true, 'the status document is larger than the bound')
 
