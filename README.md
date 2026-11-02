@@ -134,12 +134,11 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 CI runs the full suites on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) across six jobs: one per
 component, a Docker Compose build/health/persistence/restore smoke, documentation
-checks, and release verification against suite counts. The latest completed full CI run
-[41389164762](https://github.com/rajaram-2005/ragam/actions/runs/41389164762) passed the
-then-current 1,915 tests (Core 984, Web 109, Fabric 822), including release verification
-and the loopback-only Compose persistence/restore smoke. Baidu Qianfan adds one current
-fixture case (Core 985; 1,916 total), so full CI for this tree is pending. Fixtures do not
-make live vendor calls. The
+checks, and release verification against suite counts. The latest full CI run
+[41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all
+1,916 current tests (Core 985, Web 109, Fabric 822), plus release verification and the
+loopback-only Compose persistence/restore smoke. The eight added Chat APIs use deterministic
+contract fixtures; neither the tests nor CI made live vendor calls. The
 Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
 

@@ -738,10 +738,10 @@ test('the status doc reports the real test totals', () => {
   // README and docs/03 must state the *same* total.
   assert.ok(squash(doc.readme()).includes('1916 tests: core 985, web 109, fabric 822'),
     'README must state the current inventory as docs/03 does')
-  assert.ok(squash(doc.readme()).includes('latest completed full CI run')
-    && squash(doc.readme()).includes('41389164762')
-    && squash(doc.readme()).includes('then-current 1,915 tests')
-    && squash(doc.readme()).includes('full CI for this tree is pending'),
+  assert.ok(squash(doc.readme()).includes('latest full CI run')
+    && squash(doc.readme()).includes('41394564087')
+    && squash(doc.readme()).includes('1,916 current tests')
+    && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
   'README must identify the latest full CI run and its measured inventory')
   assert.ok(status.includes('(70 files'), 'the file count must move with the suite')
 
