@@ -254,7 +254,7 @@ curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed4
 PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
 ```
 
-The pinned archive includes the model manifests and checksum list. The last verified full run covered 976 Core tests before the current provider additions added eight fixture-only cases. The current suite contains 984 tests; the new adapters are covered by focused local fixtures, and a fresh full run is pending. Without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
+The pinned archive includes the model manifests and checksum list. The last earlier full run covered 976 Core tests; the current suite contains 984. CI run [41388233396](https://github.com/rajaram-2005/ragam/actions/runs/41388233396) passed the complete current suite with the pinned Pro/Max artifacts and Python prerequisites. The provider adapters also have deterministic local fixtures; neither CI nor fixtures contacted a vendor. Without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
 npm test                  # all three suites (1915 tests)
@@ -313,10 +313,10 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 984 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41324293475](https://github.com/rajaram-2005/ragam/actions/runs/41324293475) passed the prior 976-test suite with the pinned model artifacts and Python prerequisites; eight newer provider-fixture tests have focused coverage, but no new full-suite result is claimed. |
+| **Core service** | Current suite: 984 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41388233396](https://github.com/rajaram-2005/ragam/actions/runs/41388233396) passed the full current suite with the pinned model artifacts and Python prerequisites. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 109 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
-| **Docker Compose** | Run [41324293475](https://github.com/rajaram-2005/ragam/actions/runs/41324293475) passed: builds both images, starts Core/web/Caddy on loopback, checks local-workspace health and the provider catalogue with account creation disabled, then cold-backs up and restores the named volume and verifies workspace identity plus a SQLite history marker. Synthetic CI only: no live provider inference or persistent-deployment guarantee. |
+| **Docker Compose** | Run [41388233396](https://github.com/rajaram-2005/ragam/actions/runs/41388233396) passed: builds both images, starts Core/web/Caddy on loopback, checks local-workspace health and the provider catalogue with account creation disabled, then cold-backs up and restores the named volume and verifies workspace identity plus a SQLite history marker. Synthetic CI only: no live provider inference or persistent-deployment guarantee. |
 | **Docs** | The 50-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |
 

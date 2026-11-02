@@ -134,10 +134,11 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 CI runs the full suites on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) across six jobs: one per
 component, a Docker Compose build/health/persistence/restore smoke, documentation
-checks, and release verification against suite counts. The last recorded full CI run
-passed 1907 then-present tests (Core 976, Web 109, Fabric 822); the current provider additions add
-eight deterministic fixture cases. Its focused provider tests pass locally, but a new full
-CI run is still pending. The
+checks, and release verification against suite counts. The latest full CI run
+[41388233396](https://github.com/rajaram-2005/ragam/actions/runs/41388233396) passed all
+1,915 tests (Core 984, Web 109, Fabric 822), including release verification and the
+loopback-only Compose persistence/restore smoke. The seven added Chat API adapters use
+eight deterministic fixture cases; CI did not make live vendor calls. The
 Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
 
@@ -195,7 +196,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 38,092 | 25,262 | **zero npm packages** | 984 |
+| `services/core` | Node 22 ESM | 38,094 | 25,264 | **zero npm packages** | 984 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
 | `apps/web` | React 18 + Vite | 5,897 | 2,142 | react, react-dom | 109 |
 

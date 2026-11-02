@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 38,092 source lines, 25,262 test lines
+### `services/core` — 38,094 source lines, 25,264 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -179,7 +179,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/wires/deepinfra.mjs` | 15 | DeepInfra OpenAI-compatible Chat Completions; model discovery filters documented catalog metadata to chat-tagged models |
 | `providers/wires/minimax.mjs` | 15 | MiniMax OpenAI-compatible Chat Completions and model listing; international default with documented regional host configurable |
 | `providers/wires/moonshot.mjs` | 19 | Moonshot AI (Kimi) Chat Completions and authenticated model discovery using the documented OpenAI-compatible routes |
-| `providers/wires/sarvam.mjs` | 21 | Sarvam Open-Source Models Chat and deployment-specific model discovery using the documented subscription-key header; Chat access requires beta entitlement |
+| `providers/wires/sarvam.mjs` | 23 | Sarvam Open-Source Models Chat and deployment-specific model discovery; uses the documented subscription-key header (the docs also list Bearer as an alternative) |
 | `providers/wires/siliconflow.mjs` | 14 | SiliconFlow OpenAI-compatible Chat Completions and model discovery filtered to chat models |
 | `providers/wires/fireworks.mjs` | 50 | Fireworks inference plus bounded, account-scoped cursor-paginated model discovery |
 | `providers/wires/groq.mjs` | 12 | Groq OpenAI-compatible Chat Completions over its documented /openai/v1 base |

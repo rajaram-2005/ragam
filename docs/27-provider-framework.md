@@ -133,7 +133,10 @@ read-only matrix with three sentences and no controls.
 but not live-qualified. The separate `integrationType` column distinguishes native vendor API,
 OpenAI-compatible API, and gateway-routed API. Fixture tests are not vendor calls. Per-model
 capabilities come only from provider model metadata; unknown stays unknown. Streaming/vision/tools
-are not inferred from a text-completion success.
+are not inferred from a text-completion success. For Sarvam, the Chat endpoint marks
+`api-subscription-key` required and the same page's authentication section offers API-key-header
+**or** Bearer auth. Ragam uses only the documented API-key-header option; its adapter does not
+send Bearer. Its model list is deployment-specific and live verification has not been performed.
 
 | Provider | Status | Integration type | Wire | Auth | Adapter status | Live verification | Capabilities evidenced | Documentation |
 |---|---|---|---|---|---|---|---|---|

@@ -738,8 +738,10 @@ test('the status doc reports the real test totals', () => {
   // README and docs/03 must state the *same* total.
   assert.ok(squash(doc.readme()).includes('1915 tests: core 984, web 109, fabric 822'),
     'README must state the current inventory as docs/03 does')
-  assert.ok(squash(doc.readme()).includes('last recorded full CI run passed 1907 then-present tests'),
-    'README must distinguish the previous verified CI run from the current inventory')
+  assert.ok(squash(doc.readme()).includes('latest full CI run')
+    && squash(doc.readme()).includes('41388233396')
+    && squash(doc.readme()).includes('passed all 1,915 tests'),
+  'README must identify the latest full CI run and its measured inventory')
   assert.ok(status.includes('(70 files'), 'the file count must move with the suite')
 
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))

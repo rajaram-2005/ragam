@@ -7,11 +7,11 @@ something does not work, it says so and says why.
 
 **Core test environment used for the last verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test inventory: 1915 cases across the three suites** (Core 984, Web 109, Fabric 822). The last recorded full CI run [41324293475](https://github.com/rajaram-2005/ragam/actions/runs/41324293475) passed the then-present 1907 tests (Core 976, Web 109, Fabric 822) and its six jobs, including Compose health and cold-volume restore checks. The current documented-provider additions add seven Chat APIs and eight deterministic fixture cases; focused provider tests pass locally, but the full suite and a new CI run have not yet been completed for this tree. The Compose smoke in that earlier run verified the loopback-only single-user workspace, disabled account creation, provider catalogue, restored workspace ID and a SQLite conversation-history marker; it is synthetic CI, not a permanent deployment or live-provider inference. A read-only inventory of the external `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket. No external service, project, deployment, account, setting or data was changed. Vercel/Supabase repository integrations remain removed from the repo; external resources are untouched.
+**Test inventory: 1915 cases across the three suites** (Core 984, Web 109, Fabric 822). The earlier full CI run [41324293475](https://github.com/rajaram-2005/ragam/actions/runs/41324293475) passed the then-present 1907 tests (Core 976, Web 109, Fabric 822). The latest full CI run [41388233396](https://github.com/rajaram-2005/ragam/actions/runs/41388233396) passed all 1915 current tests and six jobs, including release verification and the loopback-only Docker Compose health/persistence/restore smoke. The current documented-provider additions add seven Chat APIs and eight deterministic fixture cases; fixtures are contract tests, not live vendor access. The Compose smoke verifies a synthetic local single-user workspace, disabled account creation, provider catalogue, restored workspace ID and a SQLite conversation-history marker; it is not a permanent deployment or live-provider inference. A read-only inventory of the external `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket. No external service, project, deployment, account, setting or data was changed. Vercel/Supabase repository integrations remain removed from the repo; external resources are untouched.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **984 tests** (70 files; previous full 976-test run passed in CI with pinned Pro/Max artifacts and Python prerequisites; eight new provider fixture cases are focused-tested only) |
+| `services/core` | `node --test test/*.test.mjs` | **984 tests** (70 files; the full suite passed in CI at [41388233396](https://github.com/rajaram-2005/ragam/actions/runs/41388233396) with pinned Pro/Max artifacts and Python prerequisites; the seven provider additions have deterministic fixture coverage) |
 | `services/fabric` | `PATH=.venv/bin:$PATH npm run test:fabric` | **822 tests** (42 files; local run passed) |
 | `apps/web` | `npm run test:web` | **109 tests** (5 files; 109/109 passed locally) |
 | `apps/web` build | `npm run build --prefix apps/web` | production bundle built successfully locally |
@@ -242,7 +242,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Current test inventory (984 tests) — full-suite verification pending
+### `services/core` — Current test inventory (984 tests) — full suite verified in CI
 
 | Subsystem | Status | Notes |
 |---|---|---|
