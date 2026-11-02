@@ -37,6 +37,14 @@ const providers = [
     wire: 'siliconflow_chat', baseUrl: 'https://api.siliconflow.com/v1', modelsPath: '/models?sub_type=chat',
     docs: 'https://docs.siliconflow.com/en/api-reference/chat-completions/chat-completions',
   },
+  {
+    wire: 'moonshot_chat', baseUrl: 'https://api.moonshot.ai/v1', modelsPath: '/models',
+    docs: 'https://platform.kimi.ai/docs/api/chat',
+  },
+  {
+    wire: 'sarvam_chat', baseUrl: 'https://api.sarvam.ai/v2', modelsPath: '/models',
+    docs: 'https://docs.sarvam.ai/api-reference/chat/chat-completions-v2', authHeader: 'api-subscription-key',
+  },
 ]
 
 test('international provider adapters discover documented models and send documented Chat Completions requests', async (t) => {
@@ -44,6 +52,8 @@ test('international provider adapters discover documented models and send docume
     const calls = []
     const adapter = wireFor(provider.wire)
     const config = { baseUrl: provider.baseUrl, apiKey: 'synthetic-fixture-key' }
+    const authHeader = provider.authHeader ?? 'authorization'
+    const authValue = provider.authHeader ? config.apiKey : `Bearer ${config.apiKey}`
     const expectedModel = provider.expectedModel ?? 'fixture-chat-model'
     const transport = async (receivedConfig, path, options = {}) => {
       calls.push({ receivedConfig, path, options })
@@ -63,10 +73,10 @@ test('international provider adapters discover documented models and send docume
     assert.equal(adapter.adapter.docsUrl, provider.docs)
     assert.deepEqual(await adapter.models(transport, config), provider.expectedModels ?? [expectedModel])
     assert.equal(calls[0].path, provider.modelsPath)
-    assert.equal(calls[0].options.headers.authorization, 'Bearer synthetic-fixture-key')
+    assert.equal(calls[0].options.headers[authHeader], authValue)
     if (provider.wire === 'alibaba_model_studio_chat') {
       assert.equal(calls[1].path, '/api/v1/models?page_no=2&page_size=100', 'Alibaba model discovery follows the documented page counter')
-      assert.equal(calls[1].options.headers.authorization, 'Bearer synthetic-fixture-key')
+      assert.equal(calls[1].options.headers[authHeader], authValue)
     }
 
     const result = await adapter.chat(transport, config, {
@@ -79,7 +89,7 @@ test('international provider adapters discover documented models and send docume
     const request = calls.find((call) => call.path === (provider.chatPath ?? '/chat/completions'))
     assert.ok(request, `${provider.wire} sent its Chat Completions request`)
     assert.equal(request.receivedConfig, config)
-    assert.equal(request.options.headers.authorization, 'Bearer synthetic-fixture-key')
+    assert.equal(request.options.headers[authHeader], authValue)
     assert.deepEqual(request.options.body.messages, [{ role: 'user', content: 'hello' }])
     assert.equal(request.options.body.model, expectedModel)
     assert.equal(request.options.body.max_tokens, 64)

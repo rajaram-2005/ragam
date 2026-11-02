@@ -2,7 +2,7 @@
 // request shapes and parsers only; they are deliberately not described as live vendor qualification.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { PROVIDERS, WIRE_FORMATS, providerById } from '../src/providers/catalog.mjs'
+import { AUTH_KINDS, PROVIDERS, WIRE_FORMATS, providerById } from '../src/providers/catalog.mjs'
 import { wireFor } from '../src/providers/wires/index.mjs'
 
 const cases = [
@@ -15,6 +15,8 @@ const cases = [
   { id: 'deepinfra', wire: 'deepinfra_chat', modelsPath: '/models?filter=with_meta&sort_by=maf', chatPath: '/chat/completions', list: { data: [{ id: 'deepinfra-test', metadata: { tags: ['chat'] } }] } },
   { id: 'minimax', wire: 'minimax_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { data: [{ id: 'MiniMax-M3' }] } },
   { id: 'siliconflow', wire: 'siliconflow_chat', modelsPath: '/models?sub_type=chat', chatPath: '/chat/completions', list: { data: [{ id: 'Qwen/Qwen3-32B' }] } },
+  { id: 'moonshot', wire: 'moonshot_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { object: 'list', data: [{ id: 'kimi-k3.1-pro', context_length: 1048576, supports_image_in: true, supports_video_in: true, supports_reasoning: true }] } },
+  { id: 'sarvam', wire: 'sarvam_chat', modelsPath: '/models', chatPath: '/chat/completions', authHeader: 'api-subscription-key', list: { object: 'list', data: [{ id: 'glm5.3', object: 'model', owned_by: 'sarvam' }] } },
   { id: 'groq', wire: 'groq_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { data: [{ id: 'groq-test' }] } },
   { id: 'together', wire: 'together_chat', modelsPath: '/models', chatPath: '/chat/completions', list: [{ id: 'together-test', type: 'chat', context_length: 32768 }] },
   { id: 'fireworks', wire: 'fireworks_chat', modelsPath: '/v1/accounts/acct_test/models?pageSize=200', chatPath: '/inference/v1/chat/completions', list: { models: [{ id: 'accounts/acct_test/models/fw-test', name: 'fw-test-chat' }] }, options: { accountId: 'acct_test' } },
@@ -30,7 +32,7 @@ const cases = [
 const configFor = (entry) => ({ id: entry.id, kind: entry.id, wire: entry.wire, baseUrl: 'https://fixture.invalid', apiKey: 'fixture-secret-not-a-real-key', options: entry.options ?? {} })
 
 test('the documented provider APIs each have their own contract adapter and compatibility class', () => {
-  const expected = ['openai', 'alibaba-model-studio', 'openrouter', 'mistral', 'deepseek', 'cerebras', 'deepinfra', 'minimax', 'siliconflow', 'groq', 'together', 'fireworks', 'xai', 'perplexity', 'novita', 'sambanova', 'huggingface', 'vllm', 'localai']
+  const expected = ['openai', 'alibaba-model-studio', 'openrouter', 'mistral', 'deepseek', 'cerebras', 'deepinfra', 'minimax', 'siliconflow', 'moonshot', 'sarvam', 'groq', 'together', 'fireworks', 'xai', 'perplexity', 'novita', 'sambanova', 'huggingface', 'vllm', 'localai']
   const actual = PROVIDERS.filter((row) => row.adapterStatus === 'contract_tested').map((row) => row.id).sort()
   assert.deepEqual(actual, expected.sort())
   assert.equal(PROVIDERS.some((row) => /freellmapi/i.test(row.id)), false)
@@ -44,8 +46,9 @@ test('the documented provider APIs each have their own contract adapter and comp
   }
   assert.equal(providerById('openai').integrationType, 'native-vendor')
   assert.equal(providerById('xai').integrationType, 'native-vendor')
+  assert.equal(providerById('sarvam').auth, AUTH_KINDS.API_SUBSCRIPTION_KEY)
   for (const id of ['openrouter', 'perplexity', 'huggingface']) assert.equal(providerById(id).integrationType, 'gateway-routed')
-  for (const id of ['alibaba-model-studio', 'mistral', 'deepseek', 'cerebras', 'deepinfra', 'minimax', 'siliconflow', 'groq', 'together', 'fireworks', 'novita', 'sambanova', 'vllm', 'localai']) assert.equal(providerById(id).integrationType, 'openai-compatible')
+  for (const id of ['alibaba-model-studio', 'mistral', 'deepseek', 'cerebras', 'deepinfra', 'minimax', 'siliconflow', 'moonshot', 'sarvam', 'groq', 'together', 'fireworks', 'novita', 'sambanova', 'vllm', 'localai']) assert.equal(providerById(id).integrationType, 'openai-compatible')
 })
 
 test('model-list contracts retain only reported model metadata and never infer unreported features', async () => {
@@ -61,7 +64,7 @@ test('model-list contracts retain only reported model metadata and never infer u
     assert.equal(pathSeen, entry.modelsPath, entry.id)
     assert.equal(details.length, 1, entry.id)
     assert.equal(details[0].id, entry.expectedModel ?? entry.list.models?.[0]?.id ?? entry.list.data?.[0]?.id ?? entry.list[0]?.id, entry.id)
-    assert.equal(headersSeen.authorization, `Bearer ${config.apiKey}`, entry.id)
+    assert.equal(headersSeen[entry.authHeader ?? 'authorization'], entry.authHeader ? config.apiKey : `Bearer ${config.apiKey}`, entry.id)
     if (entry.id === 'deepseek') {
       assert.equal(details[0].capabilities.contextTokens, 65536)
       assert.equal(details[0].capabilities.imageInput, 'documented')
@@ -86,7 +89,7 @@ test('completion adapters preserve exact model ids and provider-specific endpoin
     assert.equal(pathSeen, entry.chatPath, entry.id)
     assert.equal(bodySeen.model, 'verbatim-model-id', entry.id)
     assert.equal(result.text, 'fixture answer', entry.id)
-    assert.equal(headersSeen.authorization, `Bearer ${config.apiKey}`, entry.id)
+    assert.equal(headersSeen[entry.authHeader ?? 'authorization'], entry.authHeader ? config.apiKey : `Bearer ${config.apiKey}`, entry.id)
     if (entry.id === 'xai') assert.equal(bodySeen.max_output_tokens, 17)
     else assert.equal(bodySeen.max_tokens, 17)
   }

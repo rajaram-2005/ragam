@@ -33,7 +33,8 @@ function capabilities(record, provider) {
 
 export function createOpenAICompatibleAdapter(spec) {
   const headers = (config) => ({
-    ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
+    ...(config.apiKey && !spec.omitBearer ? { authorization: `Bearer ${config.apiKey}` } : {}),
+    ...(config.apiKey && spec.apiKeyHeader ? { [spec.apiKeyHeader]: config.apiKey } : {}),
     ...(spec.headers?.(config) ?? {}),
   })
   const modelPath = (config) => typeof spec.modelPath === 'function' ? spec.modelPath(config) : spec.modelPath

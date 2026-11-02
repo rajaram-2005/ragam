@@ -30,6 +30,7 @@ import { CREDENTIAL_KINDS, IMPLEMENTED, credentialFor } from './wires/index.mjs'
 export const AUTH_KINDS = Object.freeze({
   BEARER: 'bearer',
   X_API_KEY: 'x_api_key',
+  API_SUBSCRIPTION_KEY: 'api_subscription_key',
   OAUTH2: 'oauth2',
   AWS_SIGV4: 'aws_sigv4',
   GCP_ADC: 'gcp_adc',
@@ -41,7 +42,7 @@ export const WIRE_FORMATS = Object.freeze({
   OPENAI_CHAT: 'openai_chat', ALIBABA_MODEL_STUDIO_CHAT: 'alibaba_model_studio_chat',
   OPENROUTER_CHAT: 'openrouter_chat', MISTRAL_CHAT: 'mistral_chat', DEEPSEEK_CHAT: 'deepseek_chat',
   GROQ_CHAT: 'groq_chat', TOGETHER_CHAT: 'together_chat', FIREWORKS_CHAT: 'fireworks_chat',
-  CEREBRAS_CHAT: 'cerebras_chat', DEEPINFRA_CHAT: 'deepinfra_chat', MINIMAX_CHAT: 'minimax_chat', SILICONFLOW_CHAT: 'siliconflow_chat',
+  CEREBRAS_CHAT: 'cerebras_chat', DEEPINFRA_CHAT: 'deepinfra_chat', MINIMAX_CHAT: 'minimax_chat', SILICONFLOW_CHAT: 'siliconflow_chat', MOONSHOT_CHAT: 'moonshot_chat', SARVAM_CHAT: 'sarvam_chat',
   XAI_RESPONSES: 'xai_responses', PERPLEXITY_ROUTER: 'perplexity_router', NOVITA_CHAT: 'novita_chat',
   SAMBANOVA_CHAT: 'sambanova_chat', HUGGINGFACE_CHAT: 'huggingface_chat', VLLM_CHAT: 'vllm_chat', LOCALAI_CHAT: 'localai_chat',
   ANTHROPIC_MESSAGES: 'anthropic_messages',
@@ -223,6 +224,8 @@ export const PROVIDERS = Object.freeze([
     ['deepinfra', 'DeepInfra', 'https://docs.deepinfra.com/api-reference/introduction', WIRE_FORMATS.DEEPINFRA_CHAT, 'openai-compatible'],
     ['minimax', 'MiniMax', 'https://platform.minimax.io/docs/api-reference/text-openai-api', WIRE_FORMATS.MINIMAX_CHAT, 'openai-compatible'],
     ['siliconflow', 'SiliconFlow', 'https://docs.siliconflow.com/en/api-reference/models/get-model-list', WIRE_FORMATS.SILICONFLOW_CHAT, 'openai-compatible'],
+    ['moonshot', 'Moonshot AI (Kimi API)', 'https://platform.kimi.ai/docs/api/chat', WIRE_FORMATS.MOONSHOT_CHAT, 'openai-compatible'],
+    ['sarvam', 'Sarvam AI Open-Source Models', 'https://docs.sarvam.ai/api-reference/chat/chat-completions-v2', WIRE_FORMATS.SARVAM_CHAT, 'openai-compatible', AUTH_KINDS.API_SUBSCRIPTION_KEY],
     ['groq', 'Groq', 'https://console.groq.com/docs/api-reference', WIRE_FORMATS.GROQ_CHAT, 'openai-compatible'],
     ['together', 'Together AI', 'https://docs.together.ai/reference/chat-completions', WIRE_FORMATS.TOGETHER_CHAT, 'openai-compatible'],
     ['fireworks', 'Fireworks AI', 'https://docs.fireworks.ai/api-reference/post-chatcompletions', WIRE_FORMATS.FIREWORKS_CHAT, 'openai-compatible'],
@@ -233,9 +236,9 @@ export const PROVIDERS = Object.freeze([
     ['huggingface', 'Hugging Face Inference Providers', 'https://huggingface.co/docs/inference-providers/tasks/chat-completion', WIRE_FORMATS.HUGGINGFACE_CHAT, 'gateway-routed'],
     ['vllm', 'vLLM (OpenAI-compatible server)', 'https://docs.vllm.ai/en/latest/serving/online_serving/', WIRE_FORMATS.VLLM_CHAT, 'openai-compatible'],
     ['localai', 'LocalAI', 'https://localai.io/docs/features/openai-functions/', WIRE_FORMATS.LOCALAI_CHAT, 'openai-compatible'],
-  ].map(([id, label, docsUrl, wire, integrationType]) => Object.freeze({
+  ].map(([id, label, docsUrl, wire, integrationType, auth = AUTH_KINDS.BEARER]) => Object.freeze({
     id, label, category: integrationType === 'native-vendor' ? 'native-vendor' : integrationType,
-    wire, auth: AUTH_KINDS.BEARER, credential: CREDENTIAL_KINDS.API_KEY,
+    wire, auth, credential: CREDENTIAL_KINDS.API_KEY,
     status: PROVIDER_STATUS.GATEWAY_ONLY, docsUrl, capabilities: Object.freeze([]),
     integrationType, adapterStatus: 'contract_tested', liveVerification: 'pending',
     egress: Object.freeze({ https: true, operatorConfigured: true }),

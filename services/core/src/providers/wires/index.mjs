@@ -21,6 +21,8 @@ import * as cerebras from './cerebras.mjs'
 import * as deepinfra from './deepinfra.mjs'
 import * as minimax from './minimax.mjs'
 import * as siliconflow from './siliconflow.mjs'
+import * as moonshot from './moonshot.mjs'
+import * as sarvam from './sarvam.mjs'
 import * as fireworks from './fireworks.mjs'
 import * as groq from './groq.mjs'
 import * as huggingface from './huggingface.mjs'
@@ -56,6 +58,8 @@ const WIRES = Object.freeze({
   [deepinfra.wire]: deepinfra,
   [minimax.wire]: minimax,
   [siliconflow.wire]: siliconflow,
+  [moonshot.wire]: moonshot,
+  [sarvam.wire]: sarvam,
   [groq.wire]: groq,
   [together.wire]: together,
   [fireworks.wire]: fireworks,

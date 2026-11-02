@@ -731,12 +731,12 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**982 tests**'), 'current core test inventory must be stated')
+  assert.ok(status.includes('**984 tests**'), 'current core test inventory must be stated')
   assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
   assert.ok(status.includes('**109 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1913 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('1915 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1913 tests: core 982, web 109, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('1915 tests: core 984, web 109, fabric 822'),
     'README must state the current inventory as docs/03 does')
   assert.ok(squash(doc.readme()).includes('last recorded full CI run passed 1907 then-present tests'),
     'README must distinguish the previous verified CI run from the current inventory')
@@ -745,14 +745,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(982), `core heading must say 982, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(984), `core heading must say 984, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(109), `web heading must say 109, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1913,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1913`,
+    1915,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1915`,
   )
 })
 

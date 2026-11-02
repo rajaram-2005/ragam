@@ -35,6 +35,8 @@ const ENDPOINT_FOR_WIRE = Object.freeze({
   deepinfra_chat: { placeholder: 'https://api.deepinfra.com/v1/openai', hint: 'DeepInfra OpenAI-compatible API base. Model discovery filters the documented catalog to chat-tagged models; API use may incur charges.' },
   minimax_chat: { placeholder: 'https://api.minimax.io/v1', hint: 'MiniMax international OpenAI-compatible API. For a China-region account, use the API host documented for that account (api.minimaxi.com). API use may incur charges.' },
   siliconflow_chat: { placeholder: 'https://api.siliconflow.com/v1', hint: 'SiliconFlow international OpenAI-compatible API. Model discovery requests only chat models; China-region accounts may require the documented api.siliconflow.cn host. API use may incur charges.' },
+  moonshot_chat: { placeholder: 'https://api.moonshot.ai/v1', hint: 'Moonshot AI Kimi API base. This adapter uses the documented OpenAI-compatible Chat Completions and model-list endpoints. API use may incur charges; check the API platform terms.' },
+  sarvam_chat: { placeholder: 'https://api.sarvam.ai/v2', hint: 'Sarvam Open-Source Models API. Model discovery is deployment-specific, and Chat Completions requires beta access on the key. The API key is sent in the documented api-subscription-key header; usage may be billed.' },
   groq_chat: { placeholder: 'https://api.groq.com/openai/v1', hint: 'Groq OpenAI-compatible API base, including /openai/v1.' },
   together_chat: { placeholder: 'https://api.together.xyz/v1', hint: 'Together API base, including /v1.' },
   fireworks_chat: { placeholder: 'https://api.fireworks.ai', hint: 'Fireworks API root. Inference and account-scoped model listing use different documented API paths.' },
