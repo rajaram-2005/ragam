@@ -39,7 +39,7 @@ export const AUTH_KINDS = Object.freeze({
 
 /** Wire contracts implemented by the shared guarded transport and their individual adapters. */
 export const WIRE_FORMATS = Object.freeze({
-  OPENAI_CHAT: 'openai_chat', ALIBABA_MODEL_STUDIO_CHAT: 'alibaba_model_studio_chat',
+  OPENAI_CHAT: 'openai_chat', BAIDU_QIANFAN_CHAT: 'baidu_qianfan_chat', ALIBABA_MODEL_STUDIO_CHAT: 'alibaba_model_studio_chat',
   OPENROUTER_CHAT: 'openrouter_chat', MISTRAL_CHAT: 'mistral_chat', DEEPSEEK_CHAT: 'deepseek_chat',
   GROQ_CHAT: 'groq_chat', TOGETHER_CHAT: 'together_chat', FIREWORKS_CHAT: 'fireworks_chat',
   CEREBRAS_CHAT: 'cerebras_chat', DEEPINFRA_CHAT: 'deepinfra_chat', MINIMAX_CHAT: 'minimax_chat', SILICONFLOW_CHAT: 'siliconflow_chat', MOONSHOT_CHAT: 'moonshot_chat', SARVAM_CHAT: 'sarvam_chat',
@@ -216,6 +216,7 @@ export const PROVIDERS = Object.freeze([
   // deterministic local fixtures, while liveVerification remains pending.
   ...[
     ['openai', 'OpenAI', 'https://developers.openai.com/api/reference/chat-completions/overview', WIRE_FORMATS.OPENAI_CHAT, 'native-vendor'],
+    ['baidu-qianfan', 'Baidu Qianfan', 'https://cloud.baidu.com/doc/qianfan-api/s/3m7of64lb', WIRE_FORMATS.BAIDU_QIANFAN_CHAT, 'openai-compatible'],
     ['alibaba-model-studio', 'Alibaba Cloud Model Studio', 'https://help.aliyun.com/en/model-studio/compatibility-of-openai-with-dashscope', WIRE_FORMATS.ALIBABA_MODEL_STUDIO_CHAT, 'openai-compatible'],
     ['openrouter', 'OpenRouter', 'https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request', WIRE_FORMATS.OPENROUTER_CHAT, 'gateway-routed'],
     ['mistral', 'Mistral AI', 'https://docs.mistral.ai/api/endpoint/chat/', WIRE_FORMATS.MISTRAL_CHAT, 'openai-compatible'],

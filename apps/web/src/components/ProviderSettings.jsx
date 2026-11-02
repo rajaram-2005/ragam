@@ -27,6 +27,7 @@ const CUSTOM_OPTION = { id: 'custom', label: 'Custom OpenAI-compatible endpoint'
 const ENDPOINT_FOR_WIRE = Object.freeze({
   azure_openai: { placeholder: 'https://<resource>.openai.azure.com', hint: 'The resource endpoint from the Azure portal. This client adds /openai/v1. The selected id is sent as `model`, so it must be the deployment name; the data-plane model list does not enumerate deployments.' },
   openai_chat: { placeholder: 'https://api.openai.com/v1', hint: 'OpenAI Chat Completions API base, including /v1. This contract adapter does not claim Responses-only features.' },
+  baidu_qianfan_chat: { placeholder: 'https://qianfan.baidubce.com/v2', hint: 'Baidu Qianfan OpenAI-compatible API. Model discovery filters the documented catalogue to chat models not marked offline. API use may incur charges.' },
   alibaba_model_studio_chat: { placeholder: 'https://dashscope-intl.aliyuncs.com', hint: 'Alibaba Model Studio Singapore endpoint by default. The adapter lists text-input/text-output catalog entries and calls the OpenAI-compatible Chat endpoint; region, workspace, model access and API keys vary. Replace the host with the exact region/workspace endpoint documented for your account. API use may incur charges.' },
   openrouter_chat: { placeholder: 'https://openrouter.ai/api/v1', hint: 'OpenRouter routed API base, including /api/v1. Per-model capabilities are provider/model-dependent.' },
   mistral_chat: { placeholder: 'https://api.mistral.ai/v1', hint: 'Mistral API base, including /v1.' },

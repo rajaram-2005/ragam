@@ -189,7 +189,7 @@ test('the report states the three counts and the honest headline', () => {
   const report = catalogueReport()
   assert.equal(report.valid, true)
   assert.equal(report.counts.ready, 24)
-  assert.equal(report.counts.gateway_only, 21)
+  assert.equal(report.counts.gateway_only, 22)
   assert.equal(report.counts.pending, 1)
   assert.match(report.summary, /^24 ready/)
   const matrix = capabilityMatrix()

@@ -254,11 +254,11 @@ curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed4
 PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
 ```
 
-The pinned archive includes the model manifests and checksum list. The last earlier full run covered 976 Core tests; the current suite contains 984. CI run [41388233396](https://github.com/rajaram-2005/ragam/actions/runs/41388233396) passed the complete current suite with the pinned Pro/Max artifacts and Python prerequisites. The provider adapters also have deterministic local fixtures; neither CI nor fixtures contacted a vendor. Without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
+The pinned archive includes the model manifests and checksum list. The last completed full run [41389164762](https://github.com/rajaram-2005/ragam/actions/runs/41389164762) passed 984 Core tests with the pinned Pro/Max artifacts and Python prerequisites; the current suite contains 985 after one deterministic Baidu Qianfan contract case was added. Full CI for that current suite is pending. Fixtures make no vendor calls. Without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-npm test                  # all three suites (1915 tests)
-npm run test:core         # 984
+npm test                  # all three suites (1916 tests)
+npm run test:core         # 985
 npm run test:web          # 109
 npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
 ```
@@ -313,10 +313,10 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 984 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41388233396](https://github.com/rajaram-2005/ragam/actions/runs/41388233396) passed the full current suite with the pinned model artifacts and Python prerequisites. |
+| **Core service** | Current suite: 985 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41389164762](https://github.com/rajaram-2005/ragam/actions/runs/41389164762) passed the prior 984-test suite with the pinned model artifacts and Python prerequisites; the one new Baidu Qianfan contract test is covered by local fixtures, with full CI pending. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 109 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
-| **Docker Compose** | Run [41388233396](https://github.com/rajaram-2005/ragam/actions/runs/41388233396) passed: builds both images, starts Core/web/Caddy on loopback, checks local-workspace health and the provider catalogue with account creation disabled, then cold-backs up and restores the named volume and verifies workspace identity plus a SQLite history marker. Synthetic CI only: no live provider inference or persistent-deployment guarantee. |
+| **Docker Compose** | Run [41389164762](https://github.com/rajaram-2005/ragam/actions/runs/41389164762) passed: builds both images, starts Core/web/Caddy on loopback, checks local-workspace health and the provider catalogue with account creation disabled, then cold-backs up and restores the named volume and verifies workspace identity plus a SQLite history marker. Synthetic CI only: no live provider inference or persistent-deployment guarantee. |
 | **Docs** | The 50-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |
 
@@ -401,8 +401,8 @@ Claude subscription should not be assumed to include API access or API usage; ch
 provider's current API terms and billing before sending prompts. No live provider is contacted
 merely by viewing the catalogue.
 
-The catalogue currently has 46 entries: 24 `ready` entries with fixture-tested code paths,
-21 individually contract-tested Chat adapters that retain the historical `gateway_only`
+The catalogue currently has 47 entries: 24 `ready` entries with fixture-tested code paths,
+22 individually contract-tested Chat adapters that retain the historical `gateway_only`
 classification, and Diffusers as the sole `pending` entry. “Fixture-tested” is not a claim
 of live account access or model qualification. No vendor credentials or live quota were
 available for qualification in this repository. Synthetic fixtures prove request/response
@@ -492,7 +492,7 @@ controls described in §7 — set the runtime in Provider Settings, not in `.env
 ## 8. External providers and metadata catalogs
 
 **The active build routes Chat, Image and Video through one guarded online transport.** Its provider
-registry has 46 entries: 24 `ready` entries with tested code paths, twenty-one individually adapted Chat providers
+registry has 47 entries: 24 `ready` entries with tested code paths, twenty-two individually adapted Chat providers
 with individually defined contract-tested adapters (retaining `gateway_only` for catalogue
 compatibility), and one `pending` local media entry (Diffusers). The optional ComfyUI image adapter
 uses its local HTTP API and a built-in stock workflow; Ragam does not install ComfyUI or model

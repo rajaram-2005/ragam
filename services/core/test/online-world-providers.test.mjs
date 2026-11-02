@@ -6,6 +6,21 @@ import { wireFor } from '../src/providers/wires/index.mjs'
 
 const providers = [
   {
+    wire: 'baidu_qianfan_chat', baseUrl: 'https://qianfan.baidubce.com/v2',
+    modelsPath: '/models', chatPath: '/chat/completions',
+    expectedModel: 'ernie-5.1', expectedModels: ['ernie-4.5-turbo-32k', 'ernie-5.0', 'ernie-5.1'],
+    listResponses: {
+      '/models': { object: 'list', data: [
+        { id: 'ernie-5.1', type: 'chat', model_name: 'ERNIE 5.1', status: 'active', context_length: 131072, max_completions_tokens: 8192 },
+        { id: 'ernie-5.0', type: 'chat', model_name: 'ERNIE 5.0', status: 'new' },
+        { id: 'ernie-4.5-turbo-32k', type: 'chat', model_name: 'ERNIE 4.5 Turbo 32K', status: 'soon_offline' },
+        { id: 'retired-chat', type: 'chat', status: 'offline' },
+        { id: 'text-to-image', type: 'text2image', status: 'active' },
+      ] },
+    },
+    docs: 'https://cloud.baidu.com/doc/qianfan-api/s/3m7of64lb',
+  },
+  {
     wire: 'alibaba_model_studio_chat', baseUrl: 'https://dashscope-intl.aliyuncs.com',
     modelsPath: '/api/v1/models?page_no=1&page_size=100', chatPath: '/compatible-mode/v1/chat/completions',
     expectedModel: 'qwen3.8-max', expectedModels: ['qwen3.8-max', 'qwen3.8-plus'],

@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 38,094 source lines, 25,264 test lines
+### `services/core` — 38,119 source lines, 25,286 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -168,11 +168,12 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `packs/builtin.mjs` | 131 | Three shipped packs — engineering repo maintenance, legal document review (confidential, human review, "reading support, not legal advice"), grounded tutoring — each narrow, and each capability either evidenced by a file in this repository or marked unimplemented |
 | `benchmark/harness.mjs` | 254 | The measured benchmark of the adaptive core: every entry calls the real module, a failed entry is kept in the table with its error and fails the run, and a benchmark that measures nothing is refused rather than reported as zero |
 | `release/manifest.mjs` | 287 | Release verification: one version across `VERSION` and the three packages, a dated changelog entry, documented totals compared against supplied measurements (not against each other), all 8 Pro/Max multimodal cards and run records verified present, and every shipped pack capability evidenced |
-| `providers/catalog.mjs` | 411 | The vendor catalogue: wire format, auth kind, documentation URL and a status per provider. A `ready` entry may only claim capabilities backed by a test in this repository; `gateway_only` may claim none; `pending` is refused by name. Validation is what keeps a credential field unrepresentable |
+| `providers/catalog.mjs` | 412 | The vendor catalogue: wire format, auth kind, documentation URL and a status per provider. A `ready` entry may only claim capabilities backed by a test in this repository; `gateway_only` may claim none; `pending` is refused by name. Validation is what keeps a credential field unrepresentable |
 | `providers/select.mjs` | 173 | Capability selection with reasons: strict offline refuses a remote request before candidates are considered, an unrecorded context limit does not satisfy a stated minimum, and every rejected candidate is returned with a code rather than silently dropped |
 | `providers/errors.mjs` | 228 | One failure shape for every provider: status→code mapping, retryability decided by code, bounded `Retry-After`, and messages redacted against six credential patterns before they can reach a log |
-| `providers/wires/index.mjs` | 141 | The wire registry: `IMPLEMENTED_WIRES` is derived from it, so a provider cannot be promoted onto a wire nothing implements |
+| `providers/wires/index.mjs` | 143 | The wire registry: `IMPLEMENTED_WIRES` is derived from it, so a provider cannot be promoted onto a wire nothing implements |
 | `providers/wires/openai.mjs` | 72 | OpenAI-compatible chat: `{base}/models`, `{base}/chat/completions`, SSE with a `[DONE]` sentinel |
+| `providers/wires/baidu-qianfan.mjs` | 20 | Baidu Qianfan Chat Completions and model discovery, filtered to chat models not explicitly marked offline |
 | `providers/wires/deepseek.mjs` | 12 | DeepSeek Chat Completions and rich model metadata for context, output limits and modalities |
 | `providers/wires/alibaba.mjs` | 42 | Alibaba Model Studio's region-sensitive OpenAI-compatible Chat endpoint and paginated, modality-filtered official model catalogue |
 | `providers/wires/cerebras.mjs` | 14 | Cerebras Inference Chat Completions with documented `/models` discovery |
@@ -187,7 +188,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/wires/localai.mjs` | 12 | Optional LocalAI Chat Completions adapter without inferred backend/parser capabilities |
 | `providers/wires/mistral.mjs` | 13 | Mistral Chat Completions and native model-list shape, retaining reported metadata only |
 | `providers/wires/novita.mjs` | 12 | Novita OpenAI-compatible API with documented /openai/v1 endpoint paths |
-| `providers/wires/openai-compatible.mjs` | 117 | Shared tested request/response envelope with provider-specific model-list parsers, metadata normalization and safe provider error mapping |
+| `providers/wires/openai-compatible.mjs` | 119 | Shared tested request/response envelope with provider-specific model-list parsers, metadata normalization and safe provider error mapping |
 | `providers/wires/openrouter.mjs` | 12 | OpenRouter routed Chat Completions and model catalogue, with routed model ids preserved |
 | `providers/wires/perplexity.mjs` | 13 | Perplexity routed API with separate /v1/models and /router/v1/chat/completions paths |
 | `providers/wires/sambanova.mjs` | 12 | SambaNova Cloud Chat Completions and model-list adapter |
@@ -232,7 +233,7 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 5,897 source lines, 2,142 test lines
+### `apps/web` — 5,898 source lines, 2,142 test lines
 
 Five area components, three retained direct-Core account pages, a local-first app shell, shared primitives, an API client and five test files. The account pages are not product areas and are not used by the standard Docker deployment; see [20 — Accounts and sign-in](20-accounts-and-sign-in.md) for their regression-tested legacy mode. Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).

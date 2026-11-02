@@ -20,9 +20,9 @@ Exactly **Chat, Image, Video, Plugins, MCP**, with Provider Settings in a dialog
 
 Ragam is not a hosted/shared service or a separately installed native desktop app. Docker Compose is the deployment; the browser is its user interface. See the [self-hosting guide](docs/22-self-hosted-deployment.md) for security, persistence and backup details.
 
-Current release: **0.2.0** — [release note](docs/26-release.md), [changelog](CHANGELOG.md), version in [`VERSION`](VERSION). Provider Settings shows a read-only [provider matrix](docs/27-provider-framework.md): it distinguishes native vendor, OpenAI-compatible, and gateway-routed APIs; twenty-one individually adapted Chat APIs are contract-tested but live verification is pending. Model-level capabilities stay unknown unless the vendor catalogue reports evidence. The release carries the adaptive core (ten phases, code and tests) as a library; the product surface described above is unchanged by it.
+Current release: **0.2.0** — [release note](docs/26-release.md), [changelog](CHANGELOG.md), version in [`VERSION`](VERSION). Provider Settings shows a read-only [provider matrix](docs/27-provider-framework.md): it distinguishes native vendor, OpenAI-compatible, and gateway-routed APIs; twenty-two individually adapted Chat APIs are contract-tested but live verification is pending. Model-level capabilities stay unknown unless the vendor catalogue reports evidence. The release carries the adaptive core (ten phases, code and tests) as a library; the product surface described above is unchanged by it.
 
-**Current limits:** image generation has ten adapters (nine cloud providers plus local ComfyUI) and video has five (Veo, Runway, Luma, fal.ai video and Replicate video). Owner-managed MCP Streamable HTTP connections and Ragam HTTP plugin endpoints are supported; every remote tool/capability call requires explicit data-transfer approval, and Ragam never executes downloaded plugin code. There is not yet a curated external-server marketplace. All 45 non-pending provider entries have contract-tested code paths: 24 are `ready`, and 21 Chat providers retain `gateway_only` for catalogue compatibility while using individually defined adapters. This documented-provider batch adds Alibaba Cloud Model Studio, Cerebras Inference, DeepInfra, MiniMax, SiliconFlow, Moonshot AI (Kimi API) and Sarvam AI Open-Source Models. The catalogue currently has 46 entries including one pending provider. The catalogue is not an exhaustive inventory of every provider worldwide; consumer products without a documented public API are not represented as API integrations. No real vendor credential or deployment has been qualified live, and no generation has been purchased. Synthetic fixtures are used only in tests. Provider API use may incur charges; users supply their own credentials and the app does not silently switch providers. See the [user-managed server protocol guide](docs/28-user-managed-servers.md), the [Phase 2 guide](docs/19-online-only-phase-2.md), and the [local Docker deployment guide](docs/22-self-hosted-deployment.md).
+**Current limits:** image generation has ten adapters (nine cloud providers plus local ComfyUI) and video has five (Veo, Runway, Luma, fal.ai video and Replicate video). Owner-managed MCP Streamable HTTP connections and Ragam HTTP plugin endpoints are supported; every remote tool/capability call requires explicit data-transfer approval, and Ragam never executes downloaded plugin code. There is not yet a curated external-server marketplace. All 46 non-pending provider entries have contract-tested code paths: 24 are `ready`, and 22 Chat providers retain `gateway_only` for catalogue compatibility while using individually defined adapters. This documented-provider batch adds Baidu Qianfan, Alibaba Cloud Model Studio, Cerebras Inference, DeepInfra, MiniMax, SiliconFlow, Moonshot AI (Kimi API) and Sarvam AI Open-Source Models. The catalogue currently has 47 entries including one pending provider. The catalogue is not an exhaustive inventory of every provider worldwide; consumer products without a documented public API are not represented as API integrations. No real vendor credential or deployment has been qualified live, and no generation has been purchased. Synthetic fixtures are used only in tests. Provider API use may incur charges; users supply their own credentials and the app does not silently switch providers. See the [user-managed server protocol guide](docs/28-user-managed-servers.md), the [Phase 2 guide](docs/19-online-only-phase-2.md), and the [local Docker deployment guide](docs/22-self-hosted-deployment.md).
 
 ## Retained legacy architecture and verification history
 
@@ -116,7 +116,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 1915 tests: core 984, web 109, fabric 822
+npm test          # 1916 tests: core 985, web 109, fabric 822
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -134,11 +134,12 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 CI runs the full suites on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) across six jobs: one per
 component, a Docker Compose build/health/persistence/restore smoke, documentation
-checks, and release verification against suite counts. The latest full CI run
-[41388233396](https://github.com/rajaram-2005/ragam/actions/runs/41388233396) passed all
-1,915 tests (Core 984, Web 109, Fabric 822), including release verification and the
-loopback-only Compose persistence/restore smoke. The seven added Chat API adapters use
-eight deterministic fixture cases; CI did not make live vendor calls. The
+checks, and release verification against suite counts. The latest completed full CI run
+[41389164762](https://github.com/rajaram-2005/ragam/actions/runs/41389164762) passed the
+then-current 1,915 tests (Core 984, Web 109, Fabric 822), including release verification
+and the loopback-only Compose persistence/restore smoke. Baidu Qianfan adds one current
+fixture case (Core 985; 1,916 total), so full CI for this tree is pending. Fixtures do not
+make live vendor calls. The
 Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
 
@@ -196,9 +197,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 38,094 | 25,264 | **zero npm packages** | 984 |
+| `services/core` | Node 22 ESM | 38,119 | 25,286 | **zero npm packages** | 985 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 5,897 | 2,142 | react, react-dom | 109 |
+| `apps/web` | React 18 + Vite | 5,898 | 2,142 | react, react-dom | 109 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

@@ -7,6 +7,7 @@ import { wireFor } from '../src/providers/wires/index.mjs'
 
 const cases = [
   { id: 'openai', wire: 'openai_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { data: [{ id: 'gpt-test' }] } },
+  { id: 'baidu-qianfan', wire: 'baidu_qianfan_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { object: 'list', data: [{ id: 'ernie-5.1', type: 'chat', model_name: 'ERNIE 5.1', status: 'active', context_length: 131072, max_completions_tokens: 8192, architecture: { input_modalities: ['text'], output_modalities: ['text'] } }] } },
   { id: 'alibaba-model-studio', wire: 'alibaba_model_studio_chat', modelsPath: '/api/v1/models?page_no=1&page_size=100', chatPath: '/compatible-mode/v1/chat/completions', expectedModel: 'qwen3.8-max', list: { output: { total: 1, page_no: 1, page_size: 100, models: [{ model: 'qwen3.8-max', inference_metadata: { request_modality: ['Text'], response_modality: ['Text'] } }] } } },
   { id: 'openrouter', wire: 'openrouter_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { data: [{ id: 'vendor/model-test' }] } },
   { id: 'mistral', wire: 'mistral_chat', modelsPath: '/models', chatPath: '/chat/completions', list: { data: [{ id: 'mistral-test' }] } },
@@ -32,7 +33,7 @@ const cases = [
 const configFor = (entry) => ({ id: entry.id, kind: entry.id, wire: entry.wire, baseUrl: 'https://fixture.invalid', apiKey: 'fixture-secret-not-a-real-key', options: entry.options ?? {} })
 
 test('the documented provider APIs each have their own contract adapter and compatibility class', () => {
-  const expected = ['openai', 'alibaba-model-studio', 'openrouter', 'mistral', 'deepseek', 'cerebras', 'deepinfra', 'minimax', 'siliconflow', 'moonshot', 'sarvam', 'groq', 'together', 'fireworks', 'xai', 'perplexity', 'novita', 'sambanova', 'huggingface', 'vllm', 'localai']
+  const expected = ['openai', 'baidu-qianfan', 'alibaba-model-studio', 'openrouter', 'mistral', 'deepseek', 'cerebras', 'deepinfra', 'minimax', 'siliconflow', 'moonshot', 'sarvam', 'groq', 'together', 'fireworks', 'xai', 'perplexity', 'novita', 'sambanova', 'huggingface', 'vllm', 'localai']
   const actual = PROVIDERS.filter((row) => row.adapterStatus === 'contract_tested').map((row) => row.id).sort()
   assert.deepEqual(actual, expected.sort())
   assert.equal(PROVIDERS.some((row) => /freellmapi/i.test(row.id)), false)
@@ -48,7 +49,7 @@ test('the documented provider APIs each have their own contract adapter and comp
   assert.equal(providerById('xai').integrationType, 'native-vendor')
   assert.equal(providerById('sarvam').auth, AUTH_KINDS.API_SUBSCRIPTION_KEY)
   for (const id of ['openrouter', 'perplexity', 'huggingface']) assert.equal(providerById(id).integrationType, 'gateway-routed')
-  for (const id of ['alibaba-model-studio', 'mistral', 'deepseek', 'cerebras', 'deepinfra', 'minimax', 'siliconflow', 'moonshot', 'sarvam', 'groq', 'together', 'fireworks', 'novita', 'sambanova', 'vllm', 'localai']) assert.equal(providerById(id).integrationType, 'openai-compatible')
+  for (const id of ['baidu-qianfan', 'alibaba-model-studio', 'mistral', 'deepseek', 'cerebras', 'deepinfra', 'minimax', 'siliconflow', 'moonshot', 'sarvam', 'groq', 'together', 'fireworks', 'novita', 'sambanova', 'vllm', 'localai']) assert.equal(providerById(id).integrationType, 'openai-compatible')
 })
 
 test('model-list contracts retain only reported model metadata and never infer unreported features', async () => {
@@ -68,6 +69,11 @@ test('model-list contracts retain only reported model metadata and never infer u
     if (entry.id === 'deepseek') {
       assert.equal(details[0].capabilities.contextTokens, 65536)
       assert.equal(details[0].capabilities.imageInput, 'documented')
+    } else if (entry.id === 'baidu-qianfan') {
+      assert.equal(details[0].name, 'ERNIE 5.1')
+      assert.equal(details[0].capabilities.contextTokens, 131072)
+      assert.equal(details[0].capabilities.maxOutputTokens, 8192)
+      assert.equal(details[0].capabilities.imageInput, 'not_supported')
     } else if (!['deepseek', 'xai'].includes(entry.id)) {
       assert.equal(details[0].capabilities.streaming, 'unknown', entry.id)
       assert.equal(details[0].capabilities.imageInput, 'unknown', entry.id)

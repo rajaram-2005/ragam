@@ -69,7 +69,7 @@ What exists, read rather than assumed:
 | Provider setup UI (credentials, test, model list) | implemented for the three runtimes, every `ready` catalogue wire, and custom endpoints; each wire publishes its own endpoint hint and controls | `ProviderSettings.jsx`, `test/online.test.mjs`, `test/online-wires.test.mjs`, `test/online-media-wires.test.mjs` |
 | Capability matrix in the UI | **implemented and tested (read-only)** | `ProviderCatalogue.jsx`, `test/render.test.mjs` |
 | Catalog API | **implemented and tested** | `GET /api/providers/catalog` |
-| Direct per-vendor adapters | **implemented and contract-tested for twenty-one individually adapted Chat providers, six other native chat wires, nine cloud image wires, ComfyUI and five video wires**; no vendor called live | `providers/wires/*.mjs`, `test/provider-adapters.test.mjs`, `test/online-wires.test.mjs`, `test/online-media-wires.test.mjs`; ComfyUI now has a direct, fixture-tested local image adapter; Diffusers remains `pending` until a concrete local service is selected |
+| Direct per-vendor adapters | **implemented and contract-tested for twenty-two individually adapted Chat providers, six other native chat wires, nine cloud image wires, ComfyUI and five video wires**; no vendor called live | `providers/wires/*.mjs`, `test/provider-adapters.test.mjs`, `test/online-wires.test.mjs`, `test/online-media-wires.test.mjs`; ComfyUI now has a direct, fixture-tested local image adapter; Diffusers remains `pending` until a concrete local service is selected |
 | Universal Chat adapters | implemented and contract-tested; awaiting authorized live qualification | §4 — each audited provider has a distinct wire adapter and live status remains pending |
 | Image generation | **implemented and tested for OpenAI Images, Gemini Images, Stability AI, Recraft, Ideogram, FLUX, fal.ai, Replicate, Adobe Firefly and ComfyUI**; editing planned | `providers/wires/*-images.mjs`, `/api/image/*`, `test/online-image.test.mjs`, `test/online-media-wires.test.mjs`; no vendor called live |
 | Video generation, async jobs, cancellation | **implemented and tested for Google Veo, Runway, Luma, fal.ai video and Replicate video** | `providers/wires/*-video.mjs`, `/api/video/*`, `test/online-video.test.mjs`, `test/online-media-wires.test.mjs`; no vendor called live |
@@ -100,7 +100,7 @@ and a status:
 | Status | Meaning | What it may claim |
 |---|---|---|
 | `ready` | a tested code path reaches it (the three runtimes against a local server; every native chat, image and video wire against a contract fixture) | capabilities whose evidence is a test in this repository |
-| `gateway_only` | legacy status for these twenty-one provider-specific Chat adapters; see `integrationType`, `adapterStatus`, and `liveVerification` | no provider-level capability claim; model-level metadata is retained separately and is unknown when absent |
+| `gateway_only` | legacy status for these twenty-two provider-specific Chat adapters; see `integrationType`, `adapterStatus`, and `liveVerification` | no provider-level capability claim; model-level metadata is retained separately and is unknown when absent |
 | `pending` | it needs a wire adapter this build does not have | nothing; it is refused by selection |
 
 Validation is the enforcement: a `ready` entry whose capability is backed by a vendor document
@@ -127,7 +127,7 @@ read-only matrix with three sentences and no controls.
 
 ## 4. Provider matrix
 
-**24 ready, 21 individually adapted Chat providers (contract tested; live verification pending), 1 pending**
+**24 ready, 22 individually adapted Chat providers (contract tested; live verification pending), 1 pending**
 
 `gateway_only` in the legacy status field means the provider is selectable through a tested adapter,
 but not live-qualified. The separate `integrationType` column distinguishes native vendor API,
@@ -136,7 +136,7 @@ capabilities come only from provider model metadata; unknown stays unknown. Stre
 are not inferred from a text-completion success. For Sarvam, the Chat endpoint marks
 `api-subscription-key` required and the same page's authentication section offers API-key-header
 **or** Bearer auth. Ragam uses only the documented API-key-header option; its adapter does not
-send Bearer. Its model list is deployment-specific and live verification has not been performed.
+send Bearer. Its model list is deployment-specific and live verification has not been performed. Baidu Qianfan's API reference documents [`GET /v2/models`](https://cloud.baidu.com/doc/qianfan-api/s/Dmba8k71y) and `POST /v2/chat/completions`; its adapter uses the returned `type` and `status` fields to exclude non-Chat and explicitly offline entries.
 
 | Provider | Status | Integration type | Wire | Auth | Adapter status | Live verification | Capabilities evidenced | Documentation |
 |---|---|---|---|---|---|---|---|---|
@@ -150,6 +150,7 @@ send Bearer. Its model list is deployment-specific and live verification has not
 | `vertex` — Google Vertex AI | ready | — | gcp_vertex | gcp_adc | contract_tested | not_performed | streaming:test | [docs](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) |
 | `bedrock` — Amazon Bedrock | ready | — | aws_bedrock | aws_sigv4 | contract_tested | not_performed | cancellation:test | [docs](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html) |
 | `openai` — OpenAI | gateway_only | native-vendor | openai_chat | bearer | contract_tested | pending | — | [docs](https://developers.openai.com/api/reference/chat-completions/overview) |
+| `baidu-qianfan` — Baidu Qianfan | gateway_only | openai-compatible | baidu_qianfan_chat | bearer | contract_tested | pending | — | [docs](https://cloud.baidu.com/doc/qianfan-api/s/3m7of64lb) |
 | `alibaba-model-studio` — Alibaba Cloud Model Studio | gateway_only | openai-compatible | alibaba_model_studio_chat | bearer | contract_tested | pending | — | [docs](https://help.aliyun.com/en/model-studio/compatibility-of-openai-with-dashscope) |
 | `openrouter` — OpenRouter | gateway_only | gateway-routed | openrouter_chat | bearer | contract_tested | pending | — | [docs](https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request) |
 | `mistral` — Mistral AI | gateway_only | openai-compatible | mistral_chat | bearer | contract_tested | pending | — | [docs](https://docs.mistral.ai/api/endpoint/chat/) |
@@ -186,7 +187,7 @@ send Bearer. Its model list is deployment-specific and live verification has not
 | `fal-video` — fal.ai video | ready | — | fal_video | bearer | contract_tested | not_performed | video_generation:test | [docs](https://docs.fal.ai/model-apis/model-endpoints/queue) |
 | `replicate-video` — Replicate video | ready | — | replicate_video | bearer | contract_tested | not_performed | video_generation:test | [docs](https://replicate.com/docs/reference/http) |
 | `diffusers` — Diffusers (local) | pending | — | — | bearer | not_implemented | not_performed | — | [docs](https://huggingface.co/docs/diffusers/index) |
-`gateway_only` is retained for catalogue compatibility: each of the twenty-one rows has a dedicated provider adapter and contract fixtures. The status does not imply a successful vendor call or live qualification. This catalogue is not an exhaustive inventory of every provider worldwide: it includes integrations only where this build has a documented request and model-discovery contract. Consumer apps and products without an official documented API are not represented as supported APIs. New rows are added in audited batches; absence from this table is not a claim that a provider has no API.
+`gateway_only` is retained for catalogue compatibility: each of the twenty-two rows has a dedicated provider adapter and contract fixtures. The status does not imply a successful vendor call or live qualification. This catalogue is not an exhaustive inventory of every provider worldwide: it includes integrations only where this build has a documented request and model-discovery contract. Consumer apps and products without an official documented API are not represented as supported APIs. New rows are added in audited batches; absence from this table is not a claim that a provider has no API.
 
 ### 4.1 Universal Chat adapters (Step 2)
 
@@ -469,7 +470,7 @@ three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes 
 - **Images are generated once per job; retries are explicit.** A failed job is a record with an
   error, not a background retry loop. Deleting a job removes the record and the stored bytes.
 - **A catalogue id is usable when its wire is implemented and its status is not `pending`.** All
-  42 registered wires are implemented, so the twenty-four `ready` entries and the twenty-one
+  43 registered wires are implemented, so the twenty-four `ready` entries and the twenty-two
   `gateway_only` entries can be saved.
 - **The UI cannot configure a pending provider.** That is deliberate: a control that cannot work is
   a claim that it can.

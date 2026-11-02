@@ -6,6 +6,7 @@
 
 import { failure } from '../../online/failure.mjs'
 import * as anthropic from './anthropic.mjs'
+import * as baiduQianfan from './baidu-qianfan.mjs'
 import * as alibaba from './alibaba.mjs'
 import * as azure from './azure.mjs'
 import * as bedrock from './bedrock.mjs'
@@ -50,6 +51,7 @@ import * as vertex from './vertex.mjs'
 
 const WIRES = Object.freeze({
   [openai.wire]: openai,
+  [baiduQianfan.wire]: baiduQianfan,
   [alibaba.wire]: alibaba,
   [openrouter.wire]: openrouter,
   [mistral.wire]: mistral,
