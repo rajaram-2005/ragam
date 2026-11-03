@@ -28,16 +28,16 @@ Aetheris Omni is an AI workspace, not a model. Run the default single-user works
 
 ## How Aetheris Omni is different
 
-Aetheris Omni takes a deliberately self-hosted, provider-connected approach. These are architectural choices—not claims that every hosted AI product works the same way.
+Aetheris Omni takes a deliberately user-controlled, provider-connected approach. These are architectural choices—not claims that every hosted AI product works the same way.
 
 | Design choice | What it means in practice |
 |---|---|
 | **Choose the deployment boundary** | The default Docker setup runs a private single-user workspace locally. The separate hosted BYOK build serves account-backed Chat through Vercel and Supabase; it stores per-user encrypted provider settings, not hosted conversation history. |
 | **You choose the AI connection** | Connect a supported provider and explicitly select a model it returns. Aetheris Omni does not silently switch providers or invent model listings. Provider API use may cost money; the app does not include or pay for it. |
 | **Local mode stays local** | The default Compose setup binds to `127.0.0.1` and has no account or sign-in screen. Do not expose that unauthenticated mode to a LAN or public internet. |
-| **External tools require deliberate approval** | Remote MCP and plugin calls are shown as external actions and require per-call approval. Ragam does not download and execute remote plugin code. |
+| **External tools require deliberate approval** | In the local workspace, remote MCP and plugin calls are shown as external actions and require per-call approval; Ragam does not download and execute remote plugin code. The hosted BYOK scope currently exposes neither MCP nor Plugins. |
 | **Status is kept honest** | Contract-tested adapters and synthetic fixtures are not presented as live vendor verification or proof of model performance. |
-| **Five clear product areas** | Chat, Image, Video, Plugins and MCP are the five primary areas. Provider Settings is a dialog, not a sixth area. |
+| **Five clear local-workspace areas** | The local Docker edition has Chat, Image, Video, Plugins and MCP. Its Provider Settings is a dialog, not a sixth area. Hosted BYOK currently provides account-backed Chat and Provider Settings only. |
 
 ### Where the app, data and prompts go
 
