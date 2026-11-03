@@ -93,7 +93,7 @@ export function gatewayUrl(value, trustedOrigins = []) {
 
 export class OnlineGateway {
   constructor({ trustedOrigins = [], timeoutMs = 120_000, maxBytes = 2 * 1024 * 1024 } = {}) { Object.assign(this, { trustedOrigins, timeoutMs, maxBytes }) }
-  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, binary = false, method: requestedMethod = null, trustEndpoint = false, includeHeaders = false, allowEmpty = false } = {}) {
+  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, maxRequestBytes, binary = false, method: requestedMethod = null, trustEndpoint = false, includeHeaders = false, allowEmpty = false } = {}) {
     const runtime = runtimeFor(config.kind ?? config.id ?? 'litellm'), label = config.label ?? runtime.label
     const endpointOrigin = (() => { try { return new URL(config.baseUrl).origin } catch { return null } })()
     const requestTrustedOrigins = trustEndpoint && endpointOrigin
@@ -109,7 +109,8 @@ export class OnlineGateway {
     // A text completion and a generated image do not have the same sensible ceiling. The default
     // stays for chat; a media wire may raise it for one call, and the media decoder bounds again.
     const responseLimit = Math.max(this.maxBytes, Number(maxResponseBytes) || 0)
-    if (payload && Buffer.byteLength(payload) > this.maxBytes) throw failure('payload_too_large', 'Assembled request is too large.', 413)
+    const requestLimit = Number.isSafeInteger(maxRequestBytes) ? Math.max(this.maxBytes, Math.min(maxRequestBytes, 8 * 1024 * 1024)) : this.maxBytes
+    if (payload && Buffer.byteLength(payload) > requestLimit) throw failure('payload_too_large', `Assembled request exceeds ${Math.round(requestLimit / (1024 * 1024))} MiB.`, 413)
     if (runtime.keyRequired && !config.apiKey) throw failure('provider_not_configured', `Configure a ${label} key in Provider Settings.`, 503)
     if (signal?.aborted) throw failure('cancelled', 'Request cancelled.', 499)
     return await new Promise((resolve, reject) => {

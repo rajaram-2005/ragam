@@ -13,3 +13,4 @@ export const adapter = createOpenAICompatibleAdapter({
   streamUsage: false,
 })
 export const { models, modelCatalogue, chat, complete, stream, validateConfig, testConnection, getModelCapabilities, cancel, normalizeError } = adapter
+export const { chatInputKinds, chatNativeSearch, chatTools } = adapter

@@ -90,25 +90,24 @@ reviewing it.
 
 ## 2. Runtime dependencies (shipped in the browser bundle)
 
-Only these reach production. The bundle is 242.71 kB (71.78 kB gzipped), a single
-chunk, as reported by `npm run build` in this revision, and
-`apps/web/test/structure.test.mjs` fails if it grows past 400 kB.
+The browser bundle ships React and the locally used PDF.js parser/worker. The current Vite build emits separate app, PDF parser and worker chunks; the worker is an asset rather than part of the initial JavaScript chunk. The build output is recorded by `npm run web:build`, and `apps/web/test/structure.test.mjs` keeps the main bundle within its configured budget.
 
 | Package | Version | Licence | In the bundle? | Copyright |
 |---|---|---|---|---|
 | react | 18.3.1 | MIT | yes | Copyright (c) Meta Platforms, Inc. and affiliates |
 | react-dom | 18.3.1 | MIT | yes | Copyright (c) Meta Platforms, Inc. and affiliates |
+| pdfjs-dist | 6.5.438 | Apache-2.0 | yes (parser and worker chunks) | Copyright 2024 Mozilla Foundation |
 | scheduler | 0.23.2 | MIT | yes (`react-dom` dependency) | Copyright (c) Meta Platforms, Inc. and affiliates |
 | loose-envify | 1.4.0 | MIT | **no** — build-time shim | Copyright (c) 2015 Andres Suarez <zertosh@gmail.com> |
 | js-tokens | 4.0.0 | MIT | **no** — `loose-envify` dependency | Copyright (c) 2014-2018 Simon Lydell |
 
-Only `react` and `react-dom` are declared as dependencies; `scheduler`,
-`loose-envify` and `js-tokens` are their transitive dependencies. `loose-envify`
+`pdfjs-dist`, `react` and `react-dom` are declared as runtime dependencies; `scheduler`,
+`loose-envify` and `js-tokens` are React transitive dependencies. PDF.js also declares optional native canvas packages for Node rendering; those are not included in the browser bundle. `loose-envify`
 rewrites `process.env.NODE_ENV` at build time and does not survive into the
 production bundle — verified by searching the built artifact for its identifiers
 and for `process.env.NODE_ENV` (both absent), while `scheduler`'s
-`unstable_scheduleCallback` and `MessageChannel` are present. All five are listed
-because a licence obligation follows the dependency tree, not the bundle.
+`unstable_scheduleCallback` and `MessageChannel` are present. All six are listed
+because a licence obligation follows the dependency tree, not just the browser bundle.
 
 `services/core` has **zero** npm dependencies. It runs on Node's standard library
 only, including `node:sqlite`.
@@ -158,7 +157,7 @@ for f in (d.files or []):
 
 ## 3. Development and build dependencies (not shipped)
 
-All but the five packages in §2 are build-time tooling. Since the Vite 8 upgrade
+All other lockfile entries are build-time tooling or platform-specific optional packages. Since the Vite 8 upgrade
 the chain is **Vite 8 → rolldown (bundler) → oxc (JSX/TS transform) → lightningcss
 (CSS)**, plus PostCSS. Vite 5 used Rollup, esbuild and Babel; those are gone, which
 is why the entry count below is less than half what it was.
@@ -170,12 +169,12 @@ inventory becomes wrong on someone else's machine.
 
 | Measure | Count | Portable? |
 |---|---|---|
-| Entries in the committed `package-lock.json` | **46** | yes |
-| …of which platform-independent | 19 | yes |
-| …of which platform-specific native binaries | 27 | yes |
-| Actually installed on this host (linux/x64, glibc) | 23 | **no** |
+| Entries in the committed `package-lock.json` | **59** | yes |
+| …of which platform-independent | 21 | yes |
+| …of which platform-specific native binaries | 38 | yes |
+| Actually installed on this host (linux/x64, glibc) | 27 | **no** |
 
-The installed figure is host-specific because 27 entries are per-platform native
+The installed figure is host-specific because 38 entries are per-platform native
 binaries (`@rolldown/binding-darwin-arm64`, `lightningcss-win32-x64-msvc`, …) and
 npm selects among them at install time. Four match linux/x64:
 `@rolldown/binding-linux-x64-gnu`, `@rolldown/binding-linux-x64-musl`,
@@ -188,14 +187,14 @@ the installed count is stated as a property of this machine.
 
 ### Licence distribution
 
-Across all **46** lockfile entries, read from each package's own metadata — so it
+Across all **59** lockfile entries, read from each package's own metadata — so it
 covers packages that are not installed on this host but would be on another:
 
 | Licence | Count | Packages |
 |---|---|---|
-| MIT | 31 | vite, rolldown, @rolldown/binding-* (16), @rolldown/pluginutils, @oxc-project/types, @vitejs/plugin-react, postcss, react, react-dom, scheduler, loose-envify, js-tokens, nanoid, picomatch, fdir, tinyglobby, fsevents |
+| MIT | 43 | vite, rolldown, @rolldown/binding-* (16), @napi-rs/canvas and its platform packages (13), @rolldown/pluginutils, @oxc-project/types, @vitejs/plugin-react, postcss, react, react-dom, scheduler, loose-envify, js-tokens, nanoid, picomatch, fdir, tinyglobby, fsevents |
 | **MPL-2.0** | **12** | **lightningcss** and its 11 platform binaries |
-| Apache-2.0 | 1 | detect-libc |
+| Apache-2.0 | 2 | detect-libc, pdfjs-dist |
 | ISC | 1 | picocolors |
 | BSD-3-Clause | 1 | source-map-js |
 
@@ -226,10 +225,11 @@ Three things make it acceptable here:
 
 1. **Every one of the twelve is a development dependency** (`"dev": true` in the
    lockfile). CI asserts this, so it cannot silently become a runtime dependency.
-2. **Nothing MPL reaches the distributed artifact.** The five non-dev entries are
-   `react`, `react-dom`, `scheduler`, `loose-envify` and `js-tokens` — all MIT —
-   and the built bundle contains only react, react-dom and scheduler (verified in
-   CI by scanning `dist/`). The shipped CSS is this project's own stylesheet after
+2. **Nothing MPL reaches the distributed artifact.** All twelve MPL entries are
+development-only in the lockfile. The browser bundle contains React, React DOM,
+scheduler and PDF.js; its Apache-2.0 license and copyright are reproduced in
+§2 and `licenses/pdfjs-dist-Apache-2.0.txt`. The shipped CSS is this project’s
+own stylesheet after transformation, not lightningcss source.
    transformation, not lightningcss source.
 3. MPL-2.0 obligations attach to *distributing the covered files*, which this
    project does not do.
@@ -309,6 +309,7 @@ project can be redistributed without re-fetching anything:
 | `licenses/aetheris-MIT.txt` | `Aetheris-/LICENSE` @ `bed29f4` | 1,066 B |
 | `licenses/sparsiz-Unlicense.txt` | `sparsiz/LICENSE` @ `76ec6f0` | 1,211 B |
 | `licenses/numpy-BSD-3-Clause.txt` | `numpy 2.1.3` dist-info `LICENSE.txt` — **version-specific**; 2.4.6 ships a 46,794 B text | 47,755 B |
+| `licenses/pdfjs-dist-Apache-2.0.txt` | `pdfjs-dist 6.5.438` `LICENSE` | 10,174 B |
 
 The texts below are reproduced verbatim from those files.
 
@@ -415,8 +416,7 @@ This repository (`ragam`) is MIT, "Copyright (c) 2026 RAJARAM K".
 - MIT ← MIT: compatible, notice preserved above.
 - MIT ← Unlicense: compatible; public-domain work may be relicensed under MIT.
 - MIT ← BSD-3-Clause: compatible, notice preserved above.
-- MIT ← Apache-2.0 (build-time only, not redistributed): compatible for build
-  tooling; no Apache-2.0 code is distributed in any artifact.
+- MIT ← Apache-2.0 (`pdfjs-dist`, bundled at runtime): compatible; the full license and copyright notice are preserved above and in `licenses/pdfjs-dist-Apache-2.0.txt`.
 - MIT ← MPL-2.0 (build-time only, not redistributed): compatible. MPL-2.0 is
   file-level copyleft and its obligations attach to distributing the covered
   files. All twelve MPL-2.0 entries are `lightningcss` and its platform binaries,
@@ -428,8 +428,9 @@ this project.
 
 Weak copyleft (MPL-2.0) entered the tree with the Vite 8 upgrade, in build tooling
 only. It triggers no obligation here because the covered files are never
-distributed: the shipped bundle contains react, react-dom and scheduler, all MIT.
-This is stated explicitly rather than left to the "no GPL" sentence above, because
+distributed: the shipped bundle contains the MIT React runtime and the Apache-2.0
+PDF.js parser/worker, not lightningcss. This is stated explicitly rather than left
+to the "no GPL" sentence above, because
 "no strong copyleft" and "no copyleft" are different claims and only the first is
 true of this tree.
 

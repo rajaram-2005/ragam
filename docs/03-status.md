@@ -1,19 +1,19 @@
 # 03 — Implementation status
 
-> **Active product: online-only, Docker Compose.** The standard end-user app opens directly into a localhost-only single-user workspace; no email, account creation or sign-in is used. See [22-self-hosted-deployment.md](22-self-hosted-deployment.md). Direct-Core account code remains only as a development/regression path; it is not exposed by Compose. Suite totals include retained legacy coverage.
+> **Active product: online-only, with a local Docker workspace and an opt-in hosted BYOK edition.** Docker remains the default localhost-only, single-user deployment. Hosted mode is a separate Vercel/Supabase build with per-user accounts and encrypted provider settings; public registration requires configured transactional email. See [22-self-hosted-deployment.md](22-self-hosted-deployment.md) and [30-hosted-byok.md](30-hosted-byok.md). Suite totals include retained legacy coverage.
 
 Every claim below is tied to a test, a measurement or a named limitation. Where
 something does not work, it says so and says why.
 
 **Core test environment used for the last verified full run:** Node v22.22.3 · Python 3.11.2 · isolated `.venv` with NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0 and Pillow 13.0 · **no GPU**. The Pro/Max test packages were downloaded from the pinned first-party repository revision `c9f6aa2f5e31ed462caae1f94395ba46ea808a40` into ignored `.aetheris-data/` and checked against its `SHA256SUMS`; no artifacts or virtualenv files are committed. Reachable: `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`. **Unreachable:** `download.pytorch.org`, `huggingface.co`.
 
-**Test inventory: 1916 cases across the three suites** (Core 985, Web 109, Fabric 822). The earlier full CI run [41324293475](https://github.com/rajaram-2005/ragam/actions/runs/41324293475) passed the then-present 1907 tests (Core 976, Web 109, Fabric 822). The latest full CI run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all 1916 tests and six jobs, including release verification and the loopback-only Docker Compose health/persistence/restore smoke. The eight documented-provider APIs use deterministic fixtures, not live vendor access. The Compose smoke verifies a synthetic local single-user workspace, disabled account creation, provider catalogue, restored workspace ID and a SQLite conversation-history marker; it is not a permanent deployment or live-provider inference. A read-only inventory of the external `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket. No external service, project, deployment, account, setting or data was changed. Vercel/Supabase repository integrations remain removed from the repo; external resources are untouched.
+**Test inventory: 1950 cases across the three suites** (Core 1,000, Web 128, Fabric 822). The earlier full CI run [41324293475](https://github.com/rajaram-2005/ragam/actions/runs/41324293475) passed the then-present 1907 tests (Core 976, Web 109, Fabric 822). The latest completed full CI run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all 1916 tests and six jobs, including release verification and the loopback-only Docker Compose health/persistence/restore smoke. Since that run, follow-on onboarding, history, project organization, Chat parity and hosted BYOK work have expanded the suites. The current sandbox Core run was 989/1,000; 11 tests require ignored Klyvaron model artifacts and the Python NumPy prerequisite, which are not installed here. Web passed 128/128, and docs/release tests passed 64/64. The prior full local run passed with the pinned Python environment and digest-verified model artifacts; full CI for this current tree is pending. The documented-provider API contracts use deterministic fixtures, not live vendor access. The Compose smoke verifies a synthetic local single-user workspace, disabled account creation, provider catalogue, restored workspace ID and a SQLite conversation-history marker; it is not a permanent deployment or live-provider inference. A read-only inventory of the external `ragam-core` Supabase project on 2026-11-01 found 28 Ragam public tables with zero rows, zero `auth.users`, zero `storage.objects`, and one private `ragam-media` bucket. For hosted BYOK, migration `20261103110151` now adds an empty, RLS-protected `byok_provider_connections` table. The existing Supabase project Site URL/redirect allow-list now use the production Ragam origin, and sign-up is deliberately disabled until SMTP is configured. Production-only Core environment variables are present in the existing Vercel `ragam-core` project; no production deployment has been made. Vercel currently reports deployment SSO protection for non-custom domains, so public access also needs to be enabled or a custom domain selected. No provider key was created/read/used and no live provider call was made.
 
 | Suite | Command | Result |
 |---|---|---|
-| `services/core` | `node --test test/*.test.mjs` | **985 tests** (70 files; full suite passed in CI at [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) with pinned Pro/Max artifacts and Python prerequisites; Baidu Qianfan has deterministic fixture coverage) |
+| `services/core` | `node --test test/*.test.mjs` | **1000 tests** (71 files; full suite passed in CI at [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) with pinned Pro/Max artifacts and Python prerequisites; Baidu Qianfan has deterministic fixture coverage) |
 | `services/fabric` | `PATH=.venv/bin:$PATH npm run test:fabric` | **822 tests** (42 files; local run passed) |
-| `apps/web` | `npm run test:web` | **109 tests** (5 files; 109/109 passed locally) |
+| `apps/web` | `npm run test:web` | **128 tests** (9 files; 128/128 passed locally) |
 | `apps/web` build | `npm run build --prefix apps/web` | production bundle built successfully locally |
 
 **Released first-party Klyvaron Pro and Max multimodal artifacts (all 8 trained from scratch, `baseCheckpoint: null`, verified by SHA-256 on load):**
@@ -113,7 +113,7 @@ instead.
 |---|---|---|---|
 | 1 | Repository audit | **Complete** | [`01-audit.md`](./01-audit.md): per-repo findings with `file:line` evidence, licence table, integration map, baselines re-run |
 | 2 | Integration design | **Complete** | [`02-architecture.md`](./02-architecture.md) |
-| 3 | Unified app, five areas | **Complete** | `apps/web`; 109 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
+| 3 | Unified app, five areas | **Complete** | `apps/web`; 128 tests including "exactly five areas", "no internal service is a navigation entry", server-rendered markup for all five areas, and a guard against the re-export bug class |
 | 4 | Local inference with ≥1 real local LM | **Partially met** | A real local LM now runs here end to end: the from-scratch 359,616-parameter model is exported as a versioned artifact, loaded by the core in plain JavaScript, and served through the normal provider path — with its logits checked against NumPy on identical bytes (`klyvaron-runtime.test.mjs` 11, `klyvaron-store.test.mjs` 10, `klyvaron-app.test.mjs` 7 — 28 tests; another 20 pin the tier record's own claims). Full-size artifacts were trained, verified, installed into the model library and served over HTTP from the store (1.4 MB; 359,520 parameters at `67cdd58` and 359,616 at `8d9cdf8` — `docs/experiments/lm-verification-run-67cdd58.json` and `docs/experiments/lm-verification-run-8d9cdf8.json`), so the path from a training run to a served local model is demonstrated rather than only unit-tested; the second run's corpus is rebuildable from its commit, and the update/rollback exercise behind it found and fixed a storage-accounting defect in the model library (`store.mjs`: a replace used to leave the previous version's weights behind, and to report the source directory's size as the device's). What is still unmet is a local **assistant**: the artifact is a base completion model, `/api/chat` refuses it unless the user pins it by id (`model_not_instruction_tuned`, 501, with the model's own limitations attached), and the Ollama/llama.cpp adapters remain proven only against a loopback fixture ("Phase 4 in detail", below) |
 | 5 | Online provider integration | **Contract-tested; live vendor qualification pending** | The online entry routes provider-specific chat, image and video wires through one guarded transport, with destination checks, per-revision consent, deadlines and size limits. Twenty-four catalogue entries are `ready`: three runtimes, six other native chat protocols, nine cloud image adapters, one local ComfyUI adapter and five video adapters, each fixture-tested. Nineteen individually adapted Chat APIs are classified as native vendor, OpenAI-compatible or gateway-routed; this batch adds Alibaba Cloud Model Studio, Cerebras, DeepInfra, MiniMax and SiliconFlow. Their live verification remains pending; no authorized vendor credentials or quotas were available in this sandbox |
 | 6 | Secure private memory | **Complete** | Knowledge pipeline + ACL + retention + audit; 40+ tests |
@@ -242,7 +242,7 @@ Phases 9 and 10 of that programme are summarised in §4 below.
 
 ## 4. Component status
 
-### `services/core` — Current test inventory (985 tests) — full suite verified in CI
+### `services/core` — Current test inventory (1000 tests) — full suite verified locally; current CI pending
 
 | Subsystem | Status | Notes |
 |---|---|---|
@@ -379,11 +379,11 @@ resolved anywhere. Both tests fail against the previous reader.
 And the model emits mush at this size — 359,616 parameters is enough to beat every
 baseline it was measured against and not enough to hold a conversation.
 
-### `apps/web` — Implemented and tested (109 tests)
+### `apps/web` — Implemented and tested (128 tests)
 
 | Area | Status |
 |---|---|
-| Chat | **Implemented and tested** — streaming SSE, routing panel, knowledge ingest/search/citations, task lifecycle, optional browser-local profession-based prompt ideas (not model rankings; profile data is not transmitted by itself) |
+| Chat | **Platform parity partial** — streaming SSE, stored catalogue capability evidence, bounded plain-text attachments with explicit Send, knowledge ingest/search/citations, task lifecycle, resumable conversations with continuation disclosure, browser-local projects/custom titles/pins, and manual consent-gated MCP calls. PDF/image/video/audio attachments and provider-native search/tool calling remain unavailable; catalogue claims are not live inference verification. |
 | Image | **Implemented** — job queue, validation display; generation refuses on this host |
 | Video | **Implemented** — as above, plus the genuineness rule |
 | Plugins | **Implemented and tested** — manifest validation, install, preflight, invoke, approvals |
@@ -493,12 +493,10 @@ No untracked or ignored artefacts were found in the tree beyond the empty, gitig
 `npm ci`), 814 fabric.
 
 **Repository cleanup (2026-11-01):** removed `apps/web/src/components/Jobs.jsx` and its
-empty-table-only render test because Image and Video render their own job surfaces. After the
-user selected Docker-only deployment, removed the unused Vercel functions/configuration,
-Supabase adapters, migrations, their integration tests, and hosted-deployment smoke material.
+empty-table-only render test because Image and Video render their own job surfaces. At that point, after the user selected Docker-only deployment, the unused Vercel functions/configuration,
+Supabase adapters, migrations, their integration tests, and hosted-deployment smoke material were removed.
 No test fixtures, model evidence, licences, or external hosted data were deleted; external
-projects, deployments, settings, accounts, and data were not accessed or changed. Docker Compose
-is the sole deployment path documented by this repository.
+projects, deployments, settings, accounts, and data were not accessed or changed. The later hosted BYOK increment reintroduces a distinct opt-in hosted deployment; Docker Compose remains the default local path.
 
 ### Phases 9–10 — industry packs, and a release that verifies its own numbers
 

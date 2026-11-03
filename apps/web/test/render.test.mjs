@@ -536,6 +536,10 @@ test('Chat home offers original draft starters and keeps sending under the user�
     provider: { kind: 'litellm', name: 'LiteLLM', configured: true, models: ['model-a'], selectedModel: 'model-a' },
   }))
   assert.match(markup, /What would you like to work through\?/)
+  assert.match(markup, /AETHERIS OMNI · QUICK START/)
+  assert.match(markup, /This guide does not send your prompt, test a provider, or download a model/)
+  assert.match(markup, /Connection tests contact the provider you select/)
+  assert.match(markup, /aria-controls="chat-getting-started"/)
   assert.match(markup, /Make a complex idea clear/)
   assert.match(markup, /Shape a first draft/)
   assert.match(markup, /Compare the options/)
@@ -666,11 +670,9 @@ test('Provider Settings offers LiteLLM, Ollama and llama.cpp, and calls the loca
   assert.doesNotMatch(markup, /value="sk-/)
   // A signed-in workspace with no connection says so, and does not present an empty model list as ready.
   const chat = render('ChatArea (unconnected)', React.createElement(components.ChatArea, { provider: { kind: 'ollama', name: 'Ollama', configured: false, models: [] } }))
-  assert.match(chat, /Connect a model provider/)
-  assert.match(chat, /OpenAI \(ChatGPT\)/)
-  assert.match(chat, /Google Gemini/)
-  assert.match(chat, /Anthropic Claude/)
-  assert.match(chat, /xAI \(Grok\)/)
+  assert.match(chat, /AETHERIS OMNI · QUICK START/)
+  assert.match(chat, /Choose a provider/)
+  assert.doesNotMatch(chat, /Connect a model provider/)
   assert.match(chat, /Ollama/)
 
   const comfySettings = render('ProviderSettings (ComfyUI hardware)', React.createElement(components.ProviderSettings, {

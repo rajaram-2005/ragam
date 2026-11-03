@@ -1,6 +1,6 @@
 # 02 — Architecture
 
-> **Active product: online-only (Phase 2), Docker Compose.** The standard end-user stack is a localhost-only single-user workspace with no account/email flow; see [the deployment guide](22-self-hosted-deployment.md). Direct-Core account pages remain in source for development/regression coverage but are not exposed by Compose. Legacy local/research **service** code remains for regression tests. Suite totals include retained coverage.
+> **Active product: online-only (Phase 2), with local and hosted deployment modes.** The default Docker Compose stack is a localhost-only single-user workspace with no account/email flow; see [the deployment guide](22-self-hosted-deployment.md). A separate opt-in hosted BYOK web/API edition uses Supabase Auth/Postgres and Vercel functions; its scope and launch gates are in [30 — Hosted BYOK](30-hosted-byok.md). Legacy local/research **service** code remains for regression tests. Suite totals include retained coverage.
 
 How the three upstream repositories became one system, what each component owns,
 and where the enforcement points are.
@@ -53,7 +53,7 @@ output validation happens — never in the browser.
 
 - **`services/core` has zero npm dependencies.** That is a testable property, and
   it is why the root `package.json` is a script runner rather than an npm
-  workspace: hoisting `apps/web`'s 62-package tree over the core would give it a
+  workspace: hoisting `apps/web`'s 59-entry dependency lockfile over the core would give it a
   dependency surface it does not have and make that property unverifiable.
 - **`services/fabric` is Python** because the training work is NumPy-shaped. It
   runs as its own service on `:8791`, so a training run can never take down
@@ -71,22 +71,24 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 38,119 source lines, 25,286 test lines
+### `services/core` — 39,019 source lines, 25,773 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
 | `hardware/detect.mjs` | 61 | OS memory, CPU features, disk and optional bounded GPU probes |
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
-| `online/accounts.mjs` | 439 | Accounts, scrypt password hashes, lockouts, throttling, owner bootstrap and host-delivered reset codes |
-| `online/app.mjs` | 2,009 | Online application with a local single-user security boundary, retained direct-Core account mode, awaitable storage contexts, verified native Klyvaron Pro/Max inference, runtime qualification and manifest endpoints, and exact-model gateway routing |
+| `online/accounts.mjs` | 439 | Local Core accounts, scrypt password hashes, lockouts, throttling, owner bootstrap and host-delivered reset codes |
+| `hosted/byok.mjs` | 377 | Stateless Vercel BYOK API: Supabase Auth sessions, per-user AES-GCM provider secrets, strict origin/endpoint checks, explicit request/Search consent, and provider isolation |
+| `online/app.mjs` | 2,050 | Online application with a local single-user security boundary, retained direct-Core account mode, awaitable storage contexts, verified native Klyvaron Pro/Max inference, runtime qualification and manifest endpoints, and exact-model gateway routing |
 | `online/native-klyvaron.mjs` | 469 | First-party Klyvaron Pro (27,559,946 params) and Klyvaron Max (92,077,066 params) SHA-256 verification, preset-architecture enforcement, startup live inference self-test, and fail-closed selector gating |
 | `online/context-routes.mjs` | 282 | Authenticated context, reviewed read-only tool routes, and owner-managed remote server routes |
-| `online/gateway.mjs` | 261 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
+| `online/gateway.mjs` | 262 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
 | `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
-| `online/http.mjs` | 32 | Bounded streamed JSON requests and no-store responses |
+| `online/chat-content.mjs` | 109 | Validates bounded multimodal messages, media signatures, redaction and text-only history placeholders |
+| `online/http.mjs` | 33 | Bounded streamed JSON requests and no-store responses |
 | `online/klyvaron.mjs` | 87 | Klyvaron product tiers in the online build: resolve a tier to a saved connection and a listed model, refuse an unconfigured tier by name, and name the third-party provider and model as provenance |
-| `online/store.mjs` | 414 | Multi-connection encrypted local store (schema 2): one sealed credential per connection, an active id, a store-wide revision, native first-party model selection persistence, and optional Klyvaron tier presets |
+| `online/store.mjs` | 420 | Multi-connection encrypted local store (schema 2): one sealed credential per connection, an active id, a store-wide revision, native first-party model selection persistence, and optional Klyvaron tier presets |
 | `online/remote-servers.mjs` | 299 | Owner-managed MCP Streamable HTTP and Ragam plugin endpoints, encrypted credentials, schema-checked discovery, per-call consent, bounded transport and persisted enable state |
 | `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
@@ -172,34 +174,35 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/select.mjs` | 173 | Capability selection with reasons: strict offline refuses a remote request before candidates are considered, an unrecorded context limit does not satisfy a stated minimum, and every rejected candidate is returned with a code rather than silently dropped |
 | `providers/errors.mjs` | 228 | One failure shape for every provider: status→code mapping, retryability decided by code, bounded `Retry-After`, and messages redacted against six credential patterns before they can reach a log |
 | `providers/wires/index.mjs` | 143 | The wire registry: `IMPLEMENTED_WIRES` is derived from it, so a provider cannot be promoted onto a wire nothing implements |
-| `providers/wires/openai.mjs` | 72 | OpenAI-compatible chat: `{base}/models`, `{base}/chat/completions`, SSE with a `[DONE]` sentinel |
-| `providers/wires/baidu-qianfan.mjs` | 20 | Baidu Qianfan Chat Completions and model discovery, filtered to chat models not explicitly marked offline |
-| `providers/wires/deepseek.mjs` | 12 | DeepSeek Chat Completions and rich model metadata for context, output limits and modalities |
-| `providers/wires/alibaba.mjs` | 42 | Alibaba Model Studio's region-sensitive OpenAI-compatible Chat endpoint and paginated, modality-filtered official model catalogue |
-| `providers/wires/cerebras.mjs` | 14 | Cerebras Inference Chat Completions with documented `/models` discovery |
-| `providers/wires/deepinfra.mjs` | 15 | DeepInfra OpenAI-compatible Chat Completions; model discovery filters documented catalog metadata to chat-tagged models |
-| `providers/wires/minimax.mjs` | 15 | MiniMax OpenAI-compatible Chat Completions and model listing; international default with documented regional host configurable |
-| `providers/wires/moonshot.mjs` | 19 | Moonshot AI (Kimi) Chat Completions and authenticated model discovery using the documented OpenAI-compatible routes |
-| `providers/wires/sarvam.mjs` | 23 | Sarvam Open-Source Models Chat and deployment-specific model discovery; uses the documented subscription-key header (the docs also list Bearer as an alternative) |
-| `providers/wires/siliconflow.mjs` | 14 | SiliconFlow OpenAI-compatible Chat Completions and model discovery filtered to chat models |
-| `providers/wires/fireworks.mjs` | 50 | Fireworks inference plus bounded, account-scoped cursor-paginated model discovery |
-| `providers/wires/groq.mjs` | 12 | Groq OpenAI-compatible Chat Completions over its documented /openai/v1 base |
-| `providers/wires/huggingface.mjs` | 12 | Hugging Face Inference Providers router adapter; provider-dependent capabilities remain unknown |
-| `providers/wires/localai.mjs` | 12 | Optional LocalAI Chat Completions adapter without inferred backend/parser capabilities |
-| `providers/wires/mistral.mjs` | 13 | Mistral Chat Completions and native model-list shape, retaining reported metadata only |
-| `providers/wires/novita.mjs` | 12 | Novita OpenAI-compatible API with documented /openai/v1 endpoint paths |
-| `providers/wires/openai-compatible.mjs` | 119 | Shared tested request/response envelope with provider-specific model-list parsers, metadata normalization and safe provider error mapping |
-| `providers/wires/openrouter.mjs` | 12 | OpenRouter routed Chat Completions and model catalogue, with routed model ids preserved |
-| `providers/wires/perplexity.mjs` | 13 | Perplexity routed API with separate /v1/models and /router/v1/chat/completions paths |
-| `providers/wires/sambanova.mjs` | 12 | SambaNova Cloud Chat Completions and model-list adapter |
-| `providers/wires/together.mjs` | 13 | Together Chat Completions and chat-only model catalogue parsing |
-| `providers/wires/vllm.mjs` | 12 | Optional self-hosted vLLM Chat Completions adapter, still subject to trusted-origin egress policy |
+| `providers/wires/openai.mjs` | 87 | OpenAI-compatible chat: `{base}/models`, `{base}/chat/completions`, SSE with a `[DONE]` sentinel |
+| `providers/wires/openai-responses.mjs` | 116 | Shared OpenAI Responses API native web search, completion streaming, citations and proposal parsing for vendor and compatible wires |
+| `providers/wires/baidu-qianfan.mjs` | 21 | Baidu Qianfan Chat Completions and model discovery, filtered to chat models not explicitly marked offline |
+| `providers/wires/deepseek.mjs` | 13 | DeepSeek Chat Completions and rich model metadata for context, output limits and modalities |
+| `providers/wires/alibaba.mjs` | 43 | Alibaba Model Studio's region-sensitive OpenAI-compatible Chat endpoint and paginated, modality-filtered official model catalogue |
+| `providers/wires/cerebras.mjs` | 15 | Cerebras Inference Chat Completions with documented `/models` discovery |
+| `providers/wires/deepinfra.mjs` | 16 | DeepInfra OpenAI-compatible Chat Completions; model discovery filters documented catalog metadata to chat-tagged models |
+| `providers/wires/minimax.mjs` | 16 | MiniMax OpenAI-compatible Chat Completions and model listing; international default with documented regional host configurable |
+| `providers/wires/moonshot.mjs` | 20 | Moonshot AI (Kimi) Chat Completions and authenticated model discovery using the documented OpenAI-compatible routes |
+| `providers/wires/sarvam.mjs` | 24 | Sarvam Open-Source Models Chat and deployment-specific model discovery; uses the documented subscription-key header (the docs also list Bearer as an alternative) |
+| `providers/wires/siliconflow.mjs` | 15 | SiliconFlow OpenAI-compatible Chat Completions and model discovery filtered to chat models |
+| `providers/wires/fireworks.mjs` | 51 | Fireworks inference plus bounded, account-scoped cursor-paginated model discovery |
+| `providers/wires/groq.mjs` | 13 | Groq OpenAI-compatible Chat Completions over its documented /openai/v1 base |
+| `providers/wires/huggingface.mjs` | 13 | Hugging Face Inference Providers router adapter; provider-dependent capabilities remain unknown |
+| `providers/wires/localai.mjs` | 13 | Optional LocalAI Chat Completions adapter without inferred backend/parser capabilities |
+| `providers/wires/mistral.mjs` | 14 | Mistral Chat Completions and native model-list shape, retaining reported metadata only |
+| `providers/wires/novita.mjs` | 13 | Novita OpenAI-compatible API with documented /openai/v1 endpoint paths |
+| `providers/wires/openai-compatible.mjs` | 136 | Shared tested request/response envelope with provider-specific model-list parsers, metadata normalization and safe provider error mapping |
+| `providers/wires/openrouter.mjs` | 15 | OpenRouter routed Chat Completions and model catalogue, with routed model ids preserved |
+| `providers/wires/perplexity.mjs` | 14 | Perplexity routed API with separate /v1/models and /router/v1/chat/completions paths |
+| `providers/wires/sambanova.mjs` | 13 | SambaNova Cloud Chat Completions and model-list adapter |
+| `providers/wires/together.mjs` | 14 | Together Chat Completions and chat-only model catalogue parsing |
+| `providers/wires/vllm.mjs` | 13 | Optional self-hosted vLLM Chat Completions adapter, still subject to trusted-origin egress policy |
 | `providers/wires/xai.mjs` | 68 | Native xAI Responses API, language-model metadata and response.completed stream validation |
-| `providers/wires/common.mjs` | 70 | Conversation shaping shared by the native wires: system hoisting, same-role merging, user-first refusal, token counts |
-| `providers/wires/anthropic.mjs` | 93 | Anthropic Messages: `x-api-key`, `anthropic-version`, top-level `system`, content blocks, `message_stop` as the completion signal |
-| `providers/wires/gemini.mjs` | 102 | Gemini generateContent: model in the path, `x-goog-api-key`, `contents`/`systemInstruction`, `alt=sse`, blocked-prompt refusal |
-| `providers/wires/cohere.mjs` | 112 | Cohere Chat v2: Bearer auth, `/v2/chat` with a `system` message, typed SSE ending at `message-end`, and paginated `/v1/models` |
-| `providers/wires/azure.mjs` | 74 | Azure OpenAI v1: `api-key` header, `/openai/v1/chat/completions`, the deployment name in `model`, and OpenAI SSE |
+| `providers/wires/common.mjs` | 148 | Conversation shaping shared by the native wires: system hoisting, same-role merging, user-first refusal, token counts |
+| `providers/wires/anthropic.mjs` | 153 | Anthropic Messages: `x-api-key`, `anthropic-version`, top-level `system`, content blocks, `message_stop` as the completion signal |
+| `providers/wires/gemini.mjs` | 143 | Gemini generateContent: model in the path, `x-goog-api-key`, `contents`/`systemInstruction`, `alt=sse`, blocked-prompt refusal |
+| `providers/wires/cohere.mjs` | 113 | Cohere Chat v2: Bearer auth, `/v2/chat` with a `system` message, typed SSE ending at `message-end`, and paginated `/v1/models` |
+| `providers/wires/azure.mjs` | 89 | Azure OpenAI v1: `api-key` header, `/openai/v1/chat/completions`, the deployment name in `model`, and OpenAI SSE |
 | `providers/wires/sigv4.mjs` | 107 | AWS Signature Version 4 for Bedrock: canonical request, credential scope and derived signing key, checked against AWS's published worked example |
 | `providers/wires/vertex.mjs` | 192 | Vertex AI: a service-account JWT assertion exchanged for an OAuth token, the regional `generateContent` path, and v1beta1 publisher-model discovery |
 | `providers/wires/bedrock.mjs` | 158 | Bedrock Converse: SigV4-signed requests, an IAM credential document, model-metadata filtering, and non-streaming by contract |
@@ -233,9 +236,9 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 5,898 source lines, 2,142 test lines
+### `apps/web` — 7,112 source lines, 2,383 test lines
 
-Five area components, three retained direct-Core account pages, a local-first app shell, shared primitives, an API client and five test files. The account pages are not product areas and are not used by the standard Docker deployment; see [20 — Accounts and sign-in](20-accounts-and-sign-in.md) for their regression-tested legacy mode. Design tokens and the shell's visual structure come from upstream Aetheris
+Five local-workspace area components, three retained direct-Core account pages, the separate opt-in `HostedByokApp`, a local-first app shell, shared primitives and an API client. The Direct-Core account pages are not used by the standard Docker deployment; the hosted account flow and its security boundary are documented in [30 — Hosted BYOK](30-hosted-byok.md). The Web suite has nine test files. Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).
 
 ---

@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <strong>One workspace. Running on your computer. Connected to the provider you choose.</strong><br />
-  <sub>Open-source · Docker Compose · Single-user · Localhost-only</sub>
+  <strong>One workspace. Self-host it locally or use the opt-in hosted BYOK edition.</strong><br />
+  <sub>Open-source · Docker Compose · Hosted accounts · Your provider key and bill</sub>
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 
 # Aetheris Omni
 
-Aetheris Omni is a **self-hosted AI workspace**, not a model and not a shared cloud service. Its app, API and saved workspace run in Docker on your own computer. Open it in a browser at **http://localhost** and choose which supported AI provider to connect.
+Aetheris Omni is an AI workspace, not a model. Run the default single-user workspace locally with Docker at **http://localhost**, or deploy the opt-in hosted BYOK web edition for per-user accounts. In hosted mode, each person supplies an API key, Ragam encrypts it for that account, and the chosen provider bills that person directly. Public hosted registration requires a production email-delivery service; see [hosted BYOK setup](docs/30-hosted-byok.md).
 
 > **Important distinction:** “hosted locally” describes where the Aetheris Omni app and its workspace run. It does **not** make every AI model local or offline. If you choose a cloud provider, the prompts you send go to that provider and its usage terms and charges apply. A local ComfyUI connection is optional for image generation; no model weights are bundled or downloaded by Aetheris Omni.
 
@@ -32,19 +32,20 @@ Aetheris Omni takes a deliberately self-hosted, provider-connected approach. The
 
 | Design choice | What it means in practice |
 |---|---|
-| **Your computer hosts the workspace** | Docker runs the app and its persistent data on your own machine. There is no Aetheris-operated shared backend in this deployment. |
+| **Choose the deployment boundary** | The default Docker setup runs a private single-user workspace locally. The separate hosted BYOK build serves account-backed Chat through Vercel and Supabase; it stores per-user encrypted provider settings, not hosted conversation history. |
 | **You choose the AI connection** | Connect a supported provider and explicitly select a model it returns. Aetheris Omni does not silently switch providers or invent model listings. Provider API use may cost money; the app does not include or pay for it. |
-| **Local access is the security boundary** | The default Compose setup binds to `127.0.0.1` and has no account or sign-in screen. It is a single-user local workspace—not safe to expose to a LAN, public internet or remote reverse proxy as-is. |
+| **Local mode stays local** | The default Compose setup binds to `127.0.0.1` and has no account or sign-in screen. Do not expose that unauthenticated mode to a LAN or public internet. |
 | **External tools require deliberate approval** | Remote MCP and plugin calls are shown as external actions and require per-call approval. Ragam does not download and execute remote plugin code. |
 | **Status is kept honest** | Contract-tested adapters and synthetic fixtures are not presented as live vendor verification or proof of model performance. |
 | **Five clear product areas** | Chat, Image, Video, Plugins and MCP are the five primary areas. Provider Settings is a dialog, not a sixth area. |
 
 ### Where the app, data and prompts go
 
-- **App and workspace:** run on your computer in Docker. Conversation and workspace data, provider settings and generated files are kept in that local Docker volume. Protect the computer and any backups.
+- **Local deployment:** app, conversation/workspace data, provider settings and generated files stay in the local Docker volume.
+- **Hosted BYOK deployment:** Supabase Auth stores account identities; Supabase Postgres stores each user's encrypted provider key. Chat prompts and replies are not saved by the hosted Core and remain only in the current browser page unless the user copies them elsewhere.
 - **Cloud AI requests:** when you configure and use a cloud provider, the request goes to that provider. Check its privacy, retention and pricing terms before sending sensitive information.
 - **Localhost is not offline AI:** the browser address `http://localhost` means the app is on your computer. Chat with a cloud model still needs internet and sends the request to the selected vendor. No model weights are included.
-- **No account flow:** the Compose app is intentionally single-user and has no email, account creation, sign-in or password reset. Keep the default loopback binding; do not expose it to other devices or the internet.
+- **Local-mode accounts:** the Compose app is intentionally single-user and has no email, account creation, sign-in or password reset. Keep the default loopback binding. Hosted mode uses Supabase Auth and requires verified email delivery for confirmation and password recovery.
 
 ## Download and run on Windows
 
@@ -97,7 +98,7 @@ The app itself does not provide a hosted AI subscription, provider credentials, 
 | **Backup / restore** | Double-click [`scripts/Backup-Ragam.cmd`](scripts/Backup-Ragam.cmd) or [`scripts/Restore-Ragam.cmd`](scripts/Restore-Ragam.cmd). Use an encrypted location for sensitive archives. |
 | **Other Compose-compatible platforms** | Use [`compose.yaml`](compose.yaml) with its loopback-only default. The same no-login security boundary applies. |
 
-Aetheris Omni is not a hosted/shared service or a separately installed native desktop app. Docker Compose is the deployment; the browser is its user interface. Each end user runs an independent instance on their own computer.
+Aetheris Omni supports a local Docker workspace and a separate opt-in hosted BYOK web edition; see [the hosted setup guide](docs/30-hosted-byok.md) for its security boundary and launch prerequisites. The hosted scope currently provides account-backed Chat and Provider Settings, not every local-workspace area.
 
 ## Product capabilities and current limits
 
@@ -209,7 +210,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 1916 tests: core 985, web 109, fabric 822
+npm test          # 1950 tests: core 1000, web 128, fabric 822
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -227,11 +228,11 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 CI runs the full suites on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) across six jobs: one per
 component, a Docker Compose build/health/persistence/restore smoke, documentation
-checks, and release verification against suite counts. The latest full CI run
+checks, and release verification against suite counts. The latest completed full CI run
 [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all
-1,916 current tests (Core 985, Web 109, Fabric 822), plus release verification and the
-loopback-only Compose persistence/restore smoke. The eight added Chat APIs use deterministic
-contract fixtures; neither the tests nor CI made live vendor calls. The
+1,916 tests (Core 985, Web 109, Fabric 822), plus release verification and the
+loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 1,950 tests (Core 1,000, Web 128, Fabric 822). In this sandbox the full Core run was 989/1,000: 11 model/training tests could not pass because the ignored Klyvaron artifacts and Python NumPy prerequisite are not installed. Web passed 128/128; docs/release passed 64/64. The prior full local run passed with the pinned Python environment and digest-verified Klyvaron artifacts; full CI for this current tree is pending. The added Chat API paths use deterministic contract fixtures;
+neither the tests nor CI made live vendor calls. The
 Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
 
@@ -289,17 +290,18 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 38,119 | 25,286 | **zero npm packages** | 985 |
+| `services/core` | Node 22 ESM | 39,019 | 25,773 | **zero npm packages** | 1000 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 5,898 | 2,142 | react, react-dom | 109 |
+| `apps/web` | React 18 + Vite | 7,112 | 2,383 | pdfjs-dist, react, react-dom | 128 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web
-app's 62-package tree over it would give the core a dependency surface it does not
+app's 59-entry dependency lockfile over it would give the core a dependency surface it does not
 have and make that property unverifiable.
 
 Architecture, component responsibilities and enforcement points:
-[`docs/02-architecture.md`](docs/02-architecture.md).
+[`docs/02-architecture.md`](docs/02-architecture.md). Cross-provider assistant feature-parity audit and staged roadmap:
+[`docs/29-assistant-platform-parity.md`](docs/29-assistant-platform-parity.md).
 
 ---
 

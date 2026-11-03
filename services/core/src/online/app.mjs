@@ -6,6 +6,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { OnlineStore } from './store.mjs'
 import { OnlineGateway, gatewayUrl, failure, runtimeFor } from './gateway.mjs'
 import { readBody, sendJson } from './http.mjs'
+import { normalizeChatMessages, redactChatMessages, textFromChatContent } from './chat-content.mjs'
 import { contextRoutes } from './context-routes.mjs'
 import { AccountStore, ROLES, DEFAULT_MAX_ACCOUNTS } from './accounts.mjs'
 import { AuditLedger } from '../audit/ledger.mjs'
@@ -57,6 +58,27 @@ export const SESSIONS = Object.freeze({ ttlMs: 8 * 3600_000, perAccount: 8, inst
 export const COOKIE_SAME_SITE = Object.freeze(['strict', 'lax', 'none'])
 
 const LOCAL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function normalizeChatTools(value) {
+  if (value === undefined || value === null) return []
+  if (!Array.isArray(value) || value.length > 8) throw failure('invalid_tools', 'Offer at most eight function tools to a model.', 400)
+  const names = new Set()
+  let total = 0
+  return value.map((tool) => {
+    if (!tool || typeof tool !== 'object' || Array.isArray(tool)
+      || typeof tool.name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$/.test(tool.name)
+      || names.has(tool.name) || typeof tool.description !== 'string' || tool.description.length > 1000
+      || !tool.parameters || typeof tool.parameters !== 'object' || Array.isArray(tool.parameters)
+      || tool.parameters.type !== 'object') {
+      throw failure('invalid_tools', 'Function tools need unique valid names, short descriptions and object JSON Schemas.', 400)
+    }
+    const encoded = JSON.stringify(tool.parameters)
+    total += encoded.length + tool.name.length + tool.description.length
+    if (encoded.length > 12_000 || total > 32_000) throw failure('invalid_tools', 'Offered function schemas exceed the 32 KiB limit.', 413)
+    names.add(tool.name)
+    return { name: tool.name, description: tool.description, parameters: tool.parameters }
+  })
+}
 
 function isLoopbackWebHost(value) {
   try {
@@ -1198,14 +1220,11 @@ export class OnlineApp {
         throw failure('consent_required', 'Confirm this request before running generation.', 403)
       }
       const incoming = body.messages ?? [{ role: 'user', content: body.prompt }]
-      if (!Array.isArray(incoming) || incoming.length < 1 || incoming.length > 100 || incoming.some((m) => !m || !['user', 'assistant'].includes(m.role) || typeof m.content !== 'string' || m.content.length > 100_000)) {
-        throw failure('invalid_messages', 'Send up to 100 text user/assistant messages.')
-      }
-      if (incoming.at(-1).role !== 'user' || !incoming.at(-1).content.trim()) {
-        throw failure('invalid_messages', 'The last message must be a nonempty user message.')
-      }
-      const messages = incoming.map(({ role, content }) => ({ role, content }))
-      const prompt = incoming.at(-1).content
+      const normalized = normalizeChatMessages(incoming)
+      if (body.nativeSearch || (Array.isArray(body.tools) && body.tools.length)) throw failure('capability_unavailable', 'First-party Klyvaron native Chat does not expose provider search or function tools. Choose a compatible listed gateway model; no fallback is performed.', 409)
+      if (normalized.mediaCount) throw failure('capability_unavailable', 'First-party Klyvaron native Chat is text-only; choose a compatible gateway model for these attachments. No fallback is performed.', 409)
+      const messages = normalized.messages
+      const prompt = normalized.prompt
       const contextClasses = []
       let grounding = null
       if ((body.useKnowledge || body.useMemory) && body.authorization?.includeContext !== true) {
@@ -1358,10 +1377,15 @@ export class OnlineApp {
     if (body.authorization?.providerRevision !== revision || body.authorization?.confirmed !== true) throw failure('consent_required', 'Confirm sending this request to the current gateway.', 403)
     if (resolved && body.authorization?.providerId && body.authorization.providerId !== config.id) throw failure('consent_provider_mismatch', 'The request is authorized for a different provider than this tier uses.', 409)
     const incoming = body.messages ?? [{ role: 'user', content: body.prompt }]
-    if (!Array.isArray(incoming) || incoming.length < 1 || incoming.length > 100 || incoming.some((m) => !m || !['user','assistant'].includes(m.role) || typeof m.content !== 'string' || m.content.length > 100_000)) throw failure('invalid_messages', 'Send up to 100 text user/assistant messages.')
-    if (incoming.at(-1).role !== 'user' || !incoming.at(-1).content.trim()) throw failure('invalid_messages', 'The last message must be a nonempty user message.')
-    const messages = incoming.map(({ role, content }) => ({ role, content }))
-    const prompt = incoming.at(-1).content
+    const normalized = normalizeChatMessages(incoming)
+    const messages = normalized.messages
+    const prompt = normalized.prompt
+    if (normalized.mediaCount) {
+      if (body.authorization?.mediaConfirmed !== true) throw failure('media_consent_required', 'Confirm the selected media will be sent to the currently selected provider with this message.', 403)
+      const wireSupports = new Set(wireFor(config.wire).chatInputKinds ?? [])
+      const unsupported = normalized.mediaKinds.filter((kind) => !wireSupports.has(kind))
+      if (unsupported.length) throw failure('capability_unavailable', `${config.label ?? config.id} cannot encode ${unsupported.join(', ')} attachments through this Chat wire. Choose a compatible provider; no fallback is performed.`, 409)
+    }
     const contextClasses = []
     let grounding = null
     if ((body.useKnowledge || body.useMemory) && body.authorization?.includeContext !== true) throw failure('context_consent_required', 'Explicitly approve sending selected files or memories to the gateway.', 403)
@@ -1392,9 +1416,9 @@ export class OnlineApp {
       const instruction = instructionFor(body.style)
       messages.unshift({ role: 'system', content: instruction })
     }
-    const classification = mostSensitiveDataClass(...messages.map((m) => classifyText(m.content).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
+    const classification = mostSensitiveDataClass(...messages.map((m) => classifyText(textFromChatContent(m.content)).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
     if (['restricted','confidential'].includes(classification) && body.authorization?.allowSensitive !== true) throw failure('sensitive_consent_required', 'This request or its context contains sensitive information. Explicitly authorize this transfer or remove it.', 403)
-    const redacted = redactDeep(messages)
+    const redacted = redactChatMessages(messages)
     const maxTokens = body.maxTokens ?? 512
     const temperature = body.temperature ?? 0.2
     if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 8192 || !Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw failure('invalid_parameters', 'Max tokens must be 1–8192 and temperature 0–2.')
@@ -1404,15 +1428,32 @@ export class OnlineApp {
     // it never inspects a provider's JSON.
     const wire = wireFor(config.wire)
     if (typeof wire.chat !== 'function') throw failure('capability_unavailable', 'This connection generates images, not chat. Activate a chat connection in Provider Settings.', 409)
+    const tools = normalizeChatTools(body.tools)
+    if (tools.length && body.authorization?.toolsConfirmed !== true) throw failure('tools_consent_required', 'Explicitly approve sending selected function names, descriptions and schemas to the provider.', 403)
+    if (tools.length && wire.chatTools !== true) throw failure('capability_unavailable', `${config.label ?? config.id} does not expose function calling through this Chat wire. No fallback is performed.`, 409)
+    const nativeSearch = body.nativeSearch === true
+    if (nativeSearch && body.authorization?.nativeSearchConfirmed !== true) throw failure('search_consent_required', 'Explicitly approve provider-native search for this request.', 403)
+    if (nativeSearch && wire.chatNativeSearch !== true) throw failure('capability_unavailable', `${config.label ?? config.id} does not expose provider-native search through this Chat wire. No fallback is performed.`, 409)
     const result = await wire.chat(this.gateway.request.bind(this.gateway), config, {
       model,
       messages: redacted.value,
       maxTokens,
       temperature,
       signal,
+      maxRequestBytes: normalized.mediaCount ? 8 * 1024 * 1024 : undefined,
+      tools,
+      nativeSearch,
       onText: emit ? (delta) => emit('delta', { text: delta }) : null,
     })
-    const text = result.text
+    const proposedToolCalls = Array.isArray(result.toolCalls) ? result.toolCalls : []
+    const offeredNames = new Set(tools.map((tool) => tool.name))
+    if (proposedToolCalls.length > 8 || proposedToolCalls.some((call) => !offeredNames.has(call?.name)
+      || !call.arguments || typeof call.arguments !== 'object' || Array.isArray(call.arguments)
+      || JSON.stringify(call.arguments).length > 12_000)) {
+      throw failure('invalid_tool_proposal', 'The provider returned a malformed or unrequested function proposal. Nothing was executed.', 502)
+    }
+    if (proposedToolCalls.length && !tools.length) throw failure('invalid_tool_proposal', 'The provider proposed an unrequested function call. Nothing was executed.', 502)
+    const text = result.text || (proposedToolCalls.length ? `The model proposed ${proposedToolCalls.length} function call${proposedToolCalls.length === 1 ? '' : 's'} for review. Nothing was executed.` : '')
     const reportedModel = result.model ?? null
     const usage = result.usage ?? null
     if (!text) throw failure('invalid_completion', 'No text completion was returned. Tool execution is not automatic.', 502)
@@ -1439,7 +1480,7 @@ export class OnlineApp {
       this.skills.recordUse(skillUsed.name)
       this.ledger.record({ category: 'skills', action: 'skill_use', outcome: 'success', subject: session.accountId, detail: { skill: skillUsed.name, version: skillUsed.version } })
     }
-    return { text, modelId: model, providerModel: reportedModel, provider: config.label ?? runtimeFor(config.id).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null, skill: skillUsed, style: body.style ?? null, styleAudit, klyvaron: resolved ? { tier: resolved.tier, provenance: resolved.provenance } : null }
+    return { text, modelId: model, providerModel: reportedModel, provider: config.label ?? runtimeFor(config.id).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount, ...(result.grounding ? { provider: result.grounding } : {}) } : (result.grounding ?? null), toolCalls: proposedToolCalls, skill: skillUsed, style: body.style ?? null, styleAudit, klyvaron: resolved ? { tier: resolved.tier, provenance: resolved.provenance } : null }
   }
   authenticated(req) {
     const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]
@@ -1891,7 +1932,7 @@ export class OnlineApp {
           this.store.save({ selectedModel: model }); return sendJson(res, 200, { selectedModel: model })
         }
         if (req.method === 'POST' && (path === '/api/chat' || path === '/api/chat/stream')) {
-          const body = await readBody(req, { principal: session.accountId })
+          const body = await readBody(req, { principal: session.accountId, maxBytes: 8 * 1024 * 1024 })
           if (path === '/api/chat') return sendJson(res, 200, await this.chat(body, { signal: controller.signal, session }))
           let started = false
           const emit = (event, data) => {

@@ -120,18 +120,16 @@ test('the artifact URL is relative so an <img>/<video> tag resolves through the 
   assert.ok(!url.includes('localhost'))
 })
 
-test('path parameters are percent-encoded', () => {
+test('path parameters are percent-encoded', async () => {
   const { calls, restore } = installFetch(() => fakeResponse({ body: {} }))
   try {
-    api.task('a b/c?d').catch(() => {})
-    return Promise.resolve().then(() => {
-      assert.ok(calls[0].url.includes('a%20b'), `expected an encoded space, got ${calls[0].url}`)
-      assert.ok(!calls[0].url.includes('?d'), 'a query string in an id must not become a real query string')
-      restore()
-    })
-  } catch (error) {
+    await api.task('a b/c?d')
+    await api.session('saved/a b?c')
+    assert.ok(calls[0].url.includes('a%20b'), `expected an encoded space, got ${calls[0].url}`)
+    assert.ok(!calls[0].url.includes('?d'), 'a query string in an id must not become a real query string')
+    assert.equal(calls[1].url, '/api/sessions/saved%2Fa%20b%3Fc', 'saved session IDs stay within one relative route segment')
+  } finally {
     restore()
-    throw error
   }
 })
 

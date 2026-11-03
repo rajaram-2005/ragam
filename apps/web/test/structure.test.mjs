@@ -167,6 +167,16 @@ test('one way in: the token sign-in and every third-party method are gone from t
       assert.match(source, /ragam\.local-profile\.v1/)
       assert.doesNotMatch(source, /\b(?:token|password|credential|api.?key|secret)\b/i,
         'the browser-only profile store must never hold authentication or provider secrets')
+    } else if (name.endsWith('/onboarding.js')) {
+      assert.match(source, /globalThis\.localStorage/)
+      assert.match(source, /ragam\.setup-guide\.dismissed\.v1/)
+      assert.doesNotMatch(source, /\b(?:token|password|credential|api.?key|secret)\b/i,
+        'the setup-guide preference must never hold authentication or provider secrets')
+    } else if (name.endsWith('/chat-organization.js')) {
+      assert.match(source, /globalThis\.localStorage/)
+      assert.match(source, /ragam\.chat-organization\.v1/)
+      assert.doesNotMatch(source, /\b(?:token|password|credential|api.?key|secret|prompt|turns)\b/i,
+        'chat organization may only store non-secret labels, project names and pin state')
     } else {
       assert.doesNotMatch(source, /localStorage|sessionStorage|document\.cookie/,
         `${name} stores something in the browser that the server should hold`)
@@ -363,9 +373,9 @@ test('development fixtures are labelled in the interface itself', () => {
 // Dependency discipline
 // ---------------------------------------------------------------------------
 
-test('the app has no runtime dependency beyond React', () => {
+test('the app has only the local PDF parser as an additional runtime dependency', () => {
   const pkg = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8'))
-  assert.deepEqual(Object.keys(pkg.dependencies ?? {}).sort(), ['react', 'react-dom'])
+  assert.deepEqual(Object.keys(pkg.dependencies ?? {}).sort(), ['pdfjs-dist', 'react', 'react-dom'])
   // Build tooling only, and pinned exactly so a surprise major cannot slip in.
   assert.deepEqual(Object.keys(pkg.devDependencies ?? {}).sort(), ['@vitejs/plugin-react', 'vite'])
   for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
@@ -375,13 +385,19 @@ test('the app has no runtime dependency beyond React', () => {
   assert.equal(pkg.license, 'MIT')
 })
 
-test('the built bundle stays small enough that a hidden dependency would show', () => {
+test('the PDF parser is split into a lazy chunk and the initial bundle remains bounded', () => {
   const dist = join(here, '..', 'dist', 'assets')
   if (!existsSync(dist)) return // build output is not committed; run `npm run build` first
   const scripts = readdirSync(dist).filter((name) => name.endsWith('.js'))
-  assert.equal(scripts.length, 1, `expected a single bundle, found ${scripts.join(', ')}`)
-  const bytes = readFileSync(join(dist, scripts[0])).byteLength
-  assert.ok(bytes < 400 * 1024, `bundle grew to ${(bytes / 1024).toFixed(0)} KB — an unplanned dependency is likely`)
+  const entry = scripts.filter((name) => name.startsWith('index-'))
+  const parser = scripts.filter((name) => name.startsWith('pdf-'))
+  assert.equal(entry.length, 1, `expected one application entry bundle, found ${entry.join(', ')}`)
+  assert.equal(parser.length, 1, `PDF.js must be a separate lazy chunk, found ${parser.join(', ')}`)
+  assert.ok(readFileSync(join(dist, entry[0])).byteLength < 400 * 1024, 'initial application bundle exceeded 400 KiB')
+  assert.ok(readFileSync(join(dist, parser[0])).byteLength < 600 * 1024, 'PDF parser chunk exceeded 600 KiB')
+  const worker = readdirSync(dist).filter((name) => name.startsWith('pdf.worker.min-') && name.endsWith('.mjs'))
+  assert.equal(worker.length, 1, `PDF.js worker asset must be emitted, found ${worker.join(', ')}`)
+  assert.ok(readFileSync(join(dist, worker[0])).byteLength < 1.5 * 1024 * 1024, 'PDF worker asset exceeded 1.5 MiB')
 })
 
 // ---------------------------------------------------------------------------
@@ -478,6 +494,59 @@ test('the history panel reports an empty search rather than filling it in', () =
   assert.match(chat, /Searched \{hits\.searchedTurns\}/)
 })
 
+test('saved conversations reopen on request and disclose which provider receives a continuation', () => {
+  const panel = read('components/ContextPanels.jsx')
+  const chat = read('areas/ChatArea.jsx')
+  assert.match(panel, /const open = async \(id\)/)
+  assert.match(panel, /api\.session\(id\)/)
+  assert.match(panel, />Open<\/Button>/)
+  assert.match(chat, /onOpen=\{openSavedSession\}/)
+  assert.match(chat, /historical: true/)
+  assert.match(chat, /Earlier assistant reply/)
+  assert.match(chat, /The earlier provider\/model was not recorded/)
+  assert.match(chat, /this visible transcript will be sent to the currently selected model/)
+})
+
+test('conversation projects, renames and pins use browser-local metadata only', () => {
+  const panel = read('components/ContextPanels.jsx')
+  const organization = read('chat-organization.js')
+  assert.match(panel, /Create a project/)
+  assert.match(panel, /aria-label="Filter conversations by project"/)
+  assert.match(panel, />Rename<\/Button>/)
+  assert.match(panel, /metadata\.pinned \? 'Unpin' : 'Pin'/)
+  assert.match(panel, /Project names, custom titles and pins stay in this browser/)
+  assert.match(organization, /ragam\.chat-organization\.v1/)
+  assert.match(organization, /no prompts or turns/)
+})
+
+test('Chat attachments, capability evidence and manual MCP calls keep user consent explicit', () => {
+  const chat = read('areas/ChatArea.jsx')
+  const toolRunner = read('components/ChatToolRunner.jsx')
+  assert.match(chat, /onChange=\{attachChatFiles\}/)
+  assert.match(chat, /messageWithChatFiles\(prompt, attachments\)/)
+  assert.match(chat, /extracted text joins your message only when you press Send/)
+  assert.match(chat, /Images, audio and video are encoded only when you press Send/)
+  assert.match(chat, /PDF extraction stays in this browser/)
+  assert.match(chat, /Start recording/)
+  assert.match(chat, /Review this locally produced transcript/)
+  assert.match(chat, /Speak with local voice/)
+  assert.doesNotMatch(chat, /images and PDFs are not supported in Chat attachments yet/i)
+  assert.match(chat, /selectedModelEvidence\?\.capabilities/)
+  assert.match(chat, /does not infer image, search, audio or tool support from a model name/)
+  assert.match(chat, /<ChatToolRunner onAddResult=\{addToolResultToDraft\}/)
+  assert.match(toolRunner, /model response is only a proposal and is never executed automatically/)
+  assert.match(chat, /nativeSearchConfirmed: nativeSearchConsent/)
+  assert.match(chat, /toolsConfirmed: toolsConsent && offeredTools.length > 0/)
+  assert.match(chat, /Provider function-call proposals — not executed/)
+  assert.match(chat, /I approve provider-native web search/)
+  assert.match(chat, /No Chat Completions fallback is attempted/)
+  assert.match(toolRunner, /api\.mcpPreflight\(/)
+  assert.match(toolRunner, /api\.mcpCall\(/)
+  assert.match(toolRunner, /I approve sending these arguments/)
+  assert.match(toolRunner, /setExternalApproved\(false\)/)
+  assert.match(toolRunner, /Add result to chat draft/)
+})
+
 test('a session is created lazily, so a visit with no question stores nothing', () => {
   const chat=read('areas/ChatArea.jsx')
   assert.match(chat,/if \(!id\)/)
@@ -519,11 +588,12 @@ test('the security controls the product added are visible in their areas', () =>
 test('ordinary generation has a Stop control, unmount cleanup, and preserves partial text and drafts', () => {
   const chat=read('areas/ChatArea.jsx')
   assert.match(chat,/Stop generation/)
-  assert.match(chat,/useEffect\(\(\) => \(\) => abort\.current\?\.abort\(\), \[\]\)/)
+  assert.match(chat,/abort\.current\?\.abort\(\)/)
+  assert.match(chat,/clearTimeout\(recordingTimer\.current\)/)
   assert.match(chat,/signal: controller\.signal/)
   assert.match(chat,/draft is retained/)
   assert.match(chat,/if \(!completed\) throw/)
-  assert.match(chat,/setPrompt\(\(draft\) => draft\.trim\(\) === content/)
+  assert.match(chat,/setPrompt\(\(draft\) => draft\.trim\(\) === prompt\.trim\(\)/)
   assert.match(chat,/filter\(\(m\) => !m\.failed\)/)
 
 })

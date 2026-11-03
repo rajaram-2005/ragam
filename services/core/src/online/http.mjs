@@ -12,14 +12,15 @@ export function sendJson(res, status, value) {
  * by a field in the request. With accounts, that value is the account id, so two people
  * on one installation cannot address each other's data by naming a principal.
  */
-export async function readBody(req, { principal = 'owner' } = {}) {
+export async function readBody(req, { principal = 'owner', maxBytes = 2 * 1024 * 1024 } = {}) {
   if (!String(req.headers['content-type']).startsWith('application/json')) throw failure('invalid_content_type', 'JSON content type required.', 415)
   const chunks = []; let size = 0
+  const limit = Number.isSafeInteger(maxBytes) ? Math.max(1, Math.min(maxBytes, 8 * 1024 * 1024)) : 2 * 1024 * 1024
   const timer = setTimeout(() => req.destroy(), 15_000)
   try {
     for await (const chunk of req) {
       size += chunk.length
-      if (size > 2 * 1024 * 1024) throw failure('body_too_large', 'Request exceeds 2 MiB.', 413)
+      if (size > limit) throw failure('body_too_large', `Request exceeds ${Math.round(limit / (1024 * 1024))} MiB.`, 413)
       chunks.push(chunk)
     }
     let value

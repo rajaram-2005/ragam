@@ -1,6 +1,6 @@
 # 04 — Setup
 
-> **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
+> **Active product: online-only (Phase 2), with two deployment modes.** The default Docker Compose workspace is local, single-user and loopback-only. The opt-in hosted BYOK edition uses Supabase Auth/Postgres and Vercel Node functions; see [Hosted BYOK setup and security](30-hosted-byok.md). The web client build flag is off unless explicitly enabled. Legacy local/research code remains for reference and regression tests; suite totals include retained coverage.
 
 Every command below was run on the host described in
 [`03-status.md`](./03-status.md). Nothing here is aspirational.
@@ -27,7 +27,7 @@ No GPU is required for anything in this repository. No model weights are downloa
 
 ## 2. Quick start
 
-**End-user deployment is Docker Compose only.** Use the [self-hosted Docker guide](22-self-hosted-deployment.md), including the Windows double-click launcher, to run an independent local instance with persistent storage. The Node/Vite steps below are for repository development and tests, not a separate deployment target.
+**The default end-user deployment is Docker Compose.** Use the [self-hosted Docker guide](22-self-hosted-deployment.md), including the Windows double-click launcher, to run an independent local instance with persistent storage. A separate, opt-in hosted BYOK edition is available for Vercel/Supabase; it has a distinct auth/data path and requires production SMTP before public registration. See [docs/30](30-hosted-byok.md). The Node/Vite steps below are for repository development and tests.
 
 ```bash
 git clone https://github.com/rajaram-2005/ragam.git aetheris-omni
@@ -100,11 +100,11 @@ it is a real default read out of `services/core/src/config.mjs`.
 
 ```bash
 cd apps/web
-npm install          # 62 packages, ~12 s
+npm ci               # install exact versions from package-lock.json
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 99 web tests
+npm test             # 128 web tests
 ```
 
 | Variable | Default | Purpose |
@@ -117,10 +117,11 @@ container port-forward or a preview proxy. Browser-facing code uses relative
 `/api` paths exclusively; `apps/web/test/api.test.mjs` fails if any absolute host
 appears in `src/`.
 
-**Production:** `npm run build`, then serve `dist/` from anything that can also
+**Local-workspace production:** `npm run build`, then serve `dist/` from anything that can also
 proxy `/api` to the core service (nginx, Caddy, or the core itself behind a
-reverse proxy). No absolute backend URL is baked into the bundle, so the same
-build works against any origin that proxies `/api`.
+reverse proxy). No absolute backend URL is baked into the bundle. The separate hosted BYOK
+build uses `VITE_HOSTED_BYOK=true` and the fixed `/api/hosted/*` rewrite; see
+[docs/30](30-hosted-byok.md) for Vercel/Supabase configuration and the SMTP launch gate.
 
 ### Fabric service
 
@@ -242,7 +243,7 @@ The application itself needs neither Python nor model weights. To run the **enti
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install numpy==2.4.6 jax==0.10.2 av==18.1.0 Pillow==13.0.0
+.venv/bin/python -m pip install numpy==2.4.6 jax==0.10.2 av==18.1.0 Pillow==13.0.0 pytest==9.2.0
 mkdir -p .aetheris-data/online/klyvaron/models
 curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40 \
   | tar -xz --strip-components=1 -C .aetheris-data/online/klyvaron/models
@@ -257,10 +258,10 @@ PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
 The pinned archive includes the model manifests and checksum list. The full CI run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all 985 Core tests with the pinned Pro/Max artifacts and Python prerequisites. The Baidu Qianfan contract fixtures make no vendor calls. Without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-npm test                  # all three suites (1916 tests)
-npm run test:core         # 985
-npm run test:web          # 109
-npm run test:fabric       # 822 — needs numpy + pytest on the interpreter
+PATH="$PWD/.venv/bin:$PATH" npm test  # all three suites (1950 tests)
+npm run test:core                  # 1000
+npm run test:web                   # 128
+npm run test:fabric                # 822 — needs numpy + pytest on the interpreter
 ```
 
 Beyond the suites, one check is run by hand rather than by CI, because it costs nine suite
@@ -313,9 +314,9 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 985 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed with the pinned model artifacts and Python prerequisites; Baidu Qianfan is covered by local contract fixtures. |
+| **Core service** | Current suite: 1000 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed with the pinned model artifacts and Python prerequisites; Baidu Qianfan is covered by local contract fixtures. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 109 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Web app** | `npm ci`, 128 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docker Compose** | Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed: builds both images, starts Core/web/Caddy on loopback, checks local-workspace health and the provider catalogue with account creation disabled, then cold-backs up and restores the named volume and verifies workspace identity plus a SQLite history marker. Synthetic CI only: no live provider inference or persistent-deployment guarantee. |
 | **Docs** | The 50-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |

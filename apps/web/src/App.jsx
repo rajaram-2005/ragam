@@ -15,6 +15,7 @@ import ImageArea from './areas/ImageArea.jsx'
 import VideoArea from './areas/VideoArea.jsx'
 import PluginsArea from './areas/PluginsArea.jsx'
 import McpArea from './areas/McpArea.jsx'
+import HostedByokApp from './HostedByokApp.jsx'
 
 // What the address bar can say, and what the app shows for each of them.
 //
@@ -29,6 +30,11 @@ const currentPage = () => authPageFromHash(hash())
 const goTo = (target) => { if (globalThis.location) globalThis.location.hash = target }
 
 export default function App() {
+  if (import.meta.env?.VITE_HOSTED_BYOK === 'true') return <HostedByokApp />
+  return <LocalApp />
+}
+
+function LocalApp() {
   const [account, setAccount] = useState(null), [checking, setChecking] = useState(true)
   const [authError, setAuthError] = useState(null), [notice, setNotice] = useState('')
   const [active, setActive] = useState(currentArea), [page, setPage] = useState(currentPage), [settings, setSettings] = useState(false), [profileOpen, setProfileOpen] = useState(false)

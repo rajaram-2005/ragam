@@ -562,18 +562,18 @@ test('the documented dependency counts match the committed lockfile', () => {
 
   // Vite 8 replaced Rollup/esbuild/Babel with rolldown/oxc/lightningcss, which cut
   // the tree by more than half. These are the measured figures for that tree.
-  assert.equal(entries.length, 46, 'lockfile entries changed')
-  assert.equal(platformSpecific.length, 27, 'platform-specific binaries changed')
-  assert.equal(entries.length - platformSpecific.length, 19, 'platform-independent count changed')
+  assert.equal(entries.length, 59, 'lockfile entries changed')
+  assert.equal(platformSpecific.length, 38, 'platform-specific binaries changed')
+  assert.equal(entries.length - platformSpecific.length, 21, 'platform-independent count changed')
 
   const manifest = JSON.parse(readFileSync(resolve(REPO, 'apps/web/package.json'), 'utf8'))
-  assert.deepEqual(Object.keys(manifest.dependencies).sort(), ['react', 'react-dom'],
-    'only react and react-dom may be runtime dependencies')
+  assert.deepEqual(Object.keys(manifest.dependencies).sort(), ['pdfjs-dist', 'react', 'react-dom'],
+    'the PDF parser is the only additional runtime dependency')
 
   // NOTICES must present the portable numbers as fact and the installed number as a
   // property of one machine, or a reader on another host gets a wrong inventory.
   const notices = squash(doc.notices())
-  for (const claim of ['| **46** | yes |', '19 | yes', '27 | yes', '**no** |']) {
+  for (const claim of ['| **59** | yes |', '21 | yes', '38 | yes', '**no** |']) {
     assert.ok(notices.includes(claim), `NOTICES must state ${claim}`)
   }
   assert.ok(notices.includes('no `libc` field'),
@@ -586,7 +586,7 @@ test('no dependency carries strong copyleft, and weak copyleft is dev-only', () 
   // installed here: a licence obligation follows the dependency tree, and a Windows
   // or macOS build would install them.
   const entries = lockfileEntries()
-  // 23 install on a linux/x64 glibc host; the lockfile must list more than any one
+  // 27 install on this linux/x64 glibc host; the lockfile must list more than any one
   // host installs, or the scan is silently narrower than the tree it claims to cover.
   assert.ok(entries.length > 23, 'the lockfile should list more entries than any one host installs')
 
@@ -629,6 +629,10 @@ test('no dependency carries strong copyleft, and weak copyleft is dev-only', () 
 
 test('the quoted licence texts are byte-identical to the checked-in copies', () => {
   const notices = doc.notices()
+  const pdfLicense = readFileSync(resolve(REPO, 'third-party/licenses/pdfjs-dist-Apache-2.0.txt'), 'utf8')
+  assert.match(pdfLicense, /Apache License\s+Version 2\.0/)
+  assert.ok(notices.includes('Copyright 2024 Mozilla Foundation'))
+  assert.ok(notices.includes('licenses/pdfjs-dist-Apache-2.0.txt'))
   const quoted = (heading) => {
     const match = notices.match(new RegExp('### ' + heading + '[\\s\\S]*?\\n```\\n([\\s\\S]*?)\\n```'))
     assert.ok(match, `NOTICES must quote the ${heading} licence text`)
@@ -726,36 +730,39 @@ test('the status doc reports the real test totals', () => {
   // media workflow, the industry packs, the benchmark harness and the release verifier.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 70)
-  assert.equal(count('apps/web/test', /\.test\.mjs$/), 5)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 71)
+  assert.equal(count('apps/web/test', /\.test\.mjs$/), 9)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**985 tests**'), 'current core test inventory must be stated')
+  assert.ok(status.includes('**1000 tests**'), 'current core test inventory must be stated')
   assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
-  assert.ok(status.includes('**109 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1916 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('**128 tests**'), 'web test inventory must be stated')
+  assert.ok(status.includes('1950 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1916 tests: core 985, web 109, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('1950 tests: core 1000, web 128, fabric 822'),
     'README must state the current inventory as docs/03 does')
-  assert.ok(squash(doc.readme()).includes('latest full CI run')
+  assert.ok(squash(doc.readme()).includes('latest completed full CI run')
     && squash(doc.readme()).includes('41394564087')
-    && squash(doc.readme()).includes('1,916 current tests')
+    && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
+    && squash(doc.readme()).includes('The current tree has 1,950 tests (Core 1,000, Web 128, Fabric 822). In this sandbox the full Core run was 989/1,000')
+    && squash(doc.readme()).includes('Web passed 128/128; docs/release passed 64/64')
+    && squash(doc.readme()).includes('full CI for this current tree is pending')
     && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
-  'README must identify the latest full CI run and its measured inventory')
-  assert.ok(status.includes('(70 files'), 'the file count must move with the suite')
+  'README must distinguish the last full CI run from the current full local suite')
+  assert.ok(status.includes('(71 files'), 'the file count must move with the suite')
 
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(985), `core heading must say 985, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(1000), `core heading must say 1000, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(109), `web heading must say 109, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(128), `web heading must say 128, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1916,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1916`,
+    1950,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1950`,
   )
 })
 
@@ -1498,25 +1505,25 @@ test('the Markdown model card keeps the two limitation lists distinct', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Docker-only deployment: obsolete hosted integrations stay out of the release
+// Hosted BYOK is a separate opt-in deployment, with explicit account isolation.
 // ---------------------------------------------------------------------------
-
-test('deployment integrations and hosted-only instructions are absent from the repository', () => {
+test('hosted BYOK deployment surface is present and its data boundary is explicit', () => {
   for (const path of [
-    'apps/web/api/[...path].js', 'apps/web/vercel.json',
-    'services/core/api/[...path].js', 'services/core/vercel.json',
-    'services/core/src/vercel', 'services/core/src/storage/supabase-admin.mjs',
-    'services/core/src/online/supabase-context.mjs',
-    'services/core/src/knowledge/supabase-pipeline.mjs',
-    'supabase/migrations', 'docs/supabase-migration-plan.md',
-    'docs/deployment-status.md', 'scripts/production-smoke.mjs',
-  ]) assert.equal(exists(resolve(REPO, path)), false, `${path} must not ship in the Docker-only repository`)
+    'apps/web/src/HostedByokApp.jsx', 'apps/web/vercel.json',
+    'services/core/api/hosted/[...path].mjs', 'services/core/src/hosted/byok.mjs',
+    'supabase/migrations/202611030001_byok_provider_connections.sql', 'docs/30-hosted-byok.md',
+  ]) assert.equal(exists(resolve(REPO, path)), true, `${path} is required by hosted BYOK`)
 
-  const setup = doc.setup()
-  assert.ok(setup.includes('Docker Compose only'), 'end-user setup must state the supported deployment')
-  assert.ok(!/Vercel|Supabase|CORE_API_URL/.test(setup), 'setup must not instruct users to configure removed hosted integrations')
-  assert.ok(!/SUPABASE_(?:URL|SERVICE_ROLE_KEY)=/.test(read('.env.example')),
-    '.env.example must not retain hosted database credentials')
+  const api = read('services/core/src/hosted/byok.mjs')
+  assert.ok(api.includes('AETHERIS_PROVIDER_ENCRYPTION_KEY'))
+  assert.ok(api.includes('user_id=eq.') && api.includes('nativeSearchConfirmed'))
+  assert.ok(api.includes('HttpOnly') && api.includes('SameSite=Lax'))
+  const migration = read('supabase/migrations/202611030001_byok_provider_connections.sql')
+  assert.ok(migration.includes('enable row level security'))
+  assert.ok(migration.includes('revoke all on table public.byok_provider_connections from anon, authenticated'))
+  assert.ok(!/^SUPABASE_(?:URL|ANON_KEY|SERVICE_ROLE_KEY)=.+/m.test(read('.env.example')),
+    'no hosted credential value may be enabled in the repository environment template')
+  assert.ok(doc.setup().includes('hosted BYOK'))
 })
 
 // ---------------------------------------------------------------------------
