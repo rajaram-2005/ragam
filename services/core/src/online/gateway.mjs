@@ -21,14 +21,11 @@ export { failure }
 /**
  * The runtimes Provider Settings can point at.
  *
- * `keyRequired` is the only behavioural difference. A LiteLLM gateway is an authenticated
- * service, so it always needs a key. A local Ollama or llama.cpp server usually has none,
- * and a key is sent only if one is stored (`llama-server --api-key` is the case that needs
- * one). Local runtimes are still ONLINE inference: the request leaves this process for the
- * configured endpoint, and the UI and ledger say so.
+ * A local Ollama or llama.cpp server usually needs no key, and a key is sent only if one is
+ * stored (`llama-server --api-key` is the case that needs one). Local runtimes are still ONLINE
+ * inference: the request leaves this process for the configured endpoint, and the UI and ledger say so.
  */
 export const RUNTIMES = Object.freeze({
-  litellm: Object.freeze({ id: 'litellm', label: 'LiteLLM', keyRequired: true, credential: 'api_key' }),
   ollama: Object.freeze({ id: 'ollama', label: 'Ollama', keyRequired: false, credential: 'api_key' }),
   llamacpp: Object.freeze({ id: 'llamacpp', label: 'llama.cpp server', keyRequired: false, credential: 'api_key' }),
 })
@@ -36,7 +33,7 @@ export const RUNTIMES = Object.freeze({
 /**
  * The runtime record for a connection id.
  *
- * Three sources, in order: the three runtimes this build has always shipped, the catalogue (a
+ * Three sources, in order: the two built-in local runtimes, the catalogue (a
  * vendor whose wire format this transport speaks), and a named custom endpoint. Everything else is
  * refused — and a catalogue entry that is `pending`, or whose wire this transport cannot speak, is
  * refused with the code that says why rather than being treated as unknown.
@@ -45,7 +42,7 @@ export const RUNTIMES = Object.freeze({
  * usually do not, and a key is sent only if one was stored.
  */
 const KEYLESS = Object.freeze(new Set(['ollama', 'llamacpp', 'vllm', 'localai', 'comfyui', 'custom']))
-export function runtimeFor(kind = 'litellm') {
+export function runtimeFor(kind) {
   if (typeof kind !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(kind)) {
     throw failure('invalid_runtime', 'Connection ids are lower-case words separated by single hyphens.', 400)
   }
@@ -93,8 +90,8 @@ export function gatewayUrl(value, trustedOrigins = []) {
 
 export class OnlineGateway {
   constructor({ trustedOrigins = [], timeoutMs = 120_000, maxBytes = 2 * 1024 * 1024 } = {}) { Object.assign(this, { trustedOrigins, timeoutMs, maxBytes }) }
-  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, maxRequestBytes, binary = false, method: requestedMethod = null, trustEndpoint = false, includeHeaders = false, allowEmpty = false } = {}) {
-    const runtime = runtimeFor(config.kind ?? config.id ?? 'litellm'), label = config.label ?? runtime.label
+  async request(config, path, { body, signal, onFrame, headers, contentType, doneOnEnd = false, maxResponseBytes, maxRequestBytes, binary = false, method: requestedMethod = null, trustEndpoint = false, includeHeaders = false, allowEmpty = false, localOnly = false } = {}) {
+    const runtime = runtimeFor(config.kind ?? config.id), label = config.label ?? runtime.label
     const endpointOrigin = (() => { try { return new URL(config.baseUrl).origin } catch { return null } })()
     const requestTrustedOrigins = trustEndpoint && endpointOrigin
       ? [...new Set([...this.trustedOrigins, endpointOrigin])]
@@ -123,7 +120,7 @@ export class OnlineGateway {
       const abort = () => done(failure('cancelled', 'Request cancelled.', 499))
       const safeLookup = (hostname, options, callback) => lookup(hostname, { ...options, all: true }, (error, addresses) => {
         if (error) return callback(error)
-        const allowed = addresses.filter((entry) => trusted || !privateAddress(entry.address))
+        const allowed = addresses.filter((entry) => localOnly ? privateAddress(entry.address) : trusted || !privateAddress(entry.address))
         if (!allowed.length) return callback(failure('endpoint_blocked', 'Gateway DNS resolves only to blocked addresses.', 403))
         if (options.all) callback(null, allowed)
         else callback(null, allowed[0].address, allowed[0].family)
@@ -246,7 +243,7 @@ export class OnlineGateway {
 
   /** Model listing is a property of the wire, not of the transport: each adapter parses its own. */
   async modelCatalogue(config) {
-    const wireId = config.wire ?? runtimeFor(config.kind ?? config.id ?? 'litellm').wire
+    const wireId = config.wire ?? runtimeFor(config.kind ?? config.id).wire
     const wire = wireFor(wireId)
     if (typeof wire.modelCatalogue === 'function') return wire.modelCatalogue(this.request.bind(this), config)
     const ids = await wire.models(this.request.bind(this), config)
@@ -254,7 +251,7 @@ export class OnlineGateway {
   }
   async models(config) { return (await this.modelCatalogue(config)).map((record) => record.id) }
   async systemInfo(config) {
-    const wireId = config.wire ?? runtimeFor(config.kind ?? config.id ?? 'litellm').wire
+    const wireId = config.wire ?? runtimeFor(config.kind ?? config.id).wire
     const wire = wireFor(wireId)
     if (typeof wire.systemInfo !== 'function') throw failure('capability_unavailable', 'This provider does not report local hardware through its API.', 409)
     return wire.systemInfo(this.request.bind(this), config)

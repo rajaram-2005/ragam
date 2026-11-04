@@ -2,7 +2,26 @@ import React from 'react'
 import { Button } from './ui.jsx'
 
 /** A no-network first-run guide. Its actions open settings or fill a draft only. */
-export default function GettingStarted({ providerReady, modelReady, onSettings, onUseExample, onDismiss, hidden = false }) {
+export default function GettingStarted({ providerReady, modelReady, onSettings, onUseExample, onDismiss, hidden = false, modelIndependent = false }) {
+  if (modelIndependent) return (
+    <section className="getting-started" id="chat-getting-started" aria-labelledby="getting-started-title" hidden={hidden}>
+      <header className="getting-started-head">
+        <div>
+          <p className="getting-started-eyebrow">KLYVARON · MODEL-INDEPENDENT</p>
+          <h2 id="getting-started-title">Process information locally</h2>
+        </div>
+        <Button className="ghost small" type="button" onClick={onDismiss} aria-label="Hide the setup guide">Hide guide</Button>
+      </header>
+      <p className="getting-started-intro">Klyvaron’s built-in engine uses deterministic parsing, local retrieval and bounded workflows. No AI model, weights, training, download, provider account or network call is required.</p>
+      <ol className="getting-started-steps">
+        <li className="getting-started-step complete"><span className="getting-started-index">01</span><span className="getting-started-copy"><strong>Choose a task and tier</strong><small>Lite, Pro and Max change bounded context and workflow limits, not a trained model.</small></span><span className="getting-started-state">LOCAL</span></li>
+        <li className="getting-started-step complete"><span className="getting-started-index">02</span><span className="getting-started-copy"><strong>Supply text</strong><small>Text and locally extracted PDF text are supported. Binary image/audio/video understanding is not included.</small></span><span className="getting-started-state">YOUR DATA</span></li>
+        <li className="getting-started-step complete"><span className="getting-started-index">03</span><span className="getting-started-copy"><strong>Choose what persists</strong><small>Knowledge is saved only when you explicitly select the local-save option. Memory remains separately user-approved.</small></span><span className="getting-started-state">OPT IN</span></li>
+      </ol>
+      <div className="getting-started-footer"><div><strong>Try an extractive workflow</strong><small>The sample is local text and will not be sent to a model.</small></div><Button className="ghost" type="button" onClick={onUseExample}>Fill sample text</Button></div>
+      <p className="getting-started-disclosure">This engine does not provide learned open-ended language reasoning. It shows its limits and returns source evidence for retrieval tasks.</p>
+    </section>
+  )
   return (
     <section className="getting-started" id="chat-getting-started" aria-labelledby="getting-started-title" hidden={hidden}>
       <header className="getting-started-head">

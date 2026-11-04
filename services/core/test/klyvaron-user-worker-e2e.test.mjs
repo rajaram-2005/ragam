@@ -25,6 +25,12 @@ import { OnlineApp } from '../src/online/app.mjs'
 
 const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url))
 const INSTALLED_PRO_DIR = resolve(REPO_ROOT, '.aetheris-data', 'online', 'klyvaron', 'models', 'klyvaron-pro-lm')
+const pythonE2e = spawnSync('python3', ['-c', 'import numpy; import PIL'], { encoding: 'utf8' })
+const REAL_WORKER_E2E_SKIP = !existsSync(INSTALLED_PRO_DIR)
+  ? 'requires the ignored trained klyvaron-pro-lm package'
+  : pythonE2e.error || pythonE2e.status !== 0
+    ? 'requires Python NumPy and Pillow for the real local worker'
+    : false
 
 function createDedicatedTestCheckpoint(modelsDir) {
   const py = [
@@ -289,10 +295,11 @@ test('user-computer-first defaults, pairing security, mode rules, and NO silent 
   })
   assert.equal(approvedPlan.body.readyToExecute, true)
   assert.equal(approvedPlan.body.spec.selectedMode, 'lightweight_adapter')
+  assert.match(approvedPlan.body.spec.adaptiveDecision.rationale, /user explicitly approved changing 'full_fine_tune' to 'lightweight_adapter'/)
   assert.equal(approvedPlan.body.spec.stoppingCriteria.maxDurationMs, 120_000)
 })
 
-test('required 10-step real end-to-end flow: pair -> hardware -> checkpoint -> train -> validate -> load -> infer -> cancel & rollback', async (t) => {
+test('required 10-step real end-to-end flow: pair -> hardware -> checkpoint -> train -> validate -> load -> infer -> cancel & rollback', { skip: REAL_WORKER_E2E_SKIP }, async (t) => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'klyvaron-ucf-10step-'))
   const onlineDataDir = join(tempRoot, 'online')
   const workerModelsDir = join(onlineDataDir, 'klyvaron', 'models')
@@ -389,6 +396,10 @@ test('required 10-step real end-to-end flow: pair -> hardware -> checkpoint -> t
   assert.equal(planRes.body.spec.validationMethod.kind, 'automatic_disjoint_holdout_split')
   assert.equal(planRes.body.spec.trainExamples.length, 3)
   assert.equal(planRes.body.spec.validationExamples.length, 1)
+  assert.equal(planRes.body.spec.adaptiveDecision.skill, 'adaptive')
+  assert.equal(planRes.body.spec.adaptiveDecision.role, 'orchestrate_and_evaluate')
+  assert.equal(planRes.body.spec.adaptiveDecision.selectedMode, 'lightweight_adapter')
+  assert.equal(planRes.body.spec.adaptiveDecision.safeguards.executionEnvironment, 'paired_user_computer_only')
 
   // STEP 5: Execute genuine AdamW optimizer updates on the paired local worker
   const startedJob = await harness.req('POST', '/api/klyvaron/worker/execute', {
@@ -416,6 +427,9 @@ test('required 10-step real end-to-end flow: pair -> hardware -> checkpoint -> t
   )
   assert.equal(synced.validationReport.valid, true)
   assert.equal(synced.validationReport.finiteProbeLogits, true)
+  assert.equal(synced.adaptiveEvaluation.skill, 'adaptive')
+  assert.equal(synced.adaptiveEvaluation.passed, true)
+  assert.equal(synced.adaptiveEvaluation.canPromote, true)
   if (useRealPro) {
     assert.equal(synced.promotedToChat, true)
   }

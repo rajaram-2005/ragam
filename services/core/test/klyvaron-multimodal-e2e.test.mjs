@@ -10,6 +10,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -45,6 +46,17 @@ const ALL_EIGHT_MODELS = [
   'klyvaron-pro-voice',
   'klyvaron-max-voice',
 ]
+
+// These live acceptance flows need operator-installed trained artifacts plus the optional Python
+// runtime dependencies. A clean checkout does not contain those ignored artifacts, so report an
+// explicit skip instead of turning their absence into a product-code test failure.
+const missingModels = ALL_EIGHT_MODELS.filter((id) => !existsSync(join(LIVE_MODELS_DIR, id)))
+const pythonE2e = spawnSync('python3', ['-c', 'import numpy; import PIL'], { encoding: 'utf8' })
+const LIVE_ACCEPTANCE_SKIP = missingModels.length
+  ? `requires ignored trained model packages: ${missingModels.join(', ')}`
+  : pythonE2e.error || pythonE2e.status !== 0
+    ? 'requires Python NumPy and Pillow for local multimodal inference'
+    : false
 
 function stageInstalledModels(targetModelsDir) {
   for (const modelId of ALL_EIGHT_MODELS) {
@@ -150,7 +162,7 @@ test('Phase 1 & 4: product subscription tiers, 8 first-party model identities, a
   assert.equal(plan.valid, true)
 })
 
-test('Phase 2, 3, 6, 7 & 8: end-to-end HTTP verification of Chat, Image, Video, Voice, Qualification & Separate Pro/Max Manifests', async () => {
+test('Phase 2, 3, 6, 7 & 8: end-to-end HTTP verification of Chat, Image, Video, Voice, Qualification & Separate Pro/Max Manifests', { skip: LIVE_ACCEPTANCE_SKIP }, async () => {
   const workDir = mkdtempSync(join(tmpdir(), 'ragam-mm-e2e-'))
   try {
     const modelsDir = join(workDir, 'klyvaron', 'models')
@@ -349,7 +361,7 @@ test('Phase 2, 3, 6, 7 & 8: end-to-end HTTP verification of Chat, Image, Video, 
   }
 })
 
-test('Phase 2 & 5: authenticated local user worker executes hardware detection, single-use pairing, multimodal inference, and training policy gates', async () => {
+test('Phase 2 & 5: authenticated local user worker executes hardware detection, single-use pairing, multimodal inference, and training policy gates', { skip: LIVE_ACCEPTANCE_SKIP }, async () => {
   const workDir = mkdtempSync(join(tmpdir(), 'ragam-worker-mm-'))
   try {
     const modelsDir = join(workDir, 'models')

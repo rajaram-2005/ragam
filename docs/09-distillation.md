@@ -1,5 +1,7 @@
 # 09 — Distillation
 
+> **Model archive notice:** model-training, weight, evaluation and release statements below describe historical experiments or plans only. Matching payloads are absent from this checkout; these records do not establish any current model release. Active Klyvaron uses deterministic model-independent processing, with Lite/Pro/Max as resource/workflow profiles.
+
 **Two paths. One runs here today without credentials; the other is built, tested against
 a fixture, and waiting for a key.**
 

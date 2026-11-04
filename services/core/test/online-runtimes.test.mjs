@@ -1,4 +1,4 @@
-// Ollama and llama.cpp reach the online entry through the same transport as LiteLLM.
+// Ollama and llama.cpp reach the online entry through the shared provider transport.
 //
 // Every fixture here is synthetic: a loopback server that speaks the OpenAI-compatible
 // `/v1/models` and `/v1/chat/completions` routes, which is what both runtimes expose. No
@@ -61,9 +61,9 @@ async function fixture(t, { trustedOrigins = [] } = {}) {
 const chat = (f, extra = {}) => ({ prompt: 'ordinary question', model: 'local-a', authorization: { confirmed: true, providerRevision: f.app.store.state.revision }, ...extra })
 
 test('the runtime family is closed: unknown ids and pending adapters are refused, not defaulted', () => {
-  // The three built-in runtimes are unchanged, and keep their key requirements.
-  assert.deepEqual(Object.keys(RUNTIMES).sort(), ['litellm', 'llamacpp', 'ollama'])
-  assert.equal(runtimeFor('litellm').keyRequired, true)
+  // The two built-in chat runtimes remain keyless by default. LiteLLM is no longer a runtime.
+  assert.deepEqual(Object.keys(RUNTIMES).sort(), ['llamacpp', 'ollama'])
+  assert.throws(() => runtimeFor('litellm'), (error) => error.code === 'invalid_runtime')
   assert.equal(runtimeFor('ollama').keyRequired, false)
   assert.equal(runtimeFor('llamacpp').keyRequired, false)
 
@@ -171,16 +171,13 @@ test('switching runtime or endpoint never forwards the stored key to the new des
   assert.equal(other.calls.length, 0)
 })
 
-test('LiteLLM still requires a key, and a runtime route cannot act on a different saved runtime', async (t) => {
+test('LiteLLM is rejected and an unsaved provider route cannot act on another connection', async (t) => {
   const up = await runtime(t)
   const f = await fixture(t, { trustedOrigins: [up.base] }); await f.login()
-  const noKey = await f.request('PUT', '/api/providers/litellm', { baseUrl: up.v1 })
-  assert.equal(noKey.status, 400); assert.equal(noKey.data.error, 'key_required')
-
+  const removed = await f.request('PUT', '/api/providers/litellm', { baseUrl: up.v1, apiKey: 'synthetic-removed-key' })
+  assert.equal(removed.status, 400); assert.equal(removed.data.error, 'invalid_runtime')
   await f.request('PUT', '/api/providers/ollama', { baseUrl: up.v1 })
-  // A route for a connection that was never saved is not a route to the saved one: it is a 404,
-  // and it contacts nothing.
-  const missing = await f.request('POST', '/api/providers/litellm/test', {})
+  const missing = await f.request('POST', '/api/providers/openai/test', {})
   assert.equal(missing.status, 404); assert.equal(missing.data.error, 'provider_not_found')
   assert.equal(up.calls.filter((c) => c.path.endsWith('/models')).length, 0, 'an unsaved connection contacts nothing')
   const removeMissing = await f.request('DELETE', '/api/providers/llamacpp', {})
@@ -202,23 +199,23 @@ test('an unknown runtime path is not a route, and members cannot change the conn
   assert.equal(f.app.store.kind(), 'ollama')
 })
 
-test('the active runtime and endpoint survive a restart; a pre-runtime record still reads as LiteLLM', async (t) => {
+test('the active runtime survives restart and legacy LiteLLM state is discarded', async (t) => {
   const up = await runtime(t)
   const f = await fixture(t, { trustedOrigins: [up.base] }); await f.login()
   await f.request('PUT', '/api/providers/ollama', { baseUrl: up.v1 })
   f.restart()
   assert.equal(f.app.store.public().kind, 'ollama'); assert.equal(f.app.store.public().configured, true)
 
-  // A record written before runtimes existed was a bare single-connection object with no `kind`
-  // and no schema, and it always meant LiteLLM. Written in that shape rather than by deleting
-  // fields from the current one, because deleting fields is not what an old file looks like.
+  // A legacy LiteLLM record is intentionally discarded during the schema migration.
   const { writeFileSync } = await import('node:fs')
   writeFileSync(join(f.dir, 'provider.json'), JSON.stringify({
-    baseUrl: '', key: null, models: [], selectedModel: '', verified: {}, revision: 3,
+    kind: 'litellm', baseUrl: 'https://old-gateway.example/v1', key: 'sealed-old-key', models: ['old'], selectedModel: 'old', verified: {}, revision: 3,
   }))
   f.restart()
-  assert.equal(f.app.store.kind(), 'litellm'); assert.equal(f.app.store.public().configured, false)
+  assert.equal(f.app.store.kind(), null); assert.equal(f.app.store.public().configured, false)
   assert.throws(() => f.app.store.config(), (e) => e.code === 'provider_not_configured')
+  const migratedFile = readFileSync(join(f.dir, 'provider.json'), 'utf8')
+  assert.doesNotMatch(migratedFile, /litellm|old-gateway|sealed-old-key/)
 })
 
 test('readiness and model listings name the active runtime and stay unverified until inference is observed', async (t) => {

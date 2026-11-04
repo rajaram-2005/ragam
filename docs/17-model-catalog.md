@@ -14,12 +14,11 @@ Sources implemented at protocol level:
 | `catalog.klyvaron/1` | Startup-verified local library inventory | Uses existing first-party artifact metadata; no network. Catalog status is still separate from runtime admission. |
 | `catalog.huggingface/1` | `GET /api/models?limit=100&full=true&cardData=true` | Bounded first page; advertised revision, task, card licence and base relationships. No weight downloads or live Hub qualification in this sandbox. |
 | `catalog.ollama/1` | `GET /api/tags` | Installed-runtime listing shape; digest, disk bytes, family, quantization and explicit cloud markers. Does not infer chat/tool support or local inference from a name. |
-| `catalog.litellm/1` | `GET /models` relative to configured API base | LiteLLM/OpenAI-shaped accessible-model listing, not pricing/capability or successful inference evidence. |
 | `catalog.openai-compatible/1` | Same bounded model-list protocol | Private/compatible endpoints must be deliberately configured. Compatibility with one endpoint does not qualify its entire runtime. |
 
-Adapters use original code against inspected interfaces. No LiteLLM/Hub dependency
-or enterprise source is bundled. Controlled loopback servers test the actual HTTP
-path; this is not a claim that a real LiteLLM deployment or every provider works.
+Adapters use original code against inspected interfaces. No external proxy or
+enterprise source is bundled. Controlled loopback servers test the actual HTTP
+path; this is not a claim that every provider endpoint works.
 
 ## Records and trust
 
@@ -55,7 +54,7 @@ operator-owned file **outside Git**, for example:
   "sources": [
     { "id": "ollama-catalog", "kind": "ollama", "baseUrl": "http://127.0.0.1:11434", "ttlMs": 60000 },
     { "id": "hub", "kind": "huggingface", "baseUrl": "https://huggingface.co" },
-    { "id": "gateway", "kind": "litellm", "baseUrl": "http://127.0.0.1:4000/v1", "tokenFile": "gateway-token.txt" }
+    { "id": "compatible-endpoint", "kind": "openai-compatible", "baseUrl": "http://127.0.0.1:4000/v1", "tokenFile": "endpoint-token.txt" }
   ]
 }
 ```
@@ -76,10 +75,10 @@ For external sources, both are required:
    `AETHERIS_RUNTIME_POLICY=hybrid` and `AETHERIS_ONLINE_ALLOWLIST=huggingface.co`.
 2. Explicit authorization on that refresh request (`authorizeNetwork: true`).
 
-**Strict Offline blocks external catalogs even with authorization.** LiteLLM and
-generic model gateways remain external catalog operations even at a loopback URL:
-they may perform upstream discovery. Only the dedicated loopback Ollama listing
-adapter is permitted without external consent. This does not install, authorize or
+**Strict Offline blocks external catalogs even with authorization.** Generic model
+gateways remain external catalog operations even at a loopback URL: they may perform
+upstream discovery. Only the dedicated loopback Ollama listing adapter is permitted
+without external consent. This does not install, authorize or
 run an online model. Search text, prompts and documents are never sent by these
 metadata adapters; configured metadata requests contain no task content.
 

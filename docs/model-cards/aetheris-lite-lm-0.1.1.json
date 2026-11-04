@@ -4,7 +4,7 @@
   "reproduce": "npm run lm:train   # release configuration; writes artifacts/<run>.report.json\ncd services/fabric && python scripts/lm_release.py --report artifacts/aetheris-lite-lm-53ae59b2a777.report.json --version 0.1.1\n# The corpus is this repository's own text, so re-running reproduces this artifact only\n# at the revision recorded below: pass --expect-manifest-digest to make drift a refusal.\n#   --expect-manifest-digest 70c5b78c77bce0e122df93fe43504b6b780acf10b865baaa5076307b0883aa02",
   "runId": "53ae59b2a777",
   "runStatus": "partial",
-  "note": "Trained from random initialisation in pure NumPy. No pretrained weights, no PyTorch, no GPU, no network. Weights are NOT in this repository: .gitignore keeps artifacts out by policy and they are referenced by digest. The corpus is this repository's own text, so the corpus manifest digest and the code revision are recorded together and were read at the same moment.",
+  "note": "Archived, unverified model-card metadata. The corresponding weight payload is absent from this checkout; this record is not release evidence or a currently supported model. The active Klyvaron processor is model-independent.",
   "reverifiedAt": "8d9cdf86913877e62ec36b434c398b4b9f7c0a67",
   "card": {
     "name": "aetheris-lite-lm",
@@ -17,7 +17,7 @@
     "configDigest": "25b76f2531a0fc544875c0c1d8441dfad0d98d2a7d9d0e5b439274b9e01b9e11",
     "datasetDigest": "70c5b78c77bce0e122df93fe43504b6b780acf10b865baaa5076307b0883aa02",
     "parameterCount": 359616,
-    "status": "released",
+    "status": "not_released",
     "metrics": {
       "validationPerplexity": 4.893185177076384,
       "bitsPerCharacter": 2.2907738809713725,
@@ -145,7 +145,6 @@
     },
     "parentVersion": null,
     "createdAt": 1791906333.2223613,
-    "releasedAt": 1791906333.2224023,
     "supersededAt": null,
     "retiredAt": null,
     "history": [
@@ -167,10 +166,10 @@
       },
       {
         "at": 1791906333.2224023,
-        "event": "released",
-        "notes": "from-scratch NumPy training run",
-        "superseded": null
+        "event": "historical_release_claim_archived",
+        "notes": "An older record claimed release; the corresponding weight payload is absent from this checkout. This is not current release evidence."
       }
     ]
-  }
+  },
+  "archiveNotice": "Archived, unverified model-card metadata. The corresponding weight payload is absent from this checkout; this record is not release evidence or a currently supported model. The active Klyvaron processor is model-independent."
 }

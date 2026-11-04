@@ -13,7 +13,7 @@ test('hosted BYOK uses same-origin API calls and never saves provider keys in br
   assert.ok(!/localStorage|sessionStorage/.test(component))
   assert.ok(component.includes("type=\"password\""))
   assert.ok(component.includes('Save encrypted key'))
-  assert.ok(component.includes('Provider charges apply to your account'))
+  assert.ok(component.includes('provider charges apply to your account'))
 })
 
 test('hosted chat asks for explicit per-turn provider and Search approval', () => {
@@ -21,6 +21,8 @@ test('hosted chat asks for explicit per-turn provider and Search approval', () =
   assert.ok(component.includes('Use provider-native Search for this turn'))
   assert.ok(component.includes('nativeSearchConfirmed: search'))
   assert.ok(component.includes("industryMode: 'manufacturing'"))
+  assert.ok(component.includes('localOnly: localOnlyMode'))
+  assert.ok(component.includes('Local-only is on'))
   assert.ok(component.includes('IndustryOperationsPanel'))
   assert.ok(component.includes('No fallback'))
 })

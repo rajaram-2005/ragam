@@ -16,7 +16,7 @@ import VideoArea from './areas/VideoArea.jsx'
 import PluginsArea from './areas/PluginsArea.jsx'
 import McpArea from './areas/McpArea.jsx'
 import HostedByokApp from './HostedByokApp.jsx'
-import { readIndustryMode, writeIndustryMode } from './industry-operations.js'
+import { readIndustryMode, writeIndustryMode, readLocalOnlyMode, writeLocalOnlyMode } from './industry-operations.js'
 
 // What the address bar can say, and what the app shows for each of them.
 //
@@ -41,6 +41,7 @@ function LocalApp() {
   const [active, setActive] = useState(currentArea), [page, setPage] = useState(currentPage), [settings, setSettings] = useState(false), [profileOpen, setProfileOpen] = useState(false)
   const [profile, setProfile] = useState(readProfile)
   const [industryMode, setIndustryMode] = useState(readIndustryMode)
+  const [localOnlyMode, setLocalOnlyMode] = useState(readLocalOnlyMode)
   const [industryPrompt, setIndustryPrompt] = useState('')
   const [readiness, setReadiness] = useState(null), [provider, setProvider] = useState(null), [error, setError] = useState(null)
 
@@ -101,6 +102,7 @@ function LocalApp() {
 
   const area = AREAS.find((a) => a.id === active) ?? AREAS[0]
   const changeIndustryMode = (enabled) => setIndustryMode(writeIndustryMode(enabled))
+  const changeLocalOnlyMode = (enabled) => setLocalOnlyMode(writeLocalOnlyMode(enabled))
   const startIndustryTask = (taskPrompt) => {
     changeIndustryMode(true)
     setIndustryPrompt(taskPrompt)
@@ -109,7 +111,7 @@ function LocalApp() {
   }
   const shared = {
     provider, readiness, refreshReadiness: refresh, onSettings: () => setSettings(true), onProfile: () => setProfileOpen(true), profile, account,
-    industryMode, industryPrompt, onIndustryPromptConsumed: () => setIndustryPrompt(''),
+    industryMode, localOnlyMode, industryPrompt, onIndustryPromptConsumed: () => setIndustryPrompt(''),
   }
   const updateProfile = (next) => setProfile(writeProfile(next))
   return <Shell
@@ -124,6 +126,8 @@ function LocalApp() {
     onProfile={() => setProfileOpen(true)}
     industryMode={industryMode}
     onIndustryModeChange={changeIndustryMode}
+    localOnlyMode={localOnlyMode}
+    onLocalOnlyModeChange={changeLocalOnlyMode}
     onStartIndustryTask={startIndustryTask}
     onSignOut={async () => { try { await api.logout(); signedOut() } catch (e) { setError(e) } }}
   >

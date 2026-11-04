@@ -4,7 +4,7 @@
   "reproduce": "cd services/fabric && python -c \"from fabric.pipeline import Pipeline, PipelineConfig; import json; p=Pipeline(PipelineConfig(epochs=25)); p.run(); print(json.dumps(p.registry.current().to_dict(), indent=2, default=str))\"",
   "runId": "run-1791734472042-7840",
   "runStatus": "partial",
-  "note": "Deterministic apart from latencyMs, which is wall-clock measured and varies run to run; both observed values sit far inside the 1.0 ms noise floor and the 25 ms hard ceiling.",
+  "note": "Archived, unverified model-card metadata. The corresponding weight payload is absent from this checkout; this record is not release evidence or a currently supported model. The active Klyvaron processor is model-independent.",
   "card": {
     "name": "aetheris-lite-retriever",
     "version": "0.1.0",
@@ -16,7 +16,7 @@
     "configDigest": "8bb457b2d65626de",
     "datasetDigest": "64e7e42ebd0ae7174d7d9044ac407971dd00e0e748980f7595a5ccdaafd40fe4",
     "parameterCount": 18784,
-    "status": "released",
+    "status": "not_released",
     "metrics": {
       "mrr": 0.849702,
       "recall@1": 0.791667,
@@ -116,7 +116,6 @@
     },
     "parentVersion": null,
     "createdAt": 1791734473.143974,
-    "releasedAt": 1791734473.1440217,
     "supersededAt": null,
     "retiredAt": null,
     "history": [
@@ -135,9 +134,8 @@
       },
       {
         "at": 1791734473.1440217,
-        "event": "released",
-        "notes": "first Aetheris Lite retriever",
-        "superseded": null
+        "event": "historical_release_claim_archived",
+        "notes": "An older record claimed release; the corresponding weight payload is absent from this checkout. This is not current release evidence."
       }
     ]
   },
@@ -165,5 +163,6 @@
       "metrics.latencyMs"
     ],
     "note": "The reproduce command was re-run at HEAD; every deterministic field matched the card generated at codeRevision. latencyMs is a wall-clock measurement and differs in the fourth decimal place (0.0550 vs 0.0554), far inside the 1.0 ms noise floor and the 25 ms hard ceiling. The intervening commits changed the Fabric service bind default and added tests; they did not touch the pipeline, encoder or metrics."
-  }
+  },
+  "archiveNotice": "Archived, unverified model-card metadata. The corresponding weight payload is absent from this checkout; this record is not release evidence or a currently supported model. The active Klyvaron processor is model-independent."
 }

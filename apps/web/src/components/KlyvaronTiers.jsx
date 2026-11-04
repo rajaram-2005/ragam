@@ -2,12 +2,9 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { Button } from './ui.jsx'
 
-// Klyvaron Lite / Pro / Max product tiers vs first-party Klyvaron model identities.
-//
-// Product tiers (`lite`, `pro`, `max`) remain explicit user-assigned presets pointing to a saved
-// connection (or to verified `klyvaron-native` weights for chat), completely distinct from first-
-// party model identities (`klyvaron-pro-lm`, `klyvaron-max-lm`). Unverified first-party models are
-// never enabled until cryptographic digest verification and live generation checks pass.
+// Klyvaron Lite / Pro / Max are model-independent deterministic processing profiles.
+// Optional BYOK provider presets and legacy local model artifacts remain separate integrations;
+// neither is required by the built-in processor.
 
 const MODALITIES = ['chat', 'image', 'video']
 
@@ -69,15 +66,22 @@ export default function KlyvaronTiers({ providers, owner = false, onChanged }) {
   if (!view) return <p className="small" role="status">Klyvaron product tiers — not loaded yet.</p>
 
   const firstPartyList = view.firstPartyModels?.models ?? []
+  const assistantReleasePlan = Object.values(view.modelReleaseRegistry ?? {})
+    .filter((entry) => entry.ownership === 'first_party_fine_tuned_assistant')
   const workerJobs = view.trainingWorker?.jobs ?? []
 
   return <details className="klyvaron-tiers" style={{ marginTop: 20 }} open>
-    <summary>Klyvaron product tiers</summary>
+    <summary>Klyvaron capability tiers</summary>
     <p className="small">
-      {view.note} Each row names the provider and model that will serve it; a tier with no
-      preset refuses the request rather than picking a model on your behalf.
+      {view.note} The built-in processor runs locally with deterministic rules and account-local retrieval. Lite, Pro and Max change bounded context and workflow limits; they are not separate AI models. Provider presets below are optional external integrations and are not required for Klyvaron processing.
     </p>
     {error ? <p className="small" role="alert">{error}</p> : null}
+    {view.modelIndependentProcessor?.profiles ? <section className="klyvaron-processing-profiles" style={{ marginTop: 12 }}>
+      <h3>Built-in deterministic processing profiles</h3>
+      <ul className="small">{Object.values(view.modelIndependentProcessor.profiles).map((profile) => <li key={profile.id}>
+        <strong>{profile.label}</strong> — up to {profile.contextChars.toLocaleString()} input characters, {profile.maxTasks} tasks, {profile.retrievalTopK} retrieval results, {profile.parallelTasks} parallel slots. These are resource limits, not reasoning-quality claims.
+      </li>)}</ul>
+    </section> : null}
     {view.tiers.map((tier) => <section key={tier.id} style={{ marginTop: 12 }}>
       <h3>{tier.label}</h3>
       <p className="small">{tier.intent}</p>
@@ -110,7 +114,7 @@ export default function KlyvaronTiers({ providers, owner = false, onChanged }) {
     </section>)}
 
     {firstPartyList.length ? <section className="first-party-klyvaron" style={{ marginTop: 16 }}>
-      <h3>First-party Klyvaron models (separate from product tiers)</h3>
+      <h3>Optional legacy model artifacts (not required by the processor)</h3>
       <ul className="small">
         {firstPartyList.map((entry) => <li key={entry.id}>
           <strong>{entry.label}</strong> ({entry.id} · {entry.expectedParameters.toLocaleString('en-US')} params):{' '}
@@ -156,10 +160,24 @@ export default function KlyvaronTiers({ providers, owner = false, onChanged }) {
       ) : null}
     </section> : null}
 
-    {owner ? <section className="training-worker-setup" style={{ marginTop: 16 }}>
-      <h3>Authorized training worker setup</h3>
+    {assistantReleasePlan.length ? <section className="model-release-plan" style={{ marginTop: 16 }} aria-label="Klyvaron assistant release plan">
+      <h3>Legacy trained-model release records (not required for model-independent Klyvaron)</h3>
       <p className="small">
-        Inspect host resources, storage headroom, dataset licensing, and energy estimates before authorizing any training run.
+        These are separate model lifecycle records. The built-in Klyvaron processor does not require a foundation model, training run, weights or model release. Keep any legacy model claims behind their independent evidence gates.
+      </p>
+      <ul className="small">
+        {assistantReleasePlan.map((entry) => <li key={entry.id}>
+          <strong>{entry.displayName}</strong> ({entry.id} · v{entry.version}) — release status: <code>{entry.status}</code> ·
+          {' '}sizing: {entry.targetParameterClass} · foundation: {entry.foundationModel?.id ?? 'not selected'} ·
+          {' '}available: {entry.available ? 'yes' : 'no'}.
+        </li>)}
+      </ul>
+    </section> : null}
+
+    {owner ? <section className="training-worker-setup" style={{ marginTop: 16 }}>
+      <h3>Optional legacy model research (not required by Klyvaron processing)</h3>
+      <p className="small">
+        The built-in Lite/Pro/Max processor requires no model training. This separate research worker is opt-in and remains subject to its own hardware, consent, dataset licensing, time and release gates.
       </p>
       <div className="row small" style={{ gap: 8, marginTop: 6 }}>
         <select aria-label="Training preset" className="select" value={workerPreset} disabled={busy} onChange={(e) => { setWorkerPreset(e.target.value); setWorkerPlan(null) }}>

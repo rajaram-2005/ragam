@@ -13,7 +13,7 @@ const ACCESS_COOKIE = 'ragam_access'
 const REFRESH_COOKIE = 'ragam_refresh'
 const COOKIE_TTL = 60 * 60
 const TOKEN_PATTERN = /^[A-Za-z0-9._~-]{1,8192}$/
-const NON_HOSTED = new Set(['litellm', 'ollama', 'llamacpp', 'vllm', 'localai', 'comfyui'])
+const NON_HOSTED = new Set(['ollama', 'llamacpp', 'vllm', 'localai', 'comfyui'])
 
 function cookieValue(header = '', name) {
   for (const part of String(header).split(';')) {
@@ -345,6 +345,8 @@ export class HostedByokService {
       }
       if (path === '/chat' && method === 'POST') {
         const body = await readBody(req, { maxBytes: 256 * 1024 })
+        if (body.localOnly !== undefined && typeof body.localOnly !== 'boolean') throw failure('invalid_local_only_mode', 'Local-only mode must be a boolean.', 400)
+        if (body.localOnly !== false) throw failure('local_only_blocked', 'Hosted BYOK uses a remote provider and is blocked by Local-only mode. Turn Local-only off explicitly; remote provider charges may apply.', 409)
         if (body.authorization?.confirmed !== true) throw failure('consent_required', 'Confirm sending this message to your selected provider.', 403)
         const { row, wire, config } = await this.#config(user.id)
         const model = body.model ?? row.selected_model

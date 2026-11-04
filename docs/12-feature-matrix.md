@@ -1,5 +1,7 @@
 # Feature matrix: what Aetheris Omni does, and what it does not
 
+> **Model archive notice:** model-training, weight, evaluation and release statements below describe historical experiments or plans only. Matching payloads are absent from this checkout; these records do not establish any current model release. Active Klyvaron uses deterministic model-independent processing, with Lite/Pro/Max as resource/workflow profiles.
+
 > **Active product: online-only (Phase 2).** [Current setup, features and limitations](19-online-only-phase-2.md) supersede the offline-first product instructions below. Legacy local/research code remains for reference and regression tests; it is not loaded by `npm run core`. Suite totals include retained legacy coverage.
 
 A capability audit against the consumer-AI market, with four statuses and no fifth. The

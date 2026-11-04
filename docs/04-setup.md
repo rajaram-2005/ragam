@@ -14,9 +14,9 @@ Every command below was run on the host described in
 | `services/core` | **Node ≥ 22.5.0** (for `node:sqlite`). Zero npm dependencies | Node v22.22.3 |
 | `services/fabric` | **Python ≥ 3.11** + **NumPy** | Python 3.11.2, NumPy 2.1.3 |
 | `apps/web` | Node 22.x and npm. Vite 8 requires ≥ 20.19 or ≥ 22.12. 2 runtime packages, 23 installed in total | Vite 8.3.4, React 18.3.1 |
-| Tests | Python 3.11 with NumPy, JAX, PyAV and Pillow plus the pinned first-party Pro/Max packages for the full Core suite; `pytest` for Fabric; nothing extra for Web | Python 3.11.2, NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0, Pillow 13.0.0, pytest 9.1.1 |
+| Tests | Core processor/routes and Web tests require no model files; retained Fabric/worker tests may use Python dependencies and `pytest` | Python 3.11.2, NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0, Pillow 13.0.0, pytest 9.1.1 |
 
-No GPU is required for anything in this repository. No model weights are downloaded or needed to run the platform — see §7 for what that means in practice. The full Core acceptance suite is different: five tests exercise genuine released Pro/Max packages and several worker tests import Python multimodal dependencies. Those test-only prerequisites are described in §4; they are kept outside Git.
+No GPU or model weights are required to run Klyvaron's built-in processor or its Core/Web tests — see §7. Retained model-artifact and worker tests cover separate legacy paths; optional Python test prerequisites are described in §4 and kept outside Git. Passing those tests is not evidence that a model release has occurred.
 
 > **Do not `pip install torch`.** Nothing here imports it. On a GPU-less host pip
 > resolves torch to the CUDA build and pulls several gigabytes of runtime that
@@ -104,7 +104,7 @@ npm ci               # install exact versions from package-lock.json
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 129 web tests
+npm test             # 131 web tests
 ```
 
 | Variable | Default | Purpose |
@@ -122,6 +122,38 @@ proxy `/api` to the core service (nginx, Caddy, or the core itself behind a
 reverse proxy). No absolute backend URL is baked into the bundle. The separate hosted BYOK
 build uses `VITE_HOSTED_BYOK=true` and the fixed `/api/hosted/*` rewrite; see
 [docs/30](30-hosted-byok.md) for Vercel/Supabase configuration and the SMTP launch gate.
+
+### Native desktop preview (Windows, macOS, Linux)
+
+The Electron shell runs the same React build and the same Node Core service. Both its
+HTTP listeners bind only to `127.0.0.1`; the desktop Core uses local single-user mode,
+and its persistent workspace is stored in Electron's per-user `Ragam` data directory.
+It does not open a LAN listener. The local CPU model runtime is JavaScript, so inference
+uses the same verified artifact format on x64 and ARM64; accelerator-specific execution
+is not implied by this desktop package.
+
+From a source checkout with Node.js 22.12 or later:
+
+```bash
+npm run desktop:install
+npm run desktop          # build the web bundle, then launch the local desktop app
+npm run desktop:build    # build an installer for the build host's current OS
+```
+
+[The Desktop Packages workflow](../.github/workflows/desktop.yml) builds Windows NSIS,
+Linux AppImage/deb, and macOS DMG artifacts for x64 and ARM64. These are **unsigned CI
+artifacts**, retained for 14 days; they are not published releases. Windows SmartScreen
+and macOS Gatekeeper may warn because no signing identity is configured. A signed,
+public installer requires platform-specific signing and release work.
+
+Model weights are not bundled or fetched by the desktop app. Lite/Pro/Max entries in
+Provider Settings are explicit provider/model assignments, not first-party weights.
+Separately installed first-party model artifacts belong to a retained legacy integration;
+they are not the Klyvaron built-in processor, are not required for Chat, and do not establish
+that a Klyvaron model has been released. If that optional path is enabled, the UI gates it on
+digest verification and inference readiness rather than substituting missing files. These
+artifacts do not imply that the full multimodal tiers are complete; see the [family readiness
+matrix](11-klyvaron-family.md).
 
 ### Fabric service
 
@@ -154,13 +186,19 @@ aetheris-fabric listening
 
 ---
 
-## 3b. Training Aetheris Lite
+## 3b. Archived language-model experiment (not Klyvaron)
 
-The language model is trained here, from random initialisation, with no downloads:
+This is retained historical tooling, not the model-independent Klyvaron architecture. It is
+not used by Chat's built-in processor, and running it is neither necessary nor evidence of a
+Klyvaron capability or model release. No training or weight installation is part of the normal
+product setup. The old experiment commands are kept below for repository-history and test
+context only.
+
+The legacy experiment used random initialisation and no downloads:
 
 ```bash
-npm run lm:quick   # 60 steps, seconds — proves the pipeline end to end
-npm run lm:train   # the release configuration, ~35-40 minutes on 2 CPU cores
+npm run lm:quick   # legacy experiment, 60 steps — proves its pipeline end to end
+npm run lm:train   # legacy experiment; not a Klyvaron release or setup command
 ```
 
 ### Export a model the core can load
@@ -174,8 +212,10 @@ python services/fabric/scripts/export_lm.py --parity-fixture \
     services/core/test/fixtures/klyvaron-lite-parity.json
 ```
 
-Install it with the operator's command, which drives the store — the only thing that may
-write under `<AETHERIS_DATA_DIR>/klyvaron/models`:
+The retained legacy operator command can install a separately verified artifact for that
+optional old inference path. It is not needed by the built-in Klyvaron processor and does not
+mark a model release. The command drives the store — the only thing that may write under
+`<AETHERIS_DATA_DIR>/klyvaron/models`:
 
 ```bash
 node services/core/scripts/klyvaron.mjs install <artifact-dir>   # verify, budget, copy, re-verify, record
@@ -252,15 +292,15 @@ curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed4
   cat klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part* > klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz
   sha256sum -c SHA256SUMS
 )
-PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
+PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs services/core/test/klyvaron-release/*.test.mjs
 ```
 
 The pinned archive includes the model manifests and checksum list. The full CI run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all 985 Core tests with the pinned Pro/Max artifacts and Python prerequisites. The Baidu Qianfan contract fixtures make no vendor calls. Without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-PATH="$PWD/.venv/bin:$PATH" npm test  # all three suites (1957 tests)
-npm run test:core                  # 1006
-npm run test:web                   # 129
+PATH="$PWD/.venv/bin:$PATH" npm test  # all three suites (1992 tests)
+npm run test:core                  # 1039
+npm run test:web                   # 131
 npm run test:fabric                # 822 — needs numpy + pytest on the interpreter
 ```
 
@@ -314,9 +354,9 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 1006 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed with the pinned model artifacts and Python prerequisites; Baidu Qianfan is covered by local contract fixtures. |
+| **Core service** | Current suite: 1039 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) is a historical CI result and does not establish a Klyvaron model release; Baidu Qianfan is covered by local contract fixtures. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 129 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Web app** | `npm ci`, 131 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docker Compose** | Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed: builds both images, starts Core/web/Caddy on loopback, checks local-workspace health and the provider catalogue with account creation disabled, then cold-backs up and restores the named volume and verifies workspace identity plus a SQLite history marker. Synthetic CI only: no live provider inference or persistent-deployment guarantee. |
 | **Docs** | The 51-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |
@@ -344,18 +384,23 @@ Nothing in CI installs torch.
 
 ---
 
-## 6. Training a model
+## 6. Legacy Fabric training experiment (separate from Klyvaron)
+
+This section documents the retained Fabric retriever experiment only. It is not the Klyvaron
+processor, does not power Chat, and is not needed to run the product or create persistent
+knowledge. User-approved knowledge and memory are stored as data; they are not model training.
+No model release is implied by these commands.
 
 ```bash
-npm run train            # in-process; prints "partial run-<id>"
-npm run fabric:run       # through the HTTP service (start `npm run fabric` first)
+npm run train            # legacy Fabric experiment; in-process, prints "partial run-<id>"
+npm run fabric:run       # legacy HTTP experiment (start `npm run fabric` first)
 ```
 
 `partial` is the expected status: 3 of 8 stages are blocked on this host. The run
 record lists every blocked stage with its reason. A run that reports `partial`
 succeeded at what it could do and told the truth about the rest.
 
-To reproduce the released retriever exactly:
+To reproduce the retained legacy retriever experiment exactly:
 
 ```bash
 cd services/fabric
@@ -372,10 +417,11 @@ Deterministic apart from `latencyMs`. Seeds: data `1`, model `7`. See the
 
 ---
 
-## 7. Connecting Chat, Image and Video providers
+## 7. Built-in Klyvaron processing and optional media/model providers
 
-The active product — `npm run core`, which is `services/core/src/server.mjs` — performs
-**no local inference and downloads no models**. The catalogue includes direct Chat APIs
+The active product — `npm run core`, which is `services/core/src/server.mjs` — includes
+Klyvaron's built-in, model-independent deterministic text processor; it downloads and loads
+no model weights. Model-backed Chat is an optional separate integration. The catalogue includes direct Chat APIs
 (OpenAI, Anthropic Claude, Google Gemini, Google Vertex AI, Azure OpenAI, Amazon Bedrock,
 Cohere and other listed providers), separate Image APIs, and separate Video APIs. The
 full provider matrix and each connection's authentication/endpoint details are in
@@ -383,7 +429,9 @@ full provider matrix and each connection's authentication/endpoint details are i
 connections are OpenAI and Anthropic respectively. Google Gemini and Vertex AI are
 separate connection choices with different credential formats.
 
-### Connect a Chat provider in the browser
+In Chat, the default **Klyvaron built-in** engine works without a model or provider. Choose a deterministic task (such as extractive summary, input inspection, local retrieval or bounded arithmetic) and a resource profile. Its output is limited to those documented operations; it does not provide open-ended language reasoning. Text and browser-extracted document text are supported, not binary-media understanding. See [33 — Model-independent Klyvaron](./33-model-independent-klyvaron.md).
+
+### Connect an optional Chat provider in the browser
 
 1. Sign in to the local Ragam installation as its **owner** and open **Provider Settings**.
 2. Under **Add a connection**, select the API vendor (for example, OpenAI, Anthropic Claude
@@ -392,9 +440,7 @@ separate connection choices with different credential formats.
    metadata; follow the field labels and the provider's own documentation.
 3. Select **Save and use**, then **Test connection & refresh models**. This tests the model
    catalogue only; it does not send a chat prompt or prove live inference compatibility.
-4. In Chat, explicitly choose a listed model and send a prompt. Ragam sends that request to
-   the selected connection, keeps the provider/model provenance, and does not silently switch
-   to another provider if the request fails. API calls may incur provider charges.
+4. In Chat, switch the engine to **Optional connected AI provider**, then explicitly choose a listed model. Ragam sends that request to the selected connection, keeps provider/model provenance, and does not silently switch providers. API calls may incur provider charges; the default Klyvaron processor does not use this connection.
 
 Enter credentials only in Provider Settings, never in chat or source files. Credentials are
 stored encrypted by the local Core and are not returned by its API. A consumer ChatGPT or
@@ -402,7 +448,7 @@ Claude subscription should not be assumed to include API access or API usage; ch
 provider's current API terms and billing before sending prompts. No live provider is contacted
 merely by viewing the catalogue.
 
-The catalogue currently has 47 entries: 24 `ready` entries with fixture-tested code paths,
+The catalogue currently has 46 entries: 23 `ready` entries with fixture-tested code paths,
 22 individually contract-tested Chat adapters that retain the historical `gateway_only`
 classification, and Diffusers as the sole `pending` entry. “Fixture-tested” is not a claim
 of live account access or model qualification. No vendor credentials or live quota were
@@ -422,57 +468,47 @@ HTTP service and an installed checkpoint; Ragam installs neither. After you save
 
 The exact endpoint origin must be trusted by Core. In Docker, `localhost` refers to the Core container, not Windows, and `http://comfyui:8188` works only if a ComfyUI service named `comfyui` is on the same private Docker network. The default Compose stack does not start that service. Do not expose unauthenticated ComfyUI to the LAN or Internet. Diffusers remains pending until a concrete service/model and license are selected.
 
-Until a Chat connection is saved, `/api/ready` reports `status: "setup_required"` with
-`capabilities.chat: false`, and Chat explains that setup is required rather than failing
-quietly. Saving connections does not qualify a model: model-list success is not inference
-verification, and no fallback is performed.
+Until a Chat connection is saved, `/api/ready` may report `status: "setup_required"` with
+`capabilities.chat: false` for the optional model-backed route. The built-in Klyvaron processor
+remains available for its deterministic text workflows. Saving connections does not qualify a
+model: model-list success is not inference verification, and no fallback is performed.
 
-### Local models behind a local gateway
+### Local models with Ollama or llama.cpp
 
-The gateway may itself be on your own machine and front a local runtime. That is how this
-product runs on local models without being changed: Core still does no inference, it just
-talks to a gateway that happens to be on loopback.
+Ragam connects directly to a local Ollama or llama.cpp server; LiteLLM is not required or
+supported. Start the local service and install a model yourself:
 
 ```bash
-ollama serve                                    # 127.0.0.1:11434
-ollama pull qwen2.5:1.5b                        # or any chat model your hardware can hold
-pip install 'litellm[proxy]'
-litellm --model ollama/qwen2.5:1.5b --port 4000 --master_key sk-local-dev
-
-AETHERIS_LITELLM_TRUSTED_ORIGINS=http://127.0.0.1:4000 npm run core
+ollama serve
+ollama pull qwen2.5:1.5b
+npm run core
 npm run web
 ```
 
-Then in Provider Settings: base URL `http://127.0.0.1:4000/v1`, key `sk-local-dev`. The
-model id you will see is whatever the proxy reports — `ollama/qwen2.5:1.5b` with the
-command above, or `qwen2.5:1.5b` if you configure the proxy with a `model_list` YAML
-instead. Check the two endpoints Core actually calls before blaming the app:
+In Provider Settings, choose **Ollama (on the Core host)** and use
+`http://127.0.0.1:11434/v1`; the key is optional. For llama.cpp, start `llama-server`
+and use its `/v1` base URL; a key is only needed if you started it with `--api-key`.
+The **exact origin** must be trusted by Core, for example:
 
 ```bash
-curl -H 'authorization: Bearer sk-local-dev' http://127.0.0.1:4000/v1/models
-curl -H 'authorization: Bearer sk-local-dev' -H 'content-type: application/json' \
-  -d '{"model":"ollama/qwen2.5:1.5b","messages":[{"role":"user","content":"Say hi"}],"stream":true}' \
-  http://127.0.0.1:4000/v1/chat/completions
+AETHERIS_TRUSTED_ORIGINS=http://127.0.0.1:11434 npm run core
 ```
 
-`AETHERIS_LITELLM_TRUSTED_ORIGINS` exists because a private or loopback gateway is
-refused by default — otherwise anybody who can reach the API could point an installation
-at an internal address. It is compared against the URL's **exact origin**: scheme, host
-and port, with no path and no trailing slash. `http://127.0.0.1:4000/` does not match,
-and neither does `http://localhost:4000` when the base URL says `127.0.0.1`. It is read
-once at boot, so changing it means restarting Core. Comma-separated for more than one.
+If Core runs in Docker, `127.0.0.1` means the Core container, not the host. Use a local
+runtime on the same private container network or a host address reachable from Core, and
+trust that exact origin. Do not expose an unauthenticated model server publicly.
 
 ### What the refusals mean
 
 | Response | Cause |
 |---|---|
-| `400 endpoint_blocked` | A private or loopback base URL whose origin is not in `AETHERIS_LITELLM_TRUSTED_ORIGINS`, or does not match it exactly |
+| `400 endpoint_blocked` | A private or loopback base URL whose origin is not in `AETHERIS_TRUSTED_ORIGINS`, or does not match it exactly |
 | `400 invalid_endpoint` | Not a parseable HTTP(S) URL, or it carries credentials, a query or a fragment |
 | `400 key_required` | No key was sent, and a saved key is never reused for a different endpoint |
 | `400 invalid_key` | A key over 8192 characters, or one containing a line break |
-| `403 owner_required` | A member account tried to change the gateway; only the owner can |
-| `502 invalid_model_list` | The gateway's `/models` answer was not a list of at most 500 records |
-| `502 invalid_stream` | A streaming request did not get `text/event-stream` back — usually a base URL missing `/v1`, or the gateway answering with an error page |
+| `403 owner_required` | A member account tried to change a provider connection; only the owner can |
+| `502 invalid_model_list` | The provider's `/models` answer was not a list of at most 500 records |
+| `502 invalid_stream` | A streaming request did not get `text/event-stream` back — usually a base URL missing `/v1`, or the endpoint answering with an error page |
 | `409 provider_changed` | The connection was re-saved while a check or a request was in flight |
 | `409 model_unavailable` | The model asked for is not in the listed set |
 
@@ -493,7 +529,7 @@ controls described in §7 — set the runtime in Provider Settings, not in `.env
 ## 8. External providers and metadata catalogs
 
 **The active build routes Chat, Image and Video through one guarded online transport.** Its provider
-registry has 47 entries: 24 `ready` entries with tested code paths, twenty-two individually adapted Chat providers
+registry has 46 entries: 23 `ready` entries with tested code paths, twenty-two individually adapted Chat providers
 with individually defined contract-tested adapters (retaining `gateway_only` for catalogue
 compatibility), and one `pending` local media entry (Diffusers). The optional ComfyUI image adapter
 uses its local HTTP API and a built-in stock workflow; Ragam does not install ComfyUI or model
@@ -547,9 +583,9 @@ Deleting `$AETHERIS_DATA_DIR` removes all indexed company data. Document deletio
 through the API (`purgeDocument`) is preferable: it keeps an auditable deletion
 record rather than leaving an unexplained gap.
 
-### User-computer-first local worker (`npm run worker`)
+### Legacy optional user-computer worker (`npm run worker`)
 
-RAGAM never assumes a server or coding host is the user's computer, never triggers weight training from ordinary chat messages, and never auto-ingests private conversations. To execute authorized local adaptation or foundation runs on your own machine:
+This retained worker is a separate research feature, not the model-independent Klyvaron processor or its user-authorized knowledge/memory stores. No worker, adaptation, training or foundation run is needed for Klyvaron. Ordinary chat input is never model training and is never auto-ingested. Only consult the remaining instructions if you intentionally use this separate legacy research tool on your own machine:
 
 ```bash
 # Start the authenticated local worker on loopback (Linux, macOS, Windows):
@@ -566,7 +602,7 @@ npm run worker -- --workspace ./.aetheris-data/worker-workspace --pairing-secret
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Empty model list, Chat disabled, `/api/ready` says `setup_required` | No gateway saved yet | §7 — Provider Settings, then **Test connection & refresh models** |
+| Optional provider model list is empty or `/api/ready` says `setup_required` | No provider connection is configured for model-backed Chat | The built-in Klyvaron text processor remains available. To use a provider, follow §7 — Provider Settings, then **Test connection & refresh models** |
 | `400 endpoint_blocked` when saving a provider | A loopback or private base URL whose exact origin is not trusted | For ComfyUI or another local endpoint, set `AETHERIS_TRUSTED_ORIGINS` to the exact origin and restart Core; do not expose an unauthenticated service to the LAN/Internet |
 | Sign-in succeeds, then the app returns to the sign-in page | The session cookie is not being sent — the app is inside another site's iframe and the cookie is `SameSite=Strict` | Start Core with `AETHERIS_COOKIE_SAMESITE=none` and `AETHERIS_COOKIE_SECURE=true`; see [docs/20](20-accounts-and-sign-in.md) |
 | `502 invalid_stream` on every message | The base URL is missing `/v1`, or the gateway answers with an error page | §7 — check the two `curl` calls against the gateway directly |

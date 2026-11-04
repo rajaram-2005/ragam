@@ -21,14 +21,15 @@ export default function ProviderCatalogue({ catalog }) {
   if (!catalog || !Array.isArray(catalog.providers) || catalog.providers.length === 0) return null
   const reachable = catalog.providers.filter((provider) => provider.status !== 'pending')
   const pending = catalog.providers.filter((provider) => provider.status === 'pending')
+  const recommendedCount = catalog.providers.filter((provider) => provider.recommended).length
   return <details className="provider-catalogue" style={{ marginTop: 20 }}>
-    <summary>Provider support — {catalog.summary}</summary>
+    <summary>Provider support — {catalog.summary} · {recommendedCount} recommended</summary>
     <p className="small">
-      The integration class distinguishes native vendor APIs, OpenAI-compatible APIs, and gateway-routed APIs. “Contract-tested” refers only to deterministic fixtures; “live verification pending” means no authorized call against that provider/model was performed. Model-list metadata is not inference verification, and model capabilities remain unknown unless evidenced by vendor metadata.
+      <strong>Recommended</strong> marks major model providers and API platforms plus selected self-hosted runtimes for Local-only use; it is not a live check or a guarantee of quality, reliability, capability, or price. The integration class distinguishes native vendor APIs, OpenAI-compatible APIs, and gateway-routed APIs. “Contract-tested” refers only to deterministic fixtures; “live verification pending” means no authorized call against that provider/model was performed. Model-list metadata is not inference verification, and model capabilities remain unknown unless evidenced by vendor metadata.
     </p>
     <ul className="small" aria-label="Reachable providers">
       {reachable.map((provider) => <li key={provider.id}>
-        <strong>{provider.label}</strong> — {STATUS_TEXT[provider.status]}
+        <strong>{provider.label}</strong>{provider.recommended ? <> · <span>Recommended</span></> : null} — {STATUS_TEXT[provider.status]}
         {provider.integrationType ? ` · ${provider.integrationType.replaceAll('-', ' ')}` : ''}
         {provider.adapterStatus ? ` · ${provider.adapterStatus}` : ''}
         {provider.liveVerification ? ` · live: ${provider.liveVerification}` : ''}

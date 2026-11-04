@@ -1,4 +1,5 @@
 export const INDUSTRY_MODE_KEY = 'ragam-industry-mode'
+export const LOCAL_ONLY_MODE_KEY = 'ragam-local-only-mode'
 
 export const INDUSTRY_TASKS = Object.freeze([
   Object.freeze({
@@ -29,5 +30,14 @@ export function readIndustryMode(storage) {
 
 export function writeIndustryMode(enabled, storage) {
   try { browserStorage(storage)?.setItem(INDUSTRY_MODE_KEY, enabled ? 'on' : 'off') } catch { /* storage is optional */ }
+  return Boolean(enabled)
+}
+
+export function readLocalOnlyMode(storage) {
+  try { return browserStorage(storage)?.getItem(LOCAL_ONLY_MODE_KEY) !== 'off' } catch { return true }
+}
+
+export function writeLocalOnlyMode(enabled, storage) {
+  try { browserStorage(storage)?.setItem(LOCAL_ONLY_MODE_KEY, enabled ? 'on' : 'off') } catch { /* storage is optional */ }
   return Boolean(enabled)
 }

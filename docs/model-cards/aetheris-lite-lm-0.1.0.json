@@ -4,7 +4,7 @@
   "reproduce": "npm run lm:train   # writes artifacts/<run>.report.json beside the weights, then\ncd services/fabric && python scripts/lm_release.py --report artifacts/aetheris-lite-lm-82392ef89074.report.json --version 0.1.0",
   "runId": "82392ef89074",
   "runStatus": "partial",
-  "note": "Trained from random initialisation in pure NumPy. No pretrained weights, no PyTorch, no GPU, no network. Weights are NOT in this repository: .gitignore keeps artifacts out by policy and they are referenced by digest.",
+  "note": "Archived, unverified model-card metadata. The corresponding weight payload is absent from this checkout; this record is not release evidence or a currently supported model. The active Klyvaron processor is model-independent.",
   "corrections": [
     {
       "at": "2026-10-13",
@@ -27,7 +27,7 @@
     "configDigest": "d70bbe7780fd296ff28f47e66ab811ac0fffa1c4418954aa2b2c8eab421e2cdb",
     "datasetDigest": "c357293317e781f5d97dcf409146090e02517221108c7b9f8cac21832427c8dd",
     "parameterCount": 359136,
-    "status": "released",
+    "status": "not_released",
     "metrics": {
       "validationPerplexity": 4.40331790103542,
       "bitsPerCharacter": 2.138591004549883,
@@ -155,7 +155,6 @@
     },
     "parentVersion": null,
     "createdAt": 1791826919.543243,
-    "releasedAt": 1791826919.543282,
     "supersededAt": null,
     "retiredAt": null,
     "history": [
@@ -177,11 +176,11 @@
       },
       {
         "at": 1791826919.543282,
-        "event": "released",
-        "notes": "from-scratch NumPy training run",
-        "superseded": null
+        "event": "historical_release_claim_archived",
+        "notes": "An older record claimed release; the corresponding weight payload is absent from this checkout. This is not current release evidence."
       }
     ]
   },
-  "reverifiedAt": "8108d3098d575ca333ca86348fac2567a6364837-dirty"
+  "reverifiedAt": "8108d3098d575ca333ca86348fac2567a6364837-dirty",
+  "archiveNotice": "Archived, unverified model-card metadata. The corresponding weight payload is absent from this checkout; this record is not release evidence or a currently supported model. The active Klyvaron processor is model-independent."
 }

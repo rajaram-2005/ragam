@@ -1,10 +1,11 @@
 # Model card — Klyvaron Mini LM 0.1.0
 
+> **Archive notice:** this record is not release evidence. No matching weight payload is present in the current checkout; the active Klyvaron processor uses no model weights.
 | | |
 |---|---|
 | **Identifier** | `klyvaron-mini-lm@0.1.0` |
 | **Family** | `klyvaron-mini` — the architecture is `aetheris-core-v1`; `mini` is a preset of it, not a tier |
-| **Status** | `released` (0 hard failures, 1 soft failure — the wall-clock target, below) |
+| **Status** | `not_released` — archived metadata; payload absent from current checkout |
 | **Licence** | MIT — first-party weights. No third-party weights are involved. |
 | **Parameters** | 1,421,952 |
 | **Base checkpoint** | **none** — trained from random initialisation |

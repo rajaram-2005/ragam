@@ -123,10 +123,11 @@ test('the Image area generates through a saved Gemini Images connection', async 
 
   let cookie = ''
   const request = async (method, path, body) => {
+    const payload = body !== undefined ? { localOnly: false, ...body } : body
     const response = await fetch(url + path, {
       method,
-      headers: { cookie, ...(body ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}) },
-      ...(body ? { body: JSON.stringify(body) } : {}),
+      headers: { cookie, ...(payload ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}) },
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
     })
     const buffer = Buffer.from(await response.arrayBuffer()); let data
     try { data = JSON.parse(buffer.toString('utf8')) } catch { data = buffer.toString('utf8') }

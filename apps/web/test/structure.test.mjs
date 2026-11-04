@@ -24,7 +24,7 @@ import { dirname, join } from 'node:path'
 
 import { AREAS, AREA_IDS } from '../src/areas.js'
 import { AUTH_PAGES, AUTH_PAGE_IDS, PASSWORD_MIN_LENGTH, PASSWORD_RULES, SESSION_ENDED_NOTICE } from '../src/auth.js'
-import { INDUSTRY_TASKS, readIndustryMode, writeIndustryMode } from '../src/industry-operations.js'
+import { INDUSTRY_TASKS, readIndustryMode, writeIndustryMode, LOCAL_ONLY_MODE_KEY, readLocalOnlyMode, writeLocalOnlyMode } from '../src/industry-operations.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const srcDir = join(here, '..', 'src')
@@ -512,7 +512,7 @@ test('saved conversations reopen on request and disclose which provider receives
   assert.match(chat, /historical: true/)
   assert.match(chat, /Earlier assistant reply/)
   assert.match(chat, /The earlier provider\/model was not recorded/)
-  assert.match(chat, /this visible transcript will be sent to the currently selected model/)
+  assert.match(chat, /this visible transcript will be processed by the selected engine/)
 })
 
 test('conversation projects, renames and pins use browser-local metadata only', () => {
@@ -630,6 +630,37 @@ test('manufacturing operations mode is shared by every dashboard and keeps its l
   assert.equal(readIndustryMode(storage), false)
   writeIndustryMode(true, storage)
   assert.equal(readIndustryMode(storage), true)
+})
+
+test('Local-only defaults on, persists, is threaded to inference, and blocks hosted BYOK', () => {
+  const app = read('App.jsx')
+  const shell = read('components/Shell.jsx')
+  const panel = read('components/IndustryOperationsPanel.jsx')
+  const chat = read('areas/ChatArea.jsx')
+  const image = read('areas/ImageArea.jsx')
+  const video = read('areas/VideoArea.jsx')
+  const hosted = read('HostedByokApp.jsx')
+  const data = new Map()
+  const storage = { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) }
+
+  assert.equal(readLocalOnlyMode(storage), true)
+  assert.equal(writeLocalOnlyMode(false, storage), false)
+  assert.equal(data.get(LOCAL_ONLY_MODE_KEY), 'off')
+  assert.equal(readLocalOnlyMode(storage), false)
+  assert.equal(writeLocalOnlyMode(true, storage), true)
+  assert.equal(readLocalOnlyMode(storage), true)
+  assert.match(app, /useState\(readLocalOnlyMode\)/)
+  assert.match(app, /localOnlyMode=\{localOnlyMode\}/)
+  assert.match(shell, /IndustryOperationsPanel[^>]*localOnly=\{localOnlyMode\}/)
+  assert.match(panel, /Local-only · no vendor API billing/)
+  assert.match(chat, /localOnly: localOnlyMode/)
+  assert.match(image, /localOnly: localOnlyMode/)
+  assert.match(image, /Remote image provider may bill/)
+  assert.match(video, /localOnly: localOnlyMode/)
+  assert.match(video, /Remote video provider may bill/)
+  assert.match(hosted, /localOnly: localOnlyMode/)
+  assert.match(hosted, /disabled=\{localOnlyMode \|\|/)
+  assert.match(hosted, /Hosted BYOK uses a remote AI provider/)
 })
 
 test('gateway models are selected explicitly and remote refresh requires an action', () => {

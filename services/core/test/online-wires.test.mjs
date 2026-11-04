@@ -294,13 +294,14 @@ async function fixture(t) {
   f.url = await listen(server)
   f.app = app
   f.request = async (method, path, body, options = {}) => {
+    const payload = body !== undefined && !options.preserveDefaultLocalOnly ? { localOnly: false, ...body } : body
     const response = await fetch(f.url + path, {
       method,
       headers: {
         cookie: options.cookie ?? f.cookie ?? '',
-        ...(body ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}),
+        ...(payload ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}),
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
     })
     const text = await response.text()
     let data

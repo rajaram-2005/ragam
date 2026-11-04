@@ -1,6 +1,6 @@
 # Phase 1 — ecosystem integration audit
 
-**Date:** 2026-10-14 · **Decision:** retain the existing integration; proceed only to bounded remediation and qualification, not a universal-capability release.
+**Date:** 2026-10-14 · **Historical audit:** its former plan to use LiteLLM has been superseded; LiteLLM is not part of the current catalogue or supported integration. See the current [provider landscape](./31-provider-landscape.md).
 
 ## 1. Executive result
 

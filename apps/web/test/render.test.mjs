@@ -352,6 +352,21 @@ test('provider settings are read-only for a member account', () => {
   const owner = render('ProviderSettings (owner)', React.createElement(components.ProviderSettings, { account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop }))
   assert.doesNotMatch(owner, /Only the owner account/)
   assert.match(owner, /Save connection/)
+  assert.match(owner, /not a live check or a guarantee of quality/)
+
+  const catalogue = render('ProviderCatalogue', React.createElement(components.ProviderCatalogue, {
+    catalog: {
+      summary: '1 ready, 1 individually adapted Chat providers, 0 pending',
+      providers: [
+        { id: 'openai', label: 'OpenAI', recommended: true, status: 'gateway_only', capabilities: [], integrationType: 'native-vendor' },
+        { id: 'ollama', label: 'Ollama', recommended: true, status: 'ready', capabilities: [], integrationType: 'openai-compatible' },
+      ],
+    },
+  }))
+  assert.match(catalogue, /2 recommended/)
+  assert.match(catalogue, /OpenAI<\/strong> · <span>Recommended<\/span>/)
+  assert.match(catalogue, /Ollama<\/strong> · <span>Recommended<\/span> — ready in this build/)
+  assert.match(catalogue, /not a live check or a guarantee of quality/)
 })
 
 test('StatusCard distinguishes loading, errors, listings and observed inference', () => {
@@ -521,50 +536,62 @@ test('every button variant used in the app has a rule in the stylesheet', () => 
   }
 })
 
-test('Chat renders the saved exact model and identifies the online recipient', () => {
-  const provider={kind:'litellm',name:'LiteLLM',keyConfigured:true,configured:true,baseUrl:'https://gateway.example/v1',models:['model-a','model-b'],selectedModel:'model-b',revision:1}
+test('Chat keeps the saved optional model separate from the built-in processor', () => {
+  const provider={kind:'openai',name:'OpenAI',keyConfigured:true,configured:true,baseUrl:'https://gateway.example/v1',models:['model-a','model-b'],selectedModel:'model-b',revision:1}
   const markup=render('ChatArea',React.createElement(components.ChatArea,{provider}))
   assert.match(markup,/value="model-b" selected=""/)
   assert.match(markup,/No silent substitution/)
-  assert.match(markup,/not inference-verified/)
-  assert.match(markup,/gateway.example/)
+  assert.match(markup,/has not supplied capability evidence/)
+  assert.doesNotMatch(markup,/gateway.example/)
 
 })
 
 test('Chat home offers original draft starters and keeps sending under the user’s control', () => {
   const markup = render('ChatArea (welcome)', React.createElement(components.ChatArea, {
-    provider: { kind: 'litellm', name: 'LiteLLM', configured: true, models: ['model-a'], selectedModel: 'model-a' },
+    provider: { kind: 'openai', name: 'OpenAI', configured: true, models: ['model-a'], selectedModel: 'model-a' },
   }))
   assert.match(markup, /What would you like to work through\?/)
-  assert.match(markup, /AETHERIS OMNI · QUICK START/)
-  assert.match(markup, /This guide does not send your prompt, test a provider, or download a model/)
-  assert.match(markup, /Connection tests contact the provider you select/)
+  assert.match(markup, /KLYVARON · MODEL-INDEPENDENT/)
+  assert.match(markup, /No AI model, weights, training, download, provider account or network call is required/)
+  assert.match(markup, /Optional connected AI provider/)
   assert.match(markup, /aria-controls="chat-getting-started"/)
-  assert.match(markup, /Make a complex idea clear/)
-  assert.match(markup, /Shape a first draft/)
-  assert.match(markup, /Compare the options/)
-  assert.match(markup, /Make a practical plan/)
-  assert.match(markup, /Nothing is sent until you press Send/)
-  assert.match(markup, /aria-label="Message your selected model"/)
+  assert.match(markup, /Summarize a passage/)
+  assert.match(markup, /Inspect supplied text/)
+  assert.match(markup, /Extract common patterns/)
+  assert.match(markup, /Build a short outline/)
+  assert.match(markup, /nothing is sent until you press Send/)
+  assert.match(markup, /aria-label="Input for Klyvaron processing"/)
   assert.match(markup, /Shift \+ Enter for a new line/)
 
   const unconfigured = render('ChatArea (no provider)', React.createElement(components.ChatArea))
-  for (const name of ['OpenAI (ChatGPT)', 'Google Gemini', 'Anthropic Claude', 'xAI (Grok)']) assert.ok(unconfigured.includes(name), name)
-  assert.match(unconfigured, /model IDs that key can access/)
-  assert.match(unconfigured, /Provider API use may incur charges/)
-  assert.match(unconfigured, /Choose a provider/)
+  assert.match(unconfigured, /Klyvaron built-in \(no AI model\)/)
+  assert.match(unconfigured, /Optional connected AI provider/)
+  assert.match(unconfigured, /Not used by built-in processor/)
+  assert.match(unconfigured, /Choose a supported local task/)
 })
 
-test('a chosen profession personalizes draft suggestions without silently selecting a model', () => {
+test('built-in profiles expose bounded independent multi-task processing', () => {
+  const markup = render('ChatArea (multi-task built-in)', React.createElement(components.ChatArea))
+  const source = readFileSync(resolve(WEB, 'src/areas/ChatArea.jsx'), 'utf8')
+  assert.match(markup, /Additional independent steps \(0 selected\)/)
+  assert.match(markup, /tasks each process the same input independently; they are not chained/)
+  assert.match(markup, /LITE allows up to 2 task\(s\)/)
+  assert.match(source, /lite: 2, pro: 5, max: 8/)
+  assert.match(source, /tasks: processorTasks/)
+  assert.match(source, /PROCESSOR_TASK_OPTIONS\.filter/)
+})
+
+test('built-in task suggestions remain within supported operations even when a profile is set', () => {
   const markup = render('ChatArea (teacher profile)', React.createElement(components.ChatArea, {
     profile: { name: 'Ada', profession: 'Teacher' },
-    provider: { kind: 'litellm', name: 'LiteLLM', configured: true, models: [], selectedModel: '' },
+    provider: { kind: 'openai', name: 'OpenAI', configured: true, models: [], selectedModel: '' },
   }))
   assert.match(markup, /What would you like to work through, Ada\?/)
-  assert.match(markup, /A few starting points for Teacher/)
-  assert.match(markup, /Plan a lesson/)
-  assert.match(markup, /Draft practice questions/)
-  assert.match(markup, /Choose one to draft a prompt; nothing is sent until you press Send/)
+  assert.match(markup, /Choose a supported local task and supply text or an arithmetic expression/)
+  assert.match(markup, /Summarize a passage/)
+  assert.match(markup, /Extract common patterns/)
+  assert.doesNotMatch(markup, /Plan a lesson|Draft practice questions/)
+  assert.match(markup, /nothing is sent until you press Send/)
   assert.match(markup, /aria-label="Model"[^>]*disabled/)
 })
 
@@ -588,7 +615,7 @@ test('the provider catalogue shows status, never a control, and nothing when unl
     summary: '5 ready, 14 individually adapted Chat providers (contract tested; live verification pending), 14 pending',
     counts: { ready: 5, gateway_only: 14, pending: 14 },
     providers: [
-      { id: 'litellm', label: 'LiteLLM gateway', status: 'ready', capabilities: [{ id: 'streaming', source: 'test', ref: 'test/online.test.mjs' }] },
+      { id: 'ollama', label: 'Ollama', status: 'ready', capabilities: [{ id: 'streaming', source: 'test', ref: 'test/online.test.mjs' }] },
       { id: 'openai', label: 'OpenAI', status: 'gateway_only', capabilities: [] },
       { id: 'anthropic', label: 'Anthropic Claude', status: 'pending', capabilities: [] },
     ],
@@ -607,9 +634,8 @@ test('the provider catalogue shows status, never a control, and nothing when unl
   assert.equal(renderToStaticMarkup(React.createElement(components.ProviderCatalogue, { catalog: { providers: [] } })), '')
 })
 
-test('a saved catalogue connection keeps its own label instead of being displayed as LiteLLM', () => {
-  // The dialog used to look the id up in a three-entry table and fall back to the first entry, so
-  // an OpenAI or custom connection was labelled "LiteLLM gateway" and told a key was required.
+test('a saved catalogue connection keeps its own label rather than using a fallback', () => {
+  // Catalogue-backed connections use their server-provided label and credential rule.
   const provider = {
     kind: 'openai', active: 'openai', name: 'OpenAI', keyConfigured: true, configured: true,
     baseUrl: 'https://api.openai.com/v1', models: [], selectedModel: '', revision: 2,
@@ -621,16 +647,16 @@ test('a saved catalogue connection keeps its own label instead of being displaye
     account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop, provider,
   }))
   assert.match(markup, /OpenAI API base URL/)
-  assert.doesNotMatch(markup, /LiteLLM gateway API base URL/)
+  assert.doesNotMatch(markup, /LiteLLM/)
   assert.match(markup, /<option value="openai" selected="">OpenAI<\/option>/)
 })
 
 test('saved connections are listed with a switch, and adding one offers no pending adapter', () => {
   const provider = {
-    kind: 'litellm', active: 'litellm', name: 'LiteLLM', keyConfigured: true, configured: true,
-    baseUrl: 'https://gateway.example/v1', models: ['model-a'], selectedModel: 'model-a', revision: 4,
+    kind: 'ollama', active: 'ollama', name: 'Ollama', keyConfigured: false, configured: true,
+    baseUrl: 'http://ollama:11434/v1', models: ['model-a'], selectedModel: 'model-a', revision: 4,
     connections: [
-      { id: 'litellm', label: 'LiteLLM', baseUrl: 'https://gateway.example/v1', configured: true, keyConfigured: true, models: ['model-a'], selectedModel: 'model-a' },
+      { id: 'ollama', label: 'Ollama', baseUrl: 'http://ollama:11434/v1', configured: true, keyConfigured: false, models: ['model-a'], selectedModel: 'model-a' },
       { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', configured: true, keyConfigured: true, models: [], selectedModel: '' },
     ],
   }
@@ -659,9 +685,9 @@ test('Provider Settings uses a password input and separates save from connection
   assert.doesNotMatch(markup,/value="sk-/)
 })
 
-test('Provider Settings offers LiteLLM, Ollama and llama.cpp, and calls the local two online', () => {
+test('Provider Settings offers supported local runtimes and no LiteLLM connection', () => {
   const markup = render('ProviderSettings (runtimes)', React.createElement(components.ProviderSettings, { account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop }))
-  assert.match(markup, /LiteLLM gateway/)
+  assert.doesNotMatch(markup, /LiteLLM/)
   assert.match(markup, /Ollama/)
   assert.match(markup, /llama\.cpp server/)
   // A local runtime is a destination the request leaves this process for, so the copy must not call it local.
@@ -670,10 +696,10 @@ test('Provider Settings offers LiteLLM, Ollama and llama.cpp, and calls the loca
   assert.doesNotMatch(markup, /value="sk-/)
   // A signed-in workspace with no connection says so, and does not present an empty model list as ready.
   const chat = render('ChatArea (unconnected)', React.createElement(components.ChatArea, { provider: { kind: 'ollama', name: 'Ollama', configured: false, models: [] } }))
-  assert.match(chat, /AETHERIS OMNI · QUICK START/)
-  assert.match(chat, /Choose a provider/)
+  assert.match(chat, /KLYVARON · MODEL-INDEPENDENT/)
+  assert.match(chat, /Optional connected AI provider/)
   assert.doesNotMatch(chat, /Connect a model provider/)
-  assert.match(chat, /Ollama/)
+  assert.match(chat, /Not used by built-in processor/)
 
   const comfySettings = render('ProviderSettings (ComfyUI hardware)', React.createElement(components.ProviderSettings, {
     account: { id: 'a1', email: 'owner@example.test', role: 'owner' }, onClose: noop,
@@ -684,7 +710,7 @@ test('Provider Settings offers LiteLLM, Ollama and llama.cpp, and calls the loca
   assert.match(comfySettings, /ComfyUI must be reachable from the Core container/)
 })
 
-test('ChatArea gates first-party Klyvaron models strictly on real inference verification and separates gateway models', () => {
+test('optional provider models remain distinct from the model-independent built-in processor', () => {
   const proSha = '11'.repeat(32)
   const readiness = {
     status: 'configured',
@@ -716,24 +742,29 @@ test('ChatArea gates first-party Klyvaron models strictly on real inference veri
     },
   }
   const chat = render('ChatArea (first-party Pro verified, Max missing)', React.createElement(components.ChatArea, {
-    provider: { kind: 'litellm', name: 'LiteLLM', configured: true, models: ['gpt-external-demo'], selectedModel: '' },
+    provider: { kind: 'openai', name: 'OpenAI', configured: true, models: ['gpt-external-demo'], selectedModel: '' },
     readiness,
   }))
   // Verified Pro is selectable without disabled attribute; unverified Max is disabled; gateway model stays distinct.
   assert.match(chat, /<option value="klyvaron-pro-lm"[^>]*>Klyvaron Pro \(first-party · 27\.6M\)<\/option>/)
   assert.match(chat, /<option value="klyvaron-max-lm"[^>]*disabled[^>]*>Klyvaron Max \(klyvaron-max-lm\) — missing<\/option>/)
   assert.match(chat, /<option value="gpt-external-demo">gpt-external-demo<\/option>/)
-  assert.match(chat, /Klyvaron Native/)
+  assert.match(chat, /Klyvaron built-in \(no AI model\)/)
+  assert.match(chat, /Model-independent Klyvaron processing/)
   assert.doesNotMatch(chat, /Connect a model provider/)
 })
 
-test('KlyvaronTiers keeps product routing tiers separate from first-party model identities', () => {
+test('KlyvaronTiers presents model-independent processing and labels provider/model paths optional', () => {
   const panel = render('KlyvaronTiers (initial)', React.createElement(components.KlyvaronTiers, {
     providers: { connections: [] },
     owner: true,
     onChanged: noop,
   }))
   assert.match(panel, /Klyvaron product tiers/)
+  const source = readFileSync(resolve(WEB, 'src/components/KlyvaronTiers.jsx'), 'utf8')
+  assert.match(source, /model-independent deterministic processing profiles/)
+  assert.match(source, /not required for Klyvaron processing/)
+  assert.match(source, /Optional legacy model research/)
 })
 
 test('UserTrainingPanel defaults to unpaired user-computer-first mode and never claims server-host execution', () => {

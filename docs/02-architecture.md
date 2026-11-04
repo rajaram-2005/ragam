@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 39,110 source lines, 25,952 test lines
+### `services/core` — 42,932 source lines, 27,480 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -79,28 +79,29 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
 | `online/accounts.mjs` | 439 | Local Core accounts, scrypt password hashes, lockouts, throttling, owner bootstrap and host-delivered reset codes |
-| `hosted/byok.mjs` | 384 | Stateless Vercel BYOK API: Supabase Auth sessions, per-user AES-GCM provider secrets, strict origin/endpoint checks, explicit request/Search consent, and provider isolation |
-| `online/app.mjs` | 2,090 | Online application with a local single-user security boundary, retained direct-Core account mode, awaitable storage contexts, verified native Klyvaron Pro/Max inference, runtime qualification and manifest endpoints, and exact-model gateway routing |
+| `hosted/byok.mjs` | 386 | Stateless Vercel BYOK API: Supabase Auth sessions, per-user AES-GCM provider secrets, strict origin/endpoint checks, explicit request/Search consent, and provider isolation |
+| `online/app.mjs` | 2,145 | Online application with a local single-user security boundary, retained direct-Core account mode, authenticated deterministic Klyvaron processor routes, awaitable storage contexts, optional model/provider paths and exact-model gateway routing |
 | `online/native-klyvaron.mjs` | 470 | First-party Klyvaron Pro (27,559,946 params) and Klyvaron Max (92,077,066 params) SHA-256 verification, preset-architecture enforcement, startup live inference self-test, and fail-closed selector gating |
-| `online/context-routes.mjs` | 282 | Authenticated context, reviewed read-only tool routes, and owner-managed remote server routes |
-| `online/gateway.mjs` | 262 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
+| `online/context-routes.mjs` | 321 | Authenticated deterministic processor routes, account-scoped retrieval/session context, request-cancellation handling, reviewed read-only tool routes, and owner-managed remote server routes |
+| `online/gateway.mjs` | 259 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
 | `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
 | `online/chat-content.mjs` | 109 | Validates bounded multimodal messages, media signatures, redaction and text-only history placeholders |
 | `providers/industry-operations.mjs` | 40 | Supplies opt-in advisory guidance for text Chat and bounded safety-first additions to manufacturing image/video prompts |
 | `online/http.mjs` | 33 | Bounded streamed JSON requests and no-store responses |
 | `online/klyvaron.mjs` | 87 | Klyvaron product tiers in the online build: resolve a tier to a saved connection and a listed model, refuse an unconfigured tier by name, and name the third-party provider and model as provenance |
-| `online/store.mjs` | 420 | Multi-connection encrypted local store (schema 2): one sealed credential per connection, an active id, a store-wide revision, native first-party model selection persistence, and optional Klyvaron tier presets |
+| `online/store.mjs` | 424 | Multi-connection encrypted local store (schema 3): one sealed credential per connection, an active id, a store-wide revision, native first-party model selection persistence, optional Klyvaron tier presets, and retired-connection migration |
 | `online/remote-servers.mjs` | 299 | Owner-managed MCP Streamable HTTP and Ragam plugin endpoints, encrypted credentials, schema-checked discovery, per-call consent, bounded transport and persisted enable state |
 | `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `klyvaron/format.mjs` | 721 | The Klyvaron artifact format: manifest validation, character and learned Byte-BPE vocabulary digests, differentiator head metadata, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
 | `media/jobs.mjs` | 444 | Job queue, progress, cancellation, timeouts, image/video/audio artifact storage |
-| `klyvaron/runtime.mjs` | 1,045 | First-party `aetheris-core-v1` Transformer inference in plain JavaScript across Lite/Pro/Max: Byte-BPE + character tokenizers, int8 LUT dequantization, incremental KV-cache parity, age/state conditioning, verdict/state heads, and cancellation |
+| `klyvaron/runtime.mjs` | 1,045 | Retained legacy model-artifact inference runtime, separate from the built-in Klyvaron processor |
+| `klyvaron/processor.mjs` | 310 | Model-independent deterministic text tasks, bounded Lite/Pro/Max resource profiles, extractive summaries with source offsets, local retrieval and opt-in persistence |
 | `klyvaron/multimodal-host.mjs` | 677 | First-party multimodal host for Klyvaron Image, Video, and Voice (`pro` & `max`): SHA-256 verification, native Python runtime execution, PNG/MP4/WAV output validation, and runtime qualification |
 | `klyvaron/qualification.mjs` | 257 | Persistent runtime qualification registry keyed by hardware signature, backend, runtime version, model version, and SHA-256 digest with automatic staleness invalidation |
 | `klyvaron/training-worker.mjs` | 700 | Consent-gated local training worker setup and execution manager: hardware/software inspection, stable preflight snapshot with live-resource separation, compute/license/storage/energy pre-consent disclosure, expiry-bound consent, resource re-checks, atomic checkpointing, cancellation, and recovery |
-| `klyvaron/training-controller.mjs` | 1,184 | User-computer-first training & adaptation controller: unpaired fail-closed default, 5-mode resource-aware planner across all 8 models, non-silent downgrade approval gate, 7-field training specification + disclosure consent, 120s interactive deadline vs operator-budgeted foundation pretraining, and hot rollback |
+| `klyvaron/training-controller.mjs` | 1,262 | User-computer-first training & adaptation controller: unpaired fail-closed default, Adaptive planning/evaluation, 5-mode resource-aware planner across all 8 models, non-silent downgrade approval gate, 7-field training specification + disclosure consent, 120s interactive deadline vs operator-budgeted foundation pretraining, and hot rollback |
 | `klyvaron/local-worker.mjs` | 1,191 | Authenticated cross-platform local worker HTTP RPC server: single-use pairing handshake, constant-time Bearer token verification, realpath directory confinement, zero shell execution, and 9 typed local inference/qualification/training operations |
 | `providers/local.mjs` | 329 | Ollama and OpenAI-compatible local providers |
 | `router/registry.mjs` | 356 | Model descriptors, capability matching, candidate scoring, tag exclusions |
@@ -138,11 +139,28 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `skills/evaluation.mjs` | 274 | EVALUATE and DIAGNOSE: an append-only digest-chained verdict log, the incumbent's passing checks as the regression set, and a closed set of diagnoses (regression, regression_not_run, new_failure) so a rejection says which kind it was |
 | `storage/budget.mjs` | 429 | Managed-footprint accounting against the 5 GB mobile limit, integrity checks, regenerable-only cleanup |
 | `knowledge/pipeline-utils.mjs` | 68 | Pure file-validation and token-overlap helpers shared by the local SQLite knowledge pipeline without importing `node:sqlite` |
-| `klyvaron/tiers.mjs` | 1,140 | Separated subscription tiers, 8 first-party Klyvaron model identities (`pro` & `max` across Chat, Image, Video, Voice), programmatic runtime capability readiness (`ready`, `partially_available`, `missing_artifact`, `runtime_unqualified`, `training_required`, `unsupported_hardware`), and separate Pro/Max capability manifests |
+| `klyvaron/tiers.mjs` | 1,160 | Separated subscription tiers, existing research model identities, programmatic runtime capability readiness, separate Pro/Max capability manifests, and the additive licensed-foundation assistant registry in `model-registry.mjs` |
+| `klyvaron/model-registry.mjs` | 430 | Planned Lite/Pro/Max lifecycle with separate production approval, mandatory signed evidence packages, no direct trained/candidate-to-release transition, publication binding, suspension and exact-artifact availability gates |
+| `klyvaron/training-evidence.mjs` | 243 | Canonical training-run and held-out evaluation reports; validates user consent, paired local execution, privacy/resource limits and reproducibility pins; Adaptive alone decides evaluation acceptance, and attestations remain unsigned until an operator signs them |
+| `klyvaron/qualification-evidence.mjs` | 179 | Tier-bound qualification reports require typed cold-start, inference and rollback records for Windows, Linux and macOS plus a digest-checked measured-hardware report; deployment availability must match a qualified target |
+| `klyvaron/qualification-capture.mjs` | 209 | Host-bound capture verifies local artifact bytes, reads OS/hardware facts, executes supplied model/deployment adapters, measures cold-start/inference/rollback and confirms restoration; emits no passing target on failure |
+| `klyvaron/qualification-ceremony.mjs` | 115 | Prepares a canonical unsigned cross-platform signing request and audits externally signed qualification against public-only purpose-scoped trust anchors; never loads or generates a private key |
+| `klyvaron/release-decision.mjs` | 94 | Computes per-tier family ready/partial/blocked decisions from signed lifecycle gates and exact per-platform deployment evidence; never runs the tests it reports |
+| `klyvaron/release/decision-engine.mjs` | 87 | Keeps Lite, Pro and Max production decisions independent and provisional until each exact tier's production evidence and registry binding pass |
+| `klyvaron/release/evidence-schema.mjs` | 361 | Strict production evidence schemas, cross-report identity, artifact digest and required real hardware/deployment/rollback/review checks; rejects synthetic or unknown payload fields |
+| `klyvaron/release/evidence-validator.mjs` | 208 | Loads immutable tier packages without symlinks, checks exact manifest file digests/signatures/expiry and hashes actual external artifact bytes |
+| `klyvaron/release/release-gate.mjs` | 55 | Tier-scoped fail-closed gate; optionally binds evidence to the current production-approved registry record without changing release state |
+| `klyvaron/release/signature-verifier.mjs` | 205 | Revalidates four distinct purpose/role-scoped Ed25519 principals and their signed reports, exact package bytes, artifact verification and supersession state |
+| `klyvaron/platform-measurement-evidence.mjs` | 102 | Canonical metric-bearing cold-start, inference-suite and rollback records bound to the exact model, tier, artifact, hardware, OS, runtime, environment and run |
+| `klyvaron/model-registry-store.mjs` | 118 | Private, atomic durable lifecycle store; preserves state, revalidates production approval/publication on restart, refuses corrupt stages, and exposes only a Core-side transition method |
+| `klyvaron/provenance.mjs` | 217 | Metadata-only pinned foundation/license and dataset-manifest validation; requires explicit rights/privacy reviews and disjoint hashed splits, rejects user-chat and raw-content fields, and does not fetch sources or make legal determinations |
+| `klyvaron/dataset-intake.mjs` | 119 | Composes metadata validation and local byte verification into a fail-closed intake result with unsigned scoped attestation payloads; no network access or source-authenticity claim |
+| `klyvaron/local-provenance.mjs` | 228 | Local-only streaming SHA-256 verification of caller-pinned files; refuses traversal, symlinks and changing files without returning content, but does not authenticate expected digests or reviewers |
+| `klyvaron/evidence-trust.mjs` | 218 | Public-key-only Ed25519 anchors with principal/role scopes, purpose-bound signatures and superseded-manifest refusals; empty by default, with no private-key management or browser mutation route |
 | `klyvaron/plan.mjs` | 187 | The development plan: thirteen per-tier gates derived from the tier records, including the stance, the two differentiators, modality separation and `own_weights`, each open gate with its reason |
 | `klyvaron/trends.mjs` | 186 | Dated, sourced observations that expire and abstain; the mechanism `trend.awareness` is defined against, with no model behind it |
 | `klyvaron/affect.mjs` | 181 | Consent-gated, evidence-cited states from the user's own messages, with abstention and no diagnosis; the mechanism `affect.history` is defined against |
-| `klyvaron/architecture.mjs` | 640 | The family's own models: `aetheris-core-v1` (Lite/Mini/Pro/Max presets), `aetheris-image-v1`, `aetheris-video-v1`, and `aetheris-voice-v1`, the two differentiators as parts of the LM, parameter/memory arithmetic, and per-size recipe evidence |
+| `klyvaron/architecture.mjs` | 623 | Archived model-experiment configurations and resource arithmetic; no current model artifact is released. Active Lite/Pro/Max are processor resource/workflow profiles, not trained models. |
 | `klyvaron/composition.mjs` | 259 | The training-free path this family refused: the eight composition steps, the licence allowlist, and the rules that keep a composed tier from claiming a trained one or from wearing a tier label |
 | `hardware/accelerators.mjs` | 194 | The accelerator registry (CUDA, ROCm, Metal, Vulkan, OpenVINO GPU/NPU, CPU) and the weight plus KV-cache arithmetic that decides whether a model fits |
 | `skills/registry.mjs` | 425 | Skill states and the append-only version history; promotion requires recorded checks that all passed |
@@ -160,6 +178,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `adaptive/episodes.mjs` | 296 | Outcome computed rather than asserted, labelled failure hypotheses, acceptance evaluation, and an append-only JSONL episode log with a digest chain that reports where it broke |
 | `adaptive/wording.mjs` | 673 | Seven interaction states over one verbatim facts block, settings that report when they changed nothing, and a render-time §4 audit that throws instead of emitting |
 | `adaptive/loop.mjs` | 593 | The loop itself: measure, run, verify through a named counterpart, propose a skill from a verified success only, test it, promote it, reuse it, roll back by appending a version |
+| `adaptive/training-orchestrator.mjs` | 123 | Adaptive's training-only planner/evaluator: chooses among explicit methods from user evidence, never starts training, and cannot bypass local pairing, consent, evaluation, or release gates |
 | `adaptive/intent.mjs` | 183 | Capability requirements read from a request with the phrase that produced each; an unmatched request gets a question rather than a default, and emotional signals are read and used for nothing |
 | `adaptive/registry.mjs` | 157 | Which implementations exist for a capability tag and which tags a plan needs that nothing provides; one id with two meanings is refused |
 | `adaptive/plan.mjs` | 171 | Dependency-ordered plans with a digest; a plan longer than its budget or needing an uninstalled capability is refused by name rather than truncated |
@@ -171,7 +190,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `packs/builtin.mjs` | 131 | Three shipped packs — engineering repo maintenance, legal document review (confidential, human review, "reading support, not legal advice"), grounded tutoring — each narrow, and each capability either evidenced by a file in this repository or marked unimplemented |
 | `benchmark/harness.mjs` | 254 | The measured benchmark of the adaptive core: every entry calls the real module, a failed entry is kept in the table with its error and fails the run, and a benchmark that measures nothing is refused rather than reported as zero |
 | `release/manifest.mjs` | 287 | Release verification: one version across `VERSION` and the three packages, a dated changelog entry, documented totals compared against supplied measurements (not against each other), all 8 Pro/Max multimodal cards and run records verified present, and every shipped pack capability evidenced |
-| `providers/catalog.mjs` | 412 | The vendor catalogue: wire format, auth kind, documentation URL and a status per provider. A `ready` entry may only claim capabilities backed by a test in this repository; `gateway_only` may claim none; `pending` is refused by name. Validation is what keeps a credential field unrepresentable |
+| `providers/catalog.mjs` | 435 | The provider catalogue: wire format, auth kind, documentation URL, support status, and a curated `recommended` descriptor for major hosted APIs and selected Local-only runtimes. The label is not a live quality or price check; local runtimes remain available separately. A `ready` entry may only claim capabilities backed by a test in this repository; `gateway_only` may claim none; `pending` is refused by name. Validation is what keeps a credential field unrepresentable |
 | `providers/select.mjs` | 173 | Capability selection with reasons: strict offline refuses a remote request before candidates are considered, an unrecorded context limit does not satisfy a stated minimum, and every rejected candidate is returned with a code rather than silently dropped |
 | `providers/errors.mjs` | 228 | One failure shape for every provider: status→code mapping, retryability decided by code, bounded `Retry-After`, and messages redacted against six credential patterns before they can reach a log |
 | `providers/wires/index.mjs` | 143 | The wire registry: `IMPLEMENTED_WIRES` is derived from it, so a provider cannot be promoted onto a wire nothing implements |
@@ -237,7 +256,7 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 7,240 source lines, 2,419 test lines
+### `apps/web` — 7,821 source lines, 2,483 test lines
 
 Five local-workspace area components, three retained direct-Core account pages, the separate opt-in `HostedByokApp`, a local-first app shell, shared primitives and an API client. The Direct-Core account pages are not used by the standard Docker deployment; the hosted account flow and its security boundary are documented in [30 — Hosted BYOK](30-hosted-byok.md). The Web suite has nine test files. Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).

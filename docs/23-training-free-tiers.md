@@ -1,5 +1,7 @@
 # 23 — The composed tier: a training-free path this family does not take
 
+> **Model archive notice:** model-training, weight, evaluation and release statements below describe historical experiments or plans only. Matching payloads are absent from this checkout; these records do not establish any current model release. Active Klyvaron uses deterministic model-independent processing, with Lite/Pro/Max as resource/workflow profiles.
+
 **Status, stated first.** The technique is implemented and tested. **No tier of this family takes
 it.** Pro and Max were going to be composed — an unmodified, licence-checked third-party base on
 the user's own accelerator — and that was rejected: a composed tier delivers someone else's weights

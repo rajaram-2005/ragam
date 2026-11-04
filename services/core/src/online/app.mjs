@@ -1,10 +1,11 @@
 import { createServer } from 'node:http'
+import { isIP } from 'node:net'
 import { chmodSync, mkdirSync, existsSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { OnlineStore } from './store.mjs'
-import { OnlineGateway, gatewayUrl, failure, runtimeFor } from './gateway.mjs'
+import { OnlineGateway, gatewayUrl, failure, runtimeFor, privateAddress } from './gateway.mjs'
 import { readBody, sendJson } from './http.mjs'
 import { normalizeChatMessages, redactChatMessages, textFromChatContent } from './chat-content.mjs'
 import { MANUFACTURING_MODE, addIndustryInstruction, industryInstructionFor, industryMediaPrompt } from '../providers/industry-operations.mjs'
@@ -28,7 +29,10 @@ import { KLYVARON_TIERS, MODALITIES, KLYVARON_NOTE, tierFor, provenanceFor, reso
 import { NativeKlyvaronHost } from './native-klyvaron.mjs'
 import { NativeMultimodalHost } from '../klyvaron/multimodal-host.mjs'
 import { RuntimeQualificationRegistry, detectHardwareProfile } from '../klyvaron/qualification.mjs'
-import { PRODUCT_SUBSCRIPTION_TIERS } from '../klyvaron/tiers.mjs'
+import { KLYVARON_MODEL_REGISTRY, PRODUCT_SUBSCRIPTION_TIERS } from '../klyvaron/tiers.mjs'
+import { KLYVARON_PROCESSOR_PROFILES, KLYVARON_PROCESSOR_TASKS } from '../klyvaron/processor.mjs'
+import { KlyvaronModelRegistryStore } from '../klyvaron/model-registry-store.mjs'
+import { loadKlyvaronEvidenceTrustStore } from '../klyvaron/evidence-trust.mjs'
 import { LocalTrainingWorkerManager } from '../klyvaron/training-worker.mjs'
 import { UserTrainingController } from '../klyvaron/training-controller.mjs'
 
@@ -129,7 +133,6 @@ function localIdentityFor(dir, accounts) {
  * means is visible in the source and can be checked against the client that calls it.
  */
 export const PROVIDER_ROUTES = Object.freeze({
-  litellm: '/api/providers/litellm',
   ollama: '/api/providers/ollama',
   llamacpp: '/api/providers/llamacpp',
 })
@@ -171,6 +174,37 @@ const DOC_NAME = /^[0-9A-Za-z][0-9A-Za-z._-]*\.md$/
 const MAX_DOC_CHARS = 20_000
 const MAX_MEDIA_PROMPT_INPUT = 4_000
 const MAX_MEDIA_PROMPT_WITH_GUIDANCE = 5_000
+const LOCAL_CHAT_CONNECTIONS = new Set(['ollama', 'llamacpp', 'vllm', 'localai'])
+const LOCAL_IMAGE_CONNECTIONS = new Set(['comfyui'])
+const LOCAL_ENDPOINT_HOSTS = new Set(['localhost', 'host.docker.internal', 'host.containers.internal', 'ollama', 'llamacpp', 'vllm', 'localai', 'comfyui'])
+
+function requestedLocalOnly(body) {
+  if (body?.localOnly !== undefined && typeof body.localOnly !== 'boolean') {
+    throw failure('invalid_local_only_mode', 'Local-only mode must be a boolean.', 400)
+  }
+  return body?.localOnly !== false
+}
+
+function localOnlyAllows(config, modality) {
+  const allowedIds = modality === 'chat' ? LOCAL_CHAT_CONNECTIONS : modality === 'image' ? LOCAL_IMAGE_CONNECTIONS : new Set()
+  if (!allowedIds.has(config?.id)) return false
+  try {
+    const host = new URL(config.baseUrl).hostname.toLowerCase().replace(/^\[|\]$/g, '')
+    const localHost = LOCAL_ENDPOINT_HOSTS.has(host) || host.endsWith('.localhost') || (isIP(host) !== 0 && privateAddress(host))
+    return localHost
+  } catch { return false }
+}
+
+function assertLocalOnlyProvider(body, config, modality) {
+  if (requestedLocalOnly(body) && !localOnlyAllows(config, modality)) {
+    throw failure('local_only_blocked', `Local-only mode blocks remote ${modality} providers. Select verified native Klyvaron or an allowed self-hosted local endpoint, or explicitly turn Local-only off; remote providers may bill.`, 409)
+  }
+}
+
+function gatewayTransport(gateway, localOnly) {
+  const request = gateway.request.bind(gateway)
+  return localOnly ? (config, path, options = {}) => request(config, path, { ...options, localOnly: true }) : request
+}
 
 function requestedIndustryMode(body) {
   const mode = body?.industryMode
@@ -246,6 +280,12 @@ export class OnlineApp {
     if (providerStore && (typeof providerStore.public !== 'function' || typeof providerStore.config !== 'function' || typeof providerStore.flush !== 'function')) {
       throw new TypeError('providerStore must implement the OnlineStore API and durable flush()')
     }
+    this.klyvaronEvidenceTrustStore = loadKlyvaronEvidenceTrustStore(join(this.dir, 'klyvaron', 'evidence-trust.json'))
+    this.modelReleaseRegistry = new KlyvaronModelRegistryStore({
+      filePath: join(this.dir, 'klyvaron', 'model-release-registry.json'),
+      initialRecords: KLYVARON_MODEL_REGISTRY,
+      trustStore: this.klyvaronEvidenceTrustStore,
+    })
     this.gateway = new OnlineGateway({ trustedOrigins, timeoutMs })
     // The video wire polls a long-running operation. Tests shorten the interval; production uses
     // the documented 10-second cadence. This is a timing seam, not a behaviour switch.
@@ -481,10 +521,15 @@ export class OnlineApp {
     const allModalities = [...MODALITIES, 'voice']
     return {
       product: 'klyvaron',
+      modelIndependentProcessor: {
+        engine: 'klyvaron-deterministic-v1', modelRequired: false, weightsRequired: false, networkRequired: false,
+        profiles: KLYVARON_PROCESSOR_PROFILES, tasks: KLYVARON_PROCESSOR_TASKS,
+      },
       independentWeights: nativeSummary.readyCount + mmReadyCount > 0,
       note: KLYVARON_NOTE,
       revision: view.revision,
       productSubscriptionTiers: PRODUCT_SUBSCRIPTION_TIERS,
+      modelReleaseRegistry: this.modelReleaseRegistry.snapshot(),
       firstPartyModels: nativeSummary,
       firstPartyMultimodal: mmStatus,
       capabilityManifests: this.multimodalHost.buildCapabilityManifests({ hardwareCapabilities: workerCaps }),
@@ -741,6 +786,7 @@ export class OnlineApp {
    * Queue one image generation for this account and return immediately.
    */
   async startImage(body, session, requestSignal = null) {
+    const localOnly = requestedLocalOnly(body)
     const industryMode = requestedIndustryMode(body)
     const tier = body.tier === undefined || body.tier === null ? null : body.tier
     if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
@@ -807,6 +853,7 @@ export class OnlineApp {
 
     const resolved = tier === null ? null : resolveTier({ tier, modality: 'image', store: this.store, configFor: (id) => this.store.config(id), wireFor })
     const config = resolved?.config ?? this.imageConnection()
+    if (localOnly) assertLocalOnlyProvider(body, config, 'image')
     const record = this.store.connections.find((connection) => connection.id === config.id)
     const models = record?.models ?? []
     const model = resolved?.model ?? (typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0]))
@@ -831,7 +878,7 @@ export class OnlineApp {
       subject: session.accountId,
       filenameHint: `${config.id}-image`,
       signal: requestSignal,
-      run: ({ signal }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
+      run: ({ signal }) => wire.generate(gatewayTransport(this.gateway, localOnly), config, {
         model, prompt, size, signal,
         poll: this.mediaPoll ?? undefined,
         trustedOrigins: this.gateway.trustedOrigins,
@@ -849,6 +896,7 @@ export class OnlineApp {
   }
 
   async startImageEdit(body, session, requestSignal = null) {
+    requestedLocalOnly(body)
     const industryMode = requestedIndustryMode(body)
     const nativeReady = this.nativeMultimodalModelsFor('image')
     const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-image'
@@ -909,6 +957,7 @@ export class OnlineApp {
   }
 
   async understandImage(body, session) {
+    requestedLocalOnly(body)
     const industryMode = requestedIndustryMode(body)
     const nativeReady = this.nativeMultimodalModelsFor('image')
     const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-image'
@@ -946,6 +995,7 @@ export class OnlineApp {
    * the job record and nothing else; polling, cancellation and the restart rule live in the queue.
    */
   async startVideo(body, session, requestSignal = null) {
+    const localOnly = requestedLocalOnly(body)
     const industryMode = requestedIndustryMode(body)
     const tier = body.tier === undefined || body.tier === null ? null : body.tier
     if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
@@ -1030,6 +1080,7 @@ export class OnlineApp {
 
     const resolved = tier === null ? null : resolveTier({ tier, modality: 'video', store: this.store, configFor: (id) => this.store.config(id), wireFor })
     const config = resolved?.config ?? this.videoConnection()
+    if (localOnly) assertLocalOnlyProvider(body, config, 'video')
     const record = this.store.connections.find((connection) => connection.id === config.id)
     const models = record?.models ?? []
     const model = resolved?.model ?? (typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0]))
@@ -1061,7 +1112,7 @@ export class OnlineApp {
       subject: session.accountId,
       filenameHint: `${config.id}-video`,
       signal: requestSignal,
-      run: ({ signal, progress }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
+      run: ({ signal, progress }) => wire.generate(gatewayTransport(this.gateway, localOnly), config, {
         model,
         prompt,
         aspectRatio,
@@ -1076,6 +1127,7 @@ export class OnlineApp {
     return job
   }
   async understandVideo(body, session) {
+    requestedLocalOnly(body)
     const industryMode = requestedIndustryMode(body)
     const nativeReady = this.nativeMultimodalModelsFor('video')
     const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-video'
@@ -1157,7 +1209,7 @@ export class OnlineApp {
     return this.multimodalHost.transcribeSpeech({ modelId: rec.id, audioBuffer: sourceBytes })
   }
 
-  async configure(body, { session, kind = 'litellm' } = {}) {
+  async configure(body, { session, kind } = {}) {
     const runtime = runtimeFor(kind)
     if (typeof body.baseUrl !== 'string') throw failure('invalid_endpoint', 'A gateway URL is required.')
     const baseUrl = gatewayUrl(body.baseUrl, this.gateway.trustedOrigins)
@@ -1229,6 +1281,7 @@ export class OnlineApp {
   async performChat(body, { signal, emit, session } = {}) {
     if (!session?.accountId) throw failure('unauthenticated', 'Sign in to this Aetheris installation.', 401)
     if (body.executionMode && body.executionMode !== 'online') throw failure('online_only', 'Local and hybrid inference are not available.', 400)
+    const localOnly = requestedLocalOnly(body)
     if (body.industryMode !== undefined && body.industryMode !== null && body.industryMode !== false
       && body.industryMode !== '' && body.industryMode !== MANUFACTURING_MODE) {
       throw failure('invalid_industry_mode', 'Choose a supported industry mode.', 400)
@@ -1413,6 +1466,7 @@ export class OnlineApp {
     const model = resolved?.model ?? (body.model || state.selectedModel)
     const modelSource = resolved ? (this.store.connections.find((connection) => connection.id === config.id)?.models ?? []) : state.models
     if (!modelSource.includes(model)) throw failure('model_unavailable', 'Choose a listed model. This request will not switch to another model.', 409)
+    if (localOnly) assertLocalOnlyProvider(body, config, 'chat')
     if (body.authorization?.providerRevision !== revision || body.authorization?.confirmed !== true) throw failure('consent_required', 'Confirm sending this request to the current gateway.', 403)
     if (resolved && body.authorization?.providerId && body.authorization.providerId !== config.id) throw failure('consent_provider_mismatch', 'The request is authorized for a different provider than this tier uses.', 409)
     const incoming = body.messages ?? [{ role: 'user', content: body.prompt }]
@@ -1474,7 +1528,7 @@ export class OnlineApp {
     const nativeSearch = body.nativeSearch === true
     if (nativeSearch && body.authorization?.nativeSearchConfirmed !== true) throw failure('search_consent_required', 'Explicitly approve provider-native search for this request.', 403)
     if (nativeSearch && wire.chatNativeSearch !== true) throw failure('capability_unavailable', `${config.label ?? config.id} does not expose provider-native search through this Chat wire. No fallback is performed.`, 409)
-    const result = await wire.chat(this.gateway.request.bind(this.gateway), config, {
+    const result = await wire.chat(gatewayTransport(this.gateway, localOnly), config, {
       model,
       messages: redacted.value,
       maxTokens,
@@ -1722,6 +1776,7 @@ export class OnlineApp {
           return sendJson(res, 200, {
             ...baseSummary,
             multimodal: this.multimodalHost.status(),
+            modelReleaseRegistry: this.modelReleaseRegistry.snapshot(),
             localWorkerConnected: this.trainingController.isLocalWorkerConnected(),
             models: baseSummary.models.map((m) => ({
               ...m,
@@ -1929,7 +1984,7 @@ export class OnlineApp {
           return sendJson(res, 200, this.clearKlyvaronPreset(tierModalityMatch[1], tierModalityMatch[2]))
         }
         // One route per connection, so the connection a request means is in the URL and never
-        // guessed from the body. The three runtimes keep their literal paths; any other catalogue
+        // guessed from the body. The two built-in local runtimes keep their literal paths; any other catalogue
         // provider or named custom endpoint uses the same shape under its own id.
         const connectionMatch = PROVIDER_CONNECTION.exec(path)
         const connectionId = connectionMatch?.[1] === 'catalog' || connectionMatch?.[1] === 'active' ? null : (connectionMatch?.[1] ?? null)

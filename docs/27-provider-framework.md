@@ -1,5 +1,7 @@
 # 27 — Universal provider framework: audit, catalogue, and what is actually reachable
 
+> **Model archive notice:** model-training, weight, evaluation and release statements below describe historical experiments or plans only. Matching payloads are absent from this checkout; these records do not establish any current model release. Active Klyvaron uses deterministic model-independent processing, with Lite/Pro/Max as resource/workflow profiles.
+
 The master directive of 2026-10-17 asks for a universal provider architecture, a real Image and
 Video pipeline, first-party Klyvaron integrations, memory and skills, adaptation, emotional
 intelligence and Plugins/MCP — twelve phases, each independently testable. This page records the
@@ -66,7 +68,7 @@ What exists, read rather than assumed:
 | Provider registry with capability metadata | **implemented and tested** | `providers/catalog.mjs`, `test/provider-framework.test.mjs` |
 | Capability-based routing with explainable refusals | **implemented and tested** | `providers/select.mjs` |
 | Error normalisation, retry classification, redaction | **implemented and tested** | `providers/errors.mjs` |
-| Provider setup UI (credentials, test, model list) | implemented for the three runtimes, every `ready` catalogue wire, and custom endpoints; each wire publishes its own endpoint hint and controls | `ProviderSettings.jsx`, `test/online.test.mjs`, `test/online-wires.test.mjs`, `test/online-media-wires.test.mjs` |
+| Provider setup UI (credentials, test, model list) | implemented for the two built-in local runtimes, every `ready` catalogue wire, and custom endpoints; each wire publishes its own endpoint hint and controls | `ProviderSettings.jsx`, `test/online.test.mjs`, `test/online-wires.test.mjs`, `test/online-media-wires.test.mjs` |
 | Capability matrix in the UI | **implemented and tested (read-only)** | `ProviderCatalogue.jsx`, `test/render.test.mjs` |
 | Catalog API | **implemented and tested** | `GET /api/providers/catalog` |
 | Direct per-vendor adapters | **implemented and contract-tested for twenty-two individually adapted Chat providers, six other native chat wires, nine cloud image wires, ComfyUI and five video wires**; no vendor called live | `providers/wires/*.mjs`, `test/provider-adapters.test.mjs`, `test/online-wires.test.mjs`, `test/online-media-wires.test.mjs`; ComfyUI now has a direct, fixture-tested local image adapter; Diffusers remains `pending` until a concrete local service is selected |
@@ -99,7 +101,7 @@ and a status:
 
 | Status | Meaning | What it may claim |
 |---|---|---|
-| `ready` | a tested code path reaches it (the three runtimes against a local server; every native chat, image and video wire against a contract fixture) | capabilities whose evidence is a test in this repository |
+| `ready` | a tested code path reaches it (the two built-in local runtimes against a local server; every native chat, image and video wire against a contract fixture) | capabilities whose evidence is a test in this repository |
 | `gateway_only` | legacy status for these twenty-two provider-specific Chat adapters; see `integrationType`, `adapterStatus`, and `liveVerification` | no provider-level capability claim; model-level metadata is retained separately and is unknown when absent |
 | `pending` | it needs a wire adapter this build does not have | nothing; it is refused by selection |
 
@@ -127,7 +129,7 @@ read-only matrix with three sentences and no controls.
 
 ## 4. Provider matrix
 
-**24 ready, 22 individually adapted Chat providers (contract tested; live verification pending), 1 pending**
+**23 ready, 22 individually adapted Chat providers (contract tested; live verification pending), 1 pending**
 
 `gateway_only` in the legacy status field means the provider is selectable through a tested adapter,
 but not live-qualified. The separate `integrationType` column distinguishes native vendor API,
@@ -140,7 +142,6 @@ send Bearer. Its model list is deployment-specific and live verification has not
 
 | Provider | Status | Integration type | Wire | Auth | Adapter status | Live verification | Capabilities evidenced | Documentation |
 |---|---|---|---|---|---|---|---|---|
-| `litellm` — LiteLLM gateway | ready | — | openai_chat | bearer | contract_tested | not_performed | streaming:test<br>cancellation:test | [docs](https://docs.litellm.ai/docs/providers) |
 | `ollama` — Ollama (OpenAI-compatible) | ready | — | openai_chat | bearer | contract_tested | not_performed | streaming:test<br>cancellation:test | [docs](https://github.com/ollama/ollama/blob/main/docs/openai.md) |
 | `llamacpp` — llama.cpp server | ready | — | openai_chat | bearer | contract_tested | not_performed | streaming:test<br>cancellation:test | [docs](https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md) |
 | `anthropic` — Anthropic Claude | ready | — | anthropic_messages | x_api_key | contract_tested | not_performed | streaming:test | [docs](https://docs.anthropic.com/en/api/messages) |
@@ -228,7 +229,7 @@ not live tests**. No live vendor call was made; the sandbox has no authorized ve
 provider hosts are outside its network allowlist.
 
 `ready` for the native adapters (six chat shapes, ten image shapes and five video shapes) means the
-same thing it means for the three runtimes: a code path this repository exercises against a fixture.
+same thing it means for the two built-in local runtimes: a code path this repository exercises against a fixture.
 It does **not** mean the vendor was called. The nine cloud image adapters, the local ComfyUI adapter and five video adapters are contract-tested
 in `test/online-media-wires.test.mjs`, which also drives the Image and Video routes through a local
 vendor fixture; no vendor host has been contacted. Their request shapes are not interchangeable — auth
@@ -416,16 +417,17 @@ Routes (all session-gated; mutations owner-only, CSRF-checked, origin-checked):
 | `DELETE /api/providers/<id>` | Remove **that** connection |
 | `PUT /api/providers/active` | Switch the active id without rewriting credentials |
 
-A route names one connection; it cannot act on a different one. `POST /api/providers/litellm/test`
+A route names one connection; it cannot act on a different one. `POST /api/providers/openai/test`
 against a store that only holds `ollama` is `404 provider_not_found` and contacts nothing — one key
-is never spent on another vendor's endpoint. `PUT /api/providers/not-a-provider` is
-`400 invalid_runtime`; a real catalogue id whose adapter is `pending` is `400 adapter_pending`. The
-three built-in runtimes (LiteLLM, Ollama, llama.cpp) keep their existing routes and semantics.
+is never spent on another vendor's endpoint. `PUT /api/providers/litellm` is `400 invalid_runtime`;
+LiteLLM was removed and is no longer a supported connection. A real catalogue id whose adapter is
+`pending` is `400 adapter_pending`. The two built-in local Chat runtimes (Ollama and llama.cpp)
+keep their existing routes and semantics.
 
 ## 9. Known limitations of this increment
 
 - **No live provider call was made.** "Implemented, awaiting live credentials" is the ceiling for
-  every vendor outside the three tested runtimes and the eight contract-tested native adapters.
+  every vendor outside the two built-in local runtimes and the eight contract-tested native adapters.
 - **Eight native adapters exist, and none has been called live.** Anthropic Messages, Gemini
   generateContent, Cohere Chat v2, Azure OpenAI v1, Vertex AI, Bedrock Converse, OpenAI Images, Gemini Images and
   Google Veo are contract-tested against local fixtures that return the published response shapes. A key that is

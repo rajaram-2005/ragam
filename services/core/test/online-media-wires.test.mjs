@@ -456,10 +456,11 @@ test('the Image and Video areas route to the configured wire, not a hard-coded v
   const server = app.server()
   const url = await listen(server)
   const request = async (method, path, body) => {
+    const payload = body !== undefined ? { localOnly: false, ...body } : body
     const response = await fetch(url + path, {
       method,
-      headers: { cookie, ...(body !== undefined ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}) },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      headers: { cookie, ...(payload !== undefined ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}) },
+      ...(payload !== undefined ? { body: JSON.stringify(payload) } : {}),
     })
     const buffer = Buffer.from(await response.arrayBuffer())
     let data
@@ -534,7 +535,7 @@ test('the Image and Video areas route to the configured wire, not a hard-coded v
   assert.equal(comfyReady.data.media.image.wire, 'comfyui_images')
   assert.ok(comfyReady.data.media.image.sizes.includes('768x512'))
   const comfyImage = await request('POST', '/api/image/generate', {
-    prompt: 'a small blue paper kite', model: 'sdxl-base.safetensors', size: '768x512',
+    prompt: 'a small blue paper kite', model: 'sdxl-base.safetensors', size: '768x512', localOnly: true,
   })
   assert.equal(comfyImage.status, 202, JSON.stringify(comfyImage.data))
   const comfyJob = await wait('image', comfyImage.data.id)

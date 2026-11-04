@@ -1,10 +1,11 @@
 # Model card — Aetheris Lite Retriever 0.1.0
 
+> **Archive notice:** this record is not release evidence. No matching weight payload is present in the current checkout; the active Klyvaron processor uses no model weights.
 | | |
 |---|---|
 | **Identifier** | `aetheris-lite-retriever@0.1.0` |
 | **Family** | `aetheris-lite-dual-encoder` |
-| **Status** | `released` |
+| **Status** | `not_released` — archived metadata; payload absent from current checkout |
 | **Licence** | MIT |
 | **Parameters** | 18,784 |
 | **Base checkpoint** | none — trained from scratch |

@@ -17,16 +17,15 @@ import { wireFor } from '../providers/wires/index.mjs'
 // connections are not multiple concurrent recipients — a request goes to the active one, and the
 // UI says which.
 //
-// Schema 2 is `{ schema, revision, active, connections: { [id]: record }, klyvaron }`. `klyvaron`
+// Schema 3 is `{ schema, revision, active, connections: { [id]: record }, klyvaron }`. `klyvaron`
 // holds optional product-tier presets (tier -> modality -> { connectionId, model }); it is
 // additive, so a schema-2 file written before the field existed loads with no presets rather than
 // failing. A schema-1 file was a
-// single record `{ kind, baseUrl, key, models, selectedModel, verified, revision }`; it migrates to
-// one connection whose id is its kind, and the migration is tested rather than assumed, because
-// losing a stored key to a schema change is exactly the kind of failure that only shows up when
-// somebody tries to chat.
+// single record `{ kind, baseUrl, key, models, selectedModel, verified, revision }`; supported
+// connection ids migrate to schema 3. The removed `litellm` id and its tier presets are discarded,
+// including their sealed credentials, rather than being silently carried forward.
 
-export const STORE_SCHEMA = 2
+export const STORE_SCHEMA = 3
 
 /** Ids a connection may carry: a catalogue provider, or a named custom OpenAI-compatible endpoint. */
 export const CONNECTION_ID = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*)$/
@@ -48,7 +47,7 @@ function normaliseKlyvaron(raw) {
     for (const modality of KLYVARON_MODALITIES) {
       const preset = entry[modality]
       if (preset && typeof preset === 'object'
-        && typeof preset.connectionId === 'string' && CONNECTION_ID.test(preset.connectionId)
+        && typeof preset.connectionId === 'string' && preset.connectionId !== 'litellm' && CONNECTION_ID.test(preset.connectionId)
         && typeof preset.model === 'string' && preset.model.length > 0 && preset.model.length <= 200) {
         presets[modality] = { connectionId: preset.connectionId, model: preset.model }
       }
@@ -62,7 +61,8 @@ function normaliseKlyvaron(raw) {
 }
 
 /**
- * Migrate whatever was on disk into schema 2.
+ * Migrate whatever was on disk into schema 3. LiteLLM records and tier presets are deliberately
+ * discarded: that provider is no longer supported, and its stored credential must not remain usable.
  *
  * Exported so the test can feed it a schema-1 record without writing a file first — and so the
  * migration has one implementation rather than one per caller.
@@ -77,24 +77,25 @@ export function migrateState(raw) {
   if (Number.isInteger(raw.schema) && raw.schema > STORE_SCHEMA) {
     throw failure('store_schema_unsupported', `The provider store uses schema ${raw.schema}; this build understands ${STORE_SCHEMA}.`, 500)
   }
-  if (raw.schema === STORE_SCHEMA && raw.connections && typeof raw.connections === 'object') {
+  if ((raw.schema === 2 || raw.schema === STORE_SCHEMA) && raw.connections && typeof raw.connections === 'object') {
     // Only ids the store itself could have written are loaded. That also keeps a key named
     // `__proto__` in the file from reaching an assignment, where it would set a prototype.
     const connections = {}
     for (const [id, record] of Object.entries(raw.connections)) {
-      if (CONNECTION_ID.test(id)) connections[id] = normaliseRecord(id, record)
+      if (id !== 'litellm' && CONNECTION_ID.test(id)) connections[id] = normaliseRecord(id, record)
     }
     const active = typeof raw.active === 'string' && Object.hasOwn(connections, raw.active)
       ? raw.active : (Object.keys(connections)[0] ?? null)
     return { schema: STORE_SCHEMA, revision: Number.isInteger(raw.revision) ? raw.revision : 0, active, connections, klyvaron: normaliseKlyvaron(raw.klyvaron) }
   }
   // Schema 1: one connection, whose id was its `kind`.
-  const kind = typeof raw.kind === 'string' && CONNECTION_ID.test(raw.kind) ? raw.kind : 'litellm'
+  const legacyKind = typeof raw.kind === 'string' && CONNECTION_ID.test(raw.kind) ? raw.kind : null
+  const kind = legacyKind === 'litellm' ? null : legacyKind
   return {
     schema: STORE_SCHEMA,
     revision: Number.isInteger(raw.revision) ? raw.revision : 0,
     active: kind,
-    connections: { [kind]: normaliseRecord(kind, raw) },
+    connections: kind ? { [kind]: normaliseRecord(kind, raw) } : {},
     klyvaron: normaliseKlyvaron(raw.klyvaron),
   }
 }
@@ -125,7 +126,10 @@ export class OnlineStore {
     this.data = migrateState(raw)
     // A migrated file is written back immediately, so a later read never has to infer the schema
     // from a record that happens to look like both.
-    if (raw !== null && raw.schema !== STORE_SCHEMA) this.#persist()
+    const hasLegacyLiteConnection = Object.hasOwn(raw?.connections ?? {}, 'litellm') || raw?.kind === 'litellm' || raw?.active === 'litellm'
+    const hasLegacyLitePreset = Object.values(raw?.klyvaron?.tiers ?? {}).some((tier) =>
+      Object.values(tier ?? {}).some((preset) => preset?.connectionId === 'litellm'))
+    if (raw !== null && (raw.schema !== STORE_SCHEMA || hasLegacyLiteConnection || hasLegacyLitePreset)) this.#persist()
     if (existsSync(this.file)) chmodSync(this.file, 0o600)
   }
 

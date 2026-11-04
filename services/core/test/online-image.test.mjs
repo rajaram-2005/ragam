@@ -63,13 +63,14 @@ async function fixture(t) {
   }
   await boot()
   f.request = async (method, path, body, options = {}) => {
+    const payload = body !== undefined && !options.preserveDefaultLocalOnly ? { localOnly: false, ...body } : body
     const response = await fetch(f.url + path, {
       method,
       headers: {
         cookie: options.cookie ?? f.cookie ?? '',
-        ...(body !== undefined ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}),
+        ...(payload !== undefined ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}),
       },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      ...(payload !== undefined ? { body: JSON.stringify(payload) } : {}),
     })
     const buffer = Buffer.from(await response.arrayBuffer())
     let data
@@ -175,6 +176,14 @@ test('the image area generates, validates, stores and serves a real image', asyn
 test('manufacturing image mode is appended to supported generation prompts and records exact user and sent text', async (t) => {
   const f = await fixture(t)
   await f.configure()
+  const remoteCalls = f.calls.length
+  const defaultBlocked = await f.request('POST', '/api/image/generate', { prompt: 'default mode', model: 'gpt-image-1' }, { preserveDefaultLocalOnly: true })
+  assert.equal(defaultBlocked.status, 409, JSON.stringify(defaultBlocked.data))
+  assert.equal(defaultBlocked.data.error, 'local_only_blocked', 'omitting the flag defaults to Local-only')
+  const blocked = await f.request('POST', '/api/image/generate', { prompt: 'must not leave the host', model: 'gpt-image-1', localOnly: true })
+  assert.equal(blocked.status, 409, JSON.stringify(blocked.data))
+  assert.equal(blocked.data.error, 'local_only_blocked')
+  assert.equal(f.calls.length, remoteCalls, 'Local-only blocks the vendor before inference')
   const created = await f.request('POST', '/api/image/generate', { prompt: 'illustrate a maintenance toolbox', model: 'gpt-image-1', industryMode: 'manufacturing' })
   assert.equal(created.status, 202, JSON.stringify(created.data))
   const job = await f.waitFor(created.data.id)
@@ -198,7 +207,7 @@ test('native Klyvaron image prompts receive the same opt-in guidance without a g
     appliedPrompt = prompt
     return { buffer: PNG_BYTES, mimeType: 'image/png', measured: { width: 1, height: 1 }, latencyMs: 1, weightsSha256: 'a'.repeat(64) }
   }
-  const created = await f.request('POST', '/api/image/generate', { prompt: 'show a maintenance cart', model: 'klyvaron-pro-image', industryMode: 'manufacturing' })
+  const created = await f.request('POST', '/api/image/generate', { prompt: 'show a maintenance cart', model: 'klyvaron-pro-image', industryMode: 'manufacturing', localOnly: true })
   assert.equal(created.status, 202, JSON.stringify(created.data))
   const job = await f.waitFor(created.data.id)
   assert.equal(job.state, JOB_STATES.SUCCEEDED, JSON.stringify(job))

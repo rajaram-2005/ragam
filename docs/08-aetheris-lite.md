@@ -1,7 +1,6 @@
-# 08 — Aetheris Lite: a language model trained here, from nothing
+# 08 — Archived Aetheris Lite language-model experiment
 
-**Status: implemented, trained, evaluated, and released through the same gate as any
-other model card — with its limitations stated on the card rather than in a footnote.**
+> **Archive notice:** this is a historical experiment report, not a current product or release claim. The matching weight payload is not present in the current checkout. No Klyvaron model release is established by this document. The active Klyvaron path is deterministic, model-independent processing; user-authorized knowledge and memory are data, not training.
 
 ---
 
@@ -37,15 +36,14 @@ noticing that the blocker applied to a path we did not have to take.
 |---|---|
 | Architecture | decoder-only transformer, pre-LayerNorm, 3 blocks, 4 heads, `d_model` 96, `d_ff` 384 |
 | Parameter count | **359,616** (recorded on the card; the exact figure moves with the vocabulary) |
-| Released version | `aetheris-lite-lm@0.1.1` — supersedes `@0.1.0`, which is kept as a published record (§6) |
+| Archived metadata version | `aetheris-lite-lm@0.1.1` — supersedes the earlier historical metadata record (§6); neither record is release evidence |
 | Tokenisation | character-level, vocabulary fitted on the **training split only** |
 | Context | 128 characters, sliding non-overlapping evaluation windows |
 | Implementation | `services/fabric/fabric/lm/`, pure NumPy, no PyTorch, no GPU |
 | Licence | MIT (first-party weights). No third-party weights are involved. |
 | Base checkpoint | **none** — trained from random initialisation |
 
-Nothing above is state of the art, and none of it is presented as such. It is a real
-model: real weights, real forward pass, real gradients, real generation.
+Nothing above is state of the art. These details are retained historical experiment metadata; the payload is absent here, so the report does not establish a currently usable model, assistant capability, or release.
 
 ---
 
@@ -94,7 +92,7 @@ Preference Optimization → Distillation → Evaluation → Release`. What is re
 | Preference optimization | **Not implemented** | Needs preference data, a reward signal and compute that this host does not have |
 | Distillation | **Planned, not implemented** | The trainer accepts any token stream, so a teacher-generated corpus is a second data source rather than a rewrite. Requires an authenticated provider. |
 | Evaluation | **Implemented** | Held-out perplexity against three computed baselines — see §6 |
-| Release | **Implemented** | `fabric/lm/card.py` drives the existing `ModelReleaseManager`: register → validate → release, with rollback |
+| Release | **Legacy tooling only** | The old `ModelReleaseManager` experiment path is retained, but its records and missing payload do not establish a current production release |
 
 A stage marked *not implemented* is not simulated. There is no placeholder SFT stage
 that returns a plausible number.

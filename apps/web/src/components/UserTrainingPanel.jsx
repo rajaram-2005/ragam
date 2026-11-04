@@ -8,7 +8,7 @@ const MODE_LABELS = Object.freeze([
   ['memory_or_retrieval', 'Authorized memory / retrieval update (preferred for single corrections)'],
   ['lightweight_adapter', 'Lightweight LoRA adapter (max 120s including setup & finalization)'],
   ['full_fine_tune', 'Full-model checkpoint fine-tuning'],
-  ['foundation_pretrain', 'Foundation-model pretraining (separate session, not 120s-capped)'],
+  ['foundation_pretrain', 'Native Klyvaron corpus training (not open-foundation fine-tuning; separately budgeted)'],
 ])
 
 export default function UserTrainingPanel({ readiness, refreshReadiness, initialStatus = null, initialPlan = null, initialJob = null }) {
@@ -128,6 +128,9 @@ export default function UserTrainingPanel({ readiness, refreshReadiness, initial
   return (
     <Panel title="User-computer local worker & explicit learning">
       <p className="small">
+        Adaptive is the sole planning and evaluation skill: it recommends a safe mode, checks resources and held-out validation, then records outcomes. SFT/LoRA/fine-tuning are explicit weight-update methods; only the authenticated, paired worker on your computer can run them. No private chats are auto-ingested or routed to cloud training. Current workers adapt installed native Klyvaron checkpoints; licensed open-foundation fine-tuning is not yet implemented or advertised as available.
+      </p>
+      <p className="small">
         {connected
           ? `Connected to authenticated local worker ${status.worker.workerId} (${caps?.platform}/${caps?.arch}, ${caps?.cpu?.logicalCores} CPU cores, ${Math.round((caps?.memory?.availableRamBytes ?? 0) / 1e6)} MB available RAM, GPU: ${caps?.gpu?.available ? 'yes' : 'none'}).`
           : 'No local worker is paired. Your computer is not connected, and RAGAM never runs neural weight training silently from ordinary chat messages or on an unauthenticated host.'}
@@ -192,6 +195,9 @@ export default function UserTrainingPanel({ readiness, refreshReadiness, initial
       {plan ? (
         <div style={{ marginTop: 8 }}>
           <p className="small">
+            Adaptive plan ({plan.spec.adaptiveDecision?.selection ?? 'legacy'}): <strong>{plan.spec.adaptiveDecision?.rationale ?? plan.spec.recommendationReason}</strong>
+          </p>
+          <p className="small">
             Selected mode: <strong>{plan.spec.selectedMode}</strong> · Backend: <strong>{plan.spec.resourceEstimate?.selectedBackend ?? 'pending'}</strong> ·
             Required RAM: {Math.round((plan.spec.resourceEstimate?.requiredRamBytes ?? plan.spec.resourceEstimate?.estimatedRamBytes ?? 0) / 1e6)} MB ·
             Stopping ceiling: {plan.spec.stoppingCriteria?.maxDurationMs ? `${Math.round(plan.spec.stoppingCriteria.maxDurationMs / 1000)}s` : 'uncapped (foundation session)'} ·
@@ -225,10 +231,19 @@ export default function UserTrainingPanel({ readiness, refreshReadiness, initial
       </div>
 
       {activeJob ? (
-        <p className="small" style={{ marginTop: 8 }}>
-          Job {activeJob.jobId} · state: <strong>{activeJob.state}</strong>
-          {activeJob.workerJob?.progress ? ` · step ${activeJob.workerJob.progress.step}/${activeJob.workerJob.progress.totalSteps}` : ''}
-        </p>
+        <>
+          <p className="small" style={{ marginTop: 8 }}>
+            Job {activeJob.jobId} · state: <strong>{activeJob.state}</strong>
+            {activeJob.workerJob?.progress ? ` · step ${activeJob.workerJob.progress.step}/${activeJob.workerJob.progress.totalSteps}` : ''}
+          </p>
+          {activeJob.adaptiveEvaluation ? (
+            <p className="small">
+              Adaptive evaluation: <strong>{activeJob.adaptiveEvaluation.passed ? 'passed' : 'failed'}</strong>
+              {' · '}{Object.entries(activeJob.adaptiveEvaluation.checks ?? {}).map(([name, ok]) => `${name}=${ok ? 'yes' : 'no'}`).join(' · ')}
+              {' · '}{activeJob.adaptiveEvaluation.note}
+            </p>
+          ) : null}
+        </>
       ) : null}
 
       {Object.keys(gatesByModel).length ? (

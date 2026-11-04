@@ -109,13 +109,14 @@ async function fixture(t) {
   }
   await boot()
   f.request = async (method, path, body, options = {}) => {
+    const payload = body !== undefined && !options.preserveDefaultLocalOnly ? { localOnly: false, ...body } : body
     const response = await fetch(f.url + path, {
       method,
       headers: {
         cookie: f.cookie ?? '',
-        ...(body !== undefined ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}),
+        ...(payload !== undefined ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}),
       },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      ...(payload !== undefined ? { body: JSON.stringify(payload) } : {}),
     })
     const buffer = Buffer.from(await response.arrayBuffer())
     let data
@@ -224,6 +225,14 @@ test('the video area renders the completed job and serves the stored MP4', async
 test('manufacturing video mode adds advisory guidance to the selected provider prompt', async (t) => {
   const f = await fixture(t)
   await f.configure()
+  const remoteCalls = f.calls.length
+  const defaultBlocked = await f.request('POST', '/api/video/generate', { prompt: 'default mode', model: 'veo-3.1-generate-preview' }, { preserveDefaultLocalOnly: true })
+  assert.equal(defaultBlocked.status, 409, JSON.stringify(defaultBlocked.data))
+  assert.equal(defaultBlocked.data.error, 'local_only_blocked', 'omitting the flag defaults to Local-only')
+  const blocked = await f.request('POST', '/api/video/generate', { prompt: 'must not leave the host', model: 'veo-3.1-generate-preview', localOnly: true })
+  assert.equal(blocked.status, 409, JSON.stringify(blocked.data))
+  assert.equal(blocked.data.error, 'local_only_blocked')
+  assert.equal(f.calls.length, remoteCalls, 'Local-only blocks the remote video provider before inference')
   const created = await f.request('POST', '/api/video/generate', { prompt: 'a technician inspects a pump', model: 'veo-3.1-generate-preview', industryMode: 'manufacturing' })
   assert.equal(created.status, 202, JSON.stringify(created.data))
   const job = await f.waitFor(created.data.id)
@@ -247,7 +256,7 @@ test('native Klyvaron video prompts receive opt-in guidance without a remote pro
     appliedPrompt = prompt
     return { buffer: MP4, mimeType: 'video/mp4', fps: 24, frameCount: 96, durationSeconds: 4, motionEnergy: 0.1, predictedMotion: 'steady', predictedEnvironment: 'indoor', latencyMs: 1 }
   }
-  const created = await f.request('POST', '/api/video/generate', { prompt: 'show a safe inspection', model: 'klyvaron-pro-video', industryMode: 'manufacturing' })
+  const created = await f.request('POST', '/api/video/generate', { prompt: 'show a safe inspection', model: 'klyvaron-pro-video', industryMode: 'manufacturing', localOnly: true })
   assert.equal(created.status, 202, JSON.stringify(created.data))
   const job = await f.waitFor(created.data.id)
   assert.equal(job.state, JOB_STATES.SUCCEEDED, JSON.stringify(job))

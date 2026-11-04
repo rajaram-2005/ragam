@@ -1,5 +1,7 @@
 # 06 — Benchmarks
 
+> **Model archive notice:** model-training, weight, evaluation and release statements below describe historical experiments or plans only. Matching payloads are absent from this checkout; these records do not establish any current model release. Active Klyvaron uses deterministic model-independent processing, with Lite/Pro/Max as resource/workflow profiles.
+
 What was measured, against what, under which conditions, and — equally important —
 **what could not be measured**.
 
@@ -26,11 +28,21 @@ them is made or implied. See [`08-aetheris-lite.md`](./08-aetheris-lite.md).
 > no claim of superiority over them is made or implied anywhere in this
 > repository.**
 
-None of those models could be installed: `huggingface.co` is unreachable from this
-host and there is no GPU. The comparison that *was* possible is a retrieval
-comparison against **BM25**, a strong, well-understood, dependency-free baseline
-running on identical hardware with an identical tokeniser and an identical corpus.
-That is a legitimate like-for-like comparison, and it is the only one presented.
+None of those models could be installed during the recorded benchmark. The
+comparison that *was* possible is a retrieval comparison against **BM25**, a
+strong, well-understood, dependency-free baseline running on identical hardware
+with an identical tokeniser and an identical corpus. That is a legitimate
+like-for-like comparison, and it is the only one presented.
+
+**Phase 11 availability recheck (2026-11-04):** a scan of this repository found no
+candidate-model weight files; `ollama`, `llama-server`, `llama-cli` and
+`nvidia-smi` are absent, and PyTorch is not installed. This describes the current
+sandbox only; it is not a claim that every model source is unreachable. No
+Mistral/Qwen/Llama/Gemma/DeepSeek run was performed in this increment, so Phase 11
+remains partial. A competitive run still requires legally obtained, revision-pinned
+weights, an identified comparable runtime, a fixed shared workload, and preserved
+per-model measurements on the same hardware. Do not infer or publish a comparative
+result before that run exists.
 
 Anything resembling "Aetheris beats open model X" would require: the same task, the
 same prompts, the same quantization budget, compatible hardware, and separated

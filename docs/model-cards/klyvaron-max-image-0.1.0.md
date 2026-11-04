@@ -1,12 +1,13 @@
 # Model card — klyvaron-max-image 0.1.0
 
+> **Archive notice:** this record is not release evidence. No matching weight payload is present in the current checkout; the active Klyvaron processor uses no model weights.
 | | |
 |---|---|
 | **Identifier** | `klyvaron-max-image@0.1.0` |
 | **Family** | `klyvaron-max` |
 | **Modality** | `image` |
 | **Architecture** | `aetheris-image-v1` (`13,662,960` parameters) |
-| **Status** | `released` (`0` hard failures) |
+| **Status** | `not_released` — archived metadata; payload absent from current checkout |
 | **Licence** | MIT — trained from random initialisation (`baseCheckpoint: null`) |
 | **Weights SHA-256** | `69a26b9be0134aaa60d75fc4a9c57f6c7a690af3bd7cd301fe410f5afa5eb9b1` |
 | **Package SHA-256** | `ce5e12c6ac7bb897c34248191ee149d2e3ae31cc8c856688ace6827f46c4781b` (`25,238,266` bytes) |

@@ -4,7 +4,7 @@
   "reproduce": "python3 services/fabric/scripts/train_klyvaron.py --preset pro",
   "runId": "187c8e5f1be2",
   "runStatus": "partial",
-  "note": "Trained from random initialisation (seed=20261022, no pretrained base) on 15 SHA-pinned permissive repositories with whole-repository holdout (pallets__click, psf__requests). GPU runtime acceleration and target-device hardware qualification remain open on this CPU-only host.",
+  "note": "Archived, unverified experiment metadata. The corresponding weight payload is absent from the current checkout; this record is not release evidence or a supported model. The active Klyvaron processor is model-independent.",
   "card": {
     "name": "klyvaron-pro-lm",
     "version": "0.1.0",
@@ -16,7 +16,7 @@
     "configDigest": "302a4543119d3a380d4de8480a3bd9645a3b1aae4dc19dca82f87967fde98130",
     "datasetDigest": "2f949d27ba0a9a1a66687abd3f7eacb63a677303c31ca69f136d5a87c4ddb567",
     "parameterCount": 27559946,
-    "status": "released",
+    "status": "not_released",
     "metrics": {
       "validationPerplexity": 1074.4269742601562,
       "bitsPerToken": 10.069351714888974,
@@ -180,7 +180,6 @@
     },
     "parentVersion": null,
     "createdAt": 1792767918.784514,
-    "releasedAt": 1792767918.7845726,
     "supersededAt": null,
     "retiredAt": null,
     "history": [
@@ -202,9 +201,8 @@
       },
       {
         "at": 1792767918.7845726,
-        "event": "released",
-        "notes": "first-party klyvaron-pro-lm trained from random init (seed=20261022) on 15 license-verified repos",
-        "superseded": null
+        "event": "historical_release_claim_archived",
+        "notes": "This older record claimed a release, but no corresponding weights are present in the current checkout; the current release evaluator blocks this tier. Not production release evidence."
       }
     ]
   }

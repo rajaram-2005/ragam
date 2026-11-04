@@ -1,5 +1,7 @@
 # CPU-first Lite: evaluated int8 artifact support
 
+> **Model archive notice:** model-training, weight, evaluation and release statements below describe historical experiments or plans only. Matching payloads are absent from this checkout; these records do not establish any current model release. Active Klyvaron uses deterministic model-independent processing, with Lite/Pro/Max as resource/workflow profiles.
+
 ## What is implemented
 
 Core can now load **weight-only symmetric int8** Klyvaron artifacts and produce

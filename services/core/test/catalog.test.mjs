@@ -123,7 +123,7 @@ test('source registration never fetches; external refresh requires explicit bool
 test('Strict Offline blocks external catalog sources including loopback gateways before fetch', async () => {
   let calls = 0
   const guard = createEgressGuard({ policy: 'strict_offline', fetch: async () => { calls += 1; return new Response('{}') } })
-  for (const kind of ['litellm', 'huggingface', 'openai-compatible']) {
+  for (const kind of ['openai-compatible', 'huggingface']) {
     const catalog = new ModelCatalog()
     catalog.addSource(httpCatalogSource({ id: 'test', kind, baseUrl: 'http://127.0.0.1:9999/v1' }, guard))
     await assert.rejects(catalog.refresh('test', { authorizeNetwork: true }), { code: 'EGRESS_BLOCKED' })
@@ -153,14 +153,14 @@ test('Hugging Face adapter reads advertised metadata without inferring chat, pri
   assert.deepEqual(requests, ['/api/models?limit=100&full=true&cardData=true'])
 })
 
-test('LiteLLM listing uses only GET /models with server-side credentials and unknown capabilities', async (t) => {
+test('OpenAI-compatible listing uses only GET /models with server-side credentials and unknown capabilities', async (t) => {
   const requests = []
   const url = await server(t, (req, res) => {
     requests.push({ method: req.method, path: req.url, authorization: req.headers.authorization })
     json(res, { object: 'list', data: [{ id: 'configured-alias', owned_by: 'publisher', tool_calling: true }] })
   })
   const catalog = new ModelCatalog()
-  catalog.addSource(httpCatalogSource({ id: 'gateway', kind: 'litellm', baseUrl: url + '/v1', token: 'test-only-credential' }, createEgressGuard({ policy: 'hybrid' })))
+  catalog.addSource(httpCatalogSource({ id: 'gateway', kind: 'openai-compatible', baseUrl: url + '/v1', token: 'test-only-credential' }, createEgressGuard({ policy: 'hybrid' })))
   await catalog.refresh('gateway', { authorizeNetwork: true })
   assert.deepEqual(requests, [{ method: 'GET', path: '/v1/models', authorization: 'Bearer test-only-credential' }])
   assert.equal(catalog.search().records[0].toolCalling, null)
@@ -181,19 +181,19 @@ test('body and record limits apply before adapter record expansion', async () =>
   for (const headers of [{ 'content-length': `${3 * 1024 * 1024}` }, {}]) {
     const guard = createEgressGuard({ policy: 'hybrid', onlineAllowlist: ['catalog.test'], fetch: async () => new Response('x'.repeat(2 * 1024 * 1024 + 1), { headers }) })
     const catalog = new ModelCatalog()
-    catalog.addSource(httpCatalogSource({ id: 'test', kind: 'litellm', baseUrl: 'https://catalog.test/v1' }, guard))
+    catalog.addSource(httpCatalogSource({ id: 'test', kind: 'openai-compatible', baseUrl: 'https://catalog.test/v1' }, guard))
     await assert.rejects(catalog.refresh('test', { authorizeNetwork: true }), { code: 'catalog_too_large' })
   }
   const guard = createEgressGuard({ policy: 'hybrid', onlineAllowlist: ['catalog.test'], fetch: async () => Response.json({ data: Array.from({ length: 501 }, (_, i) => ({ id: String(i) })) }) })
   const catalog = new ModelCatalog()
-  catalog.addSource(httpCatalogSource({ id: 'test', kind: 'litellm', baseUrl: 'https://catalog.test/v1' }, guard))
+  catalog.addSource(httpCatalogSource({ id: 'test', kind: 'openai-compatible', baseUrl: 'https://catalog.test/v1' }, guard))
   await assert.rejects(catalog.refresh('test', { authorizeNetwork: true }), { code: 'invalid_catalog' })
 })
 
 test('deadline covers response-body reads, not just response headers', async (t) => {
   const url = await server(t, (_req, res) => { res.writeHead(200); res.write('{"data":[') })
   const catalog = new ModelCatalog()
-  catalog.addSource(httpCatalogSource({ id: 'test', kind: 'litellm', baseUrl: url, timeoutMs: 50 }, createEgressGuard({ policy: 'hybrid' })))
+  catalog.addSource(httpCatalogSource({ id: 'test', kind: 'openai-compatible', baseUrl: url, timeoutMs: 50 }, createEgressGuard({ policy: 'hybrid' })))
   await assert.rejects(catalog.refresh('test', { authorizeNetwork: true }), { code: 'timeout', status: 504 })
   assert.equal(catalog.sources()[0].refreshing, false)
 })
@@ -223,7 +223,7 @@ test('provider errors and credential echoes cannot leak into public metadata or 
       return Response.json({ data: [{ id: 'test-only-secret' }] })
     } })
     const catalog = new ModelCatalog({ onEvent: (event) => events.push(event) })
-    catalog.addSource(httpCatalogSource({ id: 'test', kind: 'litellm', baseUrl: 'https://catalog.test/v1', token: 'test-only-secret' }, guard))
+    catalog.addSource(httpCatalogSource({ id: 'test', kind: 'openai-compatible', baseUrl: 'https://catalog.test/v1', token: 'test-only-secret' }, guard))
     await assert.rejects(catalog.refresh('test', { authorizeNetwork: true }), (error) => !error.message.includes('test-only-secret'))
     assert.doesNotMatch(JSON.stringify([catalog.search(), events]), /test-only-secret|unsafe-error/)
   }
@@ -234,7 +234,7 @@ test('redirects are refused and no linked page can receive a credential', async 
   const other = await server(t, (_req, res) => { forwarded += 1; json(res, { data: [] }) })
   const url = await server(t, (_req, res) => { res.writeHead(302, { location: other }); res.end() })
   const catalog = new ModelCatalog()
-  catalog.addSource(httpCatalogSource({ id: 'test', kind: 'litellm', baseUrl: url, token: 'test-only-secret' }, createEgressGuard({ policy: 'hybrid' })))
+  catalog.addSource(httpCatalogSource({ id: 'test', kind: 'openai-compatible', baseUrl: url, token: 'test-only-secret' }, createEgressGuard({ policy: 'hybrid' })))
   await assert.rejects(catalog.refresh('test', { authorizeNetwork: true }))
   assert.equal(forwarded, 0)
 })
@@ -242,11 +242,11 @@ test('redirects are refused and no linked page can receive a credential', async 
 test('operator config is versioned, bounded and keeps credentials in server-side files', (t) => {
   const root = dir(t), file = join(root, 'sources.json')
   writeFileSync(join(root, 'token'), 'test-only-secret\n')
-  writeFileSync(file, JSON.stringify({ schema: 'aetheris.catalog-sources/1', sources: [{ id: 'gw', kind: 'litellm', baseUrl: 'https://catalog.test/v1', tokenFile: 'token' }] }))
+  writeFileSync(file, JSON.stringify({ schema: 'aetheris.catalog-sources/1', sources: [{ id: 'gw', kind: 'openai-compatible', baseUrl: 'https://catalog.test/v1', tokenFile: 'token' }] }))
   const sources = configuredCatalogSources(file, createEgressGuard())
   assert.equal(sources.length, 1)
   assert.doesNotMatch(JSON.stringify(sources), /test-only-secret/)
-  for (const baseUrl of ['http://remote.test', 'https://u:p@remote.test', 'https://remote.test?token=secret', 'file:///tmp/catalog']) assert.throws(() => httpCatalogSource({ id: 'bad', kind: 'litellm', baseUrl }, createEgressGuard()))
+  for (const baseUrl of ['http://remote.test', 'https://u:p@remote.test', 'https://remote.test?token=secret', 'file:///tmp/catalog']) assert.throws(() => httpCatalogSource({ id: 'bad', kind: 'openai-compatible', baseUrl }, createEgressGuard()))
   writeFileSync(file, JSON.stringify({ schema: 'wrong', sources: [] }))
   assert.throws(() => configuredCatalogSources(file, createEgressGuard()), { code: 'invalid_source' })
   writeFileSync(file, 'x'.repeat(65537))
@@ -257,7 +257,7 @@ test('real catalog API is searchable without registering models or contacting so
   let calls = 0
   const upstream = await server(t, (_req, res) => { calls += 1; json(res, { data: [{ id: 'not-an-inference-proof' }] }) })
   const root = dir(t), file = join(root, 'sources.json')
-  writeFileSync(file, JSON.stringify({ schema: 'aetheris.catalog-sources/1', sources: [{ id: 'gateway', kind: 'litellm', baseUrl: upstream + '/v1' }] }))
+  writeFileSync(file, JSON.stringify({ schema: 'aetheris.catalog-sources/1', sources: [{ id: 'gateway', kind: 'openai-compatible', baseUrl: upstream + '/v1' }] }))
   const { app, url, post } = await appServer(t, { AETHERIS_RUNTIME_POLICY: 'hybrid', AETHERIS_MODEL_CATALOG_FILE: file })
   const before = app.registry.list()
   const initial = await (await fetch(url + '/api/models/catalog')).json()
@@ -277,7 +277,7 @@ test('real Strict Offline catalog API does not contact a configured gateway even
   let calls = 0
   const upstream = await server(t, (_req, res) => { calls += 1; json(res, { data: [] }) })
   const file = join(dir(t), 'sources.json')
-  writeFileSync(file, JSON.stringify({ schema: 'aetheris.catalog-sources/1', sources: [{ id: 'gateway', kind: 'litellm', baseUrl: upstream }] }))
+  writeFileSync(file, JSON.stringify({ schema: 'aetheris.catalog-sources/1', sources: [{ id: 'gateway', kind: 'openai-compatible', baseUrl: upstream }] }))
   const { post } = await appServer(t, { AETHERIS_MODEL_CATALOG_FILE: file })
   const response = await post({ sourceId: 'gateway', authorizeNetwork: true })
   assert.equal(response.status, 403)

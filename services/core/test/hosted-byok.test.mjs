@@ -128,7 +128,7 @@ test('hosted catalogue only includes implemented credential-based chat providers
   assert.ok(providers.some((provider) => provider.id === 'openai' && provider.nativeSearch))
   assert.ok(providers.some((provider) => provider.id === 'anthropic' && provider.nativeSearch))
   assert.ok(providers.some((provider) => provider.id === 'gemini' && provider.nativeSearch))
-  assert.ok(!providers.some((provider) => ['litellm', 'ollama', 'bedrock', 'vertex'].includes(provider.id)))
+  assert.ok(!providers.some((provider) => ['ollama', 'bedrock', 'vertex'].includes(provider.id)))
 })
 
 test('provider records and decrypted credentials remain scoped to the authenticated account', async () => {
@@ -159,12 +159,20 @@ test('model listing and chat require a selected listed model and per-request pro
   assert.deepEqual(modelList.json().models, ['gpt-test'])
   await invoke(service, 'PUT', '/provider/model', { cookie, body: { model: 'gpt-test' } })
 
-  const refused = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Hello', authorization: {} } })
+  const refused = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Hello', localOnly: false, authorization: {} } })
   assert.equal(refused.statusCode, 403)
   assert.equal(refused.json().error, 'consent_required')
   assert.equal(calls.some((call) => call.providerPath === '/chat/completions'), false)
 
-  const accepted = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Hello', industryMode: 'manufacturing', authorization: { confirmed: true } } })
+  const defaultLocalOnlyRefusal = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Hello', authorization: { confirmed: true } } })
+  assert.equal(defaultLocalOnlyRefusal.statusCode, 409, 'omitting the flag defaults hosted BYOK to Local-only')
+  assert.equal(defaultLocalOnlyRefusal.json().error, 'local_only_blocked')
+  const localOnlyRefusal = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Hello', localOnly: true, authorization: { confirmed: true } } })
+  assert.equal(localOnlyRefusal.statusCode, 409)
+  assert.equal(localOnlyRefusal.json().error, 'local_only_blocked')
+  assert.equal(calls.some((call) => call.providerPath === '/chat/completions'), false, 'hosted BYOK never contacts a remote provider while Local-only is on')
+
+  const accepted = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Hello', industryMode: 'manufacturing', localOnly: false, authorization: { confirmed: true } } })
   assert.equal(accepted.statusCode, 200)
   assert.equal(accepted.json().text, 'Test reply')
   assert.equal(accepted.json().industryMode, 'manufacturing')
@@ -179,7 +187,7 @@ test('Search requires explicit consent and unsupported providers do not silently
   await invoke(service, 'POST', '/provider/models', { cookie, body: {} })
   await invoke(service, 'PUT', '/provider/model', { cookie, body: { model: 'gpt-test' } })
 
-  const refused = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Search', nativeSearch: true, authorization: { confirmed: true } } })
+  const refused = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Search', localOnly: false, nativeSearch: true, authorization: { confirmed: true } } })
   assert.equal(refused.statusCode, 403)
   assert.equal(refused.json().error, 'search_consent_required')
   assert.equal(calls.some((call) => call.providerPath === '/chat/completions'), false)
@@ -188,7 +196,7 @@ test('Search requires explicit consent and unsupported providers do not silently
   assert.equal(unsupported.statusCode, 200)
   await invoke(service, 'POST', '/provider/models', { cookie, body: {} })
   await invoke(service, 'PUT', '/provider/model', { cookie, body: { model: 'command-test' } })
-  const noSearch = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Search', nativeSearch: true, authorization: { confirmed: true, nativeSearchConfirmed: true } } })
+  const noSearch = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Search', localOnly: false, nativeSearch: true, authorization: { confirmed: true, nativeSearchConfirmed: true } } })
   assert.equal(noSearch.statusCode, 409)
   assert.equal(noSearch.json().error, 'capability_unavailable')
 })

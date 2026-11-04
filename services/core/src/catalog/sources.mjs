@@ -36,7 +36,7 @@ const array = (value) => {
   return value
 }
 export function httpCatalogSource({ id, kind, baseUrl, token = null, ttlMs, timeoutMs = 8000 }, guard) {
-  if (!['huggingface', 'ollama', 'litellm', 'openai-compatible'].includes(kind)) throw catalogError('invalid_source', 'unsupported catalog adapter')
+  if (!['huggingface', 'ollama', 'openai-compatible'].includes(kind)) throw catalogError('invalid_source', 'unsupported catalog adapter')
   const base = endpoint(baseUrl ?? (kind === 'huggingface' ? 'https://huggingface.co' : ''))
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) throw catalogError('invalid_source', 'invalid catalog timeout')
   if (token !== null && (typeof token !== 'string' || !token || token.length > 8192 || /[\r\n]/.test(token))) throw catalogError('invalid_source', 'invalid catalog credential')

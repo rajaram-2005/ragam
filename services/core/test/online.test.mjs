@@ -44,8 +44,8 @@ async function fixture(t, options = {}) {
     if (r.status !== 201) r = await f.request('POST','/api/auth/login',f.account)
     f.cookie = r.headers.get('set-cookie').split(';')[0]; f.accountId = r.data.account.id; return r
   }
-  f.configure = async () => { await f.login(); const r = await f.request('PUT','/api/providers/litellm',{ baseUrl: f.gatewayUrl+'/v1', apiKey: 'synthetic-gateway-secret' }); assert.equal(r.status,200); const checked = await f.request('POST','/api/models/probe',{}); assert.equal(checked.status,200); return checked.data }
-  f.chat = (extra = {}) => ({ prompt: 'ordinary question', model: 'model-a', authorization: { confirmed: true, providerRevision: f.app.store.state.revision }, ...extra })
+  f.configure = async () => { await f.login(); const r = await f.request('PUT','/api/providers/openai',{ baseUrl: f.gatewayUrl+'/v1', apiKey: 'synthetic-gateway-secret' }); assert.equal(r.status,200); const checked = await f.request('POST','/api/models/probe',{}); assert.equal(checked.status,200); return checked.data }
+  f.chat = (extra = {}) => ({ prompt: 'ordinary question', model: 'model-a', localOnly: false, authorization: { confirmed: true, providerRevision: f.app.store.state.revision }, ...extra })
   // Calling the app in process, rather than over HTTP, still has to say who is asking:
   // history, memory and knowledge are resolved from the session's account.
   f.session = () => f.app.sessionFor({ headers: { cookie: f.cookie } })
@@ -69,9 +69,9 @@ test('the provider catalogue is authenticated, read-only and carries no secrets'
   const r = await f.request('GET', '/api/providers/catalog')
   assert.equal(r.status, 200)
   assert.equal(r.data.valid, true)
-  assert.equal(r.data.counts.ready, 24, 'three runtimes, six native chat wires, nine cloud image wires, one local image wire and five video wires have a tested path')
+  assert.equal(r.data.counts.ready, 23, 'two local runtimes, six native chat wires, nine cloud image wires, one local image wire and five video wires have a tested path')
   assert.ok(r.data.counts.pending > 0, 'the unimplemented adapters must be stated, not hidden')
-  assert.match(r.data.summary, /^24 ready/)
+  assert.match(r.data.summary, /^23 ready/)
   for (const provider of r.data.providers) {
     assert.ok(provider.docsUrl.startsWith('https://'), `${provider.id} must cite documentation`)
     // A descriptor has no credential field, so there is nothing to redact — but assert it anyway,
@@ -101,7 +101,7 @@ test('a private gateway needs an exactly matching trusted origin, and nothing is
  for (const trustedOrigins of [[], ['http://127.0.0.1:4000/'], ['http://localhost:4000']]) {
    const f = await fixture(t, { trustedOrigins })
    await f.login()
-   const refused = await f.request('PUT', '/api/providers/litellm', { baseUrl: 'http://127.0.0.1:4000/v1', apiKey: 'sk-local-dev' })
+   const refused = await f.request('PUT', '/api/providers/openai', { baseUrl: 'http://127.0.0.1:4000/v1', apiKey: 'sk-local-dev' })
    assert.equal(refused.status, 400, JSON.stringify(trustedOrigins))
    assert.equal(refused.data.error, 'endpoint_blocked', JSON.stringify(trustedOrigins))
    assert.match(refused.data.message, /trusted origin/)
@@ -115,7 +115,7 @@ test('a private gateway needs an exactly matching trusted origin, and nothing is
  // local-gateway setup, and the reason the variable exists.
  const f = await fixture(t, { trustedOrigins: ['http://127.0.0.1:4000'] })
  await f.login()
- const saved = await f.request('PUT', '/api/providers/litellm', { baseUrl: 'http://127.0.0.1:4000/v1', apiKey: 'sk-local-dev' })
+ const saved = await f.request('PUT', '/api/providers/openai', { baseUrl: 'http://127.0.0.1:4000/v1', apiKey: 'sk-local-dev' })
  assert.equal(saved.status, 200)
  assert.equal(saved.data.baseUrl, 'http://127.0.0.1:4000/v1')
  assert.equal(saved.data.keyConfigured, true)
@@ -192,6 +192,16 @@ test('file knowledge and approved memory remain opt-in and backed by real stores
 })
 test('manufacturing operations guidance reaches selected gateway and native Klyvaron models without fallback', async (t) => {
  const f=await fixture(t); await f.configure()
+ const requestCount=f.calls.length
+ const blockedRemote=await f.request('POST','/api/chat',f.chat({localOnly:true}))
+ assert.equal(blockedRemote.status,409)
+ assert.equal(blockedRemote.data.error,'local_only_blocked')
+ assert.equal(f.calls.length,requestCount,'Local-only must block before contacting a remote gateway')
+ const defaultBody=f.chat(); delete defaultBody.localOnly
+ const defaultBlocked=await f.request('POST','/api/chat',defaultBody)
+ assert.equal(defaultBlocked.status,409,'omitted mode defaults to Local-only on the server')
+ assert.equal(defaultBlocked.data.error,'local_only_blocked')
+ assert.equal(f.calls.length,requestCount)
  const external=await f.request('POST','/api/chat',f.chat({industryMode:'manufacturing'}))
  assert.equal(external.status,200,JSON.stringify(external.data))
  const sent=f.calls.at(-1).body.messages
@@ -217,6 +227,21 @@ test('manufacturing operations guidance reaches selected gateway and native Klyv
  instructionTuned=false
  await assert.rejects(() => f.app.chat(f.chat({model:'klyvaron-pro-lm',industryMode:'manufacturing'}),{session:f.session()}),{code:'capability_unavailable'})
  assert.equal(f.calls.length,callsBeforeBaseRefusal,'unsupported native weights must not silently fall back to a gateway')
+
+ const localSaved=await f.request('PUT','/api/providers/ollama',{baseUrl:f.gatewayUrl+'/v1'})
+ assert.equal(localSaved.status,200,JSON.stringify(localSaved.data))
+ const localProbe=await f.request('POST','/api/models/probe',{})
+ assert.equal(localProbe.status,200,JSON.stringify(localProbe.data))
+ const localGateway=await f.request('POST','/api/chat',f.chat({localOnly:true}))
+ assert.equal(localGateway.status,200,JSON.stringify(localGateway.data))
+ assert.equal(f.calls.at(-1).path,'/v1/chat/completions','verified private Ollama-compatible endpoints remain usable in Local-only mode')
+ const ollamaConfig=f.app.store.connections.find((connection)=>connection.id==='ollama')
+ ollamaConfig.baseUrl='https://8.8.8.8/v1'
+ const beforePublicAttempt=f.calls.length
+ const publicEndpoint=await f.request('POST','/api/chat',f.chat({localOnly:true}))
+ assert.equal(publicEndpoint.status,409)
+ assert.equal(publicEndpoint.data.error,'local_only_blocked')
+ assert.equal(f.calls.length,beforePublicAttempt,'a local-provider ID cannot bless a public endpoint')
 })
 test('only reviewed built-in tools execute; custom installs and removed features are unavailable', async (t) => {
  const f=await fixture(t);await f.login()
@@ -230,7 +255,7 @@ test('only reviewed built-in tools execute; custom installs and removed features
 })
 test('connection removal clears credentials and model selection without deleting conversations', async (t) => {
  const f=await fixture(t);await f.configure();await f.request('POST','/api/sessions',{title:'keep me'})
- const r=await f.request('DELETE','/api/providers/litellm',{});assert.equal(r.data.keyConfigured,false);assert.deepEqual(r.data.models,[]);assert.equal((await f.request('GET','/api/sessions')).data.sessions.length,1)
+ const r=await f.request('DELETE','/api/providers/openai',{});assert.equal(r.data.keyConfigured,false);assert.deepEqual(r.data.models,[]);assert.equal((await f.request('GET','/api/sessions')).data.sessions.length,1)
 })
 test('public HTTPS endpoints are required unless the operator trusts an exact internal origin', () => {
  for (const url of ['file:///etc/passwd','https://user:pass@host.example/v1','http://public.example/v1','https://169.254.169.254','https://127.0.0.1','https://[::1]']) assert.throws(()=>gatewayUrl(url))
@@ -271,7 +296,7 @@ test('a schema-1 store migrates to one connection without losing the key', (t) =
   assert.equal(migrated.config().apiKey, 'synthetic-legacy-secret')
   assert.deepEqual(migrated.state.models, ['legacy-model'])
   assert.equal(migrated.state.revision, 7)
-  // And the migrated file is schema 2 on disk, so the inference happens once.
+  // And the migrated file is in the current schema on disk, so migration happens once.
   const onDisk = JSON.parse(readFileSync(join(dir, 'provider.json'), 'utf8'))
   assert.equal(onDisk.schema, STORE_SCHEMA)
   rmSync(dir, { recursive: true, force: true })
@@ -280,10 +305,10 @@ test('a schema-1 store migrates to one connection without losing the key', (t) =
 test('the migration is pure and refuses a record that is neither schema', () => {
   const fresh = migrateState(null)
   assert.deepEqual(fresh, { schema: STORE_SCHEMA, revision: 0, active: null, connections: {}, klyvaron: { tiers: {} } })
-  const legacy = migrateState({ kind: 'litellm', baseUrl: 'https://g.example/v1', key: null, revision: 2 })
-  assert.equal(legacy.active, 'litellm')
+  const legacy = migrateState({ kind: 'openai', baseUrl: 'https://g.example/v1', key: null, revision: 2 })
+  assert.equal(legacy.active, 'openai')
   assert.equal(legacy.revision, 2)
-  assert.equal(legacy.connections.litellm.baseUrl, 'https://g.example/v1')
+  assert.equal(legacy.connections.openai.baseUrl, 'https://g.example/v1')
 
   // A schema this build does not know is refused, not read as schema 1. Reading it as one
   // connection would drop every key in the file at the first restart.
@@ -297,14 +322,43 @@ test('the migration is pure and refuses a record that is neither schema', () => 
   const dirty = migrateState(JSON.parse(JSON.stringify({
     schema: STORE_SCHEMA, revision: 4, active: '__proto__',
     connections: {
-      litellm: { baseUrl: 'https://g.example/v1' },
+      openai: { baseUrl: 'https://g.example/v1' },
       '__proto__': { baseUrl: 'https://evil.example/v1' },
       'Bad Id': { baseUrl: 'https://bad.example/v1' },
     },
   })))
-  assert.deepEqual(Object.keys(dirty.connections), ['litellm'])
-  assert.equal(dirty.active, 'litellm')
+  assert.deepEqual(Object.keys(dirty.connections), ['openai'])
+  assert.equal(dirty.active, 'openai')
   assert.equal(Object.getPrototypeOf(dirty.connections).baseUrl, undefined, 'the prototype was not polluted')
+
+  // LiteLLM is retired: upgrading old schema-1 or schema-2 state drops that connection,
+  // its credential, and any Klyvaron tier pointer to it rather than leaving a hidden route.
+  const retired = migrateState({
+    schema: 2, revision: 9, active: 'litellm',
+    connections: { litellm: { baseUrl: 'https://old-gateway.example/v1', key: 'sealed-old-key', models: ['old-model'] } },
+    klyvaron: { tiers: { lite: { chat: { connectionId: 'litellm', model: 'old-model' } } } },
+  })
+  assert.equal(retired.active, null)
+  assert.deepEqual(retired.connections, {})
+  assert.deepEqual(retired.klyvaron.tiers, {})
+  const retiredSchema1 = migrateState({ kind: 'litellm', baseUrl: 'https://old-gateway.example/v1', key: 'sealed-old-key' })
+  assert.equal(retiredSchema1.active, null)
+  assert.deepEqual(retiredSchema1.connections, {})
+
+  const retiredDir = mkdtempSync(join(tmpdir(), 'ragam-retired-provider-'))
+  new OnlineStore(retiredDir)
+  writeFileSync(join(retiredDir, 'provider.json'), JSON.stringify({
+    schema: 2, revision: 9, active: 'litellm',
+    connections: { litellm: { baseUrl: 'https://old-gateway.example/v1', key: 'sealed-old-key' } },
+    klyvaron: { tiers: {} },
+  }))
+  const retiredStore = new OnlineStore(retiredDir)
+  const retiredDisk = readFileSync(join(retiredDir, 'provider.json'), 'utf8')
+  assert.equal(retiredStore.kind(), null)
+  assert.equal(retiredDisk.includes('litellm'), false)
+  assert.equal(retiredDisk.includes('sealed-old-key'), false)
+  assert.equal(retiredDisk.includes('old-gateway.example'), false)
+  rmSync(retiredDir, { recursive: true, force: true })
 })
 
 test('a saved connection this build cannot resolve is listed as unsupported, and can still be removed', () => {
@@ -334,32 +388,31 @@ test('a saved connection this build cannot resolve is listed as unsupported, and
 test('a second provider connection is stored beside the first, with its own key', async (t) => {
   const f = await fixture(t)
   await f.login()
-  // The first connection is the fixture's local gateway.
-  const first = await f.request('PUT', '/api/providers/litellm', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })
+  const first = await f.request('PUT', '/api/providers/openai', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })
   assert.equal(first.status, 200)
 
-  // A second, of a different provider, is added without touching the first.
-  const second = await f.request('PUT', '/api/providers/openai', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-second-secret' })
+  // A second, different catalogue connection is added without touching the first.
+  const second = await f.request('PUT', '/api/providers/openrouter', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-second-secret' })
   assert.equal(second.status, 200, JSON.stringify(second.data))
-  assert.equal(second.data.active, 'openai')
+  assert.equal(second.data.active, 'openrouter')
   assert.equal(second.data.connections.length, 2)
-  assert.equal(second.data.connections.find((c) => c.id === 'litellm').keyConfigured, true)
   assert.equal(second.data.connections.find((c) => c.id === 'openai').keyConfigured, true)
+  assert.equal(second.data.connections.find((c) => c.id === 'openrouter').keyConfigured, true)
 
   // Each connection decrypts to its own key; activating one does not rewrite the other.
-  assert.equal(f.app.store.config('litellm').apiKey, 'synthetic-gateway-secret')
-  assert.equal(f.app.store.config('openai').apiKey, 'synthetic-second-secret')
+  assert.equal(f.app.store.config('openai').apiKey, 'synthetic-gateway-secret')
+  assert.equal(f.app.store.config('openrouter').apiKey, 'synthetic-second-secret')
 
-  const switched = await f.request('PUT', '/api/providers/active', { id: 'litellm' })
+  const switched = await f.request('PUT', '/api/providers/active', { id: 'openai' })
   assert.equal(switched.status, 200)
-  assert.equal(switched.data.active, 'litellm')
+  assert.equal(switched.data.active, 'openai')
   assert.equal(f.app.store.config().apiKey, 'synthetic-gateway-secret')
 
   // Removing one leaves the other intact — the whole point of separate records.
-  const removed = await f.request('DELETE', '/api/providers/openai', {})
+  const removed = await f.request('DELETE', '/api/providers/openrouter', {})
   assert.equal(removed.status, 200)
   assert.equal(removed.data.connections.length, 1)
-  assert.equal(removed.data.connections[0].id, 'litellm')
+  assert.equal(removed.data.connections[0].id, 'openai')
   assert.equal(f.app.store.config().apiKey, 'synthetic-gateway-secret')
 })
 
@@ -407,20 +460,20 @@ test('a named custom OpenAI-compatible endpoint is a first-class connection', as
 test('testing one connection does not write another connection\'s model list', async (t) => {
   const f = await fixture(t)
   await f.login()
-  await f.request('PUT', '/api/providers/litellm', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })
+  await f.request('PUT', '/api/providers/openai', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })
   await f.request('PUT', '/api/providers/ollama', { baseUrl: `${f.gatewayUrl}/v1` })
   // Both have empty model lists; probe only the active one.
   await f.request('POST', '/api/providers/ollama/test', {})
   const records = f.app.store.public().connections
   assert.deepEqual(records.find((c) => c.id === 'ollama').models, ['model-a', 'model-b'])
-  assert.deepEqual(records.find((c) => c.id === 'litellm').models, [], 'the other connection must be untouched')
+  assert.deepEqual(records.find((c) => c.id === 'openai').models, [], 'the other connection must be untouched')
 })
 
 test('the public shape never contains a sealed credential, with any number of connections', async (t) => {
   const f = await fixture(t)
   await f.login()
-  await f.request('PUT', '/api/providers/litellm', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })
-  await f.request('PUT', '/api/providers/openai', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-second-secret' })
+  await f.request('PUT', '/api/providers/openai', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })
+  await f.request('PUT', '/api/providers/openrouter', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-second-secret' })
   const text = JSON.stringify((await f.request('GET', '/api/providers')).data)
   for (const secret of ['synthetic-gateway-secret', 'synthetic-second-secret', '"iv"', '"tag"', '"data"']) {
     assert.ok(!text.includes(secret), `the public shape leaked ${secret}`)

@@ -1,10 +1,11 @@
 # Model card — klyvaron-max-lm 0.1.0
 
+> **Archive notice:** this record is not release evidence. No matching weight payload is present in the current checkout; the active Klyvaron processor uses no model weights.
 | | |
 |---|---|
 | **Identifier** | `klyvaron-max-lm@0.1.0` |
 | **Family** | `klyvaron-max` |
-| **Status** | `released` (validated through `ModelReleaseManager`, 0 hard failures) |
+| **Status** | `not_released` — archived experiment metadata; payload absent from the current checkout |
 | **Licence** | MIT — first-party weights trained from random initialisation |
 | **Parameters** | 92,077,066 (`aetheris-core-v1`) |
 | **Architecture digest** | `942a6ad887c1e32cf834ee76005f933534a09edd3efacf0c341c8ffb85b38554` |

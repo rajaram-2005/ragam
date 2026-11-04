@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import IndustryOperationsPanel from './components/IndustryOperationsPanel.jsx'
-import { readIndustryMode, writeIndustryMode } from './industry-operations.js'
+import { readIndustryMode, writeIndustryMode, readLocalOnlyMode, writeLocalOnlyMode } from './industry-operations.js'
 
 async function hostedRequest(path, { method = 'GET', body, signal } = {}) {
   let response
@@ -159,6 +159,7 @@ function HostedWorkspace({ account, onSignOut }) {
   const [messages, setMessages] = useState([])
   const [draft, setDraft] = useState('')
   const [industryMode, setIndustryMode] = useState(readIndustryMode)
+  const [localOnlyMode, setLocalOnlyMode] = useState(readLocalOnlyMode)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [consent, setConsent] = useState(false)
@@ -178,6 +179,7 @@ function HostedWorkspace({ account, onSignOut }) {
     event.preventDefault()
     const text = draft.trim()
     if (!text || busy || !consent) return
+    if (localOnlyMode) { setError(new Error('Local-only mode blocks hosted BYOK because it sends prompts to remote providers. Turn Local-only off to use this hosted provider; charges may apply.')); return }
     const prior = messages
     const next = [...prior, { role: 'user', content: text }]
     setMessages(next); setDraft(''); setBusy(true); setError(null)
@@ -187,6 +189,7 @@ function HostedWorkspace({ account, onSignOut }) {
         body: {
           messages: next,
           model: provider?.model,
+          localOnly: localOnlyMode,
           ...(industryMode ? { industryMode: 'manufacturing' } : {}),
           nativeSearch: search,
           authorization: { confirmed: consent, nativeSearchConfirmed: search, allowSensitive: sensitiveConsent },
@@ -209,11 +212,14 @@ function HostedWorkspace({ account, onSignOut }) {
         <button className="hosted-quiet-button" onClick={() => setMessages([])} disabled={!messages.length}>New chat</button></div>
       <IndustryOperationsPanel
         enabled={industryMode}
+        localOnly={localOnlyMode}
+        onLocalOnlyChange={(enabled) => setLocalOnlyMode(writeLocalOnlyMode(enabled))}
         mediaAvailable={false}
         onEnabledChange={(enabled) => setIndustryMode(writeIndustryMode(enabled))}
         onStartTask={(taskPrompt) => { setIndustryMode(writeIndustryMode(true)); setDraft((current) => current.trim() ? `${current.trim()}\n\n${taskPrompt}` : taskPrompt) }}
       />
       <ErrorNote error={error} />
+      {localOnlyMode ? <p className="hosted-notice" role="status">Local-only is on. Hosted BYOK uses a remote AI provider, so sending is blocked until you explicitly turn Local-only off. Remote provider charges may apply.</p> : null}
       {!provider?.configured || !provider?.model ? <div className="hosted-empty-state"><div className="hosted-empty-icon">✦</div><h2>Bring your own AI key</h2><p>Save an API key from a supported provider. Ragam encrypts it for your account and sends requests only to the provider you choose.</p><button className="hosted-primary-button" onClick={() => setSettingsOpen(true)}>Configure provider</button></div> : null}
       {messages.length ? <div className="hosted-messages" aria-live="polite">{messages.map((message, index) => <article key={`${index}-${message.role}`} className={`hosted-message hosted-message-${message.role}`}>
         <div className="hosted-message-label">{message.role === 'user' ? 'You' : message.provider ?? selected?.label ?? 'Assistant'}</div>
@@ -229,7 +235,7 @@ function HostedWorkspace({ account, onSignOut }) {
           {selected?.nativeSearch ? <label className="hosted-check"><input type="checkbox" checked={search} onChange={(event) => setSearch(event.target.checked)} disabled={!provider?.model || busy} />Use provider-native Search for this turn (provider Search terms and results may be processed).</label> : null}
           <label className="hosted-check"><input type="checkbox" checked={sensitiveConsent} onChange={(event) => setSensitiveConsent(event.target.checked)} disabled={!provider?.model || busy} />I authorize sending any sensitive text in this message to my provider.</label>
         </div>
-        <div className="hosted-composer-bottom"><span className="hosted-hint">Requests go only to the selected provider. No fallback. Provider charges apply to your account.</span><button className="hosted-primary-button" type="submit" disabled={!draft.trim() || !provider?.model || !consent || busy}>{busy ? 'Sending…' : 'Send'}</button></div>
+        <div className="hosted-composer-bottom"><span className="hosted-hint">{localOnlyMode ? 'Blocked by Local-only mode.' : 'Requests go only to the selected provider. No fallback; provider charges apply to your account.'}</span><button className="hosted-primary-button" type="submit" disabled={localOnlyMode || !draft.trim() || !provider?.model || !consent || busy}>{busy ? 'Sending…' : 'Send'}</button></div>
       </form>
     </section>
     {settingsOpen ? <ProviderSettings providerList={providerList} current={provider} onClose={() => setSettingsOpen(false)} onChanged={(next) => { setProvider(next); refresh() }} /> : null}

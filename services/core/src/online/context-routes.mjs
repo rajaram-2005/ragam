@@ -6,6 +6,7 @@
 // is no request field that can widen it. MCP/plugin connections are installation-wide and
 // owner-managed; remote calls require per-call approval and are never treated as trusted data.
 import { CANDIDATE_STATES } from '../memory/contracts.mjs'
+import { processKlyvaronInput, KLYVARON_PROCESSOR_PROFILES, KLYVARON_PROCESSOR_TASKS } from '../klyvaron/processor.mjs'
 import { validateManifest } from '../plugins/manifest.mjs'
 import { readBody, sendJson } from './http.mjs'
 import { STYLES, STYLE_PROHIBITIONS } from './styles.mjs'
@@ -20,6 +21,44 @@ export async function contextRoutes(request, response, app, session) {
  const path = url.pathname.replace(/\/+$/, '') || '/'
  const segments = path.split('/').filter(Boolean).map(decodeURIComponent)
  const method = request.method
+ if (method === 'GET' && path === '/api/klyvaron/processor') {
+   return sendJson(response, 200, {
+     engine: 'klyvaron-deterministic-v1', modelUsed: false, weightsUsed: false, networkUsed: false,
+     profiles: KLYVARON_PROCESSOR_PROFILES, tasks: KLYVARON_PROCESSOR_TASKS,
+   }, app)
+ }
+ if (method === 'POST' && path === '/api/klyvaron/process') {
+   const body = await readJson({ maxBytes: 512 * 1024 })
+   const allowed = new Set(['tier', 'input', 'tasks', 'comparisonInput', 'useKnowledge', 'useMemory', 'saveToKnowledge', 'title', 'sessionId', 'principal', 'localOnly'])
+   if (Object.keys(body).some((key) => !allowed.has(key)) || (body.localOnly !== undefined && typeof body.localOnly !== 'boolean')) {
+     throw failure('invalid_processing_request', 'Klyvaron processing accepts only documented fields.', 400)
+   }
+   if (body.sessionId !== undefined && body.sessionId !== null) {
+     if (typeof body.sessionId !== 'string' || !(await memory.getSession(body.sessionId))) {
+       throw failure('session_not_found', 'That conversation does not exist for this account.', 404)
+     }
+   }
+   const { localOnly: _localOnly, sessionId: _sessionId, ...processingBody } = body
+   const abortController = new AbortController()
+   request.once('aborted', () => abortController.abort())
+   response.once('close', () => { if (!response.writableEnded) abortController.abort() })
+   const result = await processKlyvaronInput({
+     ...processingBody,
+     knowledge,
+     memory,
+     principal: accountId,
+     signal: abortController.signal,
+   })
+   if (body.sessionId) {
+     await memory.appendTurn(body.sessionId, { role: 'user', content: body.input, dataClass: 'internal' })
+     await memory.appendTurn(body.sessionId, { role: 'assistant', content: result.text, dataClass: 'internal' })
+   }
+   app.ledger?.record({
+     category: 'klyvaron', action: 'deterministic_process', outcome: 'success', subject: accountId,
+     detail: { tier: result.tier, tasks: result.results.map((item) => item.task), modelUsed: false, weightsUsed: false, networkUsed: false, savedToKnowledge: result.persistence.requested },
+   })
+   return sendJson(response, 200, result, app)
+ }
  if (path.startsWith('/api/plugins/trust')) {
    if (method === 'GET') return sendJson(response, 200, { keys: [], signaturesRequired: false, customInstallationDisabled: true, file: null })
    throw failure('extension_installation_disabled', 'Custom code and trust changes are disabled in the online product.', 403)

@@ -1,5 +1,7 @@
 # RAGAM — Gap-Closure Baseline Audit (Step 1)
 
+> **Model archive notice:** model-training, weight, evaluation and release statements below describe historical experiments or plans only. Matching payloads are absent from this checkout; these records do not establish any current model release. Active Klyvaron uses deterministic model-independent processing, with Lite/Pro/Max as resource/workflow profiles.
+
 **Audit date:** 2026-10-17  
 **Baseline branch:** `arena/57c1d756-ragam`  
 **Baseline commit:** `935f8e7a6f0501e43633f848c91469789259a4fe` — `Add Klyvaron product tiers with third-party provenance`  
