@@ -7,6 +7,7 @@ import { classifyText } from '../policy/classify.mjs'
 import { mostSensitiveDataClass } from '../policy/egress.mjs'
 import { PROVIDERS, PROVIDER_STATUS } from '../providers/catalog.mjs'
 import { CREDENTIAL_KINDS, normaliseCredential, wireFor } from '../providers/wires/index.mjs'
+import { MANUFACTURING_MODE, addIndustryInstruction } from '../providers/industry-operations.mjs'
 
 const ACCESS_COOKIE = 'ragam_access'
 const REFRESH_COOKIE = 'ragam_refresh'
@@ -349,8 +350,14 @@ export class HostedByokService {
         const model = body.model ?? row.selected_model
         if (!model || !Array.isArray(row.models) || !row.models.includes(model)) throw failure('model_unavailable', 'Select a model from your provider’s current model list. No fallback is performed.', 409)
         const normalized = normalizeChatMessages(body.messages ?? [{ role: 'user', content: body.prompt }])
+        if (body.industryMode !== undefined && body.industryMode !== null && body.industryMode !== false
+          && body.industryMode !== '' && body.industryMode !== MANUFACTURING_MODE) {
+          throw failure('invalid_industry_mode', 'Choose a supported industry mode.', 400)
+        }
+        const industryMode = body.industryMode === MANUFACTURING_MODE ? MANUFACTURING_MODE : null
         const sensitivity = mostSensitiveDataClass(...normalized.messages.map((message) => classifyText(textFromChatContent(message.content)).dataClass))
         if (['restricted', 'confidential'].includes(sensitivity) && body.authorization?.allowSensitive !== true) throw failure('sensitive_consent_required', 'This message may contain sensitive data. Explicitly authorize this transfer or remove it.', 403)
+        addIndustryInstruction(normalized.messages, industryMode)
         const redacted = redactChatMessages(normalized.messages)
         const nativeSearch = body.nativeSearch === true
         if (nativeSearch && body.authorization?.nativeSearchConfirmed !== true) throw failure('search_consent_required', 'Explicitly approve provider-native search for this request.', 403)
@@ -359,7 +366,7 @@ export class HostedByokService {
         const temperature = Number.isFinite(body.temperature) && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : 0.2
         const result = await wire.chat(this.gateway.request.bind(this.gateway), config, { model, messages: redacted.value, maxTokens, temperature, nativeSearch, signal: AbortSignal.timeout(120_000) })
         if (typeof result?.text !== 'string' || !result.text) throw failure('invalid_completion', 'The provider returned no text. No model was substituted.', 502)
-        return sendJson(res, 200, { text: result.text, model: result.model ?? model, usage: result.usage ?? null, grounding: result.grounding ?? null, provider: entryLabel(row.provider_id), sensitive: sensitivity !== 'public' })
+        return sendJson(res, 200, { text: result.text, model: result.model ?? model, usage: result.usage ?? null, grounding: result.grounding ?? null, provider: entryLabel(row.provider_id), sensitive: sensitivity !== 'public', industryMode })
       }
       throw failure('not_found', 'Hosted endpoint not found.', 404)
     } catch (error) {

@@ -24,6 +24,7 @@ import { dirname, join } from 'node:path'
 
 import { AREAS, AREA_IDS } from '../src/areas.js'
 import { AUTH_PAGES, AUTH_PAGE_IDS, PASSWORD_MIN_LENGTH, PASSWORD_RULES, SESSION_ENDED_NOTICE } from '../src/auth.js'
+import { INDUSTRY_TASKS, readIndustryMode, writeIndustryMode } from '../src/industry-operations.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const srcDir = join(here, '..', 'src')
@@ -177,6 +178,13 @@ test('one way in: the token sign-in and every third-party method are gone from t
       assert.match(source, /ragam\.chat-organization\.v1/)
       assert.doesNotMatch(source, /\b(?:token|password|credential|api.?key|secret|prompt|turns)\b/i,
         'chat organization may only store non-secret labels, project names and pin state')
+    } else if (name.endsWith('/industry-operations.js')) {
+      assert.match(source, /globalThis\.localStorage/)
+      assert.match(source, /ragam-industry-mode/)
+      assert.doesNotMatch(source, /\b(?:token|password|credential|api.?key|secret|turns)\b/i,
+        'industry mode may store only a non-sensitive UI preference, never credentials')
+      assert.match(source, /setItem\(INDUSTRY_MODE_KEY, enabled \? 'on' : 'off'\)/,
+        'only the on/off preference may be persisted; task prompts stay in source and Chat draft state')
     } else {
       assert.doesNotMatch(source, /localStorage|sessionStorage|document\.cookie/,
         `${name} stores something in the browser that the server should hold`)
@@ -596,6 +604,26 @@ test('ordinary generation has a Stop control, unmount cleanup, and preserves par
   assert.match(chat,/setPrompt\(\(draft\) => draft\.trim\(\) === prompt\.trim\(\)/)
   assert.match(chat,/filter\(\(m\) => !m\.failed\)/)
 
+})
+
+test('manufacturing operations mode is shared by every dashboard and keeps its launch tasks local', () => {
+  const shell = read('components/Shell.jsx')
+  const chat = read('areas/ChatArea.jsx')
+  assert.match(shell, /IndustryOperationsPanel/)
+  assert.match(shell, /onStartIndustryTask/)
+  assert.match(chat, /industryMode: 'manufacturing'/)
+  assert.match(chat, /selectedFirstParty\.instructionTuned/)
+  assert.match(chat, /does not follow instructions/)
+  assert.match(chat, /does not retrain model weights/)
+  assert.equal(INDUSTRY_TASKS.length, 3)
+  assert.deepEqual(INDUSTRY_TASKS.map((task) => task.id), ['maintenance-triage', 'quality-capa', 'shift-handover'])
+  const data = new Map()
+  const storage = { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) }
+  assert.equal(readIndustryMode(storage), true)
+  assert.equal(writeIndustryMode(false, storage), false)
+  assert.equal(readIndustryMode(storage), false)
+  writeIndustryMode(true, storage)
+  assert.equal(readIndustryMode(storage), true)
 })
 
 test('gateway models are selected explicitly and remote refresh requires an action', () => {

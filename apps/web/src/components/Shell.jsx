@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AREAS, AREA_IDS } from '../areas.js'
 import AccountCard from './AccountCard.jsx'
+import IndustryOperationsPanel from './IndustryOperationsPanel.jsx'
 export { AREAS, AREA_IDS }
 export function StatusCard({ readiness, error }) {
   return <div className="fabric-status" data-tone={error ? 'blocked' : 'warn'}>
@@ -8,7 +9,7 @@ export function StatusCard({ readiness, error }) {
     <div className="fabric-status-meta"><span>{readiness ? `${readiness.models?.total ?? 0} models listed · ${readiness.models?.ready ?? 0} inference observed` : 'Checking connection…'}</span><span>No local inference or fallback</span></div>
   </div>
 }
-export function Shell({ active, onSelect, readiness, readinessError, children, title, subtitle, account, onSettings, onProfile, onSignOut }) {
+export function Shell({ active, onSelect, readiness, readinessError, children, title, subtitle, account, onSettings, onProfile, onSignOut, industryMode, onIndustryModeChange, onStartIndustryTask }) {
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const navRef = useRef(null)
@@ -77,6 +78,7 @@ export function Shell({ active, onSelect, readiness, readinessError, children, t
       </div>
       <p className="nav-label">WORKSPACE</p>
       <nav className="primary-nav" aria-label="Product areas">{AREAS.map((area) => <button key={area.id} type="button" className={`nav-item${active === area.id ? ' active' : ''}`} onClick={() => handleNav(area.id)} aria-current={active === area.id ? 'page' : undefined}><span className="nav-glyph" aria-hidden="true">{area.glyph}</span><span className="nav-text"><strong>{area.label}</strong><small>{area.hint}</small></span></button>)}</nav>
+      <IndustryOperationsPanel enabled={industryMode} onEnabledChange={onIndustryModeChange} onStartTask={onStartIndustryTask} />
       <div className="sidebar-spacer" />
       <StatusCard readiness={readiness} error={readinessError} />
       <div className="sidebar-footer">

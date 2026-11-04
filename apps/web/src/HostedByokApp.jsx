@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import IndustryOperationsPanel from './components/IndustryOperationsPanel.jsx'
+import { readIndustryMode, writeIndustryMode } from './industry-operations.js'
 
 async function hostedRequest(path, { method = 'GET', body, signal } = {}) {
   let response
@@ -156,6 +158,7 @@ function HostedWorkspace({ account, onSignOut }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [messages, setMessages] = useState([])
   const [draft, setDraft] = useState('')
+  const [industryMode, setIndustryMode] = useState(readIndustryMode)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [consent, setConsent] = useState(false)
@@ -184,11 +187,12 @@ function HostedWorkspace({ account, onSignOut }) {
         body: {
           messages: next,
           model: provider?.model,
+          ...(industryMode ? { industryMode: 'manufacturing' } : {}),
           nativeSearch: search,
           authorization: { confirmed: consent, nativeSearchConfirmed: search, allowSensitive: sensitiveConsent },
         },
       })
-      setMessages([...next, { role: 'assistant', content: result.text, model: result.model, provider: result.provider, grounding: result.grounding }])
+      setMessages([...next, { role: 'assistant', content: result.text, model: result.model, provider: result.provider, grounding: result.grounding, industryMode: result.industryMode }])
     } catch (failure) {
       setMessages(prior)
       setDraft(text)
@@ -203,11 +207,17 @@ function HostedWorkspace({ account, onSignOut }) {
     <section className="hosted-chat-shell" aria-label="Hosted chat">
       <div className="hosted-chat-heading"><div><p className="hosted-eyebrow">YOUR PROVIDER, YOUR BILL</p><h1>Chat</h1><p className="hosted-muted">{provider?.configured ? `${selected?.label ?? provider.provider}${provider.model ? ` · ${provider.model}` : ' · choose a model in settings'}` : 'Add your provider key to start chatting.'}</p></div>
         <button className="hosted-quiet-button" onClick={() => setMessages([])} disabled={!messages.length}>New chat</button></div>
+      <IndustryOperationsPanel
+        enabled={industryMode}
+        onEnabledChange={(enabled) => setIndustryMode(writeIndustryMode(enabled))}
+        onStartTask={(taskPrompt) => { setIndustryMode(writeIndustryMode(true)); setDraft((current) => current.trim() ? `${current.trim()}\n\n${taskPrompt}` : taskPrompt) }}
+      />
       <ErrorNote error={error} />
       {!provider?.configured || !provider?.model ? <div className="hosted-empty-state"><div className="hosted-empty-icon">✦</div><h2>Bring your own AI key</h2><p>Save an API key from a supported provider. Ragam encrypts it for your account and sends requests only to the provider you choose.</p><button className="hosted-primary-button" onClick={() => setSettingsOpen(true)}>Configure provider</button></div> : null}
       {messages.length ? <div className="hosted-messages" aria-live="polite">{messages.map((message, index) => <article key={`${index}-${message.role}`} className={`hosted-message hosted-message-${message.role}`}>
         <div className="hosted-message-label">{message.role === 'user' ? 'You' : message.provider ?? selected?.label ?? 'Assistant'}</div>
         <div className="hosted-message-content">{message.content}</div>
+        {message.industryMode === 'manufacturing' ? <small className="hosted-hint">Manufacturing Operations guidance was applied. Verify every answer against approved procedures.</small> : null}
         {message.grounding?.sources?.length ? <div className="hosted-sources"><strong>Sources from provider Search</strong>{message.grounding.sources.map((source, sourceIndex) => <a key={`${source.url}-${sourceIndex}`} href={source.url} target="_blank" rel="noreferrer">{source.title || source.url}</a>)}</div> : null}
       </article>)}</div> : null}
       <form className="hosted-composer" onSubmit={send}>

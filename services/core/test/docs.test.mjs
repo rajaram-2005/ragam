@@ -749,18 +749,18 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**1001 tests**'), 'current core test inventory must be stated')
+  assert.ok(status.includes('**1002 tests**'), 'current core test inventory must be stated')
   assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
-  assert.ok(status.includes('**128 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1951 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('**129 tests**'), 'web test inventory must be stated')
+  assert.ok(status.includes('1953 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1951 tests: core 1001, web 128, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('1953 tests: core 1002, web 129, fabric 822'),
     'README must state the current inventory as docs/03 does')
   assert.ok(squash(doc.readme()).includes('latest completed full CI run')
     && squash(doc.readme()).includes('41394564087')
     && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
-    && squash(doc.readme()).includes('The current tree has 1,951 tests (Core 1,001, Web 128, Fabric 822). In this sandbox the full Core run was 990/1,001')
-    && squash(doc.readme()).includes('Web passed 128/128; docs/release passed 64/64')
+    && squash(doc.readme()).includes('The current tree has 1,953 tests (Core 1,002, Web 129, Fabric 822). In this sandbox the full Core run was 991/1,002')
+    && squash(doc.readme()).includes('Web passed 129/129; docs/release passed 64/64')
     && squash(doc.readme()).includes('full CI for this current tree is pending')
     && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
   'README must distinguish the last full CI run from the current full local suite')
@@ -769,14 +769,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(1001), `core heading must say 1001, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(1002), `core heading must say 1002, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(128), `web heading must say 128, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(129), `web heading must say 129, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1951,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1951`,
+    1953,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1953`,
   )
 })
 

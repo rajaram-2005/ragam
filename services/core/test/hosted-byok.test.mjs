@@ -164,9 +164,11 @@ test('model listing and chat require a selected listed model and per-request pro
   assert.equal(refused.json().error, 'consent_required')
   assert.equal(calls.some((call) => call.providerPath === '/chat/completions'), false)
 
-  const accepted = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Hello', authorization: { confirmed: true } } })
+  const accepted = await invoke(service, 'POST', '/chat', { cookie, body: { prompt: 'Hello', industryMode: 'manufacturing', authorization: { confirmed: true } } })
   assert.equal(accepted.statusCode, 200)
   assert.equal(accepted.json().text, 'Test reply')
+  assert.equal(accepted.json().industryMode, 'manufacturing')
+  assert.ok(calls.findLast((call) => call.providerPath === '/chat/completions').body.messages.some((message) => message.content.includes('lockout/tagout')))
   assert.equal(calls.some((call) => call.providerPath === '/chat/completions'), true)
 })
 

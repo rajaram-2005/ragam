@@ -18,7 +18,7 @@ async function blobToBase64(blob) {
   return btoa(binary)
 }
 
-export default function ChatArea({ provider, readiness, refreshReadiness, onSettings, onProfile, profile, account }) {
+export default function ChatArea({ provider, readiness, refreshReadiness, onSettings, onProfile, profile, account, industryMode = false, industryPrompt = '', onIndustryPromptConsumed }) {
   const firstPartyAll = readiness?.firstPartyModels?.models ?? []
   const firstPartyReady = firstPartyAll.filter((entry) => entry.status === 'ready' && entry.selectorEnabled)
   const firstPartyUnavailable = firstPartyAll.filter((entry) => !(entry.status === 'ready' && entry.selectorEnabled))
@@ -49,6 +49,11 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
   // The preference is read from the server, never inferred from what is typed here.
   useEffect(() => { api.styles().then((data) => { setStyles(data.styles); setStyle(data.preference?.style ?? '') }).catch(() => {}) }, [])
   useEffect(() => { if (thread.current) thread.current.scrollTop = thread.current.scrollHeight }, [messages])
+  useEffect(() => {
+    if (!industryPrompt) return
+    setPrompt(industryPrompt)
+    onIndustryPromptConsumed?.()
+  }, [industryPrompt, onIndustryPromptConsumed])
 
   const voiceModels = readiness?.media?.voice?.models ?? []
   const canRecordVoice = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== 'undefined'
@@ -71,6 +76,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
   }, [audioDraft])
 
   const selectedFirstParty = firstPartyReady.find((entry) => entry.id === model) ?? null
+  const industryUnsupported = Boolean(industryMode && selectedFirstParty && selectedFirstParty.instructionTuned !== true)
   const selectedModelEvidence = provider?.modelDetails?.find((entry) => entry.id === model) ?? null
   const selectedModelReady = Boolean(model && (gatewayModels.includes(model) || firstPartyReady.some((entry) => entry.id === model)))
   const setSetupGuideOpen = (open) => {
@@ -80,6 +86,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
 
   const send = async (event) => {
     event.preventDefault(); if (busy || saving || (!prompt.trim() && !attachments.length) || !model) return
+    if (industryUnsupported) { setError(Error('Manufacturing Operations mode needs an instruction-tuned model. Klyvaron Lite is a base completion model; switch the mode off or choose an instruction-tuned Chat model.')); return }
     const content = messageWithChatFiles(prompt, attachments)
     const mediaAttachments = attachments.filter((file) => ['image', 'audio', 'video'].includes(file.kind))
     const allowedMediaKinds = new Set(selectedFirstParty ? [] : (provider?.chatInputKinds ?? []))
@@ -123,6 +130,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
         sessionId: id,
         temperature: Number(temperature),
         maxTokens: Number(maxTokens),
+        ...(industryMode ? { industryMode: 'manufacturing' } : {}),
         useKnowledge,
         useMemory,
         ...(nativeSearchConsent ? { nativeSearch: true } : {}),
@@ -303,6 +311,8 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
   }
 
   return <div className="online-chat">
+    {industryMode ? <Banner tone="info" title="Manufacturing Operations mode is active"><p>Safety-first context is added to this text Chat request for the selected Klyvaron or gateway model. This does not retrain model weights or guarantee correct advice. Retrieved files are included only when you separately enable Knowledge and approve context transfer; verify every action against approved site procedures.</p></Banner> : null}
+    {industryUnsupported ? <Banner tone="bad" title="The selected Klyvaron model cannot use this mode"><p>Klyvaron Lite is a base completion model and does not follow instructions. Turn Manufacturing Operations mode off or select an instruction-tuned Chat model; Ragam will not switch models for you.</p></Banner> : null}
     <GettingStarted
       providerReady={Boolean(provider?.configured || selectedFirstParty)}
       modelReady={selectedModelReady}
@@ -363,6 +373,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
             {m.failed ? <small>Not completed {m.role === 'user' ? <Button className="ghost small" onClick={() => retry(i)}>Retry</Button> : null}</small> : null}
             {m.meta ? (m.meta.firstPartyWeights ? <small>Served by verified first-party Klyvaron weights ({m.meta.modelId} · SHA-256 {m.meta.weightsSha256?.slice(0, 12)}… · {m.meta.tokensPerSecond} tok/s · sentExternally: false){m.meta.differentiators ? ` · verdict: ${m.meta.differentiators.verdict} · state: ${m.meta.differentiators.state}` : ''}</small> : <small>Executed online via {m.meta.provider ?? provider?.name ?? 'the gateway'}{m.meta.redaction?.findings?.length ? ' · credentials redacted' : ''}</small>) : null}
             {typeof m.meta?.providerModel === 'string' && m.meta.providerModel !== m.meta.modelId ? <small>Reported model: {m.meta.providerModel}</small> : null}
+            {m.meta?.industryMode === 'manufacturing' ? <small>Manufacturing Operations guidance was applied to this text Chat request; verify the answer against your approved procedures.</small> : null}
             {m.meta?.skill ? <small>Procedure used: {m.meta.skill.name} v{m.meta.skill.version}</small> : null}
             {m.meta?.styleAudit && !m.meta.styleAudit.ok ? <small>Style check: {m.meta.styleAudit.violations.join(', ')}. The answer is shown unchanged; it was not rewritten.</small> : null}
             {m.meta?.grounding?.citations?.length ? <details><summary>File references sent with this request</summary><ul>{m.meta.grounding.citations.map((c, index) => <li key={index}>{c.ref} · {c.title ?? c.documentId}</li>)}</ul></details> : null}
@@ -447,7 +458,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
                 </Field>
               </div>
             </details>
-            {busy ? <Button variant="danger" onClick={() => abort.current?.abort()}>Stop generation</Button> : <Button type="submit" variant="primary" disabled={saving || !model || (!prompt.trim() && !attachments.length)}>Send</Button>}
+            {busy ? <Button variant="danger" onClick={() => abort.current?.abort()}>Stop generation</Button> : <Button type="submit" variant="primary" disabled={saving || !model || industryUnsupported || (!prompt.trim() && !attachments.length)}>Send</Button>}
           </div>
         </div>
         <div className="chat-composer-foot"><span>Enter to send <b>·</b> Shift + Enter for a new line</span><span>{selectedFirstParty ? 'Processed on this Core host · no external transfer' : 'Sent to the selected provider · charges and retention policies may apply'}</span></div>

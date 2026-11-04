@@ -16,6 +16,7 @@ import VideoArea from './areas/VideoArea.jsx'
 import PluginsArea from './areas/PluginsArea.jsx'
 import McpArea from './areas/McpArea.jsx'
 import HostedByokApp from './HostedByokApp.jsx'
+import { readIndustryMode, writeIndustryMode } from './industry-operations.js'
 
 // What the address bar can say, and what the app shows for each of them.
 //
@@ -39,6 +40,8 @@ function LocalApp() {
   const [authError, setAuthError] = useState(null), [notice, setNotice] = useState('')
   const [active, setActive] = useState(currentArea), [page, setPage] = useState(currentPage), [settings, setSettings] = useState(false), [profileOpen, setProfileOpen] = useState(false)
   const [profile, setProfile] = useState(readProfile)
+  const [industryMode, setIndustryMode] = useState(readIndustryMode)
+  const [industryPrompt, setIndustryPrompt] = useState('')
   const [readiness, setReadiness] = useState(null), [provider, setProvider] = useState(null), [error, setError] = useState(null)
 
   // Both are `useCallback` with no dependencies because they touch only state setters,
@@ -97,7 +100,17 @@ function LocalApp() {
   }
 
   const area = AREAS.find((a) => a.id === active) ?? AREAS[0]
-  const shared = { provider, readiness, refreshReadiness: refresh, onSettings: () => setSettings(true), onProfile: () => setProfileOpen(true), profile, account }
+  const changeIndustryMode = (enabled) => setIndustryMode(writeIndustryMode(enabled))
+  const startIndustryTask = (taskPrompt) => {
+    changeIndustryMode(true)
+    setIndustryPrompt(taskPrompt)
+    setActive('chat')
+    goTo('#/chat')
+  }
+  const shared = {
+    provider, readiness, refreshReadiness: refresh, onSettings: () => setSettings(true), onProfile: () => setProfileOpen(true), profile, account,
+    industryMode, industryPrompt, onIndustryPromptConsumed: () => setIndustryPrompt(''),
+  }
   const updateProfile = (next) => setProfile(writeProfile(next))
   return <Shell
     active={area.id}
@@ -109,6 +122,9 @@ function LocalApp() {
     account={account}
     onSettings={() => setSettings(true)}
     onProfile={() => setProfileOpen(true)}
+    industryMode={industryMode}
+    onIndustryModeChange={changeIndustryMode}
+    onStartIndustryTask={startIndustryTask}
     onSignOut={async () => { try { await api.logout(); signedOut() } catch (e) { setError(e) } }}
   >
     {error ? <Banner tone="bad" title={error.message} /> : null}

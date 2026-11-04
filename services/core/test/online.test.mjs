@@ -190,6 +190,34 @@ test('file knowledge and approved memory remain opt-in and backed by real stores
  assert.equal((await f.request('POST','/api/chat',body)).status,200)
  assert.ok(f.calls.at(-1).body.messages.some((m)=>m.content.includes('orchard')))
 })
+test('manufacturing operations guidance reaches selected gateway and native Klyvaron models without fallback', async (t) => {
+ const f=await fixture(t); await f.configure()
+ const external=await f.request('POST','/api/chat',f.chat({industryMode:'manufacturing'}))
+ assert.equal(external.status,200,JSON.stringify(external.data))
+ const sent=f.calls.at(-1).body.messages
+ assert.ok(sent.some((message)=>message.role==='system' && message.content.includes('lockout/tagout')))
+ assert.equal(external.data.industryMode,'manufacturing')
+ const invalid=await f.request('POST','/api/chat',f.chat({industryMode:'anything-else'}))
+ assert.equal(invalid.status,400)
+ assert.equal(invalid.data.error,'invalid_industry_mode')
+
+ const native=f.app.nativeKlyvaron, nativeMessages=[]; let nativeSystemPrompt='', instructionTuned=true
+ native.isKnownFirstPartyId=(id)=>id==='klyvaron-pro-lm'
+ native.requireProvider=(id)=>({
+   record:{id,version:'test-v1',weightsSha256:'a'.repeat(64),parameters:100},
+   provider:{get instructionTuned() { return instructionTuned },async *chatStream({messages,systemPrompt}) { nativeMessages.push(...messages); nativeSystemPrompt=systemPrompt; yield 'Advisory answer.'; return {text:'Advisory answer.',timingMs:1,tokensPerSecond:5,usage:{completionTokens:2}} }},
+ })
+ const local=await f.app.chat(f.chat({model:'klyvaron-pro-lm',industryMode:'manufacturing'}),{session:f.session()})
+ assert.equal(local.provider,'Klyvaron Native')
+ assert.equal(local.sentExternally,false)
+ assert.equal(local.industryMode,'manufacturing')
+ assert.ok(nativeMessages.some((message)=>message.role==='system' && message.content.includes('lockout/tagout')))
+ assert.match(nativeSystemPrompt,/lockout\/tagout/,'instruction-tuned Klyvaron receives the manufacturing rules in its actual system prompt')
+ const callsBeforeBaseRefusal=f.calls.length
+ instructionTuned=false
+ await assert.rejects(() => f.app.chat(f.chat({model:'klyvaron-pro-lm',industryMode:'manufacturing'}),{session:f.session()}),{code:'capability_unavailable'})
+ assert.equal(f.calls.length,callsBeforeBaseRefusal,'unsupported native weights must not silently fall back to a gateway')
+})
 test('only reviewed built-in tools execute; custom installs and removed features are unavailable', async (t) => {
  const f=await fixture(t);await f.login()
  assert.equal((await f.request('POST','/api/plugins/install',{builtin:true})).status,403)

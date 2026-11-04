@@ -33,6 +33,12 @@ The separate hosted BYOK edition is documented in [30 — Hosted BYOK](30-hosted
 - No hosting, DNS, firewall, operating-system, hardware or external-account changes are
   performed by this repository work. The operator chooses whether and where to deploy.
 
+## Manufacturing Operations mode
+
+The local workspace includes an opt-out manufacturing prompt layer shared across all five dashboards. Its sidebar offers maintenance triage, quality/CAPA drafting and shift-handover starters that open Chat. When enabled, Core adds a safety-first advisory instruction to supported text Chat requests, including native Klyvaron and the currently selected gateway model; it does not alter model weights, add manufacturing knowledge by itself, or control equipment. Klyvaron Lite and individual provider models may not reliably follow complex instructions, so treat all output as unverified assistance.
+
+Company documents remain in the existing private Knowledge store. The user must separately enable Knowledge and approve sending matching excerpts for a particular Chat turn; the industry mode itself does not transfer files. Answers should be checked against approved site procedures and reviewed by qualified people. The mode is not a safety certification, work-order system, or substitute for lockout/tagout, permits, PPE, or operator judgment. Image and Video models are not given text Chat instructions; the shared operations panel simply remains available while using those dashboards.
+
 ## Configure and start
 
 This is one independent local instance per end user. Each person's Docker Desktop runs

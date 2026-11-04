@@ -287,6 +287,27 @@ code, pre, .mono { font-family: var(--font-mono); }
 
 .primary-nav { display: grid; gap: 3px; }
 
+.industry-ops-card {
+  display: grid;
+  gap: 9px;
+  margin: 14px 2px 6px;
+  padding: 11px;
+  border: 1px solid rgba(115, 223, 180, 0.2);
+  border-radius: var(--radius-md);
+  background: linear-gradient(145deg, rgba(115, 223, 180, 0.07), rgba(115, 223, 180, 0.015));
+}
+.industry-ops-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.industry-ops-heading > div { display: grid; gap: 3px; min-width: 0; }
+.industry-ops-heading strong { color: var(--mint); font-size: var(--font-size-sm); }
+.industry-ops-heading small { color: var(--text-faint); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; }
+.industry-ops-toggle { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: var(--font-size-xs); }
+.industry-ops-toggle input { accent-color: var(--mint-strong); }
+.industry-ops-actions { display: grid; gap: 5px; }
+.industry-ops-actions .btn { min-height: 30px; padding: 5px 7px; font-size: var(--font-size-xs); text-align: left; }
+.industry-ops-note { margin: 0; color: var(--text-faint); font-size: 10px; line-height: 1.45; }
+.industry-ops-card .small { margin: 0; }
+.sidebar.collapsed .industry-ops-card { display: none; }
+
 .nav-item {
   width: 100%;
   position: relative;

@@ -105,7 +105,7 @@ Aetheris Omni supports a local Docker workspace and a separate opt-in hosted BYO
 
 The product has exactly **five primary areas: Chat, Image, Video, Plugins and MCP**. Provider Settings is a dialog; history, memory, safety and other internals stay inside the relevant areas.
 
-- **Chat:** 22 individually adapted Chat APIs have contract-tested integrations. Contract tests do not prove current live access, latency or model quality. Choose a provider and model explicitly; no silent fallback.
+- **Chat:** 22 individually adapted Chat APIs have contract-tested integrations. Local and hosted Chat include an opt-out Manufacturing Operations mode with maintenance triage, quality/CAPA and shift-handover starters. It adds a safety-first instruction layer to supported text Chat requests on instruction-tuned Klyvaron and selected gateway models; it does not retrain weights, guarantee model quality or control equipment. In local mode, Knowledge excerpts remain opt-in; all outputs must be verified against approved site procedures. Contract tests do not prove current live access, latency or model quality. Choose a provider and model explicitly; no silent fallback.
 - **Image and Video:** these use separate provider connections. Image has ten adapters (including optional local ComfyUI); Video has five. Model weights are not shipped with the app.
 - **Plugins and MCP:** reviewed built-ins plus owner-managed HTTP/Streamable HTTP connections. Remote calls need explicit approval; downloaded remote code is not executed.
 - **Provider catalogue:** currently 47 entries, including one pending entry. A listed consumer product is not automatically an API integration; only documented public APIs are represented. The catalogue is not an exhaustive inventory of every provider worldwide.
@@ -211,7 +211,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 1951 tests: core 1001, web 128, fabric 822
+npm test          # 1953 tests: core 1002, web 129, fabric 822
 npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
 npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
 npm run train     # in-process training run
@@ -232,7 +232,7 @@ component, a Docker Compose build/health/persistence/restore smoke, documentatio
 checks, and release verification against suite counts. The latest completed full CI run
 [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all
 1,916 tests (Core 985, Web 109, Fabric 822), plus release verification and the
-loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 1,951 tests (Core 1,001, Web 128, Fabric 822). In this sandbox the full Core run was 990/1,001: 11 model/training tests could not pass because the ignored Klyvaron artifacts and Python NumPy prerequisite are not installed. Web passed 128/128; docs/release passed 64/64. The prior full local run passed with the pinned Python environment and digest-verified Klyvaron artifacts; full CI for this current tree is pending. The added Chat API paths use deterministic contract fixtures;
+loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 1,953 tests (Core 1,002, Web 129, Fabric 822). In this sandbox the full Core run was 991/1,002: 11 model/training tests could not pass because the ignored Klyvaron artifacts and Python NumPy prerequisite are not installed. Web passed 129/129; docs/release passed 64/64. The prior full local run passed with the pinned Python environment and digest-verified Klyvaron artifacts; full CI for this current tree is pending. The added Chat API paths use deterministic contract fixtures;
 neither the tests nor CI made live vendor calls. The
 Fabric job asserts the release gate in **both** directions: a trained model must
 release, and an undertrained one must fail *and* must not become the current model.
@@ -291,9 +291,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 39,019 | 25,822 | **zero npm packages** | 1001 |
+| `services/core` | Node 22 ESM | 39,064 | 25,874 | **zero npm packages** | 1002 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 7,112 | 2,383 | pdfjs-dist, react, react-dom | 128 |
+| `apps/web` | React 18 + Vite | 7,232 | 2,413 | pdfjs-dist, react, react-dom | 129 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

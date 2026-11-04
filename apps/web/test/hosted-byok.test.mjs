@@ -20,6 +20,8 @@ test('hosted chat asks for explicit per-turn provider and Search approval', () =
   assert.ok(component.includes('I approve sending this message'))
   assert.ok(component.includes('Use provider-native Search for this turn'))
   assert.ok(component.includes('nativeSearchConfirmed: search'))
+  assert.ok(component.includes("industryMode: 'manufacturing'"))
+  assert.ok(component.includes('IndustryOperationsPanel'))
   assert.ok(component.includes('No fallback'))
 })
 

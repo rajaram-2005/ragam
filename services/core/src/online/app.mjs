@@ -7,6 +7,7 @@ import { OnlineStore } from './store.mjs'
 import { OnlineGateway, gatewayUrl, failure, runtimeFor } from './gateway.mjs'
 import { readBody, sendJson } from './http.mjs'
 import { normalizeChatMessages, redactChatMessages, textFromChatContent } from './chat-content.mjs'
+import { MANUFACTURING_MODE, addIndustryInstruction, industryInstructionFor } from '../providers/industry-operations.mjs'
 import { contextRoutes } from './context-routes.mjs'
 import { AccountStore, ROLES, DEFAULT_MAX_ACCOUNTS } from './accounts.mjs'
 import { AuditLedger } from '../audit/ledger.mjs'
@@ -1202,6 +1203,12 @@ export class OnlineApp {
   async performChat(body, { signal, emit, session } = {}) {
     if (!session?.accountId) throw failure('unauthenticated', 'Sign in to this Aetheris installation.', 401)
     if (body.executionMode && body.executionMode !== 'online') throw failure('online_only', 'Local and hybrid inference are not available.', 400)
+    if (body.industryMode !== undefined && body.industryMode !== null && body.industryMode !== false
+      && body.industryMode !== '' && body.industryMode !== MANUFACTURING_MODE) {
+      throw failure('invalid_industry_mode', 'Choose a supported industry mode.', 400)
+    }
+    const industryMode = body.industryMode === MANUFACTURING_MODE ? MANUFACTURING_MODE : null
+    const industryInstruction = industryInstructionFor(industryMode)
     const context = await this.contextFor(session.accountId)
     const state = this.store.state, revision = state.revision
     const tier = body.tier === undefined || body.tier === null ? null : body.tier
@@ -1216,6 +1223,9 @@ export class OnlineApp {
     if (isNativeTarget) {
       // Never fall back to a gateway or another model if the requested first-party model is missing or failed.
       const { record, provider } = this.nativeKlyvaron.requireProvider(requestedModel)
+      if (industryMode && provider.instructionTuned !== true) {
+        throw failure('capability_unavailable', 'Manufacturing Operations mode needs an instruction-tuned model. Klyvaron Lite is a base completion model and does not follow this guidance. Turn this mode off or select an instruction-tuned Chat model; no fallback is performed.', 409)
+      }
       if (body.authorization && body.authorization.confirmed === false) {
         throw failure('consent_required', 'Confirm this request before running generation.', 403)
       }
@@ -1224,6 +1234,7 @@ export class OnlineApp {
       if (body.nativeSearch || (Array.isArray(body.tools) && body.tools.length)) throw failure('capability_unavailable', 'First-party Klyvaron native Chat does not expose provider search or function tools. Choose a compatible listed gateway model; no fallback is performed.', 409)
       if (normalized.mediaCount) throw failure('capability_unavailable', 'First-party Klyvaron native Chat is text-only; choose a compatible gateway model for these attachments. No fallback is performed.', 409)
       const messages = normalized.messages
+      const industryMessage = addIndustryInstruction(messages, industryMode)
       const prompt = normalized.prompt
       const contextClasses = []
       let grounding = null
@@ -1256,7 +1267,7 @@ export class OnlineApp {
       if (body.style !== undefined && body.style !== null) {
         messages.unshift({ role: 'system', content: instructionFor(body.style) })
       }
-      const classification = mostSensitiveDataClass(...messages.map((m) => classifyText(m.content).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
+      const classification = mostSensitiveDataClass(...messages.filter((message) => message !== industryMessage).map((m) => classifyText(m.content).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
       const redacted = redactDeep(messages)
       const maxTokens = body.maxTokens ?? 96
       const temperature = body.temperature ?? 0
@@ -1280,6 +1291,7 @@ export class OnlineApp {
       try {
         const stream = provider.chatStream({
           messages: redacted.value,
+          systemPrompt: industryInstruction,
           maxTokens,
           temperature,
           signal,
@@ -1347,6 +1359,7 @@ export class OnlineApp {
         usage: nativeResult.usage,
         redaction: { findings: redacted.findings },
         grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null,
+        industryMode,
         skill: skillUsed,
         style: body.style ?? null,
         styleAudit,
@@ -1379,6 +1392,7 @@ export class OnlineApp {
     const incoming = body.messages ?? [{ role: 'user', content: body.prompt }]
     const normalized = normalizeChatMessages(incoming)
     const messages = normalized.messages
+    const industryMessage = addIndustryInstruction(messages, industryMode)
     const prompt = normalized.prompt
     if (normalized.mediaCount) {
       if (body.authorization?.mediaConfirmed !== true) throw failure('media_consent_required', 'Confirm the selected media will be sent to the currently selected provider with this message.', 403)
@@ -1416,7 +1430,7 @@ export class OnlineApp {
       const instruction = instructionFor(body.style)
       messages.unshift({ role: 'system', content: instruction })
     }
-    const classification = mostSensitiveDataClass(...messages.map((m) => classifyText(textFromChatContent(m.content)).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
+    const classification = mostSensitiveDataClass(...messages.filter((message) => message !== industryMessage).map((m) => classifyText(textFromChatContent(m.content)).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
     if (['restricted','confidential'].includes(classification) && body.authorization?.allowSensitive !== true) throw failure('sensitive_consent_required', 'This request or its context contains sensitive information. Explicitly authorize this transfer or remove it.', 403)
     const redacted = redactChatMessages(messages)
     const maxTokens = body.maxTokens ?? 512
@@ -1480,7 +1494,7 @@ export class OnlineApp {
       this.skills.recordUse(skillUsed.name)
       this.ledger.record({ category: 'skills', action: 'skill_use', outcome: 'success', subject: session.accountId, detail: { skill: skillUsed.name, version: skillUsed.version } })
     }
-    return { text, modelId: model, providerModel: reportedModel, provider: config.label ?? runtimeFor(config.id).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount, ...(result.grounding ? { provider: result.grounding } : {}) } : (result.grounding ?? null), toolCalls: proposedToolCalls, skill: skillUsed, style: body.style ?? null, styleAudit, klyvaron: resolved ? { tier: resolved.tier, provenance: resolved.provenance } : null }
+    return { text, modelId: model, providerModel: reportedModel, provider: config.label ?? runtimeFor(config.id).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount, ...(result.grounding ? { provider: result.grounding } : {}) } : (result.grounding ?? null), toolCalls: proposedToolCalls, skill: skillUsed, style: body.style ?? null, styleAudit, industryMode, klyvaron: resolved ? { tier: resolved.tier, provenance: resolved.provenance } : null }
   }
   authenticated(req) {
     const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]

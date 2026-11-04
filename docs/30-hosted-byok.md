@@ -11,6 +11,7 @@ The repo includes an opt-in hosted web/API edition alongside the default local D
 - Provider endpoints are HTTPS and pinned to the catalogue wire's documented origin/path (Azure OpenAI accepts only an `*.openai.azure.com` resource host). The shared gateway blocks private-address resolution and redirects. Local Ollama/llama.cpp endpoints are intentionally unavailable from this public backend.
 - Chat prompts and completions are held in browser memory only. The hosted API does not save chat history, memory, file uploads or provider payloads. Requests go to exactly the saved provider/model after per-turn approval; native Search has separate per-turn consent and there is no fallback.
 - Provider model discovery is an explicit user action. Provider usage and any Search charges are billed by that provider to the user's account, not by Ragam.
+- The hosted Chat UI can opt into the shared Manufacturing Operations mode. For a supported text Chat model, the API adds safety-first advisory instructions and returns the mode in the response metadata. This is prompt orchestration, not model training, a guarantee of correctness, or machine control. The hosted edition has no Knowledge/file retrieval, and model output must be checked against approved site procedures.
 
 ## Database migration
 
