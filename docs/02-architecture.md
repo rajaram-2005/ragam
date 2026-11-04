@@ -1,6 +1,6 @@
 # 02 — Architecture
 
-> **Active product: online-only (Phase 2), with local and hosted deployment modes.** The default Docker Compose stack is a localhost-only single-user workspace with no account/email flow; see [the deployment guide](22-self-hosted-deployment.md). A separate opt-in hosted BYOK web/API edition uses Supabase Auth/Postgres and Vercel functions; its scope and launch gates are in [30 — Hosted BYOK](30-hosted-byok.md). Legacy local/research **service** code remains for regression tests. Suite totals include retained coverage.
+> **Active product: online-only (Phase 2), with local and hosted deployment modes.** The default Docker Compose stack is a loopback-only single-user workspace with no account/email flow; an opt-in LAN overlay adds shared Caddy Basic Auth and internal HTTPS for a private network. See [the deployment guide](22-self-hosted-deployment.md). A separate opt-in hosted BYOK web/API edition uses Supabase Auth/Postgres and Vercel functions; its scope and launch gates are in [30 — Hosted BYOK](30-hosted-byok.md). Legacy local/research **service** code remains for regression tests. Suite totals include retained coverage.
 
 How the three upstream repositories became one system, what each component owns,
 and where the enforcement points are.
@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 39,019 source lines, 25,773 test lines
+### `services/core` — 39,019 source lines, 25,822 test lines
 
 | Module | Lines | Owns |
 |---|---|---|

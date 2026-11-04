@@ -19,6 +19,8 @@ coverage
 *.sqlite
 *.sqlite-*
 *.log
+deploy/Caddyfile.lan.local
+deploy/ragam-lan-root.crt
 *.gguf
 *.safetensors
 *.onnx

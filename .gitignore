@@ -16,6 +16,9 @@
 *.pem
 *.key
 credentials.json
+# LAN mode: generated config contains the Basic Auth hash; CA cert is local trust state.
+deploy/Caddyfile.lan.local
+deploy/ragam-lan-root.crt
 
 # --- dependencies ----------------------------------------------------------
 node_modules/

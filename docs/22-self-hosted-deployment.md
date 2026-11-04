@@ -1,26 +1,30 @@
 # Self-hosted deployment (Docker Compose)
 
-This deployment model is **one independent instance per end user**: each person runs the
-Compose stack on their own computer using its Docker Engine, rather than connecting to the
-maintainer's computer or a shared cloud backend. It deploys the **existing** online Core and
-Vite-built web app. Caddy serves the web bundle and proxies `/api/*` to Core. Each instance's
-app databases, generated files, and Caddy state live in that person's local Docker volumes
-(`ragam-data`, `ragam-caddy-data`, and `ragam-caddy-config`). Docker Compose is the repository's
-only deployment path; the app's databases and files stay on the user's computer. This does
-not add local model inference or migrate any externally hosted data.
+The default Compose deployment is **one local single-user instance**: the owner runs Core,
+the Vite-built web app, and Caddy with Docker on their computer. Caddy serves the web bundle
+and proxies `/api/*` to Core; workspace data remains in the named `ragam-data` volume.
+The default HTTP listener is loopback-only. An optional LAN overlay keeps this single-user
+mode but adds one shared Caddy Basic Auth gate and Caddy's private TLS; it is for a trusted
+home network, not public hosting. LAN users still share the same workspace identity and data.
+The separate hosted BYOK edition is documented in [30 — Hosted BYOK](30-hosted-byok.md).
 
 ## Scope and safety
 
 - The stack uses one durable named volume, `ragam-data`, for Core's SQLite databases,
   provider key material, settings, conversation/context data and generated files.
   Caddy state lives in separate named volumes.
-- This Docker deployment is a single-user local workspace with no email, registration,
-  password or sign-in screen. Its HTTP UI/API is published only on `127.0.0.1:80` and
-  Core rejects non-loopback Host headers. Do not expose it to a LAN, public network or
-  remote reverse proxy: local-only access is the security boundary when there is no login.
-- The repository no longer contains Vercel or Supabase deployment integrations or
-  migrations. This repository cleanup does **not** delete, pause, or modify any external
-  project, deployment, account, or data. No hosted-data export or migration is included.
+- The local Core remains single-user and has no email, individual accounts or sign-in
+  screen. Default Compose publishes only `127.0.0.1:80` and remains the safest choice.
+- LAN mode is a deliberate opt-in: it binds only to a private IPv4 address, requires a
+  shared Caddy Basic Auth password, and serves HTTPS using Caddy's internal CA. The
+  Core's own local-single-user guard remains enabled; Caddy passes `Host: localhost` and
+  Core allows only the exact HTTPS origin generated for that LAN hostname. Do not deploy
+  the LAN overlay on a public server or forward its ports through a router.
+- LAN Basic Auth is a shared gate, not per-person identity or authorization. Everyone who
+  knows the password can access the same single-user workspace. Choose a strong unique
+  password and share the Caddy root certificate only with devices you control.
+- Hosted BYOK still uses the separate Vercel/Supabase path. The Docker LAN mode does not
+  enable hosted accounts or Supabase; it stores this one workspace on the Docker host.
 - Provider URLs are opened by the Core **container**. A host's `127.0.0.1` is not the
   Core container; configure a provider on an address reachable from that container (or
   within the same Docker network) and add only its exact origin to
@@ -45,10 +49,31 @@ launchers below; they use file pickers, stop Core for a cold archive, and keep a
 copy before a restore. Choose a BitLocker-protected location because the archive contains
 private conversations and provider credentials.
 
-For another Docker Compose UI, open this repository's `compose.yaml`, build and start the
-project with its default settings. Keep the published address on `127.0.0.1`; do not change
-the bind to a LAN/public interface, add a remote reverse proxy, or place this no-login
-workspace on a hosted server. The app intentionally refuses non-loopback Host headers.
+### Optional LAN-only access
+
+The default remains loopback-only. To let your own devices on a trusted private network
+use the same workspace, run `scripts/Start-Lan-Ragam.ps1` from PowerShell on the Docker
+host. It asks for a private IPv4 address reserved for that host, a client hostname (that
+same IP or an mDNS name ending in `.local`), and a strong shared password. It uses the
+Caddy container to create a bcrypt hash, writes ignored local settings, validates the
+Compose overlay, and starts the stack. It does not switch off Core's local-only mode.
+
+Open `https://<the-hostname-you-entered>` from a client on the LAN. Caddy's internal CA
+certificate must be trusted by each client OS/browser; the launcher exports the public
+root certificate to ignored `deploy/ragam-lan-root.crt`. Import that certificate only on
+devices you control, then revisit the HTTPS address. **Do not bypass certificate warnings.**
+The CA private key remains in the `ragam-caddy-data` volume; protect that Docker volume
+and any backups. Never port-forward 80/443 or use a public DNS name for this LAN overlay.
+
+Stop the LAN stack without deleting data with `scripts/Stop-Lan-Ragam.ps1`. It runs
+`docker compose down` without `-v`; the workspace and Caddy CA volumes remain in place.
+For non-Windows hosts, the same configuration uses `compose.yaml` plus `compose.lan.yaml`,
+`.env.lan`, and a locally rendered `deploy/Caddyfile.lan.local`; see the launcher for the
+required variable names and Caddyfile template.
+
+For another Docker Compose UI, open `compose.yaml` and use its default settings to keep
+the published address on `127.0.0.1`. For LAN-only access, use the guarded overlay and
+never bind to `0.0.0.0`, a public address, or a hosted server.
 
 To use a model, open **Provider Settings**, choose a supported provider (including OpenAI
 for ChatGPT, Gemini, Anthropic Claude, xAI for Grok, and others), enter your own provider
@@ -105,9 +130,12 @@ docker run --rm \
 docker compose -f compose.yaml start core
 ```
 
-The Caddy volumes hold regenerable proxy runtime state only. This localhost HTTP setup
-obtains no ACME certificate; the app data that matters is in `ragam-data`. A successful
-backup command is not a restore verification.
+In default loopback mode, Caddy state is regenerable and the app data that matters is in
+`ragam-data`; that HTTP setup obtains no ACME certificate. In LAN mode, `ragam-caddy-data`
+also contains the private key for Caddy's internal CA. Keep that volume private and backed
+up if you want to preserve client trust; never copy or share its private key. If the CA
+volume is lost, Caddy will create a new root and every client must trust the newly exported
+certificate. A successful backup command is not a restore verification.
 
 For a restore drill, first stop Core and restore into a **separate test volume** while
 leaving the original volume untouched. To replace a volume, confirm the archive and
@@ -121,8 +149,4 @@ them before execution. Preserve the prior volume until every restore check passe
 
 ## Updating and cutover gates
 
-Rebuild from reviewed repository source with `docker compose up -d --build`; back up first
-and keep the previous known-good images/backup until health and local workspace checks pass. There is no
-automatic migration from external hosting or hosted-account export in this Docker-only
-repository. The removal of deployment integrations here is repository-only: any external
-service, project, deployment and data remains under its owner's control and is unchanged.
+Rebuild the default local stack from reviewed repository source with `docker compose up -d --build`; back up first and keep the previous known-good images/backup until health and local workspace checks pass. For LAN mode, include `--env-file .env.lan -f compose.yaml -f compose.lan.yaml` on each Compose command. The local Docker edition does not import hosted accounts or hosted provider settings; the opt-in hosted BYOK deployment remains a separate service and data boundary.

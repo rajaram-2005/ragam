@@ -161,7 +161,21 @@ test('.env.example documents active deployment variables without exposing accoun
   assert.deepEqual(missing, [], `.env.example omits active deployment variables: ${missing.join(', ')}`)
   const compose = readFileSync(resolve(REPO, 'compose.yaml'), 'utf8')
   assert.match(compose, /AETHERIS_LOCAL_SINGLE_USER:\s*'true'/, 'Compose must force the account-free mode')
-  assert.match(compose, /127\.0\.0\.1:80:80/, 'the no-login app must remain loopback-only')
+  assert.match(compose, /RAGAM_BIND_ADDRESS:-127\.0\.0\.1.*:80:80/, 'the no-login app must default to loopback-only')
+  const lanCompose = readFileSync(resolve(REPO, 'compose.lan.yaml'), 'utf8')
+  assert.match(lanCompose, /RAGAM_BIND_ADDRESS:\?/, 'LAN mode must require an explicit private bind address')
+  assert.match(lanCompose, /AETHERIS_TRUSTED_WEB_ORIGINS:.*https:\/\//, 'Core must trust only the HTTPS LAN origin')
+  const lanCaddy = readFileSync(resolve(REPO, 'deploy/Caddyfile.lan'), 'utf8')
+  assert.ok(lanCaddy.includes('tls internal'), 'LAN TLS must use Caddy internal PKI')
+  assert.ok(lanCaddy.includes('basic_auth'), 'LAN UI and API must require the shared password')
+  assert.ok(lanCaddy.includes('header_up Host localhost'), 'Caddy must preserve Core local-host checks')
+  assert.ok(lanCaddy.includes('header_up -Authorization'), 'Caddy must not forward its shared credential to Core')
+  const lanLauncher = readFileSync(resolve(REPO, 'scripts/Start-Lan-Ragam.ps1'), 'utf8')
+  assert.ok(lanLauncher.includes('Test-PrivateIpv4'), 'the launcher must refuse public and wildcard binds')
+  assert.ok(lanLauncher.includes('$password.Length -lt 16'), 'the shared password must have a strong minimum length')
+  const lanStopper = readFileSync(resolve(REPO, 'scripts/Stop-Lan-Ragam.ps1'), 'utf8')
+  assert.match(lanStopper, /composeArgs\s+down/, 'stopping LAN mode must retain named volumes')
+  assert.doesNotMatch(lanStopper, /down\s+-v/, 'stopping LAN mode must not delete workspace or CA data')
 })
 
 test('.env.example states the real defaults, not plausible ones', async () => {
@@ -735,17 +749,17 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**1000 tests**'), 'current core test inventory must be stated')
+  assert.ok(status.includes('**1001 tests**'), 'current core test inventory must be stated')
   assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
   assert.ok(status.includes('**128 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1950 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('1951 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1950 tests: core 1000, web 128, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('1951 tests: core 1001, web 128, fabric 822'),
     'README must state the current inventory as docs/03 does')
   assert.ok(squash(doc.readme()).includes('latest completed full CI run')
     && squash(doc.readme()).includes('41394564087')
     && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
-    && squash(doc.readme()).includes('The current tree has 1,950 tests (Core 1,000, Web 128, Fabric 822). In this sandbox the full Core run was 989/1,000')
+    && squash(doc.readme()).includes('The current tree has 1,951 tests (Core 1,001, Web 128, Fabric 822). In this sandbox the full Core run was 990/1,001')
     && squash(doc.readme()).includes('Web passed 128/128; docs/release passed 64/64')
     && squash(doc.readme()).includes('full CI for this current tree is pending')
     && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
@@ -755,14 +769,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(1000), `core heading must say 1000, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(1001), `core heading must say 1001, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(128), `web heading must say 128, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1950,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1950`,
+    1951,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1951`,
   )
 })
 
@@ -824,7 +838,9 @@ test('the account and sign-in document describes the code that implements it', (
   assert.equal(number(accounts, 'DEFAULT_MAX_ACCOUNTS'), 64)
   const compose = readFileSync(resolve(REPO, 'compose.yaml'), 'utf8')
   assert.match(compose, /AETHERIS_LOCAL_SINGLE_USER:\s*'true'/, 'the end-user Docker deployment must not use account mode')
-  assert.match(compose, /127\.0\.0\.1:80:80/, 'account-free access must be loopback-only')
+  assert.match(compose, /RAGAM_BIND_ADDRESS:-127\.0\.0\.1.*:80:80/, 'account-free access must default to loopback-only')
+  assert.ok(squash(read('docs/22-self-hosted-deployment.md')).includes('shared Caddy Basic Auth'))
+  assert.ok(squash(read('docs/22-self-hosted-deployment.md')).includes("Caddy's internal CA"))
 
   // The retained direct-Core account mode has a cookie policy; it is intentionally not
   // exposed through the end-user Compose configuration.
@@ -859,7 +875,7 @@ test('the account and sign-in document describes the code that implements it', (
     'the README must link the Windows start and stop launchers')
   assert.ok(readme.includes('http://localhost') && readme.includes('same-origin `/api`'),
     'the README must describe the browser UI and its local API route')
-  for (const path of ['scripts/Start-Ragam.cmd', 'scripts/Stop-Ragam.cmd', 'scripts/Backup-Ragam.cmd', 'scripts/Restore-Ragam.cmd', 'scripts/Backup-Ragam.ps1', 'scripts/Restore-Ragam.ps1', 'scripts/Ragam-Volume.ps1', 'compose.yaml', 'assets/aetheris-omni-logo.svg', 'assets/cta-download.gif', 'assets/cta-setup.gif', 'assets/cta-providers.gif']) {
+  for (const path of ['scripts/Start-Ragam.cmd', 'scripts/Stop-Ragam.cmd', 'scripts/Backup-Ragam.cmd', 'scripts/Restore-Ragam.cmd', 'scripts/Backup-Ragam.ps1', 'scripts/Restore-Ragam.ps1', 'scripts/Ragam-Volume.ps1', 'scripts/Start-Lan-Ragam.ps1', 'scripts/Stop-Lan-Ragam.ps1', 'compose.yaml', 'compose.lan.yaml', 'deploy/Caddyfile.lan', 'assets/aetheris-omni-logo.svg', 'assets/cta-download.gif', 'assets/cta-setup.gif', 'assets/cta-providers.gif']) {
     assert.ok(exists(resolve(REPO, path)), `the README-supported interface artifact ${path} must exist`)
   }
   const backupScript = read('scripts/Backup-Ragam.ps1')
@@ -1527,6 +1543,39 @@ test('hosted BYOK deployment surface is present and its data boundary is explici
 })
 
 // ---------------------------------------------------------------------------
+// Optional LAN-only Docker/Caddy deployment
+// ---------------------------------------------------------------------------
+test('LAN mode stays opt-in, password-gated, TLS-protected and private-network-bound', () => {
+  const compose = read('compose.yaml')
+  const overlay = read('compose.lan.yaml')
+  const caddy = read('deploy/Caddyfile.lan')
+  const start = read('scripts/Start-Lan-Ragam.ps1')
+  const stop = read('scripts/Stop-Lan-Ragam.ps1')
+  const deployment = squash(read('docs/22-self-hosted-deployment.md'))
+
+  assert.match(compose, /RAGAM_BIND_ADDRESS:-127\.0\.0\.1/,
+    'the unmodified Docker stack must remain loopback-only')
+  assert.match(overlay, /RAGAM_BIND_ADDRESS:\?/,
+    'LAN mode must fail closed unless an explicit bind address is supplied')
+  assert.match(overlay, /AETHERIS_TRUSTED_WEB_ORIGINS/,
+    'Core must trust only the LAN HTTPS origin chosen for this deployment')
+  assert.match(caddy, /tls internal/)
+  assert.match(caddy, /basic_auth/)
+  assert.match(caddy, /header_up Host localhost/,
+    'Core local-single-user Host enforcement must remain enabled behind Caddy')
+  assert.match(caddy, /header_up -Authorization/,
+    'the shared Caddy password must not be forwarded into Core')
+  assert.match(start, /Test-PrivateIpv4/)
+  assert.match(start, /16 characters/)
+  assert.match(start, /caddy hash-password/)
+  assert.match(start, /Caddyfile\.lan\.local/)
+  assert.match(stop, /compose\.lan\.yaml/)
+  assert.ok(deployment.includes('Do not bypass certificate warnings'))
+  assert.ok(deployment.includes('Never port-forward 80/443'))
+  assert.ok(read('.gitignore').includes('deploy/Caddyfile.lan.local'))
+  assert.ok(read('.dockerignore').includes('deploy/Caddyfile.lan.local'))
+})
+
 // CI: the gate that keeps every number above honest
 // ---------------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 # 04 — Setup
 
-> **Active product: online-only (Phase 2), with two deployment modes.** The default Docker Compose workspace is local, single-user and loopback-only. The opt-in hosted BYOK edition uses Supabase Auth/Postgres and Vercel Node functions; see [Hosted BYOK setup and security](30-hosted-byok.md). The web client build flag is off unless explicitly enabled. Legacy local/research code remains for reference and regression tests; suite totals include retained coverage.
+> **Active product: online-only (Phase 2), with two deployment modes.** The default Docker Compose workspace is local, single-user and loopback-only, with an optional shared-password Caddy mode for trusted LANs. The opt-in hosted BYOK edition uses Supabase Auth/Postgres and Vercel Node functions; see [Hosted BYOK setup and security](30-hosted-byok.md). The web client build flag is off unless explicitly enabled. Legacy local/research code remains for reference and regression tests; suite totals include retained coverage.
 
 Every command below was run on the host described in
 [`03-status.md`](./03-status.md). Nothing here is aspirational.
@@ -258,8 +258,8 @@ PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs
 The pinned archive includes the model manifests and checksum list. The full CI run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all 985 Core tests with the pinned Pro/Max artifacts and Python prerequisites. The Baidu Qianfan contract fixtures make no vendor calls. Without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-PATH="$PWD/.venv/bin:$PATH" npm test  # all three suites (1950 tests)
-npm run test:core                  # 1000
+PATH="$PWD/.venv/bin:$PATH" npm test  # all three suites (1951 tests)
+npm run test:core                  # 1001
 npm run test:web                   # 128
 npm run test:fabric                # 822 — needs numpy + pytest on the interpreter
 ```
@@ -314,11 +314,11 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 1000 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed with the pinned model artifacts and Python prerequisites; Baidu Qianfan is covered by local contract fixtures. |
+| **Core service** | Current suite: 1001 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed with the pinned model artifacts and Python prerequisites; Baidu Qianfan is covered by local contract fixtures. |
 | **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 128 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docker Compose** | Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed: builds both images, starts Core/web/Caddy on loopback, checks local-workspace health and the provider catalogue with account creation disabled, then cold-backs up and restores the named volume and verifies workspace identity plus a SQLite history marker. Synthetic CI only: no live provider inference or persistent-deployment guarantee. |
-| **Docs** | The 50-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
+| **Docs** | The 51-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |
 
 The Fabric job's release-gate step is the one worth reading, because it asserts the

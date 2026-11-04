@@ -1,0 +1,21 @@
+# Template rendered by scripts/Start-Lan-Ragam.ps1. Do not mount this template
+# directly; the generated Caddyfile contains the LAN hostname and bcrypt hash.
+https://__RAGAM_LAN_HOSTNAME__ {
+  tls internal
+  encode zstd gzip
+
+  basic_auth {
+    __RAGAM_BASIC_AUTH_USER__ __RAGAM_BASIC_AUTH_HASH__
+  }
+
+  @api path /api /api/*
+  reverse_proxy @api core:8790 {
+    # Keep Core's local-single-user host check intact. The request's browser Origin
+    # remains the LAN HTTPS origin and is checked against the exact Core allow-list.
+    header_up Host localhost
+    # The shared Caddy credential terminates here; Core never receives it.
+    header_up -Authorization
+  }
+
+  reverse_proxy web:8080
+}
