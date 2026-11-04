@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { normalizeProfile, readProfile, recommendationsForProfile, writeProfile } from '../src/profile.js'
+import { setSetupGuideDismissed, setupGuideDismissed } from '../src/onboarding.js'
 
 function storageFixture() {
   const entries = new Map()
@@ -57,4 +58,19 @@ test('an unfamiliar profession gets general suggestions with user-controlled con
   const items = recommendationsForProfile({ profession: 'Marine biologist' })
   assert.equal(items.length, 4)
   assert.ok(items.every((item) => item.prompt.includes('My profession is Marine biologist')))
+})
+
+test('setup guide dismissal is a reversible browser-only preference', () => {
+  const entries = new Map()
+  const storage = {
+    getItem: (key) => entries.get(key) ?? null,
+    setItem: (key, value) => entries.set(key, String(value)),
+    removeItem: (key) => entries.delete(key),
+  }
+  assert.equal(setupGuideDismissed(storage), false)
+  assert.equal(setSetupGuideDismissed(true, storage), true)
+  assert.equal(setupGuideDismissed(storage), true)
+  assert.equal(setSetupGuideDismissed(false, storage), true)
+  assert.equal(setupGuideDismissed(storage), false)
+  assert.deepEqual([...entries.keys()], [])
 })

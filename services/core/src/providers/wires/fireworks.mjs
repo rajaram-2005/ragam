@@ -42,6 +42,7 @@ const adapter = createOpenAICompatibleAdapter({
 })
 export const defaultBaseUrl = 'https://api.fireworks.ai'
 export const { models, modelCatalogue, chat, complete, stream, testConnection, getModelCapabilities, cancel, normalizeError } = adapter
+export const { chatInputKinds, chatNativeSearch, chatTools } = adapter
 export const validateConfig = (config) => {
   if (config.options?.accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(config.options.accountId)) {
     throw failure('invalid_provider_config', 'Fireworks account ID contains unsupported characters.')

@@ -1,23 +1,13 @@
-// The Klyvaron family's OWN model architecture: `aetheris-core-v1`.
+// Archived transformer experiment design and resource arithmetic: `aetheris-core-v1`.
 //
-// This module exists because of a decision, not because of a formula. Pro and Max were going to
-// be *composed* at run time from a pinned third-party base -- no training, but also no model of
-// this family's own: someone else's weights, under someone else's licence, wearing our tier
-// label. That is not what the family is for. Pro and Max are OUR models: weights trained from
-// random initialisation in this repository, exactly like Lite, with no base checkpoint anywhere
-// in the chain. `validateArchitecture` refuses a preset that names one.
+// This module is retained for historical configuration and arithmetic checks only. It does not
+// power the current Klyvaron processor, and the experiment payloads described by the old cards are
+// absent from this checkout. No model release is asserted here. The active Lite/Pro/Max options
+// are bounded deterministic processing profiles, not trained language models.
 //
-// The consequence is stated up front rather than buried: a model whose weights do not exist yet
-// cannot be a delivered model. There is no technique that produces new weights without training.
-// What needs no training is the WORK SO FAR -- the architecture, the exact configuration, the
-// parameter and memory arithmetic, and the recipe -- and all of that is real and checkable here.
-// The weights are the part that requires compute, and `recipeReport` says so per tier.
-//
-// The parameter formula is not re-invented: it mirrors `TransformerConfig.parameter_count` in
-// `services/fabric/fabric/lm/model.py`, which is the trainer that actually initialises these
-// arrays. `test/architecture.test.mjs` checks the Lite preset against the *released model card*
-// in `docs/model-cards/aetheris-lite-lm-0.1.1.json`, so if the two definitions ever drift apart,
-// a test fails instead of a document going stale.
+// The parameter formula mirrors the legacy `TransformerConfig.parameter_count` implementation in
+// `services/fabric/fabric/lm/model.py`. Tests compare these configurations with archived card/run
+// metadata while asserting that the records are not current releases.
 
 import { createHash } from 'node:crypto'
 
@@ -53,10 +43,9 @@ export const ARCHITECTURE = Object.freeze({
  * The sizes, smallest first. A tier is a preset of this architecture -- not a different design,
  * not a wrapper around someone else's.
  *
- * `mini` is a preset and not a tier: it is the size this host can train in a single sitting, so it
- * is the artifact that shows the architecture, the corpus, the tokenizer, the trainer and the
- * release gate working end to end. The tiers are lite, pro and max; `mini` claims no tier label,
- * and its card says what it is in its family field.
+ * `mini` is a historical experiment preset, not a tier or current artifact. These configurations
+ * are retained for reproducible architecture arithmetic only; the current Klyvaron processor does
+ * not load or require any of their weights. The tiers are resource/workflow profiles, not models.
  */
 export const SIZE_IDS = Object.freeze(['lite', 'mini', 'pro', 'max'])
 
@@ -64,17 +53,15 @@ export const SIZE_PRESETS = Object.freeze({
   lite: Object.freeze({
     size: 'lite',
     modelId: 'aetheris-lite-lm',
-    // The released artifact's exact configuration. The digest in the model card is the same
-    // numbers hashed in the same order, which is why this preset can be cross-checked.
+    // Configuration reconstructed from archived experiment metadata; it does not imply a current artifact.
     config: Object.freeze({
       vocabSize: 148, dModel: 96, nLayers: 3, nHeads: 4, dFf: 384, seqLen: 128, tieEmbeddings: true, baseCheckpoint: null,
-      // No differentiator parts: this is the released configuration, and the parts were added
-      // afterwards. Its record keeps what it was trained with, which is why the digest below is
-      // still the digest of the run that produced the artifact.
+      // No differentiator parts were present in the archived experiment configuration.
       ageBuckets: 0, stateClasses: 0, verdictHead: false, stateHead: false,
     }),
-    released: true,
-    artifact: 'aetheris-lite-lm-0.1.1',
+    released: false,
+    artifact: null,
+    archivedArtifact: 'aetheris-lite-lm-0.1.1',
     training: null,
   }),
   mini: Object.freeze({
@@ -91,17 +78,10 @@ export const SIZE_PRESETS = Object.freeze({
       vocabSize: 352, dModel: 192, nLayers: 3, nHeads: 4, dFf: 768, seqLen: 128, tieEmbeddings: true, baseCheckpoint: null,
       ageBuckets: 0, stateClasses: 0, verdictHead: false, stateHead: false,
     }),
-    // Released. These three fields were `released: false`, `artifact: null`,
-    // `training: 'klyvaron-mini-lm@0.1.0'` while the run was in flight, and they moved when that
-    // run exited 0 and the release gate registered the card -- the state this module reported
-    // before then is in this file's history and in `docs/experiments/klyvaron-mini-lm-run.json`,
-    // which carried `status: running` until the report existed.
-    //
-    // The gate passed with 0 hard failures and **1 soft failure**: wallSeconds 8,456.326 against a
-    // 3,600 s soft target. The target was written for a smaller run and was not relaxed to make
-    // this one pass; the miss is on the card, in its limitation list, and in the run record.
-    released: true,
-    artifact: 'klyvaron-mini-lm-0.1.0',
+    // Historical run/card identifier only; no matching payload is present and it is not released.
+    released: false,
+    artifact: null,
+    archivedArtifact: 'klyvaron-mini-lm-0.1.0',
     training: null,
   }),
   pro: Object.freeze({
@@ -111,8 +91,9 @@ export const SIZE_PRESETS = Object.freeze({
       vocabSize: 4096, dModel: 512, nLayers: 8, nHeads: 8, dFf: 2048, seqLen: 512, tieEmbeddings: true, baseCheckpoint: null,
       ageBuckets: 16, stateClasses: 8, verdictHead: true, stateHead: true,
     }),
-    released: true,
-    artifact: 'klyvaron-pro-lm-0.1.0',
+    released: false,
+    artifact: null,
+    archivedArtifact: 'klyvaron-pro-lm-0.1.0',
     training: null,
   }),
   max: Object.freeze({
@@ -122,8 +103,9 @@ export const SIZE_PRESETS = Object.freeze({
       vocabSize: 8192, dModel: 768, nLayers: 12, nHeads: 12, dFf: 3072, seqLen: 1024, tieEmbeddings: true, baseCheckpoint: null,
       ageBuckets: 16, stateClasses: 8, verdictHead: true, stateHead: true,
     }),
-    released: true,
-    artifact: 'klyvaron-max-lm-0.1.0',
+    released: false,
+    artifact: null,
+    archivedArtifact: 'klyvaron-max-lm-0.1.0',
     training: null,
   }),
 })
@@ -565,6 +547,7 @@ export function presetReport(sizeId, { tokens = null, contextTokens = null, byte
     size: sizeId,
     released: preset.released,
     artifact: preset.artifact,
+    archivedArtifact: preset.archivedArtifact ?? null,
     training: preset.training ?? null,
     config,
     configDigest: configDigest(config),
@@ -614,7 +597,7 @@ const giB = (bytes) => `${(bytes / 1024 ** 3).toFixed(2)} GiB`
 export function formatArchitecture(sizeId, { tokens = null, contextTokens = null } = {}) {
   const report = presetReport(sizeId, { tokens, contextTokens })
   const lines = []
-  lines.push(`${report.modelId} — ${report.architecture}${report.released ? ` (released as ${report.artifact})` : report.training ? ` (training as ${report.training})` : ' (no weights)'}`)
+  lines.push(`${report.modelId} — ${report.architecture}${report.released ? ` (released as ${report.artifact})` : report.training ? ` (training as ${report.training})` : report.archivedArtifact ? ` (archived record ${report.archivedArtifact}; no payload)` : ' (no weights)'}`)
   lines.push(`  config: vocab ${report.config.vocabSize}, d_model ${report.config.dModel}, ${report.config.nLayers} layers, ${report.config.nHeads} heads, d_ff ${report.config.dFf}, context ${report.config.seqLen}${report.config.tieEmbeddings ? ', tied embeddings' : ''}`)
   lines.push(`  digest: ${report.configDigest}`)
   lines.push(`  parameters: ${report.parameters.toLocaleString('en-US')}${report.valid ? '' : ' INVALID — ' + report.violations.join('; ')}`)

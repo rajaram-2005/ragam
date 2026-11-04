@@ -2,6 +2,8 @@
 // OpenAI request/response envelope. Provider modules supply endpoint paths, model-list shape and
 // explicitly documented request differences; no adapter probes or falls back to another vendor.
 import { failure } from '../../online/failure.mjs'
+import { appendOpenAIToolDeltas, finishOpenAIToolDeltas, openAIMessages, openAIToolCalls } from './common.mjs'
+import { chat as chatResponses } from './openai-responses.mjs'
 
 const safeId = (id) => typeof id === 'string' && id.length > 0 && id.length <= 240 && !/[\x00-\x1f\x7f]/.test(id)
 const arrayFor = (payload, shape) => {
@@ -64,33 +66,48 @@ export function createOpenAICompatibleAdapter(spec) {
   }
   const models = async (transport, config) => (await modelCatalogue(transport, config)).map((item) => item.id)
 
-  async function chat(transport, config, { model, messages, maxTokens, temperature, signal, onText }) {
+  async function chat(transport, config, { model, messages, maxTokens, temperature, signal, onText, maxRequestBytes, tools = [], nativeSearch = false }) {
+    if (nativeSearch) {
+      const path = spec.responsesPath ?? spec.chatPath.replace(/\/chat\/completions$/, '/responses')
+      if (path === spec.chatPath) throw failure('capability_unavailable', `${spec.provider} has no configured OpenAI Responses endpoint for native search.`, 409)
+      return chatResponses(transport, config, { path, headers: headers(config), model, messages, maxTokens, temperature, signal, onText, maxRequestBytes, tools, nativeSearch, searchToolType: spec.responsesSearchToolType ?? 'web_search' })
+    }
     let reported = null, usage = null, text = ''
+    const toolDeltas = new Map()
     const onFrame = onText ? (frame) => {
       if (frame.model) reported = frame.model
       if (frame.usage) usage = frame.usage
-      const delta = frame.choices?.[0]?.delta?.content
+      const choice = frame.choices?.[0]
+      appendOpenAIToolDeltas(toolDeltas, choice?.delta?.tool_calls)
+      const delta = choice?.delta?.content
       if (typeof delta === 'string') { text += delta; onText(delta) }
     } : null
+    const providerMessages = openAIMessages(messages)
     const body = {
       model,
-      messages,
+      messages: providerMessages,
       ...(spec.maxTokensField ? { [spec.maxTokensField]: maxTokens } : { max_tokens: maxTokens }),
       temperature,
       stream: Boolean(onText),
       ...(onText && spec.streamUsage ? { stream_options: { include_usage: true } } : {}),
+      ...(tools.length ? { tools: tools.map((tool) => ({ type: 'function', function: tool })), tool_choice: 'auto' } : {}),
     }
-    if (spec.buildRequest) Object.assign(body, spec.buildRequest({ model, messages, maxTokens, temperature, streaming: Boolean(onText), config }))
-    const data = await transport(config, spec.chatPath, { headers: headers(config), signal, body, onFrame })
-    if (onText) return { text, model: reported, usage }
-    const completion = spec.getText ? spec.getText(data) : data?.choices?.[0]?.message?.content
-    if (typeof completion !== 'string') throw failure('invalid_completion', `${spec.provider} returned no text completion. No model was substituted.`, 502)
-    return { text: completion, model: data?.model ?? null, usage: data?.usage ?? null }
+    if (spec.buildRequest) Object.assign(body, spec.buildRequest({ model, messages: providerMessages, maxTokens, temperature, streaming: Boolean(onText), config }))
+    const data = await transport(config, spec.chatPath, { headers: headers(config), signal, body, onFrame, maxRequestBytes })
+    if (onText) return { text, model: reported, usage, toolCalls: finishOpenAIToolDeltas(toolDeltas) }
+    const message = data?.choices?.[0]?.message
+    const completion = spec.getText ? spec.getText(data) : message?.content
+    const toolCalls = openAIToolCalls(message?.tool_calls ?? [])
+    if (typeof completion !== 'string' && !toolCalls.length) throw failure('invalid_completion', `${spec.provider} returned no text completion. No model was substituted.`, 502)
+    return { text: typeof completion === 'string' ? completion : '', model: data?.model ?? null, usage: data?.usage ?? null, toolCalls }
   }
   return Object.freeze({
     wire: spec.wire,
     provider: spec.provider,
     compatibility: 'openai-compatible',
+    chatInputKinds: Object.freeze(['image']),
+    chatTools: true,
+    chatNativeSearch: true,
     docsUrl: spec.docsUrl,
     models,
     modelCatalogue,

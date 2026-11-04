@@ -1,10 +1,10 @@
 # Universal ecosystem directive: integration map and delivery plan
 
-**Directive revision: 2026-10-14.** This extends the original integration scope.
+**Directive revision: 2026-10-14 · historical plan.** This extends the original integration scope.
 Earlier “complete” labels describe those narrower increments, not completion of
-the universal ecosystem. In particular, the previous decision to exclude online
-providers is superseded: **LiteLLM is now the preferred planned inference gateway**.
-It is not yet an implemented online inference service. FreeLLMAPI remains excluded.
+the universal ecosystem. The former plan to use LiteLLM as an inference gateway has
+been superseded: LiteLLM is not part of the current catalogue or supported integration.
+Use the current provider landscape in [docs/31](./31-provider-landscape.md). FreeLLMAPI remains excluded.
 
 ## Identity and protected working state
 

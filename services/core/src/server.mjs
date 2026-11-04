@@ -40,7 +40,7 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
     localSingleUser,
     dataDir: env.AETHERIS_ONLINE_DATA_DIR || resolve('.aetheris-data/online'),
     // Provider destinations are a separate allowlist from browser origins.
-    trustedOrigins: [env.AETHERIS_TRUSTED_ORIGINS || '', env.AETHERIS_LITELLM_TRUSTED_ORIGINS || ''].join(',').split(',').map((s) => s.trim()).filter(Boolean),
+    trustedOrigins: (env.AETHERIS_TRUSTED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
     trustedWebOrigins,
     secureCookie: env.AETHERIS_COOKIE_SECURE !== 'false',
     // 'strict' is the same-origin default for the Docker-served web app. Use 'none'

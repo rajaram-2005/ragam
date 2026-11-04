@@ -96,6 +96,8 @@ export const api = {
   // weights of their own. Reading is available to any signed-in account; assigning is
   // owner-only and the server enforces that.
   klyvaron: () => request('GET', '/api/klyvaron'),
+  klyvaronProcessor: () => request('GET', '/api/klyvaron/processor'),
+  processKlyvaron: (body, options) => request('POST', '/api/klyvaron/process', body, options),
   klyvaronManifests: () => request('GET', '/api/klyvaron/manifests'),
   klyvaronQualification: () => request('GET', '/api/klyvaron/qualification'),
   runKlyvaronQualification: (body) => request('POST', '/api/klyvaron/qualification/run', body),

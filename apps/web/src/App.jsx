@@ -15,6 +15,8 @@ import ImageArea from './areas/ImageArea.jsx'
 import VideoArea from './areas/VideoArea.jsx'
 import PluginsArea from './areas/PluginsArea.jsx'
 import McpArea from './areas/McpArea.jsx'
+import HostedByokApp from './HostedByokApp.jsx'
+import { readIndustryMode, writeIndustryMode, readLocalOnlyMode, writeLocalOnlyMode } from './industry-operations.js'
 
 // What the address bar can say, and what the app shows for each of them.
 //
@@ -29,10 +31,18 @@ const currentPage = () => authPageFromHash(hash())
 const goTo = (target) => { if (globalThis.location) globalThis.location.hash = target }
 
 export default function App() {
+  if (import.meta.env?.VITE_HOSTED_BYOK === 'true') return <HostedByokApp />
+  return <LocalApp />
+}
+
+function LocalApp() {
   const [account, setAccount] = useState(null), [checking, setChecking] = useState(true)
   const [authError, setAuthError] = useState(null), [notice, setNotice] = useState('')
   const [active, setActive] = useState(currentArea), [page, setPage] = useState(currentPage), [settings, setSettings] = useState(false), [profileOpen, setProfileOpen] = useState(false)
   const [profile, setProfile] = useState(readProfile)
+  const [industryMode, setIndustryMode] = useState(readIndustryMode)
+  const [localOnlyMode, setLocalOnlyMode] = useState(readLocalOnlyMode)
+  const [industryPrompt, setIndustryPrompt] = useState('')
   const [readiness, setReadiness] = useState(null), [provider, setProvider] = useState(null), [error, setError] = useState(null)
 
   // Both are `useCallback` with no dependencies because they touch only state setters,
@@ -91,7 +101,18 @@ export default function App() {
   }
 
   const area = AREAS.find((a) => a.id === active) ?? AREAS[0]
-  const shared = { provider, readiness, refreshReadiness: refresh, onSettings: () => setSettings(true), onProfile: () => setProfileOpen(true), profile, account }
+  const changeIndustryMode = (enabled) => setIndustryMode(writeIndustryMode(enabled))
+  const changeLocalOnlyMode = (enabled) => setLocalOnlyMode(writeLocalOnlyMode(enabled))
+  const startIndustryTask = (taskPrompt) => {
+    changeIndustryMode(true)
+    setIndustryPrompt(taskPrompt)
+    setActive('chat')
+    goTo('#/chat')
+  }
+  const shared = {
+    provider, readiness, refreshReadiness: refresh, onSettings: () => setSettings(true), onProfile: () => setProfileOpen(true), profile, account,
+    industryMode, localOnlyMode, industryPrompt, onIndustryPromptConsumed: () => setIndustryPrompt(''),
+  }
   const updateProfile = (next) => setProfile(writeProfile(next))
   return <Shell
     active={area.id}
@@ -103,6 +124,11 @@ export default function App() {
     account={account}
     onSettings={() => setSettings(true)}
     onProfile={() => setProfileOpen(true)}
+    industryMode={industryMode}
+    onIndustryModeChange={changeIndustryMode}
+    localOnlyMode={localOnlyMode}
+    onLocalOnlyModeChange={changeLocalOnlyMode}
+    onStartIndustryTask={startIndustryTask}
     onSignOut={async () => { try { await api.logout(); signedOut() } catch (e) { setError(e) } }}
   >
     {error ? <Banner tone="bad" title={error.message} /> : null}

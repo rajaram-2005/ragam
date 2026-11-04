@@ -1,4 +1,7 @@
-// OpenAI-compatible chat: `GET {base}/models` and `POST {base}/chat/completions`.
+// OpenAI Chat Completions: `GET {base}/models` and `POST {base}/chat/completions`.
+// Explicit native search switches to `POST {base}/responses` with the hosted `web_search` tool; it
+// never retries a failed Responses request through Chat Completions.
+// Contract reference: https://developers.openai.com/api/docs/guides/tools-web-search
 //
 // This is the wire the product shipped with; it is now an adapter like the other two, so the app
 // has one path and a connection's wire decides which builder runs. The request body, headers and
@@ -6,11 +9,16 @@
 // pin them, which is the point of moving the code rather than rewriting it.
 
 import { failure } from '../../online/failure.mjs'
+import { appendOpenAIToolDeltas, finishOpenAIToolDeltas, openAIMessages, openAIToolCalls } from './common.mjs'
+import { chat as chatResponses } from './openai-responses.mjs'
 
 export const wire = 'openai_chat'
 export const defaultBaseUrl = 'https://api.openai.com/v1'
 export const provider = 'OpenAI'
 export const compatibility = 'native-vendor'
+export const chatInputKinds = Object.freeze(['image'])
+export const chatTools = true
+export const chatNativeSearch = true
 
 const headers = (config) => (config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {})
 
@@ -42,30 +50,37 @@ export const normalizeError = (status, payload) => {
   return { code: 'provider_request_rejected', message: `OpenAI rejected the request (HTTP ${status}). Check the model and request limits.` }
 }
 
-export async function chat(transport, config, { model, messages, maxTokens, temperature, signal, onText }) {
+export async function chat(transport, config, { model, messages, maxTokens, temperature, signal, onText, maxRequestBytes, tools = [], nativeSearch = false }) {
+  if (nativeSearch) return chatResponses(transport, config, { path: '/responses', headers: headers(config), model, messages, maxTokens, temperature, signal, onText, maxRequestBytes, tools, nativeSearch })
   let reported = null
   let usage = null
   let text = ''
+  const toolDeltas = new Map()
   const onFrame = onText
     ? (frame) => {
         if (frame.model) reported = frame.model
         if (frame.usage) usage = frame.usage
-        const delta = frame.choices?.[0]?.delta?.content
+        const choice = frame.choices?.[0]
+        appendOpenAIToolDeltas(toolDeltas, choice?.delta?.tool_calls)
+        const delta = choice?.delta?.content
         if (typeof delta === 'string') { text += delta; onText(delta) }
       }
     : null
   const data = await transport(config, '/chat/completions', {
     headers: headers(config),
     signal,
-    body: { model, messages, max_tokens: maxTokens, temperature, stream: Boolean(onText) },
+    body: { model, messages: openAIMessages(messages), max_tokens: maxTokens, temperature, stream: Boolean(onText), ...(tools.length ? { tools: tools.map((tool) => ({ type: 'function', function: tool })), tool_choice: 'auto' } : {}) },
+    maxRequestBytes,
     onFrame,
   })
-  if (onText) return { text, model: reported, usage }
-  const completion = data?.choices?.[0]?.message?.content
-  if (typeof completion !== 'string') {
+  if (onText) return { text, model: reported, usage, toolCalls: finishOpenAIToolDeltas(toolDeltas) }
+  const message = data?.choices?.[0]?.message
+  const completion = message?.content
+  const toolCalls = openAIToolCalls(message?.tool_calls ?? [])
+  if (typeof completion !== 'string' && !toolCalls.length) {
     throw failure('invalid_completion', 'This model did not return a text completion. No model was substituted.', 502)
   }
-  return { text: completion, model: data.model ?? null, usage: data.usage ?? null }
+  return { text: typeof completion === 'string' ? completion : '', model: data.model ?? null, usage: data.usage ?? null, toolCalls }
 }
 
 export const complete = chat

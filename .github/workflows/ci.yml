@@ -11,6 +11,7 @@ name: CI
 on:
   push:
     branches: [main, 'arena/**']
+    tags: ['klyvaron-lite-v*', 'klyvaron-pro-v*', 'klyvaron-max-v*']
   pull_request:
     branches: [main]
   schedule:
@@ -87,7 +88,7 @@ jobs:
           # Match the release-verification invocation and retain the TAP diagnostics.
           # A separate Core job must expose its failure reason in check annotations too.
           set +e
-          node --test --test-reporter=tap test/*.test.mjs > /tmp/core.tap 2>&1
+          node --test --test-reporter=tap test/*.test.mjs test/klyvaron-release/*.test.mjs > /tmp/core.tap 2>&1
           status=$?
           tail -n 10 /tmp/core.tap
           if [ "$status" -ne 0 ]; then
@@ -341,6 +342,41 @@ jobs:
           docker compose -f compose.yaml logs --no-color || true
           docker compose -f compose.yaml down --volumes --remove-orphans || true
 
+  klyvaron-production-release-gate:
+    name: Klyvaron production evidence gate (fail closed)
+    if: startsWith(github.ref, 'refs/tags/klyvaron-')
+    runs-on: ubuntu-latest
+    env:
+      # Public trust anchors and model weights are provisioned by the protected release
+      # environment; neither is silently fetched or replaced by this workflow.
+      KLYVARON_ARTIFACT_ROOT: ${{ vars.KLYVARON_ARTIFACT_ROOT }}
+      KLYVARON_TRUST_STORE: ${{ vars.KLYVARON_TRUST_STORE_PATH }}
+      KLYVARON_REGISTRY_RECORD: ${{ vars.KLYVARON_REGISTRY_RECORD_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify the exact tier package, signatures and real artifact bytes
+        run: |
+          case "$GITHUB_REF_NAME" in
+            klyvaron-lite-v*) tier=lite; version="${GITHUB_REF_NAME#klyvaron-lite-v}" ;;
+            klyvaron-pro-v*) tier=pro; version="${GITHUB_REF_NAME#klyvaron-pro-v}" ;;
+            klyvaron-max-v*) tier=max; version="${GITHUB_REF_NAME#klyvaron-max-v}" ;;
+            *) echo "::error::unsupported Klyvaron production tag"; exit 2 ;;
+          esac
+          test -n "$KLYVARON_ARTIFACT_ROOT" || { echo "::error::production artifact root is not provisioned"; exit 2; }
+          test -n "$KLYVARON_TRUST_STORE" || { echo "::error::production public trust store is not provisioned"; exit 2; }
+          test -n "$KLYVARON_REGISTRY_RECORD" || { echo "::error::production-approved registry record is not provisioned"; exit 2; }
+          node services/core/scripts/verify-klyvaron-release.mjs \
+            --tag "$GITHUB_REF_NAME" \
+            --package-dir "release-evidence/$tier/v$version" \
+            --artifact-root "$KLYVARON_ARTIFACT_ROOT/$tier/v$version" \
+            --trust-store "$KLYVARON_TRUST_STORE" \
+            --registry-record "$KLYVARON_REGISTRY_RECORD"
+
   release:
     name: Release verification (measured, not remembered)
     runs-on: ubuntu-latest
@@ -354,6 +390,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Enforce the no-direct-release registry policy
+        run: node services/core/scripts/verify-klyvaron-release.mjs --policy-check
 
       - name: Install multimodal runtime dependencies and verified first-party weights
         run: |
@@ -376,7 +415,7 @@ jobs:
         working-directory: services/core
         run: |
           set +e
-          node --test --test-reporter=tap test/*.test.mjs > /tmp/core.tap 2>&1
+          node --test --test-reporter=tap test/*.test.mjs test/klyvaron-release/*.test.mjs > /tmp/core.tap 2>&1
           status=$?
           tail -n 10 /tmp/core.tap
           if [ "$status" -ne 0 ]; then

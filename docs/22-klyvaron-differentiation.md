@@ -1,5 +1,7 @@
 # 22 — What the Klyvaron family is for: the present, and the person
 
+> **Model archive notice:** model-training, weight, evaluation and release statements below describe historical experiments or plans only. Matching payloads are absent from this checkout; these records do not establish any current model release. Active Klyvaron uses deterministic model-independent processing, with Lite/Pro/Max as resource/workflow profiles.
+
 **Status, stated first.** Lite exists and is released ([11 — Klyvaron family](11-klyvaron-family.md)).
 **Pro and Max have no artifacts and no model has been trained for them.** The two capabilities that
 define this family — knowing what is current, and understanding what the user expressed across a

@@ -1,12 +1,13 @@
 # Model card — klyvaron-max-video 0.1.0
 
+> **Archive notice:** this record is not release evidence. No matching weight payload is present in the current checkout; the active Klyvaron processor uses no model weights.
 | | |
 |---|---|
 | **Identifier** | `klyvaron-max-video@0.1.0` |
 | **Family** | `klyvaron-max` |
 | **Modality** | `video` |
 | **Architecture** | `aetheris-video-v1` (`8,134,602` parameters) |
-| **Status** | `released` (`0` hard failures) |
+| **Status** | `not_released` — archived metadata; payload absent from current checkout |
 | **Licence** | MIT — trained from random initialisation (`baseCheckpoint: null`) |
 | **Weights SHA-256** | `229bbce13cf27b19204533558373bccdc4d540d0fd0cc8edacdd9a8a3ab5f705` |
 | **Package SHA-256** | `17c4c51f0db941d7c70b465da6e941049e6e3939b36303eb0f9ba9e6bb861dd3` (`15,035,795` bytes) |

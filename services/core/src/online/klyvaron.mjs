@@ -1,9 +1,9 @@
 // Klyvaron product tiers in the online architecture.
 //
-// The name on the outside is a product tier. The model on the inside is a third-party model the
-// operator configured, and every view built here names it. There are no Klyvaron weights in this
-// build, so a preset is a *pointer* to a saved connection and a model that connection already
-// lists — never a separate model, never a claim of independent training.
+// Klyvaron's built-in processor is model-independent: deterministic parsing, retrieval,
+// extractive ranking and bounded task workflows run without weights or network access. The
+// optional provider preset below is a separate BYOK integration; it is not required by the
+// built-in engine and is never described as Klyvaron-owned inference.
 //
 // Three rules this module exists to keep true:
 //
@@ -21,24 +21,24 @@ export const KLYVARON_TIERS = Object.freeze([
   Object.freeze({
     id: 'lite',
     label: 'Klyvaron Lite',
-    intent: 'A lower-cost, lower-latency online model chosen by the operator.',
+    intent: 'Fast, bounded text processing and concise extractive workflows on modest resources.'
   }),
   Object.freeze({
     id: 'pro',
     label: 'Klyvaron Pro',
-    intent: 'A balanced online model for everyday work.',
+    intent: 'Larger local context and multi-step deterministic workflows for documents and data.'
   }),
   Object.freeze({
     id: 'max',
     label: 'Klyvaron Max',
-    intent: 'The strongest online model this installation is authorised to use.',
+    intent: 'The largest bounded local workflows with parallel independent processing steps.'
   }),
 ])
 
 export const TIER_IDS = Object.freeze(KLYVARON_TIERS.map((tier) => tier.id))
 export const MODALITIES = Object.freeze(['chat', 'image', 'video'])
 
-export const KLYVARON_NOTE = 'Klyvaron Lite, Pro and Max are product tiers, not first-party model weights. Every request is served by the third-party provider and model named in provenance.'
+export const KLYVARON_NOTE = 'Klyvaron Lite, Pro and Max are model-independent processing profiles. The built-in deterministic processor requires no AI model, weights, training, download, provider or network call. Optional BYOK model routing is separate and names its provider/model explicitly.'
 
 /** The label for a tier id, or null when it is not a tier this build defines. */
 export function tierFor(id) {

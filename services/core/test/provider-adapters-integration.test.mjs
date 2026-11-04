@@ -46,7 +46,7 @@ async function appFixture(t) {
   const auth = await request('POST', '/api/auth/register', account)
   assert.equal(auth.status, 201, JSON.stringify(auth.data))
   const sessionCookie = auth.headers.get('set-cookie').split(';')[0]
-  const chat = (model, revision) => ({ prompt: 'Say hello.', model, authorization: { confirmed: true, providerRevision: revision } })
+  const chat = (model, revision) => ({ prompt: 'Say hello.', model, localOnly: false, authorization: { confirmed: true, providerRevision: revision } })
   t.after(async () => { await close(server); await close(peer); app.close(); rmSync(dir, { recursive: true, force: true }) })
   return { app, calls, dir, peerUrl, request: (method, path, body) => request(method, path, body, sessionCookie), chat }
 }
@@ -81,6 +81,10 @@ test('OpenRouter adapter traverses owner-protected settings, model discovery and
   const catalogue = await f.request('GET', '/api/providers/catalog')
   const openrouter = catalogue.data.providers.find((row) => row.id === 'openrouter')
   assert.equal(openrouter.integrationType, 'gateway-routed')
+  assert.equal(openrouter.recommended, true)
+  const ollama = catalogue.data.providers.find((row) => row.id === 'ollama')
+  assert.equal(ollama.recommended, true, 'Ollama is recommended as a selected Local-only runtime')
+  assert.equal(catalogue.data.providers.some((row) => row.id === 'litellm'), false, 'LiteLLM is no longer in the supported provider catalogue')
   assert.equal(openrouter.adapterStatus, 'contract_tested')
   assert.equal(openrouter.liveVerification, 'pending', 'a fixture is not a live vendor call')
 })

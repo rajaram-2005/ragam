@@ -92,12 +92,12 @@ async function fixture(t, options = {}) {
   /** Owner signed in, gateway configured, two models listed. Returns the owner cookie. */
   f.configure = async () => {
     await f.signIn(OWNER)
-    const saved = await f.request('PUT', '/api/providers/litellm', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })
+    const saved = await f.request('PUT', '/api/providers/openai', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })
     assert.equal(saved.status, 200, JSON.stringify(saved.data))
     assert.equal((await f.request('POST', '/api/models/probe', {})).status, 200)
     return f.cookie
   }
-  f.chat = (extra = {}) => ({ prompt: 'ordinary question', model: 'model-a', authorization: { confirmed: true, providerRevision: f.app.store.state.revision }, ...extra })
+  f.chat = (extra = {}) => ({ prompt: 'ordinary question', model: 'model-a', localOnly: false, authorization: { confirmed: true, providerRevision: f.app.store.state.revision }, ...extra })
   f.restart = () => { f.app.close(); f.app = create() }
   t.after(async () => { await close(f.server); await close(gateway); f.app.close(); rmSync(dir, { recursive: true, force: true }) })
   return f
@@ -630,11 +630,11 @@ test('only the owner account changes the installation gateway; a member can stil
   const memberCookie = cookieOf(member)
   assert.notEqual(memberCookie, ownerCookie)
 
-  const put = await f.request('PUT', '/api/providers/litellm', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'another-synthetic-key' }, { cookie: memberCookie })
+  const put = await f.request('PUT', '/api/providers/openai', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'another-synthetic-key' }, { cookie: memberCookie })
   assert.equal(put.status, 403); assert.equal(put.data.error, 'owner_required')
-  assert.equal((await f.request('POST', '/api/providers/litellm/test', {}, { cookie: memberCookie })).status, 403)
+  assert.equal((await f.request('POST', '/api/providers/openai/test', {}, { cookie: memberCookie })).status, 403)
   assert.equal((await f.request('POST', '/api/models/probe', {}, { cookie: memberCookie })).status, 403)
-  assert.equal((await f.request('DELETE', '/api/providers/litellm', {}, { cookie: memberCookie })).status, 403)
+  assert.equal((await f.request('DELETE', '/api/providers/openai', {}, { cookie: memberCookie })).status, 403)
   // The connection is readable, and still never carries the key.
   const visible = await f.request('GET', '/api/providers', undefined, { cookie: memberCookie })
   assert.equal(visible.status, 200); assert.equal(visible.data.keyConfigured, true); assert.equal(visible.data.apiKey, undefined)

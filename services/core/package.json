@@ -9,8 +9,8 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test test/*.test.mjs",
-    "test:watch": "node --test --watch test/*.test.mjs"
+    "test": "node --test test/*.test.mjs test/klyvaron-release/*.test.mjs",
+    "test:watch": "node --test --watch test/*.test.mjs test/klyvaron-release/*.test.mjs"
   },
   "dependencies": {},
   "devDependencies": {}

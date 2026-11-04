@@ -1,5 +1,7 @@
 # 24 — Pro and Max are our own models: `aetheris-core-v1`
 
+> **Model archive notice:** model-training, weight, evaluation and release statements below describe historical experiments or plans only. Matching payloads are absent from this checkout; these records do not establish any current model release. Active Klyvaron uses deterministic model-independent processing, with Lite/Pro/Max as resource/workflow profiles.
+
 > **Direction changed, 2026-10-16.** The requirement that **each tier be backed by a model trained by
 > this repository is withdrawn for the product tiers.** Lite, Pro and Max are now capability profiles
 > over one shared adaptive core, chosen from the hardware, models, tools, permissions and services

@@ -1,12 +1,13 @@
 # Model card — klyvaron-max-voice 0.1.0
 
+> **Archive notice:** this record is not release evidence. No matching weight payload is present in the current checkout; the active Klyvaron processor uses no model weights.
 | | |
 |---|---|
 | **Identifier** | `klyvaron-max-voice@0.1.0` |
 | **Family** | `klyvaron-max` |
 | **Modality** | `voice` |
 | **Architecture** | `aetheris-voice-v1` (`11,257,231` parameters) |
-| **Status** | `released` (`0` hard failures) |
+| **Status** | `not_released` — archived metadata; payload absent from current checkout |
 | **Licence** | MIT — trained from random initialisation (`baseCheckpoint: null`) |
 | **Weights SHA-256** | `50ed3ed517bb3c7a295f2e63dc3d028e16f983669ffd887da538f508fe44a150` |
 | **Package SHA-256** | `0ca20f985f4466d180dcf3a13b89658ffa6eb5b81cd4184e53d714efff27ee1d` (`20,795,409` bytes) |

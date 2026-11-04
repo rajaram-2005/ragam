@@ -68,8 +68,13 @@ function copyInstalledModelsTo(targetKlyvaronRoot) {
   cpSync(join(INSTALLED_ROOT, 'models'), join(targetKlyvaronRoot, 'models'), { recursive: true })
 }
 
+const artifactSkip = (spec) => existsSync(spec.dir) && existsSync(spec.cardPath)
+  && existsSync(join(spec.dir, `${spec.id}.klyvaron.json`))
+  ? false : `requires the ignored trained ${spec.id} package and its model card`
+const proMaxSkip = artifactSkip(EXPECTED_SPECS[0]) || artifactSkip(EXPECTED_SPECS[1])
+
 for (const spec of EXPECTED_SPECS) {
-  test(`[${spec.id}] 1-7: checksum, Byte-BPE tokenizer, exact ${spec.expectedTensorCount} tensors (${spec.params.toLocaleString('en-US')} params), worker-thread hardware init, KV-parity inference, non-anthropomorphic completion, and measured resources`, { timeout: spec.preset === 'max' ? 300_000 : 180_000 }, async (t) => {
+  test(`[${spec.id}] 1-7: checksum, Byte-BPE tokenizer, exact ${spec.expectedTensorCount} tensors (${spec.params.toLocaleString('en-US')} params), worker-thread hardware init, KV-parity inference, non-anthropomorphic completion, and measured resources`, { timeout: spec.preset === 'max' ? 300_000 : 180_000, skip: artifactSkip(spec) }, async (t) => {
     assert.equal(existsSync(spec.dir), true, `missing genuine installed artifact directory ${spec.dir}`)
     assert.equal(existsSync(spec.cardPath), true, `missing model card ${spec.cardPath}`)
 
@@ -195,7 +200,7 @@ for (const spec of EXPECTED_SPECS) {
   })
 }
 
-test('[Pro + Max] 8-10: distinct digests, OnlineApp HTTP/SSE chat & AbortController cancellation for BOTH models, restart persistence, and strict fail-closed error handling without fallback', { timeout: 300_000 }, async (t) => {
+test('[Pro + Max] 8-10: distinct digests, OnlineApp HTTP/SSE chat & AbortController cancellation for BOTH models, restart persistence, and strict fail-closed error handling without fallback', { timeout: 300_000, skip: proMaxSkip }, async (t) => {
   const proManifest = JSON.parse(readFileSync(join(PRO_DIR, 'klyvaron-pro-lm.klyvaron.json'), 'utf8'))
   const maxManifest = JSON.parse(readFileSync(join(MAX_DIR, 'klyvaron-max-lm.klyvaron.json'), 'utf8'))
   assert.notEqual(proManifest.weights.sha256, maxManifest.weights.sha256, 'Pro and Max weights MUST be completely distinct')

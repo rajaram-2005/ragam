@@ -1,11 +1,14 @@
 import { createServer } from 'node:http'
+import { isIP } from 'node:net'
 import { chmodSync, mkdirSync, existsSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { OnlineStore } from './store.mjs'
-import { OnlineGateway, gatewayUrl, failure, runtimeFor } from './gateway.mjs'
+import { OnlineGateway, gatewayUrl, failure, runtimeFor, privateAddress } from './gateway.mjs'
 import { readBody, sendJson } from './http.mjs'
+import { normalizeChatMessages, redactChatMessages, textFromChatContent } from './chat-content.mjs'
+import { MANUFACTURING_MODE, addIndustryInstruction, industryInstructionFor, industryMediaPrompt } from '../providers/industry-operations.mjs'
 import { contextRoutes } from './context-routes.mjs'
 import { AccountStore, ROLES, DEFAULT_MAX_ACCOUNTS } from './accounts.mjs'
 import { AuditLedger } from '../audit/ledger.mjs'
@@ -26,7 +29,10 @@ import { KLYVARON_TIERS, MODALITIES, KLYVARON_NOTE, tierFor, provenanceFor, reso
 import { NativeKlyvaronHost } from './native-klyvaron.mjs'
 import { NativeMultimodalHost } from '../klyvaron/multimodal-host.mjs'
 import { RuntimeQualificationRegistry, detectHardwareProfile } from '../klyvaron/qualification.mjs'
-import { PRODUCT_SUBSCRIPTION_TIERS } from '../klyvaron/tiers.mjs'
+import { KLYVARON_MODEL_REGISTRY, PRODUCT_SUBSCRIPTION_TIERS } from '../klyvaron/tiers.mjs'
+import { KLYVARON_PROCESSOR_PROFILES, KLYVARON_PROCESSOR_TASKS } from '../klyvaron/processor.mjs'
+import { KlyvaronModelRegistryStore } from '../klyvaron/model-registry-store.mjs'
+import { loadKlyvaronEvidenceTrustStore } from '../klyvaron/evidence-trust.mjs'
 import { LocalTrainingWorkerManager } from '../klyvaron/training-worker.mjs'
 import { UserTrainingController } from '../klyvaron/training-controller.mjs'
 
@@ -57,6 +63,27 @@ export const SESSIONS = Object.freeze({ ttlMs: 8 * 3600_000, perAccount: 8, inst
 export const COOKIE_SAME_SITE = Object.freeze(['strict', 'lax', 'none'])
 
 const LOCAL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function normalizeChatTools(value) {
+  if (value === undefined || value === null) return []
+  if (!Array.isArray(value) || value.length > 8) throw failure('invalid_tools', 'Offer at most eight function tools to a model.', 400)
+  const names = new Set()
+  let total = 0
+  return value.map((tool) => {
+    if (!tool || typeof tool !== 'object' || Array.isArray(tool)
+      || typeof tool.name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$/.test(tool.name)
+      || names.has(tool.name) || typeof tool.description !== 'string' || tool.description.length > 1000
+      || !tool.parameters || typeof tool.parameters !== 'object' || Array.isArray(tool.parameters)
+      || tool.parameters.type !== 'object') {
+      throw failure('invalid_tools', 'Function tools need unique valid names, short descriptions and object JSON Schemas.', 400)
+    }
+    const encoded = JSON.stringify(tool.parameters)
+    total += encoded.length + tool.name.length + tool.description.length
+    if (encoded.length > 12_000 || total > 32_000) throw failure('invalid_tools', 'Offered function schemas exceed the 32 KiB limit.', 413)
+    names.add(tool.name)
+    return { name: tool.name, description: tool.description, parameters: tool.parameters }
+  })
+}
 
 function isLoopbackWebHost(value) {
   try {
@@ -106,7 +133,6 @@ function localIdentityFor(dir, accounts) {
  * means is visible in the source and can be checked against the client that calls it.
  */
 export const PROVIDER_ROUTES = Object.freeze({
-  litellm: '/api/providers/litellm',
   ollama: '/api/providers/ollama',
   llamacpp: '/api/providers/llamacpp',
 })
@@ -146,6 +172,63 @@ const HARD_STYLE_VIOLATIONS = new Set([
 const DOCS_DIR = fileURLToPath(new URL('../../../../docs/', import.meta.url))
 const DOC_NAME = /^[0-9A-Za-z][0-9A-Za-z._-]*\.md$/
 const MAX_DOC_CHARS = 20_000
+const MAX_MEDIA_PROMPT_INPUT = 4_000
+const MAX_MEDIA_PROMPT_WITH_GUIDANCE = 5_000
+const LOCAL_CHAT_CONNECTIONS = new Set(['ollama', 'llamacpp', 'vllm', 'localai'])
+const LOCAL_IMAGE_CONNECTIONS = new Set(['comfyui'])
+const LOCAL_ENDPOINT_HOSTS = new Set(['localhost', 'host.docker.internal', 'host.containers.internal', 'ollama', 'llamacpp', 'vllm', 'localai', 'comfyui'])
+
+function requestedLocalOnly(body) {
+  if (body?.localOnly !== undefined && typeof body.localOnly !== 'boolean') {
+    throw failure('invalid_local_only_mode', 'Local-only mode must be a boolean.', 400)
+  }
+  return body?.localOnly !== false
+}
+
+function localOnlyAllows(config, modality) {
+  const allowedIds = modality === 'chat' ? LOCAL_CHAT_CONNECTIONS : modality === 'image' ? LOCAL_IMAGE_CONNECTIONS : new Set()
+  if (!allowedIds.has(config?.id)) return false
+  try {
+    const host = new URL(config.baseUrl).hostname.toLowerCase().replace(/^\[|\]$/g, '')
+    const localHost = LOCAL_ENDPOINT_HOSTS.has(host) || host.endsWith('.localhost') || (isIP(host) !== 0 && privateAddress(host))
+    return localHost
+  } catch { return false }
+}
+
+function assertLocalOnlyProvider(body, config, modality) {
+  if (requestedLocalOnly(body) && !localOnlyAllows(config, modality)) {
+    throw failure('local_only_blocked', `Local-only mode blocks remote ${modality} providers. Select verified native Klyvaron or an allowed self-hosted local endpoint, or explicitly turn Local-only off; remote providers may bill.`, 409)
+  }
+}
+
+function gatewayTransport(gateway, localOnly) {
+  const request = gateway.request.bind(gateway)
+  return localOnly ? (config, path, options = {}) => request(config, path, { ...options, localOnly: true }) : request
+}
+
+function requestedIndustryMode(body) {
+  const mode = body?.industryMode
+  if (mode !== undefined && mode !== null && mode !== false && mode !== '' && mode !== MANUFACTURING_MODE) {
+    throw failure('invalid_industry_mode', 'Choose a supported industry mode.', 400)
+  }
+  return mode === MANUFACTURING_MODE ? MANUFACTURING_MODE : null
+}
+
+function mediaPromptFor(body, modality, action, { allowEmpty = false } = {}) {
+  const industryMode = requestedIndustryMode(body)
+  const userPrompt = body?.prompt ?? ''
+  if (typeof userPrompt !== 'string' || (!allowEmpty && !userPrompt.trim())) {
+    throw failure('invalid_prompt', allowEmpty ? 'Prompt must be text.' : 'A prompt is required.', 400)
+  }
+  if (userPrompt.length > MAX_MEDIA_PROMPT_INPUT) {
+    throw failure('invalid_prompt', `This product caps ${modality} prompts at ${MAX_MEDIA_PROMPT_INPUT.toLocaleString()} characters.`, 400)
+  }
+  const prompt = industryMediaPrompt(userPrompt, industryMode, modality, action)
+  if (prompt.length > MAX_MEDIA_PROMPT_WITH_GUIDANCE) {
+    throw failure('invalid_prompt', 'The prompt plus advisory guidance exceeds the supported limit.', 400)
+  }
+  return { userPrompt, prompt, industryMode }
+}
 
 export function listInstallationDocs() {
   if (!existsSync(DOCS_DIR)) return []
@@ -197,6 +280,12 @@ export class OnlineApp {
     if (providerStore && (typeof providerStore.public !== 'function' || typeof providerStore.config !== 'function' || typeof providerStore.flush !== 'function')) {
       throw new TypeError('providerStore must implement the OnlineStore API and durable flush()')
     }
+    this.klyvaronEvidenceTrustStore = loadKlyvaronEvidenceTrustStore(join(this.dir, 'klyvaron', 'evidence-trust.json'))
+    this.modelReleaseRegistry = new KlyvaronModelRegistryStore({
+      filePath: join(this.dir, 'klyvaron', 'model-release-registry.json'),
+      initialRecords: KLYVARON_MODEL_REGISTRY,
+      trustStore: this.klyvaronEvidenceTrustStore,
+    })
     this.gateway = new OnlineGateway({ trustedOrigins, timeoutMs })
     // The video wire polls a long-running operation. Tests shorten the interval; production uses
     // the documented 10-second cadence. This is a timing seam, not a behaviour switch.
@@ -432,10 +521,15 @@ export class OnlineApp {
     const allModalities = [...MODALITIES, 'voice']
     return {
       product: 'klyvaron',
+      modelIndependentProcessor: {
+        engine: 'klyvaron-deterministic-v1', modelRequired: false, weightsRequired: false, networkRequired: false,
+        profiles: KLYVARON_PROCESSOR_PROFILES, tasks: KLYVARON_PROCESSOR_TASKS,
+      },
       independentWeights: nativeSummary.readyCount + mmReadyCount > 0,
       note: KLYVARON_NOTE,
       revision: view.revision,
       productSubscriptionTiers: PRODUCT_SUBSCRIPTION_TIERS,
+      modelReleaseRegistry: this.modelReleaseRegistry.snapshot(),
       firstPartyModels: nativeSummary,
       firstPartyMultimodal: mmStatus,
       capabilityManifests: this.multimodalHost.buildCapabilityManifests({ hardwareCapabilities: workerCaps }),
@@ -692,6 +786,8 @@ export class OnlineApp {
    * Queue one image generation for this account and return immediately.
    */
   async startImage(body, session, requestSignal = null) {
+    const localOnly = requestedLocalOnly(body)
+    const industryMode = requestedIndustryMode(body)
     const tier = body.tier === undefined || body.tier === null ? null : body.tier
     if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
     const tierPreset = tier === null ? null : this.store.klyvaronPreset(tier, 'image')
@@ -710,9 +806,7 @@ export class OnlineApp {
       if (!rec.verified) {
         throw failure('klyvaron_model_unavailable', `First-party model '${targetModel}' is missing or failed SHA-256 verification.`, 503)
       }
-      const prompt = body.prompt
-      if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
-      if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps image prompts at 4,000 characters.', 400)
+      const { userPrompt, prompt } = mediaPromptFor(body, 'image', 'generate')
       const allowedSizes = ['256x256', '512x512', '768x512', '512x768']
       if (body.size !== undefined && body.size !== '' && !allowedSizes.includes(body.size)) {
         throw failure('invalid_parameters', `Size must be one of ${allowedSizes.join(', ')}.`, 400)
@@ -733,7 +827,7 @@ export class OnlineApp {
       const context = await this.contextFor(session.accountId)
       const job = await context.media.enqueue({
         kind: 'image',
-        params: { prompt, size, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
+        params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, size, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
         subject: session.accountId,
         filenameHint: `${rec.id}-image`,
         signal: requestSignal,
@@ -759,6 +853,7 @@ export class OnlineApp {
 
     const resolved = tier === null ? null : resolveTier({ tier, modality: 'image', store: this.store, configFor: (id) => this.store.config(id), wireFor })
     const config = resolved?.config ?? this.imageConnection()
+    if (localOnly) assertLocalOnlyProvider(body, config, 'image')
     const record = this.store.connections.find((connection) => connection.id === config.id)
     const models = record?.models ?? []
     const model = resolved?.model ?? (typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0]))
@@ -766,9 +861,7 @@ export class OnlineApp {
     if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
     const wire = wireFor(config.wire)
     if (typeof wire.generate !== 'function') throw failure('capability_unavailable', 'That connection does not generate images.', 409)
-    const prompt = body.prompt
-    if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
-    if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps image prompts at 4,000 characters.', 400)
+    const { userPrompt, prompt } = mediaPromptFor(body, 'image', 'generate')
     // Refused here rather than inside the asynchronous job: an unsupported size must be a 400 in
     // front of the person who chose it, not a failed record they discover by polling. A wire with
     // no size list deliberately offers no control (the model decides geometry); a supplied size
@@ -781,11 +874,11 @@ export class OnlineApp {
     const context = await this.contextFor(session.accountId)
     const job = await context.media.enqueue({
       kind: 'image',
-      params: { prompt, size: size ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
+      params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, size: size ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
       subject: session.accountId,
       filenameHint: `${config.id}-image`,
       signal: requestSignal,
-      run: ({ signal }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
+      run: ({ signal }) => wire.generate(gatewayTransport(this.gateway, localOnly), config, {
         model, prompt, size, signal,
         poll: this.mediaPoll ?? undefined,
         trustedOrigins: this.gateway.trustedOrigins,
@@ -803,13 +896,14 @@ export class OnlineApp {
   }
 
   async startImageEdit(body, session, requestSignal = null) {
+    requestedLocalOnly(body)
+    const industryMode = requestedIndustryMode(body)
     const nativeReady = this.nativeMultimodalModelsFor('image')
     const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-image'
     const rec = this.multimodalHost.records.get(targetModel)
     if (!rec || rec.modality !== 'image') throw failure('model_unavailable', `Unknown first-party image model '${targetModel}'.`, 409)
     if (!rec.verified) throw failure('klyvaron_model_unavailable', `Model '${targetModel}' is missing or unverified.`, 503)
-    const prompt = body.prompt
-    if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'An editing instruction prompt is required.', 400)
+    const { userPrompt, prompt } = mediaPromptFor(body, 'image', 'edit')
     const context = await this.contextFor(session.accountId)
     let sourceBytes = null
     if (typeof body.imageBase64 === 'string' && body.imageBase64) {
@@ -835,7 +929,7 @@ export class OnlineApp {
     }
     return await context.media.enqueue({
       kind: 'image',
-      params: { prompt, mode: 'edit', model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', provenance },
+      params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, mode: 'edit', model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', provenance },
       subject: session.accountId,
       filenameHint: `${rec.id}-image-edit`,
       signal: requestSignal,
@@ -863,6 +957,8 @@ export class OnlineApp {
   }
 
   async understandImage(body, session) {
+    requestedLocalOnly(body)
+    const industryMode = requestedIndustryMode(body)
     const nativeReady = this.nativeMultimodalModelsFor('image')
     const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-image'
     const rec = this.multimodalHost.records.get(targetModel)
@@ -879,7 +975,9 @@ export class OnlineApp {
     if (!sourceBytes || sourceBytes.length === 0) {
       throw failure('invalid_parameters', 'Supply either imageBase64 or a valid sourceJobId for vision understanding.', 400)
     }
-    return this.multimodalHost.understandImage({ modelId: rec.id, imageBuffer: sourceBytes, prompt: body.prompt || '' })
+    const { prompt } = mediaPromptFor(body, 'image', 'analyze', { allowEmpty: true })
+    const result = await this.multimodalHost.understandImage({ modelId: rec.id, imageBuffer: sourceBytes, prompt })
+    return { ...result, industryMode }
   }
 
   /** Whether this installation can start a video job now: a gateway key+model OR a verified first-party video checkpoint. */
@@ -897,6 +995,8 @@ export class OnlineApp {
    * the job record and nothing else; polling, cancellation and the restart rule live in the queue.
    */
   async startVideo(body, session, requestSignal = null) {
+    const localOnly = requestedLocalOnly(body)
+    const industryMode = requestedIndustryMode(body)
     const tier = body.tier === undefined || body.tier === null ? null : body.tier
     if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
     const tierPreset = tier === null ? null : this.store.klyvaronPreset(tier, 'video')
@@ -915,9 +1015,7 @@ export class OnlineApp {
       if (!rec.verified) {
         throw failure('klyvaron_model_unavailable', `First-party model '${targetModel}' is missing or failed SHA-256 verification.`, 503)
       }
-      const prompt = body.prompt
-      if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
-      if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps video prompts at 4,000 characters.', 400)
+      const { userPrompt, prompt } = mediaPromptFor(body, 'video', 'generate')
       if (Number(body.durationMs ?? 2000) > 6000 || body.resolution === '4k' || body.audioTrack === true) {
         throw failure(
           'unsupported_video_scope',
@@ -949,7 +1047,7 @@ export class OnlineApp {
       const job = await context.media.enqueue({
         kind: 'video',
         timeoutMs: 5 * 60 * 1000,
-        params: { prompt, aspectRatio, resolution, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
+        params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, aspectRatio, resolution, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
         subject: session.accountId,
         filenameHint: `${rec.id}-video`,
         signal: requestSignal,
@@ -982,6 +1080,7 @@ export class OnlineApp {
 
     const resolved = tier === null ? null : resolveTier({ tier, modality: 'video', store: this.store, configFor: (id) => this.store.config(id), wireFor })
     const config = resolved?.config ?? this.videoConnection()
+    if (localOnly) assertLocalOnlyProvider(body, config, 'video')
     const record = this.store.connections.find((connection) => connection.id === config.id)
     const models = record?.models ?? []
     const model = resolved?.model ?? (typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0]))
@@ -989,9 +1088,7 @@ export class OnlineApp {
     if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
     const wire = wireFor(config.wire)
     if (typeof wire.generate !== 'function') throw failure('capability_unavailable', 'That connection does not generate video.', 409)
-    const prompt = body.prompt
-    if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
-    if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps video prompts at 4,000 characters.', 400)
+    const { userPrompt, prompt } = mediaPromptFor(body, 'video', 'generate')
     // A wire with an empty list does not send that control at all. Replicate video, for
     // example, documents no common geometry input across its models; sending one would be a
     // guess. An unsupported value on a wire that DOES document the control is a 400 here.
@@ -1011,11 +1108,11 @@ export class OnlineApp {
       // Video renders for minutes and the provider operation is paid for once; the deadline is
       // bounded and stated in the job record, and the job is failed honestly if it is exceeded.
       timeoutMs: 15 * 60 * 1000,
-      params: { prompt, aspectRatio: aspectRatio ?? null, resolution: resolution ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
+      params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, aspectRatio: aspectRatio ?? null, resolution: resolution ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
       subject: session.accountId,
       filenameHint: `${config.id}-video`,
       signal: requestSignal,
-      run: ({ signal, progress }) => wire.generate(this.gateway.request.bind(this.gateway), config, {
+      run: ({ signal, progress }) => wire.generate(gatewayTransport(this.gateway, localOnly), config, {
         model,
         prompt,
         aspectRatio,
@@ -1030,6 +1127,8 @@ export class OnlineApp {
     return job
   }
   async understandVideo(body, session) {
+    requestedLocalOnly(body)
+    const industryMode = requestedIndustryMode(body)
     const nativeReady = this.nativeMultimodalModelsFor('video')
     const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-video'
     const rec = this.multimodalHost.records.get(targetModel)
@@ -1046,7 +1145,9 @@ export class OnlineApp {
     if (!sourceBytes || sourceBytes.length === 0) {
       throw failure('invalid_parameters', 'Supply either videoBase64 or a valid sourceJobId for video understanding.', 400)
     }
-    return this.multimodalHost.understandVideo({ modelId: rec.id, videoBuffer: sourceBytes, prompt: body.prompt || '' })
+    const { prompt } = mediaPromptFor(body, 'video', 'analyze', { allowEmpty: true })
+    const result = await this.multimodalHost.understandVideo({ modelId: rec.id, videoBuffer: sourceBytes, prompt })
+    return { ...result, industryMode }
   }
 
   async startVoiceSynthesis(body, session) {
@@ -1108,7 +1209,7 @@ export class OnlineApp {
     return this.multimodalHost.transcribeSpeech({ modelId: rec.id, audioBuffer: sourceBytes })
   }
 
-  async configure(body, { session, kind = 'litellm' } = {}) {
+  async configure(body, { session, kind } = {}) {
     const runtime = runtimeFor(kind)
     if (typeof body.baseUrl !== 'string') throw failure('invalid_endpoint', 'A gateway URL is required.')
     const baseUrl = gatewayUrl(body.baseUrl, this.gateway.trustedOrigins)
@@ -1180,6 +1281,13 @@ export class OnlineApp {
   async performChat(body, { signal, emit, session } = {}) {
     if (!session?.accountId) throw failure('unauthenticated', 'Sign in to this Aetheris installation.', 401)
     if (body.executionMode && body.executionMode !== 'online') throw failure('online_only', 'Local and hybrid inference are not available.', 400)
+    const localOnly = requestedLocalOnly(body)
+    if (body.industryMode !== undefined && body.industryMode !== null && body.industryMode !== false
+      && body.industryMode !== '' && body.industryMode !== MANUFACTURING_MODE) {
+      throw failure('invalid_industry_mode', 'Choose a supported industry mode.', 400)
+    }
+    const industryMode = body.industryMode === MANUFACTURING_MODE ? MANUFACTURING_MODE : null
+    const industryInstruction = industryInstructionFor(industryMode)
     const context = await this.contextFor(session.accountId)
     const state = this.store.state, revision = state.revision
     const tier = body.tier === undefined || body.tier === null ? null : body.tier
@@ -1194,18 +1302,19 @@ export class OnlineApp {
     if (isNativeTarget) {
       // Never fall back to a gateway or another model if the requested first-party model is missing or failed.
       const { record, provider } = this.nativeKlyvaron.requireProvider(requestedModel)
+      if (industryMode && provider.instructionTuned !== true) {
+        throw failure('capability_unavailable', 'Manufacturing Operations mode needs an instruction-tuned model. Klyvaron Lite is a base completion model and does not follow this guidance. Turn this mode off or select an instruction-tuned Chat model; no fallback is performed.', 409)
+      }
       if (body.authorization && body.authorization.confirmed === false) {
         throw failure('consent_required', 'Confirm this request before running generation.', 403)
       }
       const incoming = body.messages ?? [{ role: 'user', content: body.prompt }]
-      if (!Array.isArray(incoming) || incoming.length < 1 || incoming.length > 100 || incoming.some((m) => !m || !['user', 'assistant'].includes(m.role) || typeof m.content !== 'string' || m.content.length > 100_000)) {
-        throw failure('invalid_messages', 'Send up to 100 text user/assistant messages.')
-      }
-      if (incoming.at(-1).role !== 'user' || !incoming.at(-1).content.trim()) {
-        throw failure('invalid_messages', 'The last message must be a nonempty user message.')
-      }
-      const messages = incoming.map(({ role, content }) => ({ role, content }))
-      const prompt = incoming.at(-1).content
+      const normalized = normalizeChatMessages(incoming)
+      if (body.nativeSearch || (Array.isArray(body.tools) && body.tools.length)) throw failure('capability_unavailable', 'First-party Klyvaron native Chat does not expose provider search or function tools. Choose a compatible listed gateway model; no fallback is performed.', 409)
+      if (normalized.mediaCount) throw failure('capability_unavailable', 'First-party Klyvaron native Chat is text-only; choose a compatible gateway model for these attachments. No fallback is performed.', 409)
+      const messages = normalized.messages
+      const industryMessage = addIndustryInstruction(messages, industryMode)
+      const prompt = normalized.prompt
       const contextClasses = []
       let grounding = null
       if ((body.useKnowledge || body.useMemory) && body.authorization?.includeContext !== true) {
@@ -1237,7 +1346,7 @@ export class OnlineApp {
       if (body.style !== undefined && body.style !== null) {
         messages.unshift({ role: 'system', content: instructionFor(body.style) })
       }
-      const classification = mostSensitiveDataClass(...messages.map((m) => classifyText(m.content).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
+      const classification = mostSensitiveDataClass(...messages.filter((message) => message !== industryMessage).map((m) => classifyText(m.content).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
       const redacted = redactDeep(messages)
       const maxTokens = body.maxTokens ?? 96
       const temperature = body.temperature ?? 0
@@ -1261,6 +1370,7 @@ export class OnlineApp {
       try {
         const stream = provider.chatStream({
           messages: redacted.value,
+          systemPrompt: industryInstruction,
           maxTokens,
           temperature,
           signal,
@@ -1328,6 +1438,7 @@ export class OnlineApp {
         usage: nativeResult.usage,
         redaction: { findings: redacted.findings },
         grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null,
+        industryMode,
         skill: skillUsed,
         style: body.style ?? null,
         styleAudit,
@@ -1355,13 +1466,20 @@ export class OnlineApp {
     const model = resolved?.model ?? (body.model || state.selectedModel)
     const modelSource = resolved ? (this.store.connections.find((connection) => connection.id === config.id)?.models ?? []) : state.models
     if (!modelSource.includes(model)) throw failure('model_unavailable', 'Choose a listed model. This request will not switch to another model.', 409)
+    if (localOnly) assertLocalOnlyProvider(body, config, 'chat')
     if (body.authorization?.providerRevision !== revision || body.authorization?.confirmed !== true) throw failure('consent_required', 'Confirm sending this request to the current gateway.', 403)
     if (resolved && body.authorization?.providerId && body.authorization.providerId !== config.id) throw failure('consent_provider_mismatch', 'The request is authorized for a different provider than this tier uses.', 409)
     const incoming = body.messages ?? [{ role: 'user', content: body.prompt }]
-    if (!Array.isArray(incoming) || incoming.length < 1 || incoming.length > 100 || incoming.some((m) => !m || !['user','assistant'].includes(m.role) || typeof m.content !== 'string' || m.content.length > 100_000)) throw failure('invalid_messages', 'Send up to 100 text user/assistant messages.')
-    if (incoming.at(-1).role !== 'user' || !incoming.at(-1).content.trim()) throw failure('invalid_messages', 'The last message must be a nonempty user message.')
-    const messages = incoming.map(({ role, content }) => ({ role, content }))
-    const prompt = incoming.at(-1).content
+    const normalized = normalizeChatMessages(incoming)
+    const messages = normalized.messages
+    const industryMessage = addIndustryInstruction(messages, industryMode)
+    const prompt = normalized.prompt
+    if (normalized.mediaCount) {
+      if (body.authorization?.mediaConfirmed !== true) throw failure('media_consent_required', 'Confirm the selected media will be sent to the currently selected provider with this message.', 403)
+      const wireSupports = new Set(wireFor(config.wire).chatInputKinds ?? [])
+      const unsupported = normalized.mediaKinds.filter((kind) => !wireSupports.has(kind))
+      if (unsupported.length) throw failure('capability_unavailable', `${config.label ?? config.id} cannot encode ${unsupported.join(', ')} attachments through this Chat wire. Choose a compatible provider; no fallback is performed.`, 409)
+    }
     const contextClasses = []
     let grounding = null
     if ((body.useKnowledge || body.useMemory) && body.authorization?.includeContext !== true) throw failure('context_consent_required', 'Explicitly approve sending selected files or memories to the gateway.', 403)
@@ -1392,9 +1510,9 @@ export class OnlineApp {
       const instruction = instructionFor(body.style)
       messages.unshift({ role: 'system', content: instruction })
     }
-    const classification = mostSensitiveDataClass(...messages.map((m) => classifyText(m.content).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
+    const classification = mostSensitiveDataClass(...messages.filter((message) => message !== industryMessage).map((m) => classifyText(textFromChatContent(m.content)).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
     if (['restricted','confidential'].includes(classification) && body.authorization?.allowSensitive !== true) throw failure('sensitive_consent_required', 'This request or its context contains sensitive information. Explicitly authorize this transfer or remove it.', 403)
-    const redacted = redactDeep(messages)
+    const redacted = redactChatMessages(messages)
     const maxTokens = body.maxTokens ?? 512
     const temperature = body.temperature ?? 0.2
     if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 8192 || !Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw failure('invalid_parameters', 'Max tokens must be 1–8192 and temperature 0–2.')
@@ -1404,15 +1522,32 @@ export class OnlineApp {
     // it never inspects a provider's JSON.
     const wire = wireFor(config.wire)
     if (typeof wire.chat !== 'function') throw failure('capability_unavailable', 'This connection generates images, not chat. Activate a chat connection in Provider Settings.', 409)
-    const result = await wire.chat(this.gateway.request.bind(this.gateway), config, {
+    const tools = normalizeChatTools(body.tools)
+    if (tools.length && body.authorization?.toolsConfirmed !== true) throw failure('tools_consent_required', 'Explicitly approve sending selected function names, descriptions and schemas to the provider.', 403)
+    if (tools.length && wire.chatTools !== true) throw failure('capability_unavailable', `${config.label ?? config.id} does not expose function calling through this Chat wire. No fallback is performed.`, 409)
+    const nativeSearch = body.nativeSearch === true
+    if (nativeSearch && body.authorization?.nativeSearchConfirmed !== true) throw failure('search_consent_required', 'Explicitly approve provider-native search for this request.', 403)
+    if (nativeSearch && wire.chatNativeSearch !== true) throw failure('capability_unavailable', `${config.label ?? config.id} does not expose provider-native search through this Chat wire. No fallback is performed.`, 409)
+    const result = await wire.chat(gatewayTransport(this.gateway, localOnly), config, {
       model,
       messages: redacted.value,
       maxTokens,
       temperature,
       signal,
+      maxRequestBytes: normalized.mediaCount ? 8 * 1024 * 1024 : undefined,
+      tools,
+      nativeSearch,
       onText: emit ? (delta) => emit('delta', { text: delta }) : null,
     })
-    const text = result.text
+    const proposedToolCalls = Array.isArray(result.toolCalls) ? result.toolCalls : []
+    const offeredNames = new Set(tools.map((tool) => tool.name))
+    if (proposedToolCalls.length > 8 || proposedToolCalls.some((call) => !offeredNames.has(call?.name)
+      || !call.arguments || typeof call.arguments !== 'object' || Array.isArray(call.arguments)
+      || JSON.stringify(call.arguments).length > 12_000)) {
+      throw failure('invalid_tool_proposal', 'The provider returned a malformed or unrequested function proposal. Nothing was executed.', 502)
+    }
+    if (proposedToolCalls.length && !tools.length) throw failure('invalid_tool_proposal', 'The provider proposed an unrequested function call. Nothing was executed.', 502)
+    const text = result.text || (proposedToolCalls.length ? `The model proposed ${proposedToolCalls.length} function call${proposedToolCalls.length === 1 ? '' : 's'} for review. Nothing was executed.` : '')
     const reportedModel = result.model ?? null
     const usage = result.usage ?? null
     if (!text) throw failure('invalid_completion', 'No text completion was returned. Tool execution is not automatic.', 502)
@@ -1439,7 +1574,7 @@ export class OnlineApp {
       this.skills.recordUse(skillUsed.name)
       this.ledger.record({ category: 'skills', action: 'skill_use', outcome: 'success', subject: session.accountId, detail: { skill: skillUsed.name, version: skillUsed.version } })
     }
-    return { text, modelId: model, providerModel: reportedModel, provider: config.label ?? runtimeFor(config.id).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null, skill: skillUsed, style: body.style ?? null, styleAudit, klyvaron: resolved ? { tier: resolved.tier, provenance: resolved.provenance } : null }
+    return { text, modelId: model, providerModel: reportedModel, provider: config.label ?? runtimeFor(config.id).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount, ...(result.grounding ? { provider: result.grounding } : {}) } : (result.grounding ?? null), toolCalls: proposedToolCalls, skill: skillUsed, style: body.style ?? null, styleAudit, industryMode, klyvaron: resolved ? { tier: resolved.tier, provenance: resolved.provenance } : null }
   }
   authenticated(req) {
     const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]
@@ -1641,6 +1776,7 @@ export class OnlineApp {
           return sendJson(res, 200, {
             ...baseSummary,
             multimodal: this.multimodalHost.status(),
+            modelReleaseRegistry: this.modelReleaseRegistry.snapshot(),
             localWorkerConnected: this.trainingController.isLocalWorkerConnected(),
             models: baseSummary.models.map((m) => ({
               ...m,
@@ -1848,7 +1984,7 @@ export class OnlineApp {
           return sendJson(res, 200, this.clearKlyvaronPreset(tierModalityMatch[1], tierModalityMatch[2]))
         }
         // One route per connection, so the connection a request means is in the URL and never
-        // guessed from the body. The three runtimes keep their literal paths; any other catalogue
+        // guessed from the body. The two built-in local runtimes keep their literal paths; any other catalogue
         // provider or named custom endpoint uses the same shape under its own id.
         const connectionMatch = PROVIDER_CONNECTION.exec(path)
         const connectionId = connectionMatch?.[1] === 'catalog' || connectionMatch?.[1] === 'active' ? null : (connectionMatch?.[1] ?? null)
@@ -1891,7 +2027,7 @@ export class OnlineApp {
           this.store.save({ selectedModel: model }); return sendJson(res, 200, { selectedModel: model })
         }
         if (req.method === 'POST' && (path === '/api/chat' || path === '/api/chat/stream')) {
-          const body = await readBody(req, { principal: session.accountId })
+          const body = await readBody(req, { principal: session.accountId, maxBytes: 8 * 1024 * 1024 })
           if (path === '/api/chat') return sendJson(res, 200, await this.chat(body, { signal: controller.signal, session }))
           let started = false
           const emit = (event, data) => {

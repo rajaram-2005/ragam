@@ -10,13 +10,14 @@ import { BaseProvider, OPERATIONS, ProviderError } from './base.mjs'
 import { AVAILABILITY } from '../router/registry.mjs'
 import { KlyvaronRuntime, buildTokenizerFromManifest } from '../klyvaron/runtime.mjs'
 import { ArtifactError } from '../klyvaron/format.mjs'
+import { INDUSTRY_SYSTEM_MARKER } from './industry-operations.mjs'
 import { createHash } from 'node:crypto'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 
 const DEFAULT_CHAT_SYSTEM = 'Klyvaron first-party language model. Answer directly from available context and state clearly when supporting evidence is absent.'
 
 function extractContextFromSystemMessages(messages) {
-  const sysParts = messages.filter((m) => m?.role === 'system' && typeof m.content === 'string').map((m) => m.content.trim()).filter(Boolean)
+  const sysParts = messages.filter((m) => m?.role === 'system' && typeof m.content === 'string' && !m.content.startsWith(INDUSTRY_SYSTEM_MARKER)).map((m) => m.content.trim()).filter(Boolean)
   for (const text of sysParts) {
     if (/context material|retrieved|\[source=/i.test(text)) {
       return text.slice(0, 700)
@@ -163,7 +164,9 @@ export class KlyvaronProvider extends BaseProvider {
       }
     }
 
-    const systemPrompt = chatTemplate.systemPrompt || DEFAULT_CHAT_SYSTEM
+    const systemPrompt = [chatTemplate.systemPrompt || DEFAULT_CHAT_SYSTEM, request.systemPrompt]
+      .filter((part) => typeof part === 'string' && part.trim())
+      .join('\n\n')
     const context = typeof request.context === 'string' && request.context.trim()
       ? request.context.trim()
       : extractContextFromSystemMessages(messages)

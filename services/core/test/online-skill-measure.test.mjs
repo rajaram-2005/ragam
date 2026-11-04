@@ -54,7 +54,7 @@ async function fixture(t) {
   }
   f.configure = async () => {
     await f.login()
-    assert.equal((await f.request('PUT', '/api/providers/litellm', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })).status, 200)
+    assert.equal((await f.request('PUT', '/api/providers/openai', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })).status, 200)
     assert.equal((await f.request('POST', '/api/models/probe', {})).status, 200)
   }
   f.install = async (version, marker) => f.request('POST', '/api/skills', {

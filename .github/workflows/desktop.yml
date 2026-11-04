@@ -1,0 +1,94 @@
+name: Desktop packages
+
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64 and ARM64
+            runner: ubuntu-24.04
+            target: --linux AppImage deb --x64 --arm64
+          - name: Windows x64 and ARM64
+            runner: windows-latest
+            target: --win nsis --x64 --arm64
+          - name: macOS Intel and Apple Silicon
+            runner: macos-14
+            target: --mac dmg --x64 --arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            apps/desktop/package-lock.json
+
+      - name: Install locked web and desktop build dependencies
+        run: |
+          npm ci --prefix apps/web
+          npm ci --prefix apps/desktop
+
+      - name: Verify the cross-platform CPU model runtime
+        run: node --test services/core/test/klyvaron-runtime.test.mjs
+
+      - name: Install the digest-pinned Pro and Max language-model artifacts for real inference checks
+        shell: bash
+        run: |
+          mkdir -p .aetheris-data/online/klyvaron/models
+          curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40 | tar -xz --strip-components=1 -C .aetheris-data/online/klyvaron/models
+          (
+            cd .aetheris-data/online/klyvaron/models
+            cat klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part* > klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz
+            rm -f klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part*
+          )
+
+      - name: Verify real Pro and Max local inference on this operating system
+        run: node --test services/core/test/klyvaron-pro-max-acceptance.test.mjs
+
+      - name: Test the desktop loopback server
+        run: npm test
+        working-directory: apps/desktop
+
+      - name: Build the React app and unpacked desktop app
+        run: |
+          npm run build:web
+          npx electron-builder --dir
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Smoke-test the packaged desktop app and loopback Core
+        run: npm run smoke
+        working-directory: apps/desktop
+
+      - name: Build native installer packages for both CPU architectures
+        run: npx electron-builder ${{ matrix.target }}
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload unsigned desktop package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ragam-${{ matrix.name }}
+          path: apps/desktop/release/*
+          if-no-files-found: error
+          retention-days: 14

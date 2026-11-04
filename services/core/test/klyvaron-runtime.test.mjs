@@ -330,4 +330,26 @@ test('the provider answers honestly about a base model', async () => {
   assert.equal(chunks.join(''), (await provider.chat({ messages: [{ role: 'user', content: 'Aetheris' }], maxTokens: 4 })).text)
 
   await assert.rejects(() => provider.chat({ messages: [{ role: 'user', content: '   ' }] }), /prompt is required/)
+
+  // The industry prompt is a real system instruction for instruction-tuned weights,
+  // not merely a message silently demoted into the retrieved-evidence context.
+  const tunedArtifact = fixtureArtifact()
+  tunedArtifact.manifest = structuredClone(fixture.manifest)
+  tunedArtifact.manifest.instructionTuned = true
+  tunedArtifact.manifest.chatTemplate = { format: 'klyvaron-chat-v1', systemPrompt: 'Fixture system behavior.' }
+  const tunedRuntime = new KlyvaronRuntime(tunedArtifact)
+  let generatedPrompt = ''
+  tunedRuntime.generateSteps = function * (generation) {
+    generatedPrompt = generation.prompt
+    yield { type: 'token', text: 'ok' }
+    return { text: 'ok', generatedTokens: 1, promptTokens: 1, stoppedBy: 'stop' }
+  }
+  const tunedProvider = new KlyvaronProvider({ runtime: tunedRuntime, guard: { fetch: () => { throw new Error('Klyvaron must never reach the network') } } })
+  await tunedProvider.chat({
+    messages: [{ role: 'user', content: 'How should I inspect this asset?' }],
+    systemPrompt: 'Manufacturing policy: never bypass lockout/tagout.',
+    maxTokens: 1,
+  })
+  assert.match(generatedPrompt, /Fixture system behavior\.\n\nManufacturing policy: never bypass lockout\/tagout\./)
+  assert.match(generatedPrompt, /<\|context\|>\nnone\n/)
 })

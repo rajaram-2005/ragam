@@ -24,7 +24,7 @@ const when = (value) => {
   return Number.isFinite(time) && time > 0 ? new Date(time).toLocaleString() : '—'
 }
 
-export default function ImageArea({ provider, readiness, refreshReadiness, onSettings }) {
+export default function ImageArea({ provider, readiness, refreshReadiness, onSettings, industryMode = false, localOnlyMode = false }) {
   const [jobs, setJobs] = useState([])
   const [prompt, setPrompt] = useState('')
   const [size, setSize] = useState('auto')
@@ -59,6 +59,7 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
       ?? null
   }, [provider, readiness])
   const models = connection?.models ?? []
+  const localOnlyUnsupported = Boolean(localOnlyMode && connection && !['klyvaron-native', 'comfyui'].includes(connection.id))
   const SIZES = connection?.sizes?.length ? connection.sizes : (connection ? [] : DEFAULT_SIZES)
 
   useEffect(() => {
@@ -95,9 +96,10 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
   const generate = async (event) => {
     event.preventDefault()
     if (!connection || !model || !prompt.trim()) return
+    if (localOnlyUnsupported) { setError(Error('Local-only mode blocked this remote image provider. Choose native Klyvaron or local ComfyUI, or turn Local-only off to use remote APIs that may bill.')); return }
     setBusy(true); setError(null); setNotice('')
     try {
-      const job = await api.generateImage({ prompt, size: SIZES.length ? size : undefined, model })
+      const job = await api.generateImage({ prompt, size: SIZES.length ? size : undefined, model, localOnly: localOnlyMode, ...(industryMode ? { industryMode: 'manufacturing' } : {}) })
       setJobs((current) => [job, ...current.filter((entry) => entry.id !== job.id)])
       setPrompt('')
       setNotice('Generation queued. The image appears here when the provider returns bytes this build can validate.')
@@ -129,6 +131,10 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
           <p>Use <strong>Test connection</strong> in Provider Settings to read the image-model list. A generation without a listed model is refused rather than guessed.</p>
         </Banner>
       : null}
+    {localOnlyMode && !connection ? <Banner tone="warn" title="No local image model is available"><p>Local-only mode blocks remote image providers. Install or configure a verified Klyvaron image model or a self-hosted ComfyUI endpoint; no remote request will be sent.</p></Banner> : null}
+    {localOnlyUnsupported ? <Banner tone="warn" title="Remote image provider blocked"><p>Local-only mode prevents this request from reaching {connection?.label ?? 'the selected provider'}. Choose local Klyvaron/ComfyUI or explicitly turn Local-only off; remote APIs may bill.</p></Banner> : null}
+    {!localOnlyMode && connection && !['klyvaron-native', 'comfyui'].includes(connection.id) ? <Banner tone="warn" title="Remote image provider may bill"><p>Local-only is off. Requests go to {connection.label}; check the provider’s current pricing, retention and terms. Ragam does not guarantee a free tier.</p></Banner> : null}
+    {industryMode && connection ? <Banner tone="warn" title="Manufacturing prompt guidance is on"><p>Guidance is appended to image prompts as advisory text. Generated images are illustrative, not evidence of actual equipment, safe operation or approved procedures.</p></Banner> : null}
 
     {connection && models.length
       ? <form onSubmit={generate}>
@@ -148,7 +154,7 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
                   </select>
                 </Field>
               : null}
-            <Button type="submit" variant="primary" busy={busy} disabled={busy || !prompt.trim() || !model}>Generate image</Button>
+            <Button type="submit" variant="primary" busy={busy} disabled={busy || localOnlyUnsupported || !prompt.trim() || !model}>Generate image</Button>
           </div>
         </form>
       : null}
@@ -170,6 +176,7 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
             <small>{when(job.createdAt)}</small>
           </div>
           <p className="small"><strong>Prompt:</strong> {job.params?.prompt}</p>
+          {job.params?.industryMode === 'manufacturing' ? <p className="small">Manufacturing prompt guidance applied · illustrative output only.</p> : null}
           <p className="small">
             {job.params?.provider} · {job.result?.model ?? job.params?.model}
             {job.artifact ? ` · ${job.artifact.format?.toUpperCase()} · ${bytesOf(job.artifact.byteLength)} · sha256 ${job.artifact.sha256?.slice(0, 12)}…` : ''}
@@ -201,6 +208,8 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
                     model: model.startsWith('klyvaron-') ? model : undefined,
                     sourceJobId: job.id,
                     prompt: editPromptByJob[job.id].trim(),
+                    localOnly: localOnlyMode,
+                    ...(industryMode ? { industryMode: 'manufacturing' } : {}),
                   })
                   setJobs((current) => [editedJob, ...current])
                 } catch (e) { setError(e) } finally { setBusy(false) }
@@ -211,6 +220,8 @@ export default function ImageArea({ provider, readiness, refreshReadiness, onSet
                   const res = await api.understandImage({
                     model: model.startsWith('klyvaron-') ? model : undefined,
                     sourceJobId: job.id,
+                    localOnly: localOnlyMode,
+                    ...(industryMode ? { industryMode: 'manufacturing' } : {}),
                   })
                   setAnalysisByJob((prev) => ({ ...prev, [job.id]: res }))
                 } catch (e) { setError(e) } finally { setBusy(false) }

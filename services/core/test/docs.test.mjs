@@ -26,7 +26,7 @@ import { DEFAULT_ROUTING_WEIGHTS } from '../src/router/registry.mjs'
 import { COMPETITOR_MARKERS, FAMILY_STANCE, KLYVARON, TIERS, familyReport, ownedArtifacts, tierClaimFor, tierClaimForArtifact } from '../src/klyvaron/tiers.mjs'
 import { ACCELERATORS, ACCELERATOR_IDS } from '../src/hardware/accelerators.mjs'
 import { MODALITY_MODELS, presetReport } from '../src/klyvaron/architecture.mjs'
-import { PROVIDERS, PROVIDER_STATUS, catalogueReport } from '../src/providers/catalog.mjs'
+import { PROVIDERS, PROVIDER_STATUS, RECOMMENDED_PROVIDER_IDS, catalogueReport } from '../src/providers/catalog.mjs'
 
 const idMapOf = (plan) => Object.fromEntries(plan.tiers.map((t) => [t.id, t]))
 const gateIn = (tier, id) => tier.gates.find((g) => g.id === id)
@@ -161,7 +161,21 @@ test('.env.example documents active deployment variables without exposing accoun
   assert.deepEqual(missing, [], `.env.example omits active deployment variables: ${missing.join(', ')}`)
   const compose = readFileSync(resolve(REPO, 'compose.yaml'), 'utf8')
   assert.match(compose, /AETHERIS_LOCAL_SINGLE_USER:\s*'true'/, 'Compose must force the account-free mode')
-  assert.match(compose, /127\.0\.0\.1:80:80/, 'the no-login app must remain loopback-only')
+  assert.match(compose, /RAGAM_BIND_ADDRESS:-127\.0\.0\.1.*:80:80/, 'the no-login app must default to loopback-only')
+  const lanCompose = readFileSync(resolve(REPO, 'compose.lan.yaml'), 'utf8')
+  assert.match(lanCompose, /RAGAM_BIND_ADDRESS:\?/, 'LAN mode must require an explicit private bind address')
+  assert.match(lanCompose, /AETHERIS_TRUSTED_WEB_ORIGINS:.*https:\/\//, 'Core must trust only the HTTPS LAN origin')
+  const lanCaddy = readFileSync(resolve(REPO, 'deploy/Caddyfile.lan'), 'utf8')
+  assert.ok(lanCaddy.includes('tls internal'), 'LAN TLS must use Caddy internal PKI')
+  assert.ok(lanCaddy.includes('basic_auth'), 'LAN UI and API must require the shared password')
+  assert.ok(lanCaddy.includes('header_up Host localhost'), 'Caddy must preserve Core local-host checks')
+  assert.ok(lanCaddy.includes('header_up -Authorization'), 'Caddy must not forward its shared credential to Core')
+  const lanLauncher = readFileSync(resolve(REPO, 'scripts/Start-Lan-Ragam.ps1'), 'utf8')
+  assert.ok(lanLauncher.includes('Test-PrivateIpv4'), 'the launcher must refuse public and wildcard binds')
+  assert.ok(lanLauncher.includes('$password.Length -lt 16'), 'the shared password must have a strong minimum length')
+  const lanStopper = readFileSync(resolve(REPO, 'scripts/Stop-Lan-Ragam.ps1'), 'utf8')
+  assert.match(lanStopper, /composeArgs\s+down/, 'stopping LAN mode must retain named volumes')
+  assert.doesNotMatch(lanStopper, /down\s+-v/, 'stopping LAN mode must not delete workspace or CA data')
 })
 
 test('.env.example states the real defaults, not plausible ones', async () => {
@@ -562,18 +576,18 @@ test('the documented dependency counts match the committed lockfile', () => {
 
   // Vite 8 replaced Rollup/esbuild/Babel with rolldown/oxc/lightningcss, which cut
   // the tree by more than half. These are the measured figures for that tree.
-  assert.equal(entries.length, 46, 'lockfile entries changed')
-  assert.equal(platformSpecific.length, 27, 'platform-specific binaries changed')
-  assert.equal(entries.length - platformSpecific.length, 19, 'platform-independent count changed')
+  assert.equal(entries.length, 59, 'lockfile entries changed')
+  assert.equal(platformSpecific.length, 38, 'platform-specific binaries changed')
+  assert.equal(entries.length - platformSpecific.length, 21, 'platform-independent count changed')
 
   const manifest = JSON.parse(readFileSync(resolve(REPO, 'apps/web/package.json'), 'utf8'))
-  assert.deepEqual(Object.keys(manifest.dependencies).sort(), ['react', 'react-dom'],
-    'only react and react-dom may be runtime dependencies')
+  assert.deepEqual(Object.keys(manifest.dependencies).sort(), ['pdfjs-dist', 'react', 'react-dom'],
+    'the PDF parser is the only additional runtime dependency')
 
   // NOTICES must present the portable numbers as fact and the installed number as a
   // property of one machine, or a reader on another host gets a wrong inventory.
   const notices = squash(doc.notices())
-  for (const claim of ['| **46** | yes |', '19 | yes', '27 | yes', '**no** |']) {
+  for (const claim of ['| **59** | yes |', '21 | yes', '38 | yes', '**no** |']) {
     assert.ok(notices.includes(claim), `NOTICES must state ${claim}`)
   }
   assert.ok(notices.includes('no `libc` field'),
@@ -586,7 +600,7 @@ test('no dependency carries strong copyleft, and weak copyleft is dev-only', () 
   // installed here: a licence obligation follows the dependency tree, and a Windows
   // or macOS build would install them.
   const entries = lockfileEntries()
-  // 23 install on a linux/x64 glibc host; the lockfile must list more than any one
+  // 27 install on this linux/x64 glibc host; the lockfile must list more than any one
   // host installs, or the scan is silently narrower than the tree it claims to cover.
   assert.ok(entries.length > 23, 'the lockfile should list more entries than any one host installs')
 
@@ -629,6 +643,10 @@ test('no dependency carries strong copyleft, and weak copyleft is dev-only', () 
 
 test('the quoted licence texts are byte-identical to the checked-in copies', () => {
   const notices = doc.notices()
+  const pdfLicense = readFileSync(resolve(REPO, 'third-party/licenses/pdfjs-dist-Apache-2.0.txt'), 'utf8')
+  assert.match(pdfLicense, /Apache License\s+Version 2\.0/)
+  assert.ok(notices.includes('Copyright 2024 Mozilla Foundation'))
+  assert.ok(notices.includes('licenses/pdfjs-dist-Apache-2.0.txt'))
   const quoted = (heading) => {
     const match = notices.match(new RegExp('### ' + heading + '[\\s\\S]*?\\n```\\n([\\s\\S]*?)\\n```'))
     assert.ok(match, `NOTICES must quote the ${heading} licence text`)
@@ -714,8 +732,20 @@ test('the docs record limitations instead of implying completeness', () => {
 })
 
 test('the status doc reports the real test totals', () => {
-  // Recomputed from the filesystem: one test file per suite.
-  const count = (dir, pattern) => readdirSync(resolve(REPO, dir)).filter((f) => pattern.test(f)).length
+  // Recomputed recursively because the focused Klyvaron production-gate suite lives in its own directory.
+  const count = (dir, pattern) => {
+    let total = 0
+    const walk = (current) => {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        const full = resolve(current, entry.name)
+        if (entry.isDirectory()) walk(full)
+        else if (pattern.test(entry.name)) total += 1
+      }
+    }
+    walk(resolve(REPO, dir))
+    return total
+  }
+  // The focused Klyvaron production-release evidence suite is counted with the recursive walk.
   // 35 includes the accounts suite (traditional sign-in), the online runtimes suite
   // (Ollama and llama.cpp on the online entry), the Klyvaron plan suite, the suites added
   // with the family's differentiation (tier stance and modality rules, the dated-source
@@ -726,51 +756,51 @@ test('the status doc reports the real test totals', () => {
   // media workflow, the industry packs, the benchmark harness and the release verifier.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 70)
-  assert.equal(count('apps/web/test', /\.test\.mjs$/), 5)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 75)
+  assert.equal(count('apps/web/test', /\.test\.mjs$/), 9)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**985 tests**'), 'current core test inventory must be stated')
+  assert.ok(status.includes('**1039 tests**'), 'current core test inventory must be stated')
   assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
-  assert.ok(status.includes('**109 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1916 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('**131 tests**'), 'web test inventory must be stated')
+  assert.ok(status.includes('1992 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1916 tests: core 985, web 109, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('1992 tests: core 1039, web 131, fabric 822'),
     'README must state the current inventory as docs/03 does')
-  assert.ok(squash(doc.readme()).includes('latest full CI run')
+  assert.ok(squash(doc.readme()).includes('latest completed full CI run')
     && squash(doc.readme()).includes('41394564087')
-    && squash(doc.readme()).includes('1,916 current tests')
+    && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
+    && squash(doc.readme()).includes('The current tree has 1,992 tests (Core 1,039, Web 131, Fabric 822). The full Core suite passed 1,033/1,039 with six skipped legacy model-artifact checks; the focused processor/route tests passed 13/13. Web passed 131/131 and the production bundle built. Fabric test command exited nonzero: 821 passed and one optional multimodal training test failed because JAX is unavailable. This was not a skip; the separate model-training path was not pursued.')
+    && squash(doc.readme()).includes('Full CI for this current tree is pending')
     && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
-  'README must identify the latest full CI run and its measured inventory')
-  assert.ok(status.includes('(70 files'), 'the file count must move with the suite')
+  'README must distinguish the last full CI run from the current full local suite')
+  assert.ok(status.includes('(75 files'), 'the file count must move with the suite')
 
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(985), `core heading must say 985, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(1039), `core heading must say 1039, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(109), `web heading must say 109, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(131), `web heading must say 131, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1916,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1916`,
+    1992,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1992`,
   )
 })
 
-test('the setup guide describes the product that actually runs', () => {
-  // §2 and §7 showed the legacy service's startup banner and told readers to install
-  // Ollama and start the core with LLAMACPP_ENABLED=true. `npm run core` is the online
-  // entry: it never reads that variable, has no local runtime, and answers an unconfigured
-  // installation with setup_required. A setup guide for a different product is worse than
-  // none -- it sends somebody to install a runtime that cannot be reached, and the report
-  // that follows is "I signed in and cannot see the models or chat".
+test('the setup guide describes built-in processing and optional provider paths', () => {
+  // The active Core includes model-independent deterministic text processing; provider/model
+  // inference is an optional, separate route. Keep the setup copy aligned with that boundary.
   const setup = squash(doc.setup())
   const raw = doc.setup()
   for (const claim of [
-    'performs **no local inference and downloads no models**',
-    'AETHERIS_LITELLM_TRUSTED_ORIGINS=http://127.0.0.1:4000 npm run core',
+    'built-in, model-independent deterministic text processor',
+    'default **Klyvaron built-in** engine works without a model or provider',
+    'Optional connected AI provider',
+    'AETHERIS_TRUSTED_ORIGINS=http://127.0.0.1:11434 npm run core',
     '**exact origin**',
     'endpoint_blocked',
     'Aetheris online-only API listening',
@@ -817,7 +847,9 @@ test('the account and sign-in document describes the code that implements it', (
   assert.equal(number(accounts, 'DEFAULT_MAX_ACCOUNTS'), 64)
   const compose = readFileSync(resolve(REPO, 'compose.yaml'), 'utf8')
   assert.match(compose, /AETHERIS_LOCAL_SINGLE_USER:\s*'true'/, 'the end-user Docker deployment must not use account mode')
-  assert.match(compose, /127\.0\.0\.1:80:80/, 'account-free access must be loopback-only')
+  assert.match(compose, /RAGAM_BIND_ADDRESS:-127\.0\.0\.1.*:80:80/, 'account-free access must default to loopback-only')
+  assert.ok(squash(read('docs/22-self-hosted-deployment.md')).includes('shared Caddy Basic Auth'))
+  assert.ok(squash(read('docs/22-self-hosted-deployment.md')).includes("Caddy's internal CA"))
 
   // The retained direct-Core account mode has a cookie policy; it is intentionally not
   // exposed through the end-user Compose configuration.
@@ -852,7 +884,7 @@ test('the account and sign-in document describes the code that implements it', (
     'the README must link the Windows start and stop launchers')
   assert.ok(readme.includes('http://localhost') && readme.includes('same-origin `/api`'),
     'the README must describe the browser UI and its local API route')
-  for (const path of ['scripts/Start-Ragam.cmd', 'scripts/Stop-Ragam.cmd', 'scripts/Backup-Ragam.cmd', 'scripts/Restore-Ragam.cmd', 'scripts/Backup-Ragam.ps1', 'scripts/Restore-Ragam.ps1', 'scripts/Ragam-Volume.ps1', 'compose.yaml', 'assets/aetheris-omni-logo.svg', 'assets/cta-download.gif', 'assets/cta-setup.gif', 'assets/cta-providers.gif']) {
+  for (const path of ['scripts/Start-Ragam.cmd', 'scripts/Stop-Ragam.cmd', 'scripts/Backup-Ragam.cmd', 'scripts/Restore-Ragam.cmd', 'scripts/Backup-Ragam.ps1', 'scripts/Restore-Ragam.ps1', 'scripts/Ragam-Volume.ps1', 'scripts/Start-Lan-Ragam.ps1', 'scripts/Stop-Lan-Ragam.ps1', 'compose.yaml', 'compose.lan.yaml', 'deploy/Caddyfile.lan', 'assets/aetheris-omni-logo.svg', 'assets/cta-download.gif', 'assets/cta-setup.gif', 'assets/cta-providers.gif']) {
     assert.ok(exists(resolve(REPO, path)), `the README-supported interface artifact ${path} must exist`)
   }
   const backupScript = read('scripts/Backup-Ragam.ps1')
@@ -889,15 +921,15 @@ test('the documented language-model results match its committed model card', () 
   // the artifact of record, generated from the run report. If the two disagree, one
   // of them is wrong and there is no way to tell which from reading either alone.
   //
-  // The released card is 0.1.1; 0.1.0 stays committed as the superseded record and its
-  // own guards follow below, because superseding an artifact is a status change and not
-  // a licence to edit what it published.
+  // The 0.1.1 card is the newer archival record; 0.1.0 remains as superseded experiment
+  // metadata. Neither card establishes a currently released model or payload.
   const card = JSON.parse(doc.lmCard())
   const text = squash(doc.lite())
   assert.equal(card.format, 'aetheris-model-card/v1')
   assert.equal(card.card.identifier, 'aetheris-lite-lm@0.1.1')
-  assert.equal(card.card.status, 'released')
-  assert.equal(card.card.supersededAt, null, 'a released card is not itself superseded')
+  assert.equal(card.card.status, 'not_released')
+  assert.match(card.archiveNotice, /not release evidence/)
+  assert.equal(card.card.supersededAt, null, 'the newer archived metadata record is not itself superseded')
 
   const metrics = card.card.metrics
   // Written out at the full precision the card records, not rounded for display.
@@ -926,7 +958,7 @@ test('the documented language-model results match its committed model card', () 
     `docs/08 must state the parameter count ${metrics.parameterCount.toLocaleString('en-US')}`,
   )
 
-  // The gate must actually have passed, not merely be described as if it did.
+  // Historical evaluation metadata remains internally checked, but is not release evidence.
   assert.equal(card.runStatus, 'partial', 'the Aetheris Lite family pipeline is still incomplete')
   assert.ok(!card.card.validation.hardFailures || card.card.validation.hardFailures.length === 0)
   assert.ok(card.card.limitations.length >= 4, 'the card must list its own limitations')
@@ -948,7 +980,7 @@ test('the documented language-model results match its committed model card', () 
     card.card.limitations.some((l) => l.includes('model_not_instruction_tuned')),
     'the card must state the behaviour the route actually has',
   )
-  assert.equal(card.corrections, undefined, 'the released card has nothing to correct')
+  assert.equal(card.corrections, undefined, 'the newer archived record has no correction entries')
 
   // The superseded card is still an artifact of record. One sentence in it was false: it
   // said the model was "deliberately not wired into /api/chat" while the route had been
@@ -971,8 +1003,7 @@ test('the documented language-model results match its committed model card', () 
   assert.ok(markdown.includes('model_not_instruction_tuned'))
   assert.ok(markdown.includes('Corrections'), 'the Markdown card must show the correction')
 
-  // And the document has to say which artifact is which: the superseded figures stay, with
-  // the reason, and the released card's figures are the headline.
+  // And the archive report has to distinguish the superseded metadata from the newer record.
   assert.ok(text.includes('superseded'), 'docs/08 must record the supersession')
   assert.ok(text.includes(previous.card.weightsDigest),
     'docs/08 must keep the superseded artifact\'s published digest')
@@ -1421,7 +1452,8 @@ test('the model card JSON is machine-readable and self-consistent', () => {
   assert.equal(card.name, 'aetheris-lite-retriever')
   assert.equal(card.version, '0.1.0')
   assert.equal(card.identifier, 'aetheris-lite-retriever@0.1.0')
-  assert.equal(card.status, 'released')
+  assert.equal(card.status, 'not_released')
+  assert.match(wrapper.archiveNotice, /not release evidence/)
   assert.equal(card.baseCheckpoint, null, 'trained from scratch, not a fine-tune — must stay explicit')
   assert.equal(card.licence, 'MIT')
   assert.equal(card.parentVersion, null)
@@ -1498,28 +1530,61 @@ test('the Markdown model card keeps the two limitation lists distinct', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Docker-only deployment: obsolete hosted integrations stay out of the release
+// Hosted BYOK is a separate opt-in deployment, with explicit account isolation.
 // ---------------------------------------------------------------------------
-
-test('deployment integrations and hosted-only instructions are absent from the repository', () => {
+test('hosted BYOK deployment surface is present and its data boundary is explicit', () => {
   for (const path of [
-    'apps/web/api/[...path].js', 'apps/web/vercel.json',
-    'services/core/api/[...path].js', 'services/core/vercel.json',
-    'services/core/src/vercel', 'services/core/src/storage/supabase-admin.mjs',
-    'services/core/src/online/supabase-context.mjs',
-    'services/core/src/knowledge/supabase-pipeline.mjs',
-    'supabase/migrations', 'docs/supabase-migration-plan.md',
-    'docs/deployment-status.md', 'scripts/production-smoke.mjs',
-  ]) assert.equal(exists(resolve(REPO, path)), false, `${path} must not ship in the Docker-only repository`)
+    'apps/web/src/HostedByokApp.jsx', 'apps/web/vercel.json',
+    'services/core/api/hosted/[...path].mjs', 'services/core/src/hosted/byok.mjs',
+    'supabase/migrations/202611030001_byok_provider_connections.sql', 'docs/30-hosted-byok.md',
+  ]) assert.equal(exists(resolve(REPO, path)), true, `${path} is required by hosted BYOK`)
 
-  const setup = doc.setup()
-  assert.ok(setup.includes('Docker Compose only'), 'end-user setup must state the supported deployment')
-  assert.ok(!/Vercel|Supabase|CORE_API_URL/.test(setup), 'setup must not instruct users to configure removed hosted integrations')
-  assert.ok(!/SUPABASE_(?:URL|SERVICE_ROLE_KEY)=/.test(read('.env.example')),
-    '.env.example must not retain hosted database credentials')
+  const api = read('services/core/src/hosted/byok.mjs')
+  assert.ok(api.includes('AETHERIS_PROVIDER_ENCRYPTION_KEY'))
+  assert.ok(api.includes('user_id=eq.') && api.includes('nativeSearchConfirmed'))
+  assert.ok(api.includes('HttpOnly') && api.includes('SameSite=Lax'))
+  const migration = read('supabase/migrations/202611030001_byok_provider_connections.sql')
+  assert.ok(migration.includes('enable row level security'))
+  assert.ok(migration.includes('revoke all on table public.byok_provider_connections from anon, authenticated'))
+  assert.ok(!/^SUPABASE_(?:URL|ANON_KEY|SERVICE_ROLE_KEY)=.+/m.test(read('.env.example')),
+    'no hosted credential value may be enabled in the repository environment template')
+  assert.ok(doc.setup().includes('hosted BYOK'))
 })
 
 // ---------------------------------------------------------------------------
+// Optional LAN-only Docker/Caddy deployment
+// ---------------------------------------------------------------------------
+test('LAN mode stays opt-in, password-gated, TLS-protected and private-network-bound', () => {
+  const compose = read('compose.yaml')
+  const overlay = read('compose.lan.yaml')
+  const caddy = read('deploy/Caddyfile.lan')
+  const start = read('scripts/Start-Lan-Ragam.ps1')
+  const stop = read('scripts/Stop-Lan-Ragam.ps1')
+  const deployment = squash(read('docs/22-self-hosted-deployment.md'))
+
+  assert.match(compose, /RAGAM_BIND_ADDRESS:-127\.0\.0\.1/,
+    'the unmodified Docker stack must remain loopback-only')
+  assert.match(overlay, /RAGAM_BIND_ADDRESS:\?/,
+    'LAN mode must fail closed unless an explicit bind address is supplied')
+  assert.match(overlay, /AETHERIS_TRUSTED_WEB_ORIGINS/,
+    'Core must trust only the LAN HTTPS origin chosen for this deployment')
+  assert.match(caddy, /tls internal/)
+  assert.match(caddy, /basic_auth/)
+  assert.match(caddy, /header_up Host localhost/,
+    'Core local-single-user Host enforcement must remain enabled behind Caddy')
+  assert.match(caddy, /header_up -Authorization/,
+    'the shared Caddy password must not be forwarded into Core')
+  assert.match(start, /Test-PrivateIpv4/)
+  assert.match(start, /16 characters/)
+  assert.match(start, /caddy hash-password/)
+  assert.match(start, /Caddyfile\.lan\.local/)
+  assert.match(stop, /compose\.lan\.yaml/)
+  assert.ok(deployment.includes('Do not bypass certificate warnings'))
+  assert.ok(deployment.includes('Never port-forward 80/443'))
+  assert.ok(read('.gitignore').includes('deploy/Caddyfile.lan.local'))
+  assert.ok(read('.dockerignore').includes('deploy/Caddyfile.lan.local'))
+})
+
 // CI: the gate that keeps every number above honest
 // ---------------------------------------------------------------------------
 
@@ -1612,7 +1677,10 @@ test('the CI workflow is valid YAML with the structure it claims', () => {
   // the hyphenated self-hosted integration job.
   const jobsBlock = workflow.slice(workflow.indexOf('\njobs:'))
   const jobs = [...jobsBlock.matchAll(/^  ([a-z-]+):$/gm)].map((m) => m[1])
-  assert.deepEqual(jobs, ['core', 'fabric', 'web', 'self-hosted', 'release', 'docs'], `unexpected job list: ${jobs.join(', ')}`)
+  assert.deepEqual(jobs, ['core', 'fabric', 'web', 'self-hosted', 'klyvaron-production-release-gate', 'release', 'docs'], `unexpected job list: ${jobs.join(', ')}`)
+  assert.ok(workflow.includes("tags: ['klyvaron-lite-v*', 'klyvaron-pro-v*', 'klyvaron-max-v*']"), 'CI must trigger production Klyvaron tags')
+  assert.ok(jobsBlock.includes('--registry-record "$KLYVARON_REGISTRY_RECORD"'), 'production tag CI must bind to the approved registry record')
+  assert.ok(jobsBlock.includes('verify-klyvaron-release.mjs'), 'production tag CI must run the evidence verifier')
   assert.ok(jobsBlock.includes('docker compose -f compose.yaml config -q'), 'self-host CI must validate Compose')
   assert.ok(jobsBlock.includes('Cold-backup the named volume'), 'self-host CI must test persistence and restoration')
   const smoke = read('scripts/self-host-smoke.mjs')
@@ -1622,7 +1690,7 @@ test('the CI workflow is valid YAML with the structure it claims', () => {
 
   // Every job must check the code out before doing anything with it.
   const perJob = jobsBlock.split(/^  [a-z-]+:$/m).slice(1)
-  assert.equal(perJob.length, 6)
+  assert.equal(perJob.length, 7)
   for (const [index, body] of perJob.entries()) {
     assert.ok(body.includes('actions/checkout@'), `job ${jobs[index]} must check out the repository`)
     assert.ok(body.includes('run:'), `job ${jobs[index]} must actually run something`)
@@ -2229,6 +2297,17 @@ test('the provider matrix in docs/27 is the catalogue, not a retyped copy', () =
   assert.equal(rows.some(([, id]) => /freellm/i.test(id)), false, 'the excluded aggregator must not appear in the matrix')
   assert.match(text, /FreeLLMAPI remains excluded/, 'the exclusion must be stated, not merely true')
   assert.ok(text.includes('No live provider call was made'), 'the absence of live verification must be stated')
+
+  const landscape = read('docs/31-provider-landscape.md')
+  assert.equal(RECOMMENDED_PROVIDER_IDS.length, 45)
+  assert.match(landscape, /curated set of 45 entries: 40 major hosted model providers and API platforms/)
+  assert.match(landscape, /five selected self-hosted runtimes intended for Local-only use/)
+  assert.match(landscape, /not a live verification, quality\/reliability ranking, capability guarantee, or price endorsement/)
+  assert.match(landscape, /All 46 catalogue entries remain available/)
+  assert.match(landscape, /Self-hosted runtimes for Local-only use:\*\* Ollama, llama\.cpp, vLLM, LocalAI, and ComfyUI/)
+  for (const label of ['OpenAI', 'Anthropic Claude', 'OpenRouter', 'Hugging Face Inference Providers', 'Baidu Qianfan', 'Alibaba Cloud Model Studio', 'Sarvam AI', 'SiliconFlow', 'SambaNova', 'Recraft', 'Ideogram', 'fal.ai Video', 'Replicate Video', 'Ollama', 'llama.cpp', 'vLLM', 'LocalAI', 'ComfyUI']) {
+    assert.ok(landscape.includes(label), `docs/31 must include recommended ${label}`)
+  }
 })
 
 test('the catalogue cannot outgrow the status vocabulary the docs define', () => {
@@ -2241,22 +2320,18 @@ test('the catalogue cannot outgrow the status vocabulary the docs define', () =>
   assert.equal(Object.values(PROVIDER_STATUS).length, 3)
 })
 
-test('the Klyvaron Pro and Max language-model cards match their presets and docs/03', () => {
-  const proWrapper = JSON.parse(read('docs/model-cards/klyvaron-pro-lm-0.1.0.json'))
-  const maxWrapper = JSON.parse(read('docs/model-cards/klyvaron-max-lm-0.1.0.json'))
-  const statusText = squash(doc.status())
-
-  for (const [preset, wrapper] of [['pro', proWrapper], ['max', maxWrapper]]) {
-    assert.equal(wrapper.format, 'aetheris-model-card/v1')
-    assert.equal(wrapper.card.status, 'released')
-    assert.equal(wrapper.card.baseCheckpoint, null)
-    assert.equal(wrapper.card.parameterCount, presetReport(preset).parameters)
-    assert.deepEqual(wrapper.card.validation.hardFailures, [])
-    assert.ok(statusText.includes(wrapper.card.artifacts.fileDigest),
-      `docs/03 must state ${wrapper.card.identifier} int8 digest`)
+test('all archived model-card records are explicitly not release evidence', () => {
+  const cardsDir = resolve(REPO, 'docs/model-cards')
+  for (const filename of readdirSync(cardsDir).filter((name) => name.endsWith('.json'))) {
+    const wrapper = JSON.parse(readFileSync(resolve(cardsDir, filename), 'utf8'))
+    const card = wrapper.card ?? wrapper
+    assert.equal(card.status, 'not_released', `${filename} must not claim a current release`)
+    assert.match(wrapper.archiveNotice ?? wrapper.note, /not release evidence/, `${filename} needs an archive notice`)
+    const markdown = readFileSync(resolve(cardsDir, filename.replace(/\.json$/, '.md')), 'utf8')
+    assert.match(markdown, /\*\*Status\*\* \| `not_released`/, `${filename} Markdown twin must agree`)
   }
-  assert.notEqual(proWrapper.card.artifacts.fileDigest, maxWrapper.card.artifacts.fileDigest)
-  assert.notEqual(proWrapper.card.weightsDigest, maxWrapper.card.weightsDigest)
-  assert.notEqual(proWrapper.card.artifacts.vocabularyDigest, maxWrapper.card.artifacts.vocabularyDigest)
+  const statusText = squash(doc.status())
+  assert.match(statusText, /no production model released/)
+  assert.match(statusText, /historical records only/)
 })
 

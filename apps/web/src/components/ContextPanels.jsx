@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
+import { addChatProject, readChatOrganization, updateChatSessionOrganization, writeChatOrganization } from '../chat-organization.js'
 import { Banner, Button, Chip, Code, EmptyState, ErrorNote, Field, Kv, Panel, Stat, Stats, Table, formatValue } from './ui.jsx'
 const DATA_CLASSES = ['public', 'internal', 'confidential', 'restricted']
 export function KnowledgePanel() {
@@ -497,12 +498,55 @@ export function MemoryPanel() {
 }
 
 
-export function HistoryPanel({ sessionId }) {
+export function HistoryPanel({ sessionId, onOpen, onDelete, disabled = false }) {
   const [sessions, setSessions] = useState([])
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState(null)
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
+  const [organization, setOrganization] = useState(() => readChatOrganization())
+  const [projectDraft, setProjectDraft] = useState('')
+  const [projectFilter, setProjectFilter] = useState('')
+  const [renamingId, setRenamingId] = useState(null)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [notice, setNotice] = useState(null)
+  const [organizationError, setOrganizationError] = useState(null)
+
+  const commitOrganization = (next) => {
+    setOrganization(next)
+    setNotice(writeChatOrganization(next)
+      ? null
+      : 'Browser storage is unavailable; organization changes will not persist after this page closes.')
+  }
+  const changeSessionOrganization = (id, patch) => {
+    commitOrganization(updateChatSessionOrganization(organization, id, patch))
+  }
+  const createProject = (event) => {
+    event.preventDefault()
+    const next = addChatProject(organization, projectDraft)
+    if (!next) {
+      setOrganizationError('Choose a unique project name (up to 100 characters); this browser can hold up to 50 projects.')
+      return
+    }
+    commitOrganization(next)
+    setProjectDraft('')
+    setOrganizationError(null)
+  }
+  const saveTitle = (event, id) => {
+    event.preventDefault()
+    const title = titleDraft.trim()
+    if (!title) return
+    changeSessionOrganization(id, { title })
+    setRenamingId(null)
+    setTitleDraft('')
+  }
+  const visibleSessions = sessions
+    .filter((session) => {
+      const project = organization.sessions[session.id]?.project ?? ''
+      return projectFilter === '' || (projectFilter === '__unassigned' ? !project : project === projectFilter)
+    })
+    .sort((left, right) => Number(Boolean(organization.sessions[right.id]?.pinned))
+      - Number(Boolean(organization.sessions[left.id]?.pinned)))
 
   const load = useCallback(async () => {
     try {
@@ -530,10 +574,25 @@ export function HistoryPanel({ sessionId }) {
     }
   }
 
+  const open = async (id) => {
+    setBusy(`open-${id}`)
+    setError(null)
+    try {
+      const session = await api.session(id)
+      onOpen?.(session)
+    } catch (caught) {
+      setError(caught)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const remove = async (id) => {
     setBusy(`del-${id}`)
     try {
       await api.deleteSession(id)
+      changeSessionOrganization(id, { title: null, project: null, pinned: false })
+      onDelete?.(id)
       await load()
     } catch (caught) {
       setError(caught)
@@ -551,6 +610,24 @@ export function HistoryPanel({ sessionId }) {
     >
       <div className="grid" style={{ gap: 14 }}>
         {error ? <ErrorNote error={error} title="History request failed" /> : null}
+        {organizationError ? <Banner tone="warn" title="Project not added"><span className="small">{organizationError}</span></Banner> : null}
+        {notice ? <Banner tone="warn" title="Organization not saved"><span className="small">{notice}</span></Banner> : null}
+        <p className="small chat-organization-note">Project names, custom titles and pins stay in this browser. They do not contain conversation turns and are not sent to a provider.</p>
+        <form onSubmit={createProject}>
+          <Field label="Create a project" hint="Projects are browser-local labels; assign saved conversations below.">
+            <div className="row">
+              <input className="input" aria-label="New project name" value={projectDraft} maxLength={100} onChange={(event) => setProjectDraft(event.target.value)} placeholder="e.g. Research" />
+              <Button type="submit" disabled={!projectDraft.trim()}>Add project</Button>
+            </div>
+          </Field>
+        </form>
+        <Field label="Show conversations">
+          <select className="select" aria-label="Filter conversations by project" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+            <option value="">All projects</option>
+            <option value="__unassigned">No project</option>
+            {organization.projects.map((project) => <option key={project} value={project}>{project}</option>)}
+          </select>
+        </Field>
 
         <form onSubmit={search}>
           <Field label="Search your own past conversations" hint="Lexical search over stored turns, ranked locally.">
@@ -592,15 +669,48 @@ export function HistoryPanel({ sessionId }) {
         {sessions.length ? (
           <Table
             columns={[
-              { key: 'title', label: 'Session', render: (session) => session.title ?? <span className="small">{session.id.slice(0, 8)}…</span> },
+              { key: 'title', label: 'Conversation', render: (session) => {
+                const metadata = organization.sessions[session.id] ?? {}
+                const suggestedTitle = session.title ?? `Conversation ${session.id.slice(0, 8)}`
+                return renamingId === session.id ? (
+                  <form className="chat-rename-form" onSubmit={(event) => saveTitle(event, session.id)}>
+                    <input className="input" aria-label="Custom conversation title" maxLength={100} value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} placeholder={suggestedTitle} />
+                    <Button type="submit" disabled={!titleDraft.trim()}>Save</Button>
+                    <Button type="button" className="ghost" onClick={() => { setRenamingId(null); setTitleDraft('') }}>Cancel</Button>
+                  </form>
+                ) : (
+                  <div className="chat-history-title">
+                    <strong>{metadata.title || suggestedTitle}</strong>
+                    {metadata.pinned ? <Chip tone="info" dot={false}>Pinned</Chip> : null}
+                  </div>
+                )
+              } },
+              { key: 'project', label: 'Project', render: (session) => (
+                <select
+                  className="select"
+                  aria-label={`Project for ${organization.sessions[session.id]?.title || session.title || session.id}`}
+                  value={organization.sessions[session.id]?.project ?? ''}
+                  disabled={disabled || busy !== null}
+                  onChange={(event) => changeSessionOrganization(session.id, { project: event.target.value })}
+                >
+                  <option value="">No project</option>
+                  {organization.projects.map((project) => <option key={project} value={project}>{project}</option>)}
+                </select>
+              ) },
               { key: 'turnCount', label: 'Turns', render: (session) => formatValue(session.turnCount) },
               { key: 'lastAt', label: 'Last used', render: (session) => new Date(session.lastAt).toLocaleString() },
-              { key: 'actions', label: '', render: (session) => (
-                <Button variant="danger" busy={busy === `del-${session.id}`} onClick={() => remove(session.id)}>Delete</Button>
-              ) },
+              { key: 'actions', label: '', render: (session) => {
+                const metadata = organization.sessions[session.id] ?? {}
+                return <div className="chat-history-actions">
+                  <Button className="ghost small" disabled={disabled || busy !== null} busy={busy === `open-${session.id}`} onClick={() => open(session.id)}>Open</Button>
+                  <Button className="ghost small" disabled={disabled || busy !== null} onClick={() => changeSessionOrganization(session.id, { pinned: !metadata.pinned })}>{metadata.pinned ? 'Unpin' : 'Pin'}</Button>
+                  <Button className="ghost small" disabled={disabled || busy !== null} onClick={() => { setRenamingId(session.id); setTitleDraft('') }}>Rename</Button>
+                  <Button className="small" variant="danger" disabled={disabled || busy !== null} busy={busy === `del-${session.id}`} onClick={() => remove(session.id)}>Delete</Button>
+                </div>
+              } },
             ]}
-            rows={sessions.map((session) => ({ ...session, key: session.id }))}
-            empty="No conversation has been stored yet."
+            rows={visibleSessions.map((session) => ({ ...session, key: session.id }))}
+            empty={projectFilter ? 'No conversation is assigned to this project.' : 'No conversation has been stored yet.'}
           />
         ) : (
           <EmptyState title="No conversations stored yet">

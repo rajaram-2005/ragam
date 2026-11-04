@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/hosted/:path*",
+      "destination": "https://ragam-core.vercel.app/api/hosted/:path*"
+    }
+  ]
+}

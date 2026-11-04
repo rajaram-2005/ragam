@@ -8,6 +8,8 @@
 //       {endpoint}/openai/v1/models`.
 //   https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/azureopenai/chat — `POST
 //       {endpoint}/openai/v1/chat/completions`, with `api-key` or `Authorization: Bearer` auth.
+//   https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/web-search — explicit search uses
+//       `POST {endpoint}/openai/v1/responses` and the `web_search` server tool.
 //
 // Why this is a wire and not "OpenAI with a different base URL": the credential header is
 // `api-key`, not `authorization`, and the endpoint is `/openai/v1/...`, not `/v1/...`. An OpenAI
@@ -16,10 +18,14 @@
 // OpenAI's, and the contract test pins that too.
 
 import { failure } from '../../online/failure.mjs'
-import { idsFromData, tokens } from './common.mjs'
+import { appendOpenAIToolDeltas, finishOpenAIToolDeltas, idsFromData, openAIMessages, openAIToolCalls, tokens } from './common.mjs'
+import { chat as chatResponses } from './openai-responses.mjs'
 
 export const wire = 'azure_openai'
 export const credential = 'api_key'
+export const chatInputKinds = Object.freeze(['image'])
+export const chatTools = true
+export const chatNativeSearch = true
 
 const headers = (config) => ({ 'api-key': config.apiKey })
 const MAX_MODELS = 500
@@ -37,36 +43,45 @@ export async function models(transport, config) {
   return idsFromData(data)
 }
 
-export async function chat(transport, config, { model, messages, maxTokens, temperature, signal, onText }) {
+export async function chat(transport, config, { model, messages, maxTokens, temperature, signal, onText, maxRequestBytes, tools = [], nativeSearch = false }) {
+  if (nativeSearch) return chatResponses(transport, config, { path: '/openai/v1/responses', headers: headers(config), model, messages, maxTokens, temperature, signal, onText, maxRequestBytes, tools, nativeSearch })
   if (!model) throw failure('invalid_model', 'Choose an Azure OpenAI deployment.', 400)
   const body = {
     model,
-    messages: (messages ?? []).map(({ role, content }) => ({ role, content })),
+    messages: openAIMessages(messages),
     max_tokens: maxTokens,
     stream: Boolean(onText),
     ...(Number.isFinite(temperature) ? { temperature } : {}),
+    ...(tools.length ? { tools: tools.map((tool) => ({ type: 'function', function: tool })), tool_choice: 'auto' } : {}),
   }
 
   if (!onText) {
-    const data = await transport(config, '/openai/v1/chat/completions', { headers: headers(config), signal, body })
-    const text = data?.choices?.[0]?.message?.content
-    if (typeof text !== 'string' || !text) {
+    const data = await transport(config, '/openai/v1/chat/completions', { headers: headers(config), signal, body, maxRequestBytes })
+    const message = data?.choices?.[0]?.message
+    const text = message?.content
+    const toolCalls = openAIToolCalls(message?.tool_calls ?? [])
+    if (typeof text !== 'string' && !toolCalls.length) {
       throw failure('invalid_completion', 'Azure OpenAI returned no text completion. No model was substituted.', 502)
     }
-    return { text, model: data?.model ?? null, usage: usageOf(data?.usage) }
+    return { text: typeof text === 'string' ? text : '', model: data?.model ?? null, usage: usageOf(data?.usage), toolCalls }
   }
 
   let text = ''
   let reported = null
   let usage = null
+  const toolDeltas = new Map()
   const onFrame = (frame) => {
     if (frame?.model) reported = frame.model
     if (frame?.usage) usage = usageOf(frame.usage) ?? usage
-    const delta = frame?.choices?.[0]?.delta?.content
+    const choice = frame?.choices?.[0]
+    appendOpenAIToolDeltas(toolDeltas, choice?.delta?.tool_calls)
+    const delta = choice?.delta?.content
     if (typeof delta === 'string') { text += delta; onText(delta) }
   }
-  await transport(config, '/openai/v1/chat/completions', { headers: headers(config), signal, body, onFrame })
-  return { text, model: reported, usage }
+  await transport(config, '/openai/v1/chat/completions', { headers: headers(config), signal, body, onFrame, maxRequestBytes })
+  const toolCalls = finishOpenAIToolDeltas(toolDeltas)
+  if (!text && !toolCalls.length) throw failure('invalid_completion', 'Azure OpenAI returned no text or function proposal.', 502)
+  return { text, model: reported, usage, toolCalls }
 }
 
 function usageOf(usage) {

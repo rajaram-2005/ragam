@@ -18,6 +18,7 @@ import {
   CAPABILITIES,
   PROVIDER_STATUS,
   PROVIDERS,
+  RECOMMENDED_PROVIDER_IDS,
   WIRE_FORMATS,
   catalogueReport,
   describeProvider,
@@ -54,6 +55,14 @@ test('the shipped catalogue validates, with unique ids', () => {
   assert.equal(verdict.valid, true, verdict.problems.join('; '))
   assert.equal(new Set(PROVIDERS.map((provider) => provider.id)).size, PROVIDERS.length)
   for (const provider of PROVIDERS) assert.match(provider.id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  assert.equal(RECOMMENDED_PROVIDER_IDS.length, 45)
+  assert.equal(new Set(RECOMMENDED_PROVIDER_IDS).size, RECOMMENDED_PROVIDER_IDS.length)
+  assert.ok(RECOMMENDED_PROVIDER_IDS.every((id) => PROVIDERS.some((provider) => provider.id === id)))
+  assert.equal(describeProvider('openai').recommended, true)
+  assert.equal(describeProvider('openrouter').recommended, true)
+  for (const id of ['ollama', 'llamacpp', 'vllm', 'localai', 'comfyui']) assert.equal(describeProvider(id).recommended, true)
+  assert.throws(() => providerById('litellm'), (error) => error.code === 'unknown_provider')
+  assert.equal(describeProvider('diffusers').recommended, false)
 })
 
 test('acceptance: a provider cannot claim a capability this build does not implement', () => {
@@ -122,7 +131,7 @@ test('acceptance: nothing the catalogue returns can contain a credential', () =>
   const smuggled = validateProvider({ ...valid, credential: 'sk-live-should-never-be-here' })
   assert.equal(smuggled.valid, false)
   assert.match(smuggled.problems.join('\n'), /is not a known kind/)
-  const described = describeProvider('litellm')
+  const described = describeProvider('ollama')
   assert.equal(described.credential, 'api_key')
   const { credential, ...rest } = described
   assert.ok(!/sk-|bearer [a-z0-9]{8,}|api[_-]?key/i.test(JSON.stringify(rest)))
@@ -131,7 +140,7 @@ test('acceptance: nothing the catalogue returns can contain a credential', () =>
 test('a ready provider is chosen only for capabilities it evidences by test', () => {
   const decision = selectProvider({ capabilities: [CAPABILITIES.STREAMING] })
   assert.ok(decision.chosen)
-  assert.equal(decision.chosen.id, 'litellm')
+  assert.equal(decision.chosen.id, 'ollama')
   assert.equal(decision.chosen.health, 'unverified', 'selection is not a health check')
   assert.deepEqual(decision.chosen.capabilities, [{ id: CAPABILITIES.STREAMING, evidence: 'test' }])
   assert.ok(decision.rejected.length > 0, 'the refused candidates must be reported, not dropped')
@@ -149,19 +158,19 @@ test('remote selection requires the installation to opt in, and health is respec
   assert.equal(remote.chosen, null)
   assert.ok(remote.rejected.every((entry) => [REFUSAL_CODES.REMOTE_NOT_ALLOWED, REFUSAL_CODES.WIRE_NOT_IMPLEMENTED, REFUSAL_CODES.ADAPTER_PENDING, REFUSAL_CODES.CAPABILITY_MISSING].includes(entry.code)))
 
-  const healthy = selectProvider({ capabilities: [CAPABILITIES.STREAMING], remote: true }, { allowRemote: true }, { litellm: 'ready' })
-  assert.equal(healthy.chosen.id, 'litellm')
+  const healthy = selectProvider({ capabilities: [CAPABILITIES.STREAMING], remote: true }, { allowRemote: true }, { ollama: 'ready' })
+  assert.equal(healthy.chosen.id, 'ollama')
   assert.equal(healthy.chosen.health, 'ready')
 
   // An unhealthy provider is removed from the field and the reason is reported. Selecting among
   // the remaining *ready* providers is not the forbidden fallback: the caller is choosing before
   // sending, and the decision names what it passed over. Retrying a different recipient *after* a
   // failure is forbidden, and that is a property of the caller, not of this function.
-  const unhealthy = selectProvider({ capabilities: [CAPABILITIES.STREAMING] }, {}, { litellm: 'unavailable' })
-  assert.equal(unhealthy.chosen.id, 'ollama')
-  assert.ok(unhealthy.rejected.some((entry) => entry.id === 'litellm' && entry.code === REFUSAL_CODES.UNHEALTHY))
+  const unhealthy = selectProvider({ capabilities: [CAPABILITIES.STREAMING] }, {}, { ollama: 'unavailable' })
+  assert.equal(unhealthy.chosen.id, 'llamacpp')
+  assert.ok(unhealthy.rejected.some((entry) => entry.id === 'ollama' && entry.code === REFUSAL_CODES.UNHEALTHY))
   // A caller that will not accept a substitution pins the id; then the refusal is total.
-  const pinned = selectProvider({ capabilities: [CAPABILITIES.STREAMING], ids: ['litellm'] }, {}, { litellm: 'unavailable' })
+  const pinned = selectProvider({ capabilities: [CAPABILITIES.STREAMING], ids: ['ollama'] }, {}, { ollama: 'unavailable' })
   assert.equal(pinned.chosen, null)
   assert.deepEqual(pinned.rejected.map((entry) => entry.code), [REFUSAL_CODES.UNHEALTHY])
 })
@@ -169,7 +178,7 @@ test('remote selection requires the installation to opt in, and health is respec
 test('the allowlist is an allowlist: a provider off it is refused, not ranked lower', () => {
   const decision = selectProvider({ capabilities: [CAPABILITIES.STREAMING] }, { allowedHosts: ['ollama'] })
   assert.equal(decision.chosen.id, 'ollama')
-  assert.ok(decision.rejected.some((entry) => entry.id === 'litellm' && entry.code === REFUSAL_CODES.REMOTE_NOT_ALLOWED))
+  assert.ok(decision.rejected.some((entry) => entry.id === 'anthropic' && entry.code === REFUSAL_CODES.REMOTE_NOT_ALLOWED))
 })
 
 test('an unknown provider id is refused rather than defaulted', () => {
@@ -188,15 +197,15 @@ test('the catalogue refuses the excluded aggregator by name', () => {
 test('the report states the three counts and the honest headline', () => {
   const report = catalogueReport()
   assert.equal(report.valid, true)
-  assert.equal(report.counts.ready, 24)
+  assert.equal(report.counts.ready, 23)
   assert.equal(report.counts.gateway_only, 22)
   assert.equal(report.counts.pending, 1)
-  assert.match(report.summary, /^24 ready/)
+  assert.match(report.summary, /^23 ready/)
   const matrix = capabilityMatrix()
   assert.equal(matrix.valid, true)
   // Catalogue order, not alphabetical: the matrix is a table a reader compares row by row.
   assert.deepEqual(matrix.tested, [
-    'litellm', 'ollama', 'llamacpp', 'anthropic', 'gemini',
+    'ollama', 'llamacpp', 'anthropic', 'gemini',
     'cohere', 'azure-openai', 'vertex', 'bedrock', 'openai-images', 'gemini-images',
     'stability', 'recraft', 'ideogram', 'black-forest-labs', 'fal', 'replicate', 'firefly', 'comfyui',
     'veo', 'runway', 'luma', 'fal-video', 'replicate-video',

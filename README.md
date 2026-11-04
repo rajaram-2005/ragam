@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <strong>One workspace. Running on your computer. Connected to the provider you choose.</strong><br />
-  <sub>Open-source · Docker Compose · Single-user · Localhost-only</sub>
+  <strong>One workspace. Self-host it locally or use the opt-in hosted BYOK edition.</strong><br />
+  <sub>Open-source · Docker Compose · Hosted accounts · Your provider key and bill</sub>
 </p>
 
 <p align="center">
@@ -19,32 +19,35 @@
 
 # Aetheris Omni
 
-Aetheris Omni is a **self-hosted AI workspace**, not a model and not a shared cloud service. Its app, API and saved workspace run in Docker on your own computer. Open it in a browser at **http://localhost** and choose which supported AI provider to connect.
+Aetheris Omni is an AI workspace, not a model. Run the default single-user workspace locally with Docker at **http://localhost**, or deploy the opt-in hosted BYOK web edition for per-user accounts. In hosted mode, each person supplies an API key, Ragam encrypts it for that account, and the chosen provider bills that person directly. Public hosted registration requires a production email-delivery service; see [hosted BYOK setup](docs/30-hosted-byok.md).
 
-> **Important distinction:** “hosted locally” describes where the Aetheris Omni app and its workspace run. It does **not** make every AI model local or offline. If you choose a cloud provider, the prompts you send go to that provider and its usage terms and charges apply. A local ComfyUI connection is optional for image generation; no model weights are bundled or downloaded by Aetheris Omni.
+**Klyvaron's built-in Chat path is model-independent.** It uses deterministic parsing, extractive summaries, lexical comparison, local BM25 retrieval and bounded workflows; it does not require model training, model weights, a download, provider credentials or network access. Lite, Pro and Max change context and workflow limits, not model identity. This is not open-ended language reasoning; unsupported inference is not implied. See [model-independent Klyvaron](docs/33-model-independent-klyvaron.md).
+
+> **Important distinction:** “hosted locally” describes where the Aetheris Omni app and its workspace run. The built-in Klyvaron text processor is local and deterministic. If you switch to an optional cloud-model provider, the prompts you send go to that provider and its usage terms and charges apply. A local ComfyUI connection is optional for image generation; no model weights are bundled or downloaded by Aetheris Omni.
 
 **Five product areas:** Chat · Image · Video · Plugins · MCP<br>
 **Product version:** 0.2.0 · [Release notes](docs/26-release.md) · [MIT license](LICENSE)
 
 ## How Aetheris Omni is different
 
-Aetheris Omni takes a deliberately self-hosted, provider-connected approach. These are architectural choices—not claims that every hosted AI product works the same way.
+Aetheris Omni takes a deliberately user-controlled, provider-connected approach. These are architectural choices—not claims that every hosted AI product works the same way.
 
 | Design choice | What it means in practice |
 |---|---|
-| **Your computer hosts the workspace** | Docker runs the app and its persistent data on your own machine. There is no Aetheris-operated shared backend in this deployment. |
+| **Choose the deployment boundary** | The default Docker setup runs a private single-user workspace locally. The separate hosted BYOK build serves account-backed Chat through Vercel and Supabase; it stores per-user encrypted provider settings, not hosted conversation history. |
 | **You choose the AI connection** | Connect a supported provider and explicitly select a model it returns. Aetheris Omni does not silently switch providers or invent model listings. Provider API use may cost money; the app does not include or pay for it. |
-| **Local access is the security boundary** | The default Compose setup binds to `127.0.0.1` and has no account or sign-in screen. It is a single-user local workspace—not safe to expose to a LAN, public internet or remote reverse proxy as-is. |
-| **External tools require deliberate approval** | Remote MCP and plugin calls are shown as external actions and require per-call approval. Ragam does not download and execute remote plugin code. |
+| **Local mode stays private** | Default Compose binds to `127.0.0.1`. Optional LAN mode adds one shared Caddy password and private HTTPS for a trusted home network; it is still one user, not individual accounts. Never expose it to the public internet. |
+| **External tools require deliberate approval** | In the local workspace, remote MCP and plugin calls are shown as external actions and require per-call approval; Ragam does not download and execute remote plugin code. The hosted BYOK scope currently exposes neither MCP nor Plugins. |
 | **Status is kept honest** | Contract-tested adapters and synthetic fixtures are not presented as live vendor verification or proof of model performance. |
-| **Five clear product areas** | Chat, Image, Video, Plugins and MCP are the five primary areas. Provider Settings is a dialog, not a sixth area. |
+| **Five clear local-workspace areas** | The local Docker edition has Chat, Image, Video, Plugins and MCP. Its Provider Settings is a dialog, not a sixth area. Hosted BYOK currently provides account-backed Chat and Provider Settings only. |
 
 ### Where the app, data and prompts go
 
-- **App and workspace:** run on your computer in Docker. Conversation and workspace data, provider settings and generated files are kept in that local Docker volume. Protect the computer and any backups.
+- **Local deployment:** app, conversation/workspace data, provider settings and generated files stay in the local Docker volume.
+- **Hosted BYOK deployment:** Supabase Auth stores account identities; Supabase Postgres stores each user's encrypted provider key. Chat prompts and replies are not saved by the hosted Core and remain only in the current browser page unless the user copies them elsewhere.
 - **Cloud AI requests:** when you configure and use a cloud provider, the request goes to that provider. Check its privacy, retention and pricing terms before sending sensitive information.
 - **Localhost is not offline AI:** the browser address `http://localhost` means the app is on your computer. Chat with a cloud model still needs internet and sends the request to the selected vendor. No model weights are included.
-- **No account flow:** the Compose app is intentionally single-user and has no email, account creation, sign-in or password reset. Keep the default loopback binding; do not expose it to other devices or the internet.
+- **Local-mode accounts:** the Compose app remains single-user and has no email, account creation, or individual sign-in/password reset. Optional LAN Basic Auth is one shared access password, not separate accounts. Hosted BYOK uses Supabase Auth and requires verified email delivery for confirmation and recovery.
 
 ## Download and run on Windows
 
@@ -76,7 +79,7 @@ This is a source-code download, not a conventional `.exe` installer. The checked
 1. In the app, open **Provider Settings**.
 2. Choose a provider you already have access to and **connect your own provider key** by entering its API key in the provider form. Do not paste a key into a chat message, issue, or support request.
 3. Save the connection and explicitly choose **Test connection**. Provider API access is separate from consumer subscriptions (for example, ChatGPT or Claude subscriptions may not include API usage). Provider usage may incur charges; check its current terms and pricing directly.
-4. In Chat, choose a model returned by that provider. Aetheris Omni does not silently choose a replacement if the selected provider or model fails.
+4. Chat defaults to Klyvaron's built-in model-independent processor. If you deliberately choose the optional provider engine, select a model returned by that provider; Aetheris Omni does not silently substitute a model if it fails.
 
 The app itself does not provide a hosted AI subscription, provider credentials, paid tier or bundled inference. The [provider matrix](docs/27-provider-framework.md) distinguishes supported API contracts from live verification; no live vendor call is implied by a fixture test.
 
@@ -85,7 +88,7 @@ The app itself does not provide a hosted AI subscription, provider credentials, 
 - To stop the containers but keep your workspace, double-click **scripts/Stop-Ragam.cmd**. Start again with **scripts/Start-Ragam.cmd**.
 - To make a backup or restore one, double-click **scripts/Backup-Ragam.cmd** or **scripts/Restore-Ragam.cmd** and follow the file pickers. Store both the archive and checksum together on an encrypted drive; backups contain private workspace data and provider settings.
 - Do **not** delete the Docker volume or use a “remove volumes” option for routine stopping or updates. That volume holds your workspace.
-- Keep the default `127.0.0.1` binding. Because this app has no sign-in, do not change the bind address, forward port 80, expose it to a LAN/public network or put it behind a remote proxy. See the [security and persistence guide](docs/22-self-hosted-deployment.md).
+- Keep the default `127.0.0.1` binding unless you deliberately configure the guarded [LAN mode](docs/22-self-hosted-deployment.md). Never expose the no-account Docker workspace to the public internet or forward its ports through your router.
 
 ## Supported user interfaces
 
@@ -95,18 +98,23 @@ The app itself does not provide a hosted AI subscription, provider credentials, 
 | **Browser app** | Open `http://localhost`. Caddy serves the UI and forwards same-origin `/api` requests to your local Core service. |
 | **Stop without deleting data** | Double-click [`scripts/Stop-Ragam.cmd`](scripts/Stop-Ragam.cmd). Docker volumes and data remain. |
 | **Backup / restore** | Double-click [`scripts/Backup-Ragam.cmd`](scripts/Backup-Ragam.cmd) or [`scripts/Restore-Ragam.cmd`](scripts/Restore-Ragam.cmd). Use an encrypted location for sensitive archives. |
-| **Other Compose-compatible platforms** | Use [`compose.yaml`](compose.yaml) with its loopback-only default. The same no-login security boundary applies. |
+| **LAN-only Docker access** | Use [`scripts/Start-Lan-Ragam.ps1`](scripts/Start-Lan-Ragam.ps1) to configure a private bind address, a shared password and Caddy internal HTTPS; install its local CA certificate on your own client devices. Do not port-forward it to the internet. |
+| **Other Compose-compatible platforms** | Use [`compose.yaml`](compose.yaml) with its loopback-only default, or follow the guarded LAN overlay in the [deployment guide](docs/22-self-hosted-deployment.md). |
+| **Cross-platform desktop preview** | Windows x64/ARM64, Linux x64/ARM64, and macOS Intel/Apple Silicon installers are built by the [Desktop Packages workflow](.github/workflows/desktop.yml). Packages are unsigned CI artifacts, not yet a signed public release. |
 
-Aetheris Omni is not a hosted/shared service or a separately installed native desktop app. Docker Compose is the deployment; the browser is its user interface. Each end user runs an independent instance on their own computer.
+For a desktop source preview, install Node.js 22.12 or later, then run `npm run desktop:install` and `npm run desktop`. The desktop wrapper starts Core and serves the UI only on loopback; workspace data stays in the operating system's Ragam application-data directory. It does not expose a LAN or public listener.
+
+The installers do **not** bundle or silently download model weights. Klyvaron Lite/Pro/Max are built-in deterministic processing profiles; optional provider assignments and legacy local model artifacts are separate integrations, not requirements for those profiles. Any optional model route names the exact provider/model and does not silently substitute another destination.
+
+Aetheris Omni supports a local Docker workspace and a separate opt-in hosted BYOK web edition; see [the hosted setup guide](docs/30-hosted-byok.md) for its security boundary and launch prerequisites. The hosted scope currently provides account-backed Chat and Provider Settings, not every local-workspace area.
 
 ## Product capabilities and current limits
 
 The product has exactly **five primary areas: Chat, Image, Video, Plugins and MCP**. Provider Settings is a dialog; history, memory, safety and other internals stay inside the relevant areas.
 
-- **Chat:** 22 individually adapted Chat APIs have contract-tested integrations. Contract tests do not prove current live access, latency or model quality. Choose a provider and model explicitly; no silent fallback.
-- **Image and Video:** these use separate provider connections. Image has ten adapters (including optional local ComfyUI); Video has five. Model weights are not shipped with the app.
+- **Chat, Image and Video:** Chat defaults to the deterministic, model-independent Klyvaron processor for text inspection, extractive summaries, pattern extraction, lexical comparison, local evidence retrieval and bounded arithmetic. It does not claim open-ended reasoning. An optional provider engine has 22 individually adapted Chat API contracts; the local workspace and hosted Chat also offer Manufacturing Operations guidance for selected model requests, not for the deterministic processor. Image has ten adapters (including local ComfyUI); Video has five. Klyvaron does not interpret binary image/audio/video input in its built-in processor. Remote APIs may charge; provider tests use fixtures and make no live vendor calls.
 - **Plugins and MCP:** reviewed built-ins plus owner-managed HTTP/Streamable HTTP connections. Remote calls need explicit approval; downloaded remote code is not executed.
-- **Provider catalogue:** currently 47 entries, including one pending entry. A listed consumer product is not automatically an API integration; only documented public APIs are represented. The catalogue is not an exhaustive inventory of every provider worldwide.
+- **Provider catalogue:** currently 46 entries, including one pending entry; see the [provider landscape and cost boundary](docs/31-provider-landscape.md). A listed consumer product is not automatically an API integration; only documented public APIs are represented. The catalogue is not an exhaustive inventory of every provider worldwide.
 - **Verification:** the catalogue distinguishes adapter status from live vendor verification. Tests use synthetic fixtures and make no vendor calls. No provider has been live-qualified as part of this repository work.
 
 For full evidence and technical details, see the [provider framework](docs/27-provider-framework.md), [product status](docs/03-status.md), [self-hosted deployment guide](docs/22-self-hosted-deployment.md), and [release notes](docs/26-release.md).
@@ -119,7 +127,7 @@ This repository is named `ragam`, and some code, container and launcher filename
 
 ## Retained legacy architecture and verification history
 
-The following documents the earlier research foundation. Its local/offline capabilities are not part of the active product.
+The following documents the earlier neural-model research foundation. Those model artifacts are not required by the active model-independent Klyvaron processor; experimental local inference remains a separate optional path.
 
 
 An **online-first** AI platform built by integrating two repositories into one system:
@@ -152,7 +160,7 @@ internal service promoted to a navigation entry, fails the build.
 
 | Area | What it does | Current boundary |
 |---|---|---|
-| **Chat** | Sends prompts to the explicitly selected model through the configured provider; supports streaming, optional conversation history, approved memory, and text-file knowledge with citations. | Inference is online-only. A reachable provider and its own credentials are required; no silent model fallback. |
+| **Chat** | Defaults to model-independent Klyvaron deterministic processing; optional model-backed Chat supports streaming and opt-in account-local memory/knowledge context. | Built-in processing is bounded to documented deterministic tasks; model-backed inference requires an explicitly selected provider and model. |
 | **Image** | Submits image-generation jobs through the supported provider adapters and shows job state and validated output. | Requires a configured provider. Adapters are contract-tested; live vendor qualification is still pending. |
 | **Video** | Submits video-generation jobs, exposes progress/cancellation, and validates that the result is genuine video rather than a still image. | Requires a configured provider. No video model or inference runtime is bundled locally. |
 | **Plugins** | Reviewed built-ins plus owner-managed Ragam HTTP plugin connections, with manifest/schema validation and permission preflight. | Remote plugin code is never downloaded or executed. The remote endpoint receives arguments only after per-call consent; only `service.external` scope is grantable. |
@@ -172,7 +180,7 @@ picker are controls inside the app, not additional product areas.
 | Resource management | Sidebar hardware card; Image and Video echoes |
 | Media validation | Image/Video → job detail, rejection reasons, artifact sha256 |
 | Execution control | Image/Video job cancellation; Chat generation Stop; task pause/resume/cancel |
-| User-authorized adaptation/training | Chat → “Create or adapt model weights”; paired user-computer worker, explicit disclosure/consent, verified-base and resource gates. Interactive lightweight adaptation is capped at 120 seconds from the Execute action through worker setup/finalization. Foundation pretraining is a separate mode; research benchmarking and model-card publication remain separate workflows. |
+| User-authorized knowledge and memory | Chat → local knowledge and approved-memory controls; saving is explicit, account-scoped and separate from ordinary session history. This stores user data and does not train a model. The retained model-adaptation worker is an optional legacy research subsystem, not part of Klyvaron processing or its normal setup. |
 
 ---
 
@@ -209,15 +217,16 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 1916 tests: core 985, web 109, fabric 822
-npm run lm:quick  # 60-step Aetheris Lite LM smoke run (seconds, no GPU)
-npm run lm:train  # the full from-scratch LM run (~35-40 min on 2 CPUs)
-npm run train     # in-process training run
+npm test          # 1992 tests: core 1039, web 131, fabric 822
 ```
 
-The optional real Qwen LoRA smoke path is separate from normal setup. On a machine
-with internet access and about 8 GB RAM (a Codespace is sufficient), it bootstraps
-its own reviewed torch/Transformers/PEFT packages and uses CPU when no GPU exists:
+The old Fabric and from-scratch model-training commands are retained as separate
+research tooling only. They are not Klyvaron processing, do not turn user input into
+training data, and are not required to run the product or save user-authorized knowledge.
+No model release is implied by their presence. The optional Qwen LoRA smoke path is also
+legacy research, separate from normal setup, and has not been executed. If someone is
+specifically auditing that path, its runner bootstraps reviewed torch/Transformers/PEFT
+packages on an internet-connected machine with about 8 GB RAM:
 
 ```bash
 python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
@@ -227,13 +236,14 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 CI runs the full suites on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) across six jobs: one per
 component, a Docker Compose build/health/persistence/restore smoke, documentation
-checks, and release verification against suite counts. The latest full CI run
+checks, and suite-count verification plus tests for the separate legacy release-gate code. The latest completed full CI run
 [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all
-1,916 current tests (Core 985, Web 109, Fabric 822), plus release verification and the
-loopback-only Compose persistence/restore smoke. The eight added Chat APIs use deterministic
-contract fixtures; neither the tests nor CI made live vendor calls. The
-Fabric job asserts the release gate in **both** directions: a trained model must
-release, and an undertrained one must fail *and* must not become the current model.
+1,916 tests (Core 985, Web 109, Fabric 822), plus release verification and the
+loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 1,992 tests (Core 1,039, Web 131, Fabric 822). The full Core suite passed 1,033/1,039 with six skipped legacy model-artifact checks; the focused processor/route tests passed 13/13. Web passed 131/131 and the production bundle built. Fabric test command exited nonzero: 821 passed and one optional multimodal training test failed because JAX is unavailable. This was not a skip; the separate model-training path was not pursued. Signing and qualification-capture tests use synthetic fixtures and do not establish a production signature or qualification. Full CI for this current tree is pending. The added Chat API paths use deterministic contract fixtures;
+neither the tests nor CI made live vendor calls. The
+Fabric job tests the retained retriever experiment's gate in **both** directions. This is
+separate from the active model-independent Klyvaron processor and is not evidence that a
+Klyvaron model has been released.
 
 End-user setup and troubleshooting: [`docs/22-self-hosted-deployment.md`](docs/22-self-hosted-deployment.md). Developer environment variables and repository setup: [`docs/04-setup.md`](docs/04-setup.md).
 
@@ -289,17 +299,18 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 38,119 | 25,286 | **zero npm packages** | 985 |
+| `services/core` | Node 22 ESM | 42,932 | 27,480 | **zero npm packages** | 1039 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 5,898 | 2,142 | react, react-dom | 109 |
+| `apps/web` | React 18 + Vite | 7,821 | 2,483 | pdfjs-dist, react, react-dom | 131 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web
-app's 62-package tree over it would give the core a dependency surface it does not
+app's 59-entry dependency lockfile over it would give the core a dependency surface it does not
 have and make that property unverifiable.
 
 Architecture, component responsibilities and enforcement points:
-[`docs/02-architecture.md`](docs/02-architecture.md).
+[`docs/02-architecture.md`](docs/02-architecture.md). Cross-provider assistant feature-parity audit and staged roadmap:
+[`docs/29-assistant-platform-parity.md`](docs/29-assistant-platform-parity.md).
 
 ---
 
@@ -473,6 +484,9 @@ Details, including seven open items stated plainly:
 | [`docs/10-hermes-audit.md`](docs/10-hermes-audit.md) | Hermes Agent audit: what was adopted, what was rejected, and why |
 | [`docs/11-klyvaron-family.md`](docs/11-klyvaron-family.md) | The Klyvaron family, the six learning levels, and what is not built |
 | [`docs/22-klyvaron-differentiation.md`](docs/22-klyvaron-differentiation.md) | What the family is for: the present, the person, and the comparisons it refuses |
+| [`docs/klyvaron-release-governance.md`](docs/klyvaron-release-governance.md) | Mandatory per-tier production gate, lifecycle, CI behavior and current HOLD / NOT RELEASED decisions |
+| [`docs/klyvaron-evidence-standard.md`](docs/klyvaron-evidence-standard.md) | Signed production evidence package schemas, verifier rules and trust roles |
+| [`docs/33-model-independent-klyvaron.md`](docs/33-model-independent-klyvaron.md) | Built-in deterministic processor, tier resource profiles, tasks and limitations |
 | [`docs/23-training-free-tiers.md`](docs/23-training-free-tiers.md) | The composed path this family considered and refused, kept because the refusal is a checked rule |
 | [`docs/24-own-models.md`](docs/24-own-models.md) | Pro and Max as this family's own models: the `aetheris-core-v1` architecture, the two differentiators as parts of it, and what training them costs |
 | [`docs/12-feature-matrix.md`](docs/12-feature-matrix.md) | Every capability marked completed / partial / planned / unsupported |

@@ -20,6 +20,7 @@ import { join, resolve } from 'node:path'
 
 import { SIZE_PRESETS, configDigest, parameterCount } from './architecture.mjs'
 import { ALLOWED_WORKER_OPERATIONS, INTERACTIVE_ADAPTER_WALL_LIMIT_MS } from './local-worker.mjs'
+import { evaluateAdaptiveTraining, planAdaptiveTraining } from '../adaptive/training-orchestrator.mjs'
 
 export const TRAINING_MODES = Object.freeze([
   'context_only',
@@ -591,29 +592,24 @@ export class UserTrainingController {
       )
     }
 
-    let selectedMode = requestedMode
-    let recommendationReason = ''
-    if (!selectedMode) {
-      if (exampleCount === 0 && request.ephemeralContext) {
-        selectedMode = 'context_only'
-        recommendationReason = 'Ephemeral session context supplied; prompt context suffices with zero weight modification.'
-      } else if (exampleCount <= 1 && !authorizedCorpusPath) {
-        selectedMode = 'memory_or_retrieval'
-        recommendationReason = 'Single user correction detected: storing in authorized memory/retrieval is immediate and reliable without overfitting neural weights on one example.'
-      } else if (authorizedCorpusPath) {
-        selectedMode = 'foundation_pretrain'
-        recommendationReason = 'Authorized multi-document training corpus provided.'
-      } else {
-        selectedMode = 'lightweight_adapter'
-        recommendationReason = `${exampleCount} authorized input/target examples supplied; rank-r LoRA adapter updates behavior within the 120s interactive budget while keeping base weights intact.`
-      }
-    } else if (!TRAINING_MODES.includes(selectedMode)) {
-      throw new UserTrainingControllerError(`Unsupported training mode '${selectedMode}'.`, { code: 'invalid_mode' })
-    } else if (selectedMode === 'lightweight_adapter' && exampleCount === 1 && !allowSingleExampleAdapter) {
-      recommendationReason = 'Note: for a single correction, authorized memory/retrieval is normally preferred; proceeding with explicit user-requested adapter update.'
-    } else {
-      recommendationReason = `User explicitly requested '${selectedMode}'.`
+    if (requestedMode && !TRAINING_MODES.includes(requestedMode)) {
+      throw new UserTrainingControllerError(`Unsupported training mode '${requestedMode}'.`, { code: 'invalid_mode' })
     }
+    const priorOutcomes = [...this.jobs.values()]
+      .filter((job) => job.modelId === modelSpec.modelId && job.adaptiveEvaluation)
+      .map((job) => ({ mode: job.mode, passed: job.adaptiveEvaluation.passed }))
+    const adaptiveDecision = planAdaptiveTraining({
+      requestedMode,
+      validModes: TRAINING_MODES,
+      exampleCount,
+      hasAuthorizedCorpus: Boolean(authorizedCorpusPath),
+      ephemeralContext: Boolean(request.ephemeralContext),
+      allowSingleExampleAdapter,
+      localWorkerConnected: connected,
+      priorOutcomes,
+    })
+    let selectedMode = adaptiveDecision.selectedMode
+    let recommendationReason = adaptiveDecision.rationale
 
     const rank = Number(trainingLoss.rank ?? 8)
     const maxSteps = Number(stoppingCriteria.maxSteps ?? (selectedMode === 'foundation_pretrain' ? 50 : 6))
@@ -627,6 +623,8 @@ export class UserTrainingController {
       batchSize,
       rank,
     })
+    adaptiveDecision.evidence.workerCompatible = requestedEstimate.compatible
+    adaptiveDecision.evidence.resourceLimitations = [...requestedEstimate.limitations]
 
     // Rule (Section 3): NEVER silently downgrade `full_fine_tune` or `foundation_pretrain` to
     // `lightweight_adapter`! Explain the difference and require explicit `modeChangeApproval`.
@@ -677,6 +675,20 @@ export class UserTrainingController {
           batchSize: 1,
           rank,
         })
+    adaptiveDecision.selectedMode = selectedMode
+    adaptiveDecision.weightUpdateMethod = PARAMETER_UPDATING_MODES.includes(selectedMode) ? selectedMode : null
+    adaptiveDecision.evidence.requestedModeResourceCompatible = requestedEstimate.compatible
+    adaptiveDecision.evidence.requestedModeResourceLimitations = [...requestedEstimate.limitations]
+    adaptiveDecision.evidence.workerCompatible = activeEstimate.compatible
+    adaptiveDecision.evidence.resourceLimitations = [...activeEstimate.limitations]
+    adaptiveDecision.modeChangeApproval = modeDowngradeProposal
+      ? { ...modeDowngradeProposal, approvedByUser: modeDowngradeProposal.approvedByUser }
+      : null
+    if (modeDowngradeProposal?.approvedByUser && selectedMode !== modeDowngradeProposal.requestedMode) {
+      const approvalNote = ` The user explicitly approved changing '${modeDowngradeProposal.requestedMode}' to '${selectedMode}'.`
+      adaptiveDecision.rationale += approvalNote
+      recommendationReason += approvalNote
+    }
 
     // Partition separate validation split automatically when sufficient examples exist (`>= 4`).
     let trainExamples = Array.isArray(examples) ? [...examples] : []
@@ -689,6 +701,15 @@ export class UserTrainingController {
       validationStrategy = 'automatic_disjoint_holdout_split'
     } else if (heldOutValidation.length === 0) {
       validationStrategy = 'target_nll_and_regression_holdout_single_or_small_sample'
+    }
+    adaptiveDecision.validationPlan = {
+      strategy: validationStrategy,
+      heldOutExampleCount: heldOutValidation.length,
+      regressionCheckCount: Array.isArray(regressionTests) && regressionTests.length > 0
+        ? regressionTests.length
+        : 3,
+      activationRequiresArtifactValidationAndNativeInference: true,
+      rollbackOnFailedReleaseGates: true,
     }
 
     const effectiveMaxDurationMs = selectedMode === 'lightweight_adapter'
@@ -728,6 +749,7 @@ export class UserTrainingController {
       requestedMode: requestedMode ?? selectedMode,
       selectedMode,
       recommendationReason,
+      adaptiveDecision,
       intendedBehavior: String(intendedBehavior || '').trim(),
       inputTargetFormat,
       dataProvenance: {
@@ -769,21 +791,38 @@ export class UserTrainingController {
       stepDelayMs: Number(request.stepDelayMs ?? 0),
     }
 
+    const blockers = [...activeEstimate.limitations]
+    for (const f of missingSpecFields) blockers.push(`Missing required training specification field '${f}'.`)
+    if (modeDowngradeProposal && !modeDowngradeProposal.approvedByUser) {
+      blockers.push(modeDowngradeProposal.differenceExplanation)
+    }
+    adaptiveDecision.readyToExecute = blockers.length === 0
+    adaptiveDecision.blockerCount = blockers.length
     const disclosureDigest = sha256Hex({
       modelId: spec.modelId,
       selectedMode: spec.selectedMode,
+      adaptiveDecision: spec.adaptiveDecision,
       intendedBehavior: spec.intendedBehavior,
       datasetSha256: spec.dataProvenance.datasetSha256,
       stoppingCriteria: spec.stoppingCriteria,
       requiredRamBytes: activeEstimate.requiredRamBytes,
       requiredDiskBytes: activeEstimate.requiredDiskBytes,
     })
-
-    const blockers = [...activeEstimate.limitations]
-    for (const f of missingSpecFields) blockers.push(`Missing required training specification field '${f}'.`)
-    if (modeDowngradeProposal && !modeDowngradeProposal.approvedByUser) {
-      blockers.push(modeDowngradeProposal.differenceExplanation)
-    }
+    this.ledger?.record({
+      category: 'adaptive_training',
+      action: 'plan',
+      outcome: adaptiveDecision.readyToExecute ? 'ready' : 'blocked',
+      subject: spec.modelId,
+      detail: {
+        skill: adaptiveDecision.skill,
+        selectedMode: adaptiveDecision.selectedMode,
+        selection: adaptiveDecision.selection,
+        datasetSha256: spec.dataProvenance.datasetSha256,
+        workerId: spec.workerId,
+        blockerCount: blockers.length,
+        workerCompatible: activeEstimate.compatible,
+      },
+    })
 
     return {
       readyToExecute: blockers.length === 0,
@@ -1005,6 +1044,30 @@ export class UserTrainingController {
         ? Boolean(inferResult.ok)
         : Boolean(inferResult.generatedTokens >= 1)
       this.modelGateHistory.set(tracked.modelId, hist)
+      const workerStartedAt = Date.parse(live.startedAt ?? '')
+      const workerCompletedAt = Date.parse(live.completedAt ?? '')
+      tracked.adaptiveEvaluation = evaluateAdaptiveTraining({
+        mode: tracked.mode,
+        artifactValid: Boolean(validation.valid),
+        evaluationPassed: hist.evaluationPassed,
+        nativeInferencePassed: hist.nativeInferencePassed,
+        measuredWallMs: Number.isFinite(workerStartedAt) && Number.isFinite(workerCompletedAt)
+          ? workerCompletedAt - workerStartedAt
+          : live.progress?.elapsedMs,
+      })
+      this.ledger?.record({
+        category: 'adaptive_training',
+        action: 'evaluate',
+        outcome: tracked.adaptiveEvaluation.passed ? 'passed' : 'failed',
+        subject: tracked.modelId,
+        detail: {
+          jobId,
+          workerId: tracked.workerId,
+          mode: tracked.mode,
+          checks: tracked.adaptiveEvaluation.checks,
+          measuredWallMs: tracked.adaptiveEvaluation.measuredWallMs,
+        },
+      })
 
       // Gate 3: Activate on `NativeKlyvaronHost` or `NativeMultimodalHost` ONLY when all gates succeeded!
       if (hist.evaluationPassed && hist.nativeInferencePassed && tracked.mode === 'lightweight_adapter') {
@@ -1055,7 +1118,22 @@ export class UserTrainingController {
     tracked.promotedToChat = false
     tracked.promotedToMultimodal = false
     tracked.rollbackReport = rb
+    tracked.adaptiveEvaluation = evaluateAdaptiveTraining({
+      mode: tracked.mode,
+      artifactValid: Boolean(tracked.validationReport?.valid),
+      evaluationPassed: Boolean(this.modelGateHistory.get(tracked.modelId)?.evaluationPassed),
+      nativeInferencePassed: Boolean(this.modelGateHistory.get(tracked.modelId)?.nativeInferencePassed),
+      rolledBack: true,
+      measuredWallMs: tracked.adaptiveEvaluation?.measuredWallMs ?? null,
+    })
     this.#saveState()
+    this.ledger?.record({
+      category: 'adaptive_training',
+      action: 'evaluate',
+      outcome: 'rolled_back',
+      subject: tracked.modelId,
+      detail: { jobId, workerId: tracked.workerId, mode: tracked.mode, checks: tracked.adaptiveEvaluation.checks },
+    })
     this.ledger?.record({
       category: 'training_worker',
       action: 'job_rollback',

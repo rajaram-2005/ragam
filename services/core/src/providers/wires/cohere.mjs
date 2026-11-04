@@ -19,6 +19,7 @@ import { failure } from '../../online/failure.mjs'
 import { conversation, requireUserFirst, tokens, unique } from './common.mjs'
 
 export const wire = 'cohere_chat'
+export const defaultBaseUrl = 'https://api.cohere.com'
 const MODEL_PAGE_SIZE = 100
 const MAX_PAGES = 20
 

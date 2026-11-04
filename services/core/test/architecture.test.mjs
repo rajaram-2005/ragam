@@ -56,10 +56,11 @@ function pythonModelDigest(modelConfig) {
   return createHash('sha256').update(`{${body}}`, 'utf8').digest('hex')
 }
 
-test('the Lite preset is the released model, checked against the artifact rather than asserted', () => {
+test('the Lite preset matches archived model-card metadata without treating it as released', () => {
   const preset = SIZE_PRESETS.lite
-  assert.equal(preset.released, true)
-  assert.equal(preset.artifact, card.identifier.replace('@', '-'))
+  assert.equal(preset.released, false)
+  assert.equal(preset.artifact, null)
+  assert.equal(preset.archivedArtifact, card.identifier.replace('@', '-'))
   // The parameter count comes from the formula the trainer uses, and the card recorded the same
   // number from a real run: 148 * 96 + 128 * 96 + 3 * (4*96^2 + 2*96*384 + 4*96) + 2*96.
   assert.equal(parameterCount(preset.config), card.parameterCount)
@@ -82,23 +83,14 @@ test('the Lite preset is the released model, checked against the artifact rather
   assert.match(configDigest(preset.config), /^[0-9a-f]{64}$/)
 })
 
-test('the mini preset is the artifact trained here, and its config is the one the run recorded', () => {
+test('the mini preset matches its archived experiment configuration', () => {
   const preset = SIZE_PRESETS.mini
-  // Whether this preset may name an artifact is decided by the run's record rather than by a
-  // literal here: the record says `running` while the run is in flight, and a size that claimed a
-  // released artifact over a running process would be describing something that does not exist
-  // yet. The test passes either way, which is the point -- it cannot be left behind after the run
-  // lands, because landing changes the record and the preset has to follow it.
-  const finished = Boolean(miniRun.outcome?.status) && miniRun.outcome.status !== 'running'
-  if (finished) {
-    assert.equal(preset.released, true)
-    assert.equal(preset.artifact, miniRun.modelId.replace('@', '-'))
-    assert.equal(preset.training, null)
-  } else {
-    assert.equal(preset.released, false)
-    assert.equal(preset.artifact, null)
-    assert.equal(preset.training, miniRun.modelId)
-  }
+  // The run record is retained as history, but its finished state does not make its absent
+  // payload a current release.
+  assert.equal(preset.released, false)
+  assert.equal(preset.artifact, null)
+  assert.equal(preset.archivedArtifact, miniRun.modelId.replace('@', '-'))
+  assert.equal(preset.training, null)
   assert.equal(preset.config.baseCheckpoint, null)
   // The parameter count the trainer computes for this config, and the one its report recorded.
   assert.equal(parameterCount(preset.config), 1_421_952)
@@ -111,14 +103,15 @@ test('the mini preset is the artifact trained here, and its config is the one th
   assert.equal(preset.config.vocabSize, presetDigestFixture.vocab_size)
 })
 
-test('the released card of the second artifact agrees with the preset and with the run record', () => {
+test('the archived mini-model record agrees with its preset and run metadata but is not a release', () => {
   const preset = SIZE_PRESETS.mini
   const outcome = miniRun.outcome
   assert.equal(miniCard.identifier, miniRun.modelId)
-  assert.equal(miniCard.identifier.replace('@', '-'), preset.artifact, 'the preset must name the card that was released')
+  assert.equal(miniCard.identifier.replace('@', '-'), preset.archivedArtifact, 'the preset must identify historical metadata without claiming release')
   assert.equal(miniCard.family, 'klyvaron-mini', 'the preset is not a tier and the card must not claim one')
   assert.equal(miniCard.baseCheckpoint, null, 'trained from random initialisation: there is no base')
-  assert.equal(miniCard.status, 'released')
+  assert.equal(miniCard.status, 'not_released')
+  assert.match(miniCard.archiveNotice, /not release evidence/)
   assert.equal(miniCard.parameterCount, parameterCount(preset.config))
   assert.equal(miniCard.parameterCount, miniRun.parameterCount)
 
@@ -284,13 +277,13 @@ test('training arithmetic is 6ND and a rate is never baked in as a measurement',
 test('the recipe says what is done and what is open, per size, with a reason for every open step', () => {
   const lite = recipeReport('lite')
   assert.deepEqual(lite.map((step) => step.id), [...RECIPE_STEP_IDS])
-  assert.ok(lite.every((step) => step.status === RECIPE_STATES.SATISFIED), 'Lite is trained, evaluated and released')
+  assert.ok(lite.every((step) => step.status === RECIPE_STATES.SATISFIED), 'the legacy Lite recipe metadata records completed stages; this is not a current release')
   for (const step of lite) assert.ok(step.evidence && step.evidence.length > 20)
 
   for (const id of ['pro', 'max']) {
     const steps = recipeReport(id)
     assert.deepEqual(steps.map((step) => step.id), [...RECIPE_STEP_IDS])
-    assert.ok(steps.every((step) => step.status === RECIPE_STATES.SATISFIED), `${id} LM is trained, evaluated and released`)
+    assert.ok(steps.every((step) => step.status === RECIPE_STATES.SATISFIED), `${id} legacy recipe metadata records completed stages; this is not a current release`)
     for (const step of steps) assert.ok(step.evidence && step.evidence.length > 20)
   }
   assert.throws(() => recipeReport('nope'), /unknown size/)
@@ -305,8 +298,10 @@ test('the tier record points at the architecture, and the plan derives the gates
     assert.deepEqual([...tier.backingPath.steps], [...RECIPE_STEP_IDS])
   }
   assert.equal(SIZE_PRESETS.lite.modelId, 'aetheris-lite-lm')
-  assert.equal(SIZE_PRESETS.pro.artifact, 'klyvaron-pro-lm-0.1.0')
-  assert.equal(SIZE_PRESETS.max.artifact, 'klyvaron-max-lm-0.1.0')
+  assert.equal(SIZE_PRESETS.pro.artifact, null)
+  assert.equal(SIZE_PRESETS.max.artifact, null)
+  assert.equal(SIZE_PRESETS.pro.archivedArtifact, 'klyvaron-pro-lm-0.1.0')
+  assert.equal(SIZE_PRESETS.max.archivedArtifact, 'klyvaron-max-lm-0.1.0')
 
   const plan = idMap(developmentPlan())
   for (const id of [TIERS.LITE, TIERS.PRO, TIERS.MAX]) {

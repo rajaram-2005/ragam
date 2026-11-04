@@ -18,9 +18,13 @@
 //   * a stream has no `[DONE]` sentinel and ends when the response body ends.
 
 import { failure } from '../../online/failure.mjs'
-import { conversation, requireUserFirst, tokens, unique } from './common.mjs'
+import { conversation, geminiParts, requireUserFirst, tokens, unique } from './common.mjs'
 
 export const wire = 'gemini_generate'
+export const defaultBaseUrl = 'https://generativelanguage.googleapis.com/v1beta'
+export const chatInputKinds = Object.freeze(['image', 'audio', 'video'])
+export const chatNativeSearch = true
+export const chatTools = true
 
 const headers = (config) => ({ 'x-goog-api-key': config.apiKey })
 
@@ -28,13 +32,17 @@ const headers = (config) => ({ 'x-goog-api-key': config.apiKey })
 export const modelId = (model) => String(model ?? '').replace(/^models\//, '')
 
 /** The request body, exported so a contract test can assert it without a network call. */
-export function bodyFor({ messages, maxTokens, temperature }) {
+export function bodyFor({ messages, maxTokens, temperature, tools = [], nativeSearch = false }) {
   const { system, turns } = conversation(messages)
   requireUserFirst(turns, 'Gemini')
   return {
-    contents: turns.map((turn) => ({ role: turn.role === 'assistant' ? 'model' : 'user', parts: [{ text: turn.content }] })),
+    contents: turns.map((turn) => ({ role: turn.role === 'assistant' ? 'model' : 'user', parts: geminiParts(turn.content) })),
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     generationConfig: { maxOutputTokens: maxTokens, ...(Number.isFinite(temperature) ? { temperature } : {}) },
+    ...((nativeSearch || tools.length) ? { tools: [
+      ...(nativeSearch ? [{ google_search: {} }] : []),
+      ...(tools.length ? [{ function_declarations: tools.map(({ name, description, parameters }) => ({ name, description, parameters })) }] : []),
+    ] } : {}),
   }
 }
 
@@ -51,22 +59,25 @@ export async function models(transport, config) {
     .map((model) => modelId(model?.name)))
 }
 
-export async function chat(transport, config, { model, messages, maxTokens, temperature, signal, onText }) {
+export async function chat(transport, config, { model, messages, maxTokens, temperature, signal, onText, maxRequestBytes, tools = [], nativeSearch = false }) {
   const id = modelId(model)
   if (!id) throw failure('invalid_model', 'A Gemini model id is required.', 400)
   const path = `/models/${encodeURIComponent(id)}:${onText ? 'streamGenerateContent?alt=sse' : 'generateContent'}`
-  const body = bodyFor({ messages, maxTokens, temperature })
+  const body = bodyFor({ messages, maxTokens, temperature, tools, nativeSearch })
 
   if (!onText) {
-    const data = await transport(config, path, { headers: headers(config), signal, body })
+    const data = await transport(config, path, { headers: headers(config), signal, body, maxRequestBytes })
     const text = textOf(data)
-    if (!text) throw failure('invalid_completion', blockedMessage(data), 502)
-    return { text, model: data?.modelVersion ?? null, usage: usageOf(data) }
+    const toolCalls = toolCallsOf(data)
+    if (!text && !toolCalls.length) throw failure('invalid_completion', blockedMessage(data), 502)
+    return { text, model: data?.modelVersion ?? null, usage: usageOf(data), toolCalls, grounding: groundingOf(data) }
   }
 
   let text = ''
   let reported = null
   let usage = null
+  let grounding = null
+  const toolCalls = new Map()
   let sawCandidate = false
   let finished = false
   const onFrame = (frame) => {
@@ -74,13 +85,43 @@ export async function chat(transport, config, { model, messages, maxTokens, temp
     if (frame?.usageMetadata) usage = usageOf(frame)
     if (Array.isArray(frame?.candidates) && frame.candidates.length) sawCandidate = true
     if (frame?.candidates?.[0]?.finishReason) finished = true
+    grounding = groundingOf(frame) ?? grounding
+    for (const call of toolCallsOf(frame)) {
+      const key = call.proposalId ?? call.name
+      const previous = toolCalls.get(key)
+      toolCalls.set(key, previous ? { ...previous, arguments: { ...previous.arguments, ...call.arguments } } : call)
+    }
     const delta = textOf(frame)
     if (delta) { text += delta; onText(delta) }
   }
-  await transport(config, path, { headers: headers(config), signal, body, onFrame, doneOnEnd: true })
+  await transport(config, path, { headers: headers(config), signal, body, onFrame, doneOnEnd: true, maxRequestBytes })
   if (!sawCandidate) throw failure('invalid_completion', 'Gemini returned no candidate. No model was substituted.', 502)
   if (!finished) throw failure('provider_interrupted', 'Gemini stream ended without a finish reason.', 502)
-  return { text, model: reported, usage }
+  if (!text && !toolCalls.size) throw failure('invalid_completion', 'Gemini returned neither text nor a tool proposal.', 502)
+  return { text, model: reported, usage, toolCalls: [...toolCalls.values()], grounding }
+}
+
+export function toolCallsOf(data) {
+  const parts = data?.candidates?.[0]?.content?.parts
+  if (!Array.isArray(parts)) return []
+  return parts.flatMap((part, index) => {
+    const call = part?.functionCall
+    if (typeof call?.name !== 'string' || !call.name) return []
+    const args = call.args && typeof call.args === 'object' && !Array.isArray(call.args) ? call.args : {}
+    return [{ name: call.name, arguments: args, proposalId: `gemini-${index}` }]
+  })
+}
+
+export function groundingOf(data) {
+  const metadata = data?.candidates?.[0]?.groundingMetadata
+  if (!metadata || typeof metadata !== 'object') return null
+  const sources = (metadata.groundingChunks ?? []).flatMap((chunk) => {
+    const web = chunk?.web
+    if (typeof web?.uri !== 'string' || !/^https?:\/\//i.test(web.uri)) return []
+    return [{ title: typeof web.title === 'string' ? web.title.slice(0, 500) : '', url: web.uri }]
+  })
+  const queries = (metadata.webSearchQueries ?? []).filter((query) => typeof query === 'string').slice(0, 10)
+  return { sources: sources.slice(0, 30), queries }
 }
 
 export function textOf(data) {

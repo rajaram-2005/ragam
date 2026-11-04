@@ -16,7 +16,6 @@ services:
       AETHERIS_ONLINE_DATA_DIR: /var/lib/ragam/online
       AETHERIS_LOCAL_SINGLE_USER: 'true'
       AETHERIS_TRUSTED_ORIGINS: ${AETHERIS_TRUSTED_ORIGINS:-}
-      AETHERIS_LITELLM_TRUSTED_ORIGINS: ${AETHERIS_LITELLM_TRUSTED_ORIGINS:-}
       AETHERIS_ONLINE_TIMEOUT_MS: ${AETHERIS_ONLINE_TIMEOUT_MS:-120000}
     volumes:
       - ragam-data:/var/lib/ragam
@@ -68,7 +67,9 @@ services:
     # The UI and unauthenticated single-user API are intentionally host-loopback only.
     # Do not publish them on a LAN or public interface.
     ports:
-      - "127.0.0.1:80:80"
+      # The default remains loopback-only. The opt-in LAN overlay uses a .env.lan
+      # private IPv4 bind address plus Caddy internal TLS and shared Basic Auth.
+      - "${RAGAM_BIND_ADDRESS:-127.0.0.1}:80:80"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

@@ -33,6 +33,8 @@ import { tmpdir } from 'node:os'
 import { OnlineApp } from '../src/online/app.mjs'
 import { bodyFor as anthropicBody } from '../src/providers/wires/anthropic.mjs'
 import { bodyFor as geminiBody } from '../src/providers/wires/gemini.mjs'
+import { anthropicContent, geminiParts, openAIContent } from '../src/providers/wires/common.mjs'
+import { normalizeChatMessages, redactChatMessages, textFromChatContent } from '../src/online/chat-content.mjs'
 import { bodyFor as cohereBody } from '../src/providers/wires/cohere.mjs'
 import { wireFor } from '../src/providers/wires/index.mjs'
 import { controlUrl, readCredential as readBedrockCredential } from '../src/providers/wires/bedrock.mjs'
@@ -84,18 +86,47 @@ async function fixture(t) {
     f.calls.push(call)
     const json = (value) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(value)) }
 
+    // OpenAI Responses web_search contract, exercised through OpenAI, Azure and OpenAI-compatible paths.
+    if (['/v1/responses', '/openai/v1/responses', '/api/v1/responses'].includes(req.url)) {
+      const response = {
+        id: 'resp_fixture', object: 'response', model: body?.model ?? 'fixture-model', output_text: 'Answer grounded by fixture search.',
+        output: [
+          { type: 'web_search_call', id: 'search_fixture', status: 'completed', action: { type: 'search', query: 'fixture current query', sources: [{ type: 'url', title: 'Fixture search result', url: 'https://search.example.test/openai-source' }] } },
+          { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Answer grounded by fixture search.', annotations: [{ type: 'url_citation', title: 'Fixture citation', url: 'https://search.example.test/openai-source', start_index: 0, end_index: 10 }] }] },
+        ],
+        usage: { input_tokens: 12, output_tokens: 8, total_tokens: 20 },
+      }
+      if (body?.stream) return sse(res, [
+        { event: 'response.output_text.delta', data: { type: 'response.output_text.delta', delta: 'Answer grounded by fixture search.' } },
+        { event: 'response.completed', data: { type: 'response.completed', response } },
+      ])
+      return json(response)
+    }
+
     // Anthropic
     if (req.url === '/v1/models') return json({ data: [{ id: 'claude-sonnet-4-5', type: 'model' }], has_more: false })
     if (req.url === '/v1/messages' && !body?.stream) {
+      const search = body?.tools?.some((tool) => tool.type === 'web_search_20250305')
       return json({
         id: 'msg_fixture', type: 'message', role: 'assistant', model: 'claude-sonnet-4-5',
-        content: [{ type: 'text', text: 'fixture answer from the Messages wire' }],
+        content: [
+          ...(search ? [
+            { type: 'server_tool_use', id: 'srv_search_1', name: 'web_search', input: { query: 'fixture Anthropic query' } },
+            { type: 'web_search_tool_result', tool_use_id: 'srv_search_1', content: [{ type: 'web_search_result', title: 'Anthropic fixture source', url: 'https://search.example.test/anthropic-source' }] },
+          ] : []),
+          { type: 'text', text: 'fixture answer from the Messages wire' },
+        ],
         stop_reason: 'end_turn', usage: { input_tokens: 7, output_tokens: 4 },
       })
     }
     if (req.url === '/v1/messages' && body?.stream) {
+      const searchFrames = body?.tools?.some((tool) => tool.type === 'web_search_20250305') ? [
+        { event: 'content_block_start', data: { type: 'content_block_start', index: 0, content_block: { type: 'server_tool_use', id: 'srv_search_stream', name: 'web_search', input: { query: 'fixture Anthropic stream query' } } } },
+        { event: 'content_block_start', data: { type: 'content_block_start', index: 1, content_block: { type: 'web_search_tool_result', tool_use_id: 'srv_search_stream', content: [{ type: 'web_search_result', title: 'Anthropic streamed source', url: 'https://search.example.test/anthropic-stream-source' }] } } },
+      ] : []
       return sse(res, [
         { event: 'message_start', data: { type: 'message_start', message: { model: 'claude-sonnet-4-5', usage: { input_tokens: 9, output_tokens: 0 } } } },
+        ...searchFrames,
         { event: 'content_block_delta', data: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello ' } } },
         { event: 'content_block_delta', data: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'from Anthropic' } } },
         { event: 'message_delta', data: { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 3 } } },
@@ -115,8 +146,10 @@ async function fixture(t) {
       })
     }
     if (req.url.startsWith('/v1beta/models/gemini-2.0-flash:generateContent')) {
+      const functionMode = body?.tools?.some((tool) => Array.isArray(tool.function_declarations))
+      const searchMode = body?.tools?.some((tool) => tool.google_search)
       return json({
-        candidates: [{ content: { parts: [{ text: 'fixture answer from the Gemini wire' }], role: 'model' }, finishReason: 'STOP' }],
+        candidates: [{ content: { parts: functionMode ? [{ functionCall: { name: body.tools.find((tool) => tool.function_declarations)?.function_declarations[0]?.name, args: { query: 'fixture query' } } }] : [{ text: 'fixture answer from the Gemini wire' }], role: 'model' }, finishReason: 'STOP', ...(searchMode ? { groundingMetadata: { webSearchQueries: ['fixture query'], groundingChunks: [{ web: { uri: 'https://search.example.test/source', title: 'Fixture source' } }] } } : {}) }],
         usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 6, totalTokenCount: 11 },
         modelVersion: 'gemini-2.0-flash',
       })
@@ -159,6 +192,8 @@ async function fixture(t) {
       }
       return sse(res, frames)
     }
+
+    if (req.url === '/api/v1/models') return json({ data: [{ id: 'compatible-search-model' }] })
 
     // Azure OpenAI, v1 API. The data-plane list is models, not deployments; the `model` field
     // carries whichever deployment name the saved connection selected.
@@ -259,13 +294,14 @@ async function fixture(t) {
   f.url = await listen(server)
   f.app = app
   f.request = async (method, path, body, options = {}) => {
+    const payload = body !== undefined && !options.preserveDefaultLocalOnly ? { localOnly: false, ...body } : body
     const response = await fetch(f.url + path, {
       method,
       headers: {
         cookie: options.cookie ?? f.cookie ?? '',
-        ...(body ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}),
+        ...(payload ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}),
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
     })
     const text = await response.text()
     let data
@@ -430,6 +466,220 @@ test('Gemini streams with alt=sse and no sentinel, and a blocked prompt is a ref
   assert.equal(blocked.status, 502)
   assert.equal(blocked.data.error, 'invalid_completion')
   assert.match(blocked.data.message, /SAFETY/)
+})
+
+test('Gemini search and function proposals require per-request approval and never execute tools', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  await f.request('PUT', '/api/providers/gemini', { baseUrl: `${f.vendorUrl}/v1beta`, apiKey: GEMINI_KEY })
+  await f.request('POST', '/api/providers/gemini/test', {})
+  await f.request('PUT', '/api/models/selection', { model: 'gemini-2.0-flash' })
+
+  const before = f.calls.length
+  const refusedSearch = await f.request('POST', '/api/chat', f.chat({ nativeSearch: true }))
+  assert.equal(refusedSearch.status, 403)
+  assert.equal(refusedSearch.data.error, 'search_consent_required')
+  assert.equal(f.calls.length, before, 'search is refused before any provider request')
+
+  const authorized = f.chat({ nativeSearch: true })
+  authorized.authorization.nativeSearchConfirmed = true
+  const searched = await f.request('POST', '/api/chat', authorized)
+  assert.equal(searched.status, 200, JSON.stringify(searched.data))
+  assert.deepEqual(f.calls.at(-1).body.tools, [{ google_search: {} }])
+  assert.deepEqual(searched.data.grounding.sources, [{ title: 'Fixture source', url: 'https://search.example.test/source' }])
+  assert.deepEqual(searched.data.grounding.queries, ['fixture query'])
+
+  const declaration = { name: 'mcp_docs_lookup', description: 'Look up a document', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } }
+  const refusedTools = await f.request('POST', '/api/chat', f.chat({ tools: [declaration] }))
+  assert.equal(refusedTools.status, 403)
+  assert.equal(refusedTools.data.error, 'tools_consent_required')
+
+  const withTools = f.chat({ tools: [declaration] })
+  withTools.authorization.toolsConfirmed = true
+  const proposed = await f.request('POST', '/api/chat', withTools)
+  assert.equal(proposed.status, 200, JSON.stringify(proposed.data))
+  assert.deepEqual(f.calls.at(-1).body.tools, [{ function_declarations: [declaration] }])
+  assert.match(proposed.data.text, /proposed 1 function call/)
+  assert.deepEqual(proposed.data.toolCalls.map(({ name, arguments: args }) => ({ name, arguments: args })), [{ name: declaration.name, arguments: { query: 'fixture query' } }])
+  assert.equal(f.calls.filter((call) => call.path.includes('tools/call')).length, 0, 'function proposals are never executed by Core')
+})
+
+test('multimodal Chat validates, redacts text, preserves media bytes and uses wire-native encodings', () => {
+  const bytes = Buffer.from([0xff, 0xd8, 0xff, 0x01, 0x02])
+  const data = bytes.toString('base64')
+  const normalized = normalizeChatMessages([{ role: 'user', content: [
+    { type: 'text', text: 'inspect this image' },
+    { type: 'image', name: 'photo.jpg', mimeType: 'image/jpeg', data },
+  ] }])
+  assert.equal(normalized.mediaCount, 1)
+  assert.deepEqual(normalized.mediaKinds, ['image'])
+  assert.equal(normalized.messages[0].content[1].data, data)
+
+  const redacted = redactChatMessages([{ role: 'user', content: [
+    { type: 'text', text: 'key is sk-123456789012345678901234' },
+    normalized.messages[0].content[1],
+  ] }])
+  assert.ok(redacted.findings.length, 'text secrets are redacted')
+  assert.equal(redacted.value[0].content[1].data, data, 'validated media bytes are preserved exactly')
+  const history = textFromChatContent(normalized.messages[0].content)
+  assert.match(history, /Attached image: photo.jpg/)
+  assert.ok(!history.includes(data), 'binary bytes are replaced in history with a readable placeholder')
+
+  assert.deepEqual(openAIContent(normalized.messages[0].content)[1], { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${data}` } })
+  assert.deepEqual(anthropicContent(normalized.messages[0].content)[1], { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } })
+  assert.deepEqual(geminiParts(normalized.messages[0].content)[1], { inline_data: { mime_type: 'image/jpeg', data } })
+  assert.throws(() => normalizeChatMessages([{ role: 'user', content: [{ type: 'image', name: 'spoof.jpg', mimeType: 'image/jpeg', data: Buffer.from('not jpeg').toString('base64') }] }]), { code: 'invalid_attachment' })
+})
+
+test('Gemini image transfer requires separate approval and supports a bounded 2 MiB request without saving bytes', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  await f.request('PUT', '/api/providers/gemini', { baseUrl: `${f.vendorUrl}/v1beta`, apiKey: GEMINI_KEY })
+  await f.request('POST', '/api/providers/gemini/test', {})
+  await f.request('PUT', '/api/models/selection', { model: 'gemini-2.0-flash' })
+  const session = await f.request('POST', '/api/sessions', { title: 'media privacy check' })
+  const bytes = Buffer.alloc(2 * 1024 * 1024, 0x5a)
+  bytes.set([0xff, 0xd8, 0xff], 0)
+  const data = bytes.toString('base64')
+  const request = f.chat({ sessionId: session.data.id, messages: [{ role: 'user', content: [
+    { type: 'text', text: 'describe this' },
+    { type: 'image', name: 'large.jpg', mimeType: 'image/jpeg', data },
+  ] }] })
+  const before = f.calls.length
+  const refused = await f.request('POST', '/api/chat', request)
+  assert.equal(refused.status, 403)
+  assert.equal(refused.data.error, 'media_consent_required')
+  assert.equal(f.calls.length, before, 'binary media is rejected before provider egress without approval')
+
+  request.authorization.mediaConfirmed = true
+  const reply = await f.request('POST', '/api/chat', request)
+  assert.equal(reply.status, 200, JSON.stringify(reply.data))
+  const sent = f.calls.at(-1).body.contents[0].parts[1].inline_data
+  assert.equal(sent.mime_type, 'image/jpeg')
+  assert.equal(sent.data, data)
+  const saved = await f.request('GET', `/api/sessions/${session.data.id}`)
+  assert.equal(saved.status, 200)
+  assert.ok(!JSON.stringify(saved.data).includes(data), 'binary content is not persisted in conversation history')
+  assert.match(JSON.stringify(saved.data), /Attached image: large.jpg/)
+})
+
+test('OpenAI Chat Completions serializes function schemas and returns an unexecuted proposal', async () => {
+  const wire = wireFor('openai_chat')
+  const tool = { name: 'mcp_docs_lookup', description: 'Look up a document', parameters: { type: 'object', properties: { query: { type: 'string' } } } }
+  let captured
+  const result = await wire.chat(async (_config, path, options) => {
+    captured = { path, body: options.body }
+    return { model: 'fixture-model', choices: [{ message: { content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: tool.name, arguments: '{"query":"status"}' } }] } }] }
+  }, { baseUrl: 'https://provider.example.test/v1', apiKey: 'fixture-key' }, { model: 'fixture-model', messages: [{ role: 'user', content: 'look it up' }], maxTokens: 100, temperature: 0, tools: [tool] })
+  assert.equal(captured.path, '/chat/completions')
+  assert.deepEqual(captured.body.tools, [{ type: 'function', function: tool }])
+  assert.equal(captured.body.tool_choice, 'auto')
+  assert.deepEqual(result.toolCalls.map(({ name, arguments: args }) => ({ name, arguments: args })), [{ name: tool.name, arguments: { query: 'status' } }])
+  assert.equal(result.text, '')
+  const streamed = await wire.chat(async (_config, _path, options) => {
+    options.onFrame({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'call-stream', function: { name: tool.name, arguments: '' } }] } }] })
+    options.onFrame({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{\"query\":' } }] } }] })
+    options.onFrame({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '\"stream\"}' } }] } }] })
+    return null
+  }, { baseUrl: 'https://provider.example.test/v1', apiKey: 'fixture-key' }, { model: 'fixture-model', messages: [{ role: 'user', content: 'look it up' }], maxTokens: 100, temperature: 0, tools: [tool], onText() {} })
+  assert.deepEqual(streamed.toolCalls.map(({ name, arguments: args }) => ({ name, arguments: args })), [{ name: tool.name, arguments: { query: 'stream' } }])
+})
+
+test('native web search uses each selected provider wire only after explicit consent', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  const connections = [
+    { id: 'openai', baseUrl: `${f.vendorUrl}/v1`, apiKey: 'fixture-openai-key', model: 'claude-sonnet-4-5', path: '/v1/responses', header: 'authorization', value: 'Bearer fixture-openai-key', family: 'responses' },
+    { id: 'azure-openai', baseUrl: f.vendorUrl, apiKey: AZURE_KEY, model: 'gpt-4o', path: '/openai/v1/responses', header: 'api-key', value: AZURE_KEY, family: 'responses' },
+    { id: 'openrouter', baseUrl: `${f.vendorUrl}/api/v1`, apiKey: 'fixture-openrouter-key', model: 'compatible-search-model', path: '/api/v1/responses', header: 'authorization', value: 'Bearer fixture-openrouter-key', family: 'responses', searchToolType: 'openrouter:web_search' },
+    { id: 'anthropic', baseUrl: `${f.vendorUrl}/v1`, apiKey: ANTHROPIC_KEY, model: 'claude-sonnet-4-5', path: '/v1/messages', header: 'x-api-key', value: ANTHROPIC_KEY, family: 'messages' },
+  ]
+
+  for (const connection of connections) {
+    const saved = await f.request('PUT', `/api/providers/${connection.id}`, { baseUrl: connection.baseUrl, apiKey: connection.apiKey })
+    assert.equal(saved.status, 200, `${connection.id}: ${JSON.stringify(saved.data)}`)
+    const probed = await f.request('POST', `/api/providers/${connection.id}/test`, {})
+    assert.equal(probed.status, 200, `${connection.id}: ${JSON.stringify(probed.data)}`)
+    await f.request('PUT', '/api/models/selection', { model: connection.model })
+
+    const before = f.calls.length
+    const unapproved = await f.request('POST', '/api/chat', f.chat({ nativeSearch: true }))
+    assert.equal(unapproved.status, 403, connection.id)
+    assert.equal(unapproved.data.error, 'search_consent_required', connection.id)
+    assert.equal(f.calls.length, before, `${connection.id}: search consent is required before provider egress`)
+
+    const approved = f.chat({ nativeSearch: true })
+    approved.authorization.nativeSearchConfirmed = true
+    const reply = await f.request('POST', '/api/chat', approved)
+    assert.equal(reply.status, 200, `${connection.id}: ${JSON.stringify(reply.data)}`)
+    assert.ok(reply.data.grounding?.sources?.length, `${connection.id} returned provider search sources`)
+    const request = f.calls.at(-1)
+    assert.equal(request.path, connection.path)
+    assert.equal(request.headers[connection.header], connection.value)
+    if (connection.family === 'responses') {
+      assert.deepEqual(request.body.tools, [{ type: connection.searchToolType ?? 'web_search' }])
+      assert.equal(request.body.max_output_tokens, 512)
+      assert.ok(Array.isArray(request.body.input))
+    } else {
+      assert.deepEqual(request.body.tools, [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }])
+    }
+    assert.equal(reply.data.grounding.sources[0].url.startsWith('https://'), true)
+
+    if (['openai', 'anthropic'].includes(connection.id)) {
+      const streamed = f.chat({ nativeSearch: true })
+      streamed.authorization.nativeSearchConfirmed = true
+      const stream = await f.request('POST', '/api/chat/stream', streamed)
+      assert.equal(stream.status, 200, `${connection.id} stream: ${JSON.stringify(stream.data)}`)
+      assert.match(stream.data, /event: done/)
+      const done = JSON.parse(stream.data.split('event: done\ndata: ')[1].split('\n\n')[0])
+      assert.ok(done.grounding?.sources?.length, `${connection.id} stream preserved search sources`)
+    }
+  }
+})
+
+test('each OpenAI-compatible wire builds a no-fallback Responses native-search request', async () => {
+  const ids = [
+    'baidu_qianfan_chat', 'alibaba_model_studio_chat', 'openrouter_chat', 'mistral_chat', 'deepseek_chat',
+    'cerebras_chat', 'deepinfra_chat', 'minimax_chat', 'siliconflow_chat', 'moonshot_chat', 'sarvam_chat',
+    'groq_chat', 'together_chat', 'fireworks_chat', 'perplexity_router', 'novita_chat', 'sambanova_chat',
+    'huggingface_chat', 'vllm_chat', 'localai_chat',
+  ]
+  for (const id of ids) {
+    const wire = wireFor(id)
+    assert.equal(wire.chatNativeSearch, true, `${id} exposes the compatible Responses search path`)
+    let captured
+    const result = await wire.chat(async (_config, path, options) => {
+      captured = { path, body: options.body }
+      return { model: 'fixture-compatible-model', output_text: 'searched', output: [{ type: 'message', content: [{ type: 'output_text', text: 'searched', annotations: [] }] }] }
+    }, { baseUrl: 'https://provider.example.test/v1', apiKey: 'fixture-key', options: { accountId: 'fixture-account' } }, {
+      model: 'fixture-compatible-model', messages: [{ role: 'user', content: 'search for this' }], maxTokens: 100, temperature: 0.2, nativeSearch: true,
+    })
+    assert.ok(captured.path.endsWith('/responses'), `${id} uses Responses, not a Chat Completions fallback`)
+    assert.deepEqual(captured.body.tools, [{ type: id === 'openrouter_chat' ? 'openrouter:web_search' : 'web_search' }])
+    assert.equal(result.text, 'searched')
+  }
+})
+
+test('Anthropic Messages serializes function schemas and returns a tool_use proposal', async () => {
+  const wire = wireFor('anthropic_messages')
+  const tool = { name: 'mcp_docs_lookup', description: 'Look up a document', parameters: { type: 'object', properties: { query: { type: 'string' } } } }
+  let body
+  const result = await wire.chat(async (_config, _path, options) => {
+    body = options.body
+    return { model: 'claude-fixture', content: [{ type: 'tool_use', id: 'tool-1', name: tool.name, input: { query: 'status' } }] }
+  }, { baseUrl: 'https://provider.example.test/v1', apiKey: 'fixture-key' }, { model: 'claude-fixture', messages: [{ role: 'user', content: 'look it up' }], maxTokens: 100, temperature: 0, tools: [tool] })
+  assert.deepEqual(body.tools, [{ name: tool.name, description: tool.description, input_schema: tool.parameters }])
+  assert.deepEqual(body.tool_choice, { type: 'auto' })
+  assert.deepEqual(result.toolCalls.map(({ name, arguments: args }) => ({ name, arguments: args })), [{ name: tool.name, arguments: { query: 'status' } }])
+  assert.equal(result.text, '')
+  const streamed = await wire.chat(async (_config, _path, options) => {
+    options.onFrame({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'tool-stream', name: tool.name, input: {} } })
+    options.onFrame({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{\"query\":' } })
+    options.onFrame({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '\"stream\"}' } })
+    options.onFrame({ type: 'message_stop' })
+    return null
+  }, { baseUrl: 'https://provider.example.test/v1', apiKey: 'fixture-key' }, { model: 'claude-fixture', messages: [{ role: 'user', content: 'look it up' }], maxTokens: 100, temperature: 0, tools: [tool], onText() {} })
+  assert.deepEqual(streamed.toolCalls.map(({ name, arguments: args }) => ({ name, arguments: args })), [{ name: tool.name, arguments: { query: 'stream' } }])
 })
 
 test('the Cohere adapter paginates model discovery and parses the v2 response', async (t) => {

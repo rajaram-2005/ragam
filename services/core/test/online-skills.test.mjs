@@ -51,10 +51,10 @@ async function fixture(t) {
   }
   f.configure = async () => {
     await f.login()
-    assert.equal((await f.request('PUT', '/api/providers/litellm', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })).status, 200)
+    assert.equal((await f.request('PUT', '/api/providers/openai', { baseUrl: `${f.gatewayUrl}/v1`, apiKey: 'synthetic-gateway-secret' })).status, 200)
     assert.equal((await f.request('POST', '/api/models/probe', {})).status, 200)
   }
-  f.chat = (extra = {}) => ({ prompt: 'ordinary question', model: 'model-a', authorization: { confirmed: true, providerRevision: f.app.store.state.revision }, ...extra })
+  f.chat = (extra = {}) => ({ prompt: 'ordinary question', model: 'model-a', localOnly: false, authorization: { confirmed: true, providerRevision: f.app.store.state.revision }, ...extra })
   t.after(async () => { await close(server); await close(gateway); f.app.close(); rmSync(dir, { recursive: true, force: true }) })
   return f
 }

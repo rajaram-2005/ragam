@@ -389,6 +389,7 @@ export class NativeKlyvaronHost {
         firstParty: true,
         preset: entry.preset,
         parameters: entry.parameters,
+        instructionTuned: entry.instructionTuned,
         contextTokens: entry.contextTokens,
         quantization: entry.quantization,
         weightsSha256: entry.weightsSha256,

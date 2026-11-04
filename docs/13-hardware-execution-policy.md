@@ -1,5 +1,7 @@
 # Klyvaron Lite × Pro × Max — hardware-based execution policy
 
+> **Model archive notice:** model-training, weight, evaluation and release statements below describe historical experiments or plans only. Matching payloads are absent from this checkout; these records do not establish any current model release. Active Klyvaron uses deterministic model-independent processing, with Lite/Pro/Max as resource/workflow profiles.
+
 This is the controlling execution policy. **Max replaces the former High name**
 in the family API, product specification and export CLI. Historical model cards
 and experimental measurements are not rewritten. A tier name is never proof of

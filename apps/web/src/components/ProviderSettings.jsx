@@ -13,11 +13,10 @@ import KlyvaronTiers from './KlyvaronTiers.jsx'
 // inference: the request is sent to the endpoint entered here. A local Ollama or llama.cpp
 // server is online in that sense, and the dialog says so rather than calling it local.
 export const RUNTIME_OPTIONS = Object.freeze([
-  { id: 'litellm', label: 'LiteLLM gateway', keyRequired: true, credential: 'api_key', placeholder: 'https://your-gateway.example/v1', hint: 'Your gateway API base, including /v1 if your deployment needs it. A key is required.' },
   { id: 'ollama', label: 'Ollama (on the Core host)', keyRequired: false, credential: 'api_key', placeholder: 'http://<core-host>:11434/v1', hint: 'Ollama\u2019s OpenAI-compatible base. The Core host must list this exact origin in AETHERIS_TRUSTED_ORIGINS. A key is optional.' },
   { id: 'llamacpp', label: 'llama.cpp server (on the Core host)', keyRequired: false, credential: 'api_key', placeholder: 'http://<core-host>:8080/v1', hint: 'Base of a running llama-server. The Core host must list this exact origin in AETHERIS_TRUSTED_ORIGINS. A key is needed only if the server was started with --api-key.' },
 ])
-// A connection may be one of the three runtimes, a catalogue vendor whose wire this build speaks,
+// A connection may be one of the built-in local runtimes, a catalogue vendor whose wire this build speaks,
 // or a named custom endpoint. Pending adapters are never offered: the server refuses them, and an
 // option that the server refuses is a promise this dialog cannot keep.
 const CUSTOM_OPTION = { id: 'custom', label: 'Custom OpenAI-compatible endpoint', wire: 'openai_chat', credential: 'api_key' }
@@ -82,7 +81,7 @@ const CREDENTIAL_FOR_KIND = Object.freeze({
 })
 const credentialFor = (kind) => CREDENTIAL_FOR_KIND[kind] ?? CREDENTIAL_FOR_KIND.api_key
 const gibibytes = (value) => Number.isSafeInteger(value) && value >= 0 ? `${(value / 1024 ** 3).toFixed(1)} GiB` : 'not reported'
-// A saved connection that is not one of the three runtimes still needs a label and a key rule on
+// A saved connection that is not one of the built-in local runtimes still needs a label and a key rule on
 // screen. Deriving both from the record the server returned is the only way this stays true when a
 // catalogue entry is added: the client must not keep a second copy of the catalogue's facts.
 const connectionOption = (connection) => ({
@@ -100,7 +99,7 @@ const connectionOption = (connection) => ({
 export default function ProviderSettings({ account, onClose, onChanged, provider: loaded = null }) {
   const owner = account?.role === 'owner'
   const dialog = useRef(null)
-  const [provider, setProvider] = useState(loaded), [kind, setKind] = useState(loaded?.kind ?? 'litellm'), [url, setUrl] = useState(loaded?.baseUrl ?? ''), [key, setKey] = useState('')
+  const [provider, setProvider] = useState(loaded), [kind, setKind] = useState(loaded?.kind ?? 'ollama'), [url, setUrl] = useState(loaded?.baseUrl ?? ''), [key, setKey] = useState('')
   const [busy, setBusy] = useState(false), [error, setError] = useState(null), [notice, setNotice] = useState('')
   const [hardwareInfo, setHardwareInfo] = useState(null), [hardwareError, setHardwareError] = useState(null), [hardwareBusy, setHardwareBusy] = useState(false)
   // Non-fatal: the catalogue is information, and failing to load it must not stop somebody from
@@ -116,7 +115,11 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
   const runtimeOptions = [...RUNTIME_OPTIONS, ...connections
     .filter((connection) => !RUNTIME_OPTIONS.some((option) => option.id === connection.id))
     .map(connectionOption)]
-  // An id this dialog has never heard of must not be displayed as LiteLLM. If the server returned
+    .map((option) => ({
+      ...option,
+      recommended: Boolean(catalog?.providers?.find((entry) => entry.id === option.id)?.recommended),
+    }))
+  // An id this dialog has never heard of must not be displayed as a different connection. If the server returned
   // a record for it, that record supplies the label and the key rule; only a totally unknown id
   // falls back, and the select will then show the first option while the state keeps the real id —
   // which the server, not this component, validates.
@@ -130,7 +133,8 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
       .filter((entry) => entry.status !== 'pending' && entry.wire !== null)
       .map((entry) => ({
         id: entry.id,
-        label: `${entry.label}${entry.integrationType === 'gateway-routed' ? ' (gateway-routed API)' : entry.integrationType === 'openai-compatible' ? ' (OpenAI-compatible API)' : entry.integrationType === 'native-vendor' ? ' (native API)' : ''}`,
+        label: `${entry.recommended ? 'Recommended · ' : ''}${entry.label}${entry.integrationType === 'gateway-routed' ? ' (gateway-routed API)' : entry.integrationType === 'openai-compatible' ? ' (OpenAI-compatible API)' : entry.integrationType === 'native-vendor' ? ' (native API)' : ''}`,
+        recommended: Boolean(entry.recommended),
         wire: entry.wire,
         integrationType: entry.integrationType,
         credential: entry.credential ?? 'api_key',
@@ -138,6 +142,7 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
       })),
     CUSTOM_OPTION,
   ].filter((option) => !savedIds.has(option.id))
+    .sort((a, b) => Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)) || a.label.localeCompare(b.label))
   // The form always submits an option it actually offers, including after the one that was
   // selected has just been saved and therefore left the list.
   const nextAddKind = addOptions.some((option) => option.id === addKind) ? addKind : (addOptions[0]?.id ?? '')
@@ -146,7 +151,7 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
   useEffect(() => {
     dialog.current?.showModal()
     api.provider().then((s) => {
-      setProvider(s); setKind(s.kind ?? 'litellm'); setUrl(s.baseUrl)
+      setProvider(s); setKind(s.kind ?? 'ollama'); setUrl(s.baseUrl)
       const activeConnection = s.connections?.find((connection) => connection.id === s.kind)
       setAddAccountId(activeConnection?.options?.accountId ?? s.options?.accountId ?? '')
     }).catch(setError)
@@ -173,14 +178,14 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
   }
   return <dialog className="provider-dialog" ref={dialog} onCancel={(e) => { e.preventDefault(); if (!busy) onClose() }} aria-labelledby="provider-settings-title">
     <div className="row between"><h2 id="provider-settings-title">Provider Settings</h2><Button disabled={busy} onClick={onClose}>Close</Button></div>
-    <p>Connect cloud APIs (OpenAI/ChatGPT, Anthropic/Claude, Google Gemini and others) or an operator-run local service. Chat, Image and Video use separate provider connections; each request goes to the selected connection with no automatic fallback. API access and charges are controlled by the provider; a ChatGPT or Claude consumer subscription should not be assumed to include API usage. Local Ollama, llama.cpp and ComfyUI endpoints must be reachable from Core and their exact origins listed in AETHERIS_TRUSTED_ORIGINS. Ragam does not install local services or model weights.</p>
+    <p>Connect cloud APIs (OpenAI/ChatGPT, Anthropic/Claude, Google Gemini and others) or an operator-run local service. “Recommended” marks major model providers and API platforms plus selected self-hosted runtimes for Local-only use; it is not a live check or a guarantee of quality, reliability, capability, or price. Chat, Image and Video use separate provider connections; each request goes to the selected connection with no automatic fallback. API access and charges are controlled by the provider; a ChatGPT or Claude consumer subscription should not be assumed to include API usage. Local Ollama, llama.cpp and ComfyUI endpoints must be reachable from Core and their exact origins listed in AETHERIS_TRUSTED_ORIGINS. Ragam does not install local services or model weights.</p>
     {owner ? null : <Banner tone="info" title="Read-only for this account"><p>Only the owner account of this installation can change its gateway connection or key. You can still choose a model and chat through the connection that is configured.</p></Banner>}
     {error ? <Banner tone="bad" title={error.message} /> : null}
     {notice ? <Banner tone="info" title={notice} /> : null}
     <form onSubmit={async (e) => { e.preventDefault(); if (await act(() => api.saveProvider(kind, { baseUrl: url, ...(key ? { apiKey: key } : {}), ...(kind === 'fireworks' ? { options: { accountId: addAccountId } } : {}) }))) setNotice('Connection saved. Test it to fetch models; no prompt is sent by that test.') }}>
       <Field label="Connection" hint="Which saved connection this form edits. Saving activates it; the other connections and their keys are kept.">
         <select aria-label="Connection" className="select" value={kind} onChange={(e) => chooseRuntime(e.target.value)} disabled={busy || !provider || !owner}>
-          {runtimeOptions.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+          {runtimeOptions.map((r) => <option key={r.id} value={r.id}>{r.recommended ? `${r.label} · Recommended` : r.label}</option>)}
         </select>
       </Field>
       <Field label={`${runtime.label} API base URL`} hint={runtime.hint}><input autoFocus className="input" type="url" required value={url} placeholder={runtime.placeholder} onChange={(e) => setUrl(e.target.value)} disabled={busy || !provider || !owner} /></Field>
@@ -234,7 +239,7 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
       Streaming: {selectedEvidence.capabilities.streaming}; tools and structured output: not exposed by RAGAM Chat.
       {selectedVerification ? ` A text inference succeeded at ${selectedVerification}; this does not qualify streaming or other capabilities.` : ' No successful text inference has been recorded for this model yet.'}
     </p> : null}
-    <p className="small">Model selection lives in Chat. Model-list success is not inference verification. No automatic fallback. Requests may incur provider charges; gateway budgets and quotas still apply. Image and Video require separate qualified adapters.</p>
+    <p className="small">Model selection lives in Chat. Model-list success is not inference verification. No automatic fallback. Remote requests may incur provider charges; this catalogue does not certify free tiers or quotas. Self-hosted inference avoids a vendor API bill but still uses your hardware, electricity and appropriately licensed weights. Image and Video require separate qualified adapters.</p>
     {provider ? <details className="connections" style={{ marginTop: 20 }} open={(provider.connections?.length ?? 0) > 1}>
       <summary>Saved connections ({provider.connections?.length ?? 0})</summary>
       <p className="small">Each connection has its own encrypted credential. Activating one changes where the next request goes; it does not overwrite the others.</p>

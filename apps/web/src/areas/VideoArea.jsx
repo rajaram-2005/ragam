@@ -25,7 +25,7 @@ const when = (value) => {
   return Number.isFinite(time) && time > 0 ? new Date(time).toLocaleString() : '—'
 }
 
-export default function VideoArea({ provider, readiness, refreshReadiness, onSettings }) {
+export default function VideoArea({ provider, readiness, refreshReadiness, onSettings, industryMode = false, localOnlyMode = false }) {
   const [jobs, setJobs] = useState([])
   const [prompt, setPrompt] = useState('')
   const [aspectRatio, setAspectRatio] = useState(ASPECT_RATIOS[0])
@@ -60,6 +60,7 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
       ?? null
   }, [provider, readiness])
   const models = connection?.models ?? []
+  const localOnlyUnsupported = Boolean(localOnlyMode && connection && connection.id !== 'klyvaron-native')
   const aspectOptions = connection?.aspectRatios ?? []
   const resolutionOptions = connection?.resolutions ?? []
 
@@ -100,9 +101,10 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
   const generate = async (event) => {
     event.preventDefault()
     if (!connection || !model || !prompt.trim()) return
+    if (localOnlyUnsupported) { setError(Error('Local-only mode blocked this remote video provider. Only verified native Klyvaron video runs without a vendor API call; turn Local-only off to use remote APIs that may bill.')); return }
     setBusy(true); setError(null); setNotice('')
     try {
-      const job = await api.generateVideo({ prompt, aspectRatio, resolution, model })
+      const job = await api.generateVideo({ prompt, aspectRatio, resolution, model, localOnly: localOnlyMode, ...(industryMode ? { industryMode: 'manufacturing' } : {}) })
       setJobs((current) => [job, ...current.filter((entry) => entry.id !== job.id)])
       setPrompt('')
       setNotice('Generation queued. A provider renders this for minutes; the clip appears here only when its bytes pass validation.')
@@ -144,6 +146,10 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
           <p>Use <strong>Test connection</strong> in Provider Settings to read the video-model list. A generation without a listed model is refused rather than guessed.</p>
         </Banner>
       : null}
+    {localOnlyMode && !connection ? <Banner tone="warn" title="No local video model is available"><p>Local-only mode blocks remote video providers. Install a verified Klyvaron video model; no remote request will be sent.</p></Banner> : null}
+    {localOnlyUnsupported ? <Banner tone="warn" title="Remote video provider blocked"><p>Local-only mode prevents this request from reaching {connection?.label ?? 'the selected provider'}. Choose verified native Klyvaron or explicitly turn Local-only off; remote APIs may bill.</p></Banner> : null}
+    {!localOnlyMode && connection && connection.id !== 'klyvaron-native' ? <Banner tone="warn" title="Remote video provider may bill"><p>Local-only is off. Requests go to {connection.label}; check the provider’s current pricing, retention and terms. Ragam does not guarantee a free tier.</p></Banner> : null}
+    {industryMode && connection ? <Banner tone="warn" title="Manufacturing prompt guidance is on"><p>Guidance is appended to video prompts as advisory text. Generated clips are illustrative, not evidence of actual equipment, safe operation or approved procedures.</p></Banner> : null}
 
     {connection && models.length
       ? <form onSubmit={generate}>
@@ -170,7 +176,7 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
                   </select>
                 </Field>
               : null}
-            <Button type="submit" variant="primary" busy={busy} disabled={busy || !prompt.trim() || !model}>Generate video</Button>
+            <Button type="submit" variant="primary" busy={busy} disabled={busy || localOnlyUnsupported || !prompt.trim() || !model}>Generate video</Button>
           </div>
         </form>
       : null}
@@ -192,6 +198,7 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
             <small>{when(job.createdAt)}</small>
           </div>
           <p className="small"><strong>Prompt:</strong> {job.params?.prompt}</p>
+          {job.params?.industryMode === 'manufacturing' ? <p className="small">Manufacturing prompt guidance applied · illustrative clip only.</p> : null}
           <p className="small">
             {job.params?.provider} · {job.result?.model ?? job.params?.model}
             {job.result?.durationSeconds != null ? ` · ${seconds(job.result.durationSeconds)}` : ''}
@@ -230,6 +237,8 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
                   const res = await api.understandVideo({
                     model: model.startsWith('klyvaron-') ? model : undefined,
                     sourceJobId: job.id,
+                    localOnly: localOnlyMode,
+                    ...(industryMode ? { industryMode: 'manufacturing' } : {}),
                   })
                   setVideoAnalysisByJob((prev) => ({ ...prev, [job.id]: res }))
                 } catch (e) { setError(e) } finally { setBusy(false) }

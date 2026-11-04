@@ -19,6 +19,10 @@
 
 import { BACKING_PATHS, backingPathViolations } from './composition.mjs'
 import { ARCHITECTURE, RECIPE_STEP_IDS, SIZE_PRESETS } from './architecture.mjs'
+import {
+  MODEL_RELEASE_STATES, advanceKlyvaronModelRelease, buildKlyvaronModelRegistry,
+  isKlyvaronModelAvailable, klyvaronReleaseGateReport,
+} from './model-registry.mjs'
 
 export const TIERS = Object.freeze({ LITE: 'lite', PRO: 'pro', MAX: 'max' })
 
@@ -698,6 +702,20 @@ export const KLYVARON_MODEL_IDENTITIES = Object.freeze({
   'klyvaron-max-voice': identityEntry('klyvaron-max-voice', '0.1.0', TIERS.MAX, 'audio', 'aetheris-voice-v1', MAX_VOICE_BACKING),
 })
 
+// One release catalogue combines the historical, measured native artifacts with the three
+// planned instruction-tuned assistant lines. Historical weights remain research evidence;
+// they are not silently relabelled as open-foundation Klyvaron assistants.
+export const KLYVARON_MODEL_REGISTRY = buildKlyvaronModelRegistry({
+  liteIdentity: LITE_MODEL_IDENTITY,
+  modelIdentities: KLYVARON_MODEL_IDENTITIES,
+})
+export {
+  MODEL_RELEASE_STATES,
+  advanceKlyvaronModelRelease,
+  isKlyvaronModelAvailable,
+  klyvaronReleaseGateReport,
+}
+
 const LITE_CAPABILITIES = Object.freeze({
   'text.completion': {
     state: CAPABILITY_STATES.AVAILABLE,
@@ -1109,6 +1127,8 @@ export function familyReport() {
     stance: FAMILY_STANCE,
     subscriptionTiers: PRODUCT_SUBSCRIPTION_TIERS,
     modelIdentities: KLYVARON_MODEL_IDENTITIES,
+    modelRegistry: KLYVARON_MODEL_REGISTRY,
+    modelReleaseStates: MODEL_RELEASE_STATES,
     runtimeReadinessStates: RUNTIME_READINESS_STATES,
     tiers: Object.values(KLYVARON).map((tier) => ({
       id: tier.id,

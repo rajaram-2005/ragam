@@ -123,9 +123,9 @@ const ready = (id, label, doc, capabilities, extra = {}) => Object.freeze({
   ...extra,
 })
 
-// The three runtimes the product actually offers. Their capabilities are the ones the transport's
-// tests exercise: streaming with a real sentinel, cancellation, and model listing. Tools are not
-// claimed for them here because the online chat path does not send a tool schema.
+// The two built-in local runtimes the product offers. Their capabilities are the ones the
+// transport tests exercise: streaming with a real sentinel, cancellation, and model listing. Tools
+// are not claimed for them here because the online chat path does not send a tool schema.
 const GATEWAY_TESTS = 'test/online.test.mjs'
 const streaming = cap(CAPABILITIES.STREAMING, 'test', GATEWAY_TESTS)
 const cancellation = cap(CAPABILITIES.CANCELLATION, 'test', GATEWAY_TESTS)
@@ -136,7 +136,7 @@ const wireStreaming = cap(CAPABILITIES.STREAMING, 'test', WIRE_TESTS)
 const wireCancellation = cap(CAPABILITIES.CANCELLATION, 'test', WIRE_TESTS)
 
 // A native adapter: a published wire this build speaks, contract-tested against a local fixture.
-// `ready` here means exactly what it means for the three runtimes — a tested code path — and not
+// `ready` here means exactly what it means for the two built-in local runtimes — a tested code path — and not
 // that the vendor has been called. The note says the second part.
 /**
  * An image adapter. It is `ready` for the same reason a chat wire is: a test exercises the request
@@ -197,8 +197,21 @@ const native = (id, label, doc, wire, auth, { streaming: streams = true, capabil
   notes: 'Native adapter, contract-tested against a local fixture. No live call has been made in this build; the credential you save is sent only to the endpoint you configure.',
 })
 
+// Curation, not a live quality/reliability rating. These IDs cover major direct model/cloud APIs
+// and established multi-model/model-specific API platforms across Chat, Image and Video. Local
+// runtimes remain catalogued but are identified separately by their Local-only UI.
+export const RECOMMENDED_PROVIDER_IDS = Object.freeze([
+  'openai', 'anthropic', 'gemini', 'azure-openai', 'vertex', 'bedrock', 'cohere', 'mistral', 'xai', 'deepseek',
+  'baidu-qianfan', 'alibaba-model-studio', 'minimax', 'moonshot', 'sarvam',
+  'openrouter', 'huggingface', 'together', 'fireworks', 'groq', 'cerebras', 'deepinfra', 'perplexity',
+  'siliconflow', 'novita', 'sambanova',
+  'openai-images', 'gemini-images', 'stability', 'recraft', 'ideogram', 'black-forest-labs', 'firefly',
+  'fal', 'replicate', 'veo', 'runway', 'luma', 'fal-video', 'replicate-video',
+  // Selected self-hosted endpoints are recommended specifically for Local-only deployments.
+  'ollama', 'llamacpp', 'vllm', 'localai', 'comfyui',
+])
+
 export const PROVIDERS = Object.freeze([
-  ready('litellm', 'LiteLLM gateway', 'https://docs.litellm.ai/docs/providers', [streaming, cancellation]),
   ready('ollama', 'Ollama (OpenAI-compatible)', 'https://github.com/ollama/ollama/blob/main/docs/openai.md', [streaming, cancellation]),
   ready('llamacpp', 'llama.cpp server', 'https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md', [streaming, cancellation]),
 
@@ -364,6 +377,15 @@ export function validateProvider(provider) {
 export function validateCatalogue(providers = PROVIDERS) {
   const problems = []
   const seen = new Set()
+  // Recommendation metadata describes the shipped catalogue, not a candidate subset supplied by
+  // selection callers. Validate the cross-reference only when validating that complete catalogue.
+  if (providers === PROVIDERS) {
+    const recommendationIds = new Set(RECOMMENDED_PROVIDER_IDS)
+    if (recommendationIds.size !== RECOMMENDED_PROVIDER_IDS.length) problems.push('recommended provider ids must be unique')
+    for (const id of recommendationIds) {
+      if (!providers.some((provider) => provider.id === id)) problems.push(`recommended provider '${id}' is missing from the catalogue`)
+    }
+  }
   for (const provider of providers) {
     if (seen.has(provider.id)) problems.push(`duplicate provider id '${provider.id}'`)
     seen.add(provider.id)
@@ -382,6 +404,7 @@ export function describeProvider(id) {
   return Object.freeze({
     id: provider.id,
     label: provider.label,
+    recommended: RECOMMENDED_PROVIDER_IDS.includes(provider.id),
     category: provider.category,
     status: provider.status,
     wire: provider.wire,

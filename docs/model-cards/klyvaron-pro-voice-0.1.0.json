@@ -15,7 +15,7 @@
     "configDigest": "e2868fcc87bd8e884a0db3af7dcdc296a6e1a428b55ee7275e488280914c16d3",
     "datasetDigest": "e6f57b41688363ad9a091a51b5d9f1ba3fec3d237b654e8e58d8e5dbce7d2323",
     "parameterCount": 3076311,
-    "status": "released",
+    "status": "not_released",
     "metrics": {
       "validationUtteranceAccuracy": 1.0,
       "uniformUtteranceBaseline": 0.0833,
@@ -147,7 +147,6 @@
     },
     "parentVersion": null,
     "createdAt": 1792776029.7230818,
-    "releasedAt": 1792776029.7231348,
     "supersededAt": null,
     "retiredAt": null,
     "history": [
@@ -168,10 +167,10 @@
       },
       {
         "at": 1792776029.7231348,
-        "event": "released",
-        "notes": "first-party klyvaron-pro-voice trained from random init (seed=20261301)",
-        "superseded": null
+        "event": "historical_release_claim_archived",
+        "notes": "An older record claimed release; the corresponding weight payload is absent from this checkout. This is not current release evidence."
       }
     ]
-  }
+  },
+  "archiveNotice": "Archived, unverified model-card metadata. The corresponding weight payload is absent from this checkout; this record is not release evidence or a currently supported model. The active Klyvaron processor is model-independent."
 }

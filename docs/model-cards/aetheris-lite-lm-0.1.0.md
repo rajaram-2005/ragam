@@ -1,10 +1,11 @@
 # Model card — Aetheris Lite LM 0.1.0
 
+> **Archive notice:** this record is not release evidence. No matching weight payload is present in the current checkout; the active Klyvaron processor uses no model weights.
 | | |
 |---|---|
 | **Identifier** | `aetheris-lite-lm@0.1.0` |
 | **Family** | `aetheris-lite` |
-| **Status** | `released` (through the standard release gate, 0 hard failures, 0 soft failures) |
+| **Status** | `not_released` — archived metadata; payload absent from current checkout |
 | **Licence** | MIT — first-party weights. No third-party weights are involved. |
 | **Parameters** | 359,136 |
 | **Base checkpoint** | **none** — trained from random initialisation |
