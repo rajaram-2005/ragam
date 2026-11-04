@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 39,064 source lines, 25,874 test lines
+### `services/core` — 39,110 source lines, 25,952 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -80,13 +80,13 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
 | `online/accounts.mjs` | 439 | Local Core accounts, scrypt password hashes, lockouts, throttling, owner bootstrap and host-delivered reset codes |
 | `hosted/byok.mjs` | 384 | Stateless Vercel BYOK API: Supabase Auth sessions, per-user AES-GCM provider secrets, strict origin/endpoint checks, explicit request/Search consent, and provider isolation |
-| `online/app.mjs` | 2,064 | Online application with a local single-user security boundary, retained direct-Core account mode, awaitable storage contexts, verified native Klyvaron Pro/Max inference, runtime qualification and manifest endpoints, and exact-model gateway routing |
+| `online/app.mjs` | 2,090 | Online application with a local single-user security boundary, retained direct-Core account mode, awaitable storage contexts, verified native Klyvaron Pro/Max inference, runtime qualification and manifest endpoints, and exact-model gateway routing |
 | `online/native-klyvaron.mjs` | 470 | First-party Klyvaron Pro (27,559,946 params) and Klyvaron Max (92,077,066 params) SHA-256 verification, preset-architecture enforcement, startup live inference self-test, and fail-closed selector gating |
 | `online/context-routes.mjs` | 282 | Authenticated context, reviewed read-only tool routes, and owner-managed remote server routes |
 | `online/gateway.mjs` | 262 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
 | `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
 | `online/chat-content.mjs` | 109 | Validates bounded multimodal messages, media signatures, redaction and text-only history placeholders |
-| `providers/industry-operations.mjs` | 20 | Validates the optional manufacturing mode and supplies the safety-first advisory instruction to native Klyvaron and selected gateway Chat requests |
+| `providers/industry-operations.mjs` | 40 | Supplies opt-in advisory guidance for text Chat and bounded safety-first additions to manufacturing image/video prompts |
 | `online/http.mjs` | 33 | Bounded streamed JSON requests and no-store responses |
 | `online/klyvaron.mjs` | 87 | Klyvaron product tiers in the online build: resolve a tier to a saved connection and a listed model, refuse an unconfigured tier by name, and name the third-party provider and model as provenance |
 | `online/store.mjs` | 420 | Multi-connection encrypted local store (schema 2): one sealed credential per connection, an active id, a store-wide revision, native first-party model selection persistence, and optional Klyvaron tier presets |
@@ -237,7 +237,7 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 7,232 source lines, 2,413 test lines
+### `apps/web` — 7,240 source lines, 2,419 test lines
 
 Five local-workspace area components, three retained direct-Core account pages, the separate opt-in `HostedByokApp`, a local-first app shell, shared primitives and an API client. The Direct-Core account pages are not used by the standard Docker deployment; the hosted account flow and its security boundary are documented in [30 — Hosted BYOK](30-hosted-byok.md). The Web suite has nine test files. Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).

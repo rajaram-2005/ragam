@@ -18,3 +18,23 @@ export function addIndustryInstruction(messages, mode) {
   messages.unshift(message)
   return message
 }
+
+const MEDIA_GUIDANCE = Object.freeze({
+  image: Object.freeze({
+    generate: 'Create an illustrative concept only, not evidence of a real asset or an approved procedure. Depict safe work: never show guards defeated, lockout/tagout bypassed, unsafe PPE, or unsafe acts. Do not invent readable equipment labels, specifications, limits, or compliance marks.',
+    edit: 'Keep the result illustrative, not evidence of a real asset or an approved procedure. Do not add unsafe work, defeated guards, bypassed lockout/tagout, unsafe PPE, invented equipment labels, specifications, limits, or compliance marks.',
+    analyze: 'Report only visible details as unverified observations; distinguish uncertainty from fact. Do not infer specifications, alarm meaning, root cause, acceptance limits, or safety approval from pixels. If a hazard may be present, advise following site stop-work and escalation procedures with a qualified person.',
+  }),
+  video: Object.freeze({
+    generate: 'Create an illustrative concept only, not evidence of a real asset or an approved procedure. Show safe actions and motion; never show guards defeated, lockout/tagout bypassed, unsafe PPE, or unsafe acts. Do not invent equipment labels, specifications, limits, or compliance marks.',
+    analyze: 'Describe only visible actions and motion as unverified observations; distinguish uncertainty from fact. Do not infer specifications, alarm meaning, root cause, acceptance limits, or safety approval from frames. If a hazard may be present, advise following site stop-work and escalation procedures with a qualified person.',
+  }),
+})
+
+/** Append bounded, advisory text to a media prompt; it does not alter model weights or imply compliance. */
+export function industryMediaPrompt(prompt, mode, modality, action = 'generate') {
+  if (mode !== MANUFACTURING_MODE) return prompt
+  const guidance = MEDIA_GUIDANCE[modality]?.[action]
+  if (!guidance) return prompt
+  return `${String(prompt ?? '').trim()}\n\nManufacturing Operations guidance (advisory): ${guidance}`
+}

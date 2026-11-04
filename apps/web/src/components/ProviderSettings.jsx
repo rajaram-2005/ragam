@@ -234,7 +234,7 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
       Streaming: {selectedEvidence.capabilities.streaming}; tools and structured output: not exposed by RAGAM Chat.
       {selectedVerification ? ` A text inference succeeded at ${selectedVerification}; this does not qualify streaming or other capabilities.` : ' No successful text inference has been recorded for this model yet.'}
     </p> : null}
-    <p className="small">Model selection lives in Chat. Model-list success is not inference verification. No automatic fallback. Requests may incur provider charges; gateway budgets and quotas still apply. Image and Video require separate qualified adapters.</p>
+    <p className="small">Model selection lives in Chat. Model-list success is not inference verification. No automatic fallback. Remote requests may incur provider charges; this catalogue does not certify free tiers or quotas. Self-hosted inference avoids a vendor API bill but still uses your hardware, electricity and appropriately licensed weights. Image and Video require separate qualified adapters.</p>
     {provider ? <details className="connections" style={{ marginTop: 20 }} open={(provider.connections?.length ?? 0) > 1}>
       <summary>Saved connections ({provider.connections?.length ?? 0})</summary>
       <p className="small">Each connection has its own encrypted credential. Activating one changes where the next request goes; it does not overwrite the others.</p>

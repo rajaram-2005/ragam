@@ -7,7 +7,7 @@ import { OnlineStore } from './store.mjs'
 import { OnlineGateway, gatewayUrl, failure, runtimeFor } from './gateway.mjs'
 import { readBody, sendJson } from './http.mjs'
 import { normalizeChatMessages, redactChatMessages, textFromChatContent } from './chat-content.mjs'
-import { MANUFACTURING_MODE, addIndustryInstruction, industryInstructionFor } from '../providers/industry-operations.mjs'
+import { MANUFACTURING_MODE, addIndustryInstruction, industryInstructionFor, industryMediaPrompt } from '../providers/industry-operations.mjs'
 import { contextRoutes } from './context-routes.mjs'
 import { AccountStore, ROLES, DEFAULT_MAX_ACCOUNTS } from './accounts.mjs'
 import { AuditLedger } from '../audit/ledger.mjs'
@@ -169,6 +169,32 @@ const HARD_STYLE_VIOLATIONS = new Set([
 const DOCS_DIR = fileURLToPath(new URL('../../../../docs/', import.meta.url))
 const DOC_NAME = /^[0-9A-Za-z][0-9A-Za-z._-]*\.md$/
 const MAX_DOC_CHARS = 20_000
+const MAX_MEDIA_PROMPT_INPUT = 4_000
+const MAX_MEDIA_PROMPT_WITH_GUIDANCE = 5_000
+
+function requestedIndustryMode(body) {
+  const mode = body?.industryMode
+  if (mode !== undefined && mode !== null && mode !== false && mode !== '' && mode !== MANUFACTURING_MODE) {
+    throw failure('invalid_industry_mode', 'Choose a supported industry mode.', 400)
+  }
+  return mode === MANUFACTURING_MODE ? MANUFACTURING_MODE : null
+}
+
+function mediaPromptFor(body, modality, action, { allowEmpty = false } = {}) {
+  const industryMode = requestedIndustryMode(body)
+  const userPrompt = body?.prompt ?? ''
+  if (typeof userPrompt !== 'string' || (!allowEmpty && !userPrompt.trim())) {
+    throw failure('invalid_prompt', allowEmpty ? 'Prompt must be text.' : 'A prompt is required.', 400)
+  }
+  if (userPrompt.length > MAX_MEDIA_PROMPT_INPUT) {
+    throw failure('invalid_prompt', `This product caps ${modality} prompts at ${MAX_MEDIA_PROMPT_INPUT.toLocaleString()} characters.`, 400)
+  }
+  const prompt = industryMediaPrompt(userPrompt, industryMode, modality, action)
+  if (prompt.length > MAX_MEDIA_PROMPT_WITH_GUIDANCE) {
+    throw failure('invalid_prompt', 'The prompt plus advisory guidance exceeds the supported limit.', 400)
+  }
+  return { userPrompt, prompt, industryMode }
+}
 
 export function listInstallationDocs() {
   if (!existsSync(DOCS_DIR)) return []
@@ -715,6 +741,7 @@ export class OnlineApp {
    * Queue one image generation for this account and return immediately.
    */
   async startImage(body, session, requestSignal = null) {
+    const industryMode = requestedIndustryMode(body)
     const tier = body.tier === undefined || body.tier === null ? null : body.tier
     if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
     const tierPreset = tier === null ? null : this.store.klyvaronPreset(tier, 'image')
@@ -733,9 +760,7 @@ export class OnlineApp {
       if (!rec.verified) {
         throw failure('klyvaron_model_unavailable', `First-party model '${targetModel}' is missing or failed SHA-256 verification.`, 503)
       }
-      const prompt = body.prompt
-      if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
-      if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps image prompts at 4,000 characters.', 400)
+      const { userPrompt, prompt } = mediaPromptFor(body, 'image', 'generate')
       const allowedSizes = ['256x256', '512x512', '768x512', '512x768']
       if (body.size !== undefined && body.size !== '' && !allowedSizes.includes(body.size)) {
         throw failure('invalid_parameters', `Size must be one of ${allowedSizes.join(', ')}.`, 400)
@@ -756,7 +781,7 @@ export class OnlineApp {
       const context = await this.contextFor(session.accountId)
       const job = await context.media.enqueue({
         kind: 'image',
-        params: { prompt, size, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
+        params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, size, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
         subject: session.accountId,
         filenameHint: `${rec.id}-image`,
         signal: requestSignal,
@@ -789,9 +814,7 @@ export class OnlineApp {
     if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
     const wire = wireFor(config.wire)
     if (typeof wire.generate !== 'function') throw failure('capability_unavailable', 'That connection does not generate images.', 409)
-    const prompt = body.prompt
-    if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
-    if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps image prompts at 4,000 characters.', 400)
+    const { userPrompt, prompt } = mediaPromptFor(body, 'image', 'generate')
     // Refused here rather than inside the asynchronous job: an unsupported size must be a 400 in
     // front of the person who chose it, not a failed record they discover by polling. A wire with
     // no size list deliberately offers no control (the model decides geometry); a supplied size
@@ -804,7 +827,7 @@ export class OnlineApp {
     const context = await this.contextFor(session.accountId)
     const job = await context.media.enqueue({
       kind: 'image',
-      params: { prompt, size: size ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
+      params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, size: size ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
       subject: session.accountId,
       filenameHint: `${config.id}-image`,
       signal: requestSignal,
@@ -826,13 +849,13 @@ export class OnlineApp {
   }
 
   async startImageEdit(body, session, requestSignal = null) {
+    const industryMode = requestedIndustryMode(body)
     const nativeReady = this.nativeMultimodalModelsFor('image')
     const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-image'
     const rec = this.multimodalHost.records.get(targetModel)
     if (!rec || rec.modality !== 'image') throw failure('model_unavailable', `Unknown first-party image model '${targetModel}'.`, 409)
     if (!rec.verified) throw failure('klyvaron_model_unavailable', `Model '${targetModel}' is missing or unverified.`, 503)
-    const prompt = body.prompt
-    if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'An editing instruction prompt is required.', 400)
+    const { userPrompt, prompt } = mediaPromptFor(body, 'image', 'edit')
     const context = await this.contextFor(session.accountId)
     let sourceBytes = null
     if (typeof body.imageBase64 === 'string' && body.imageBase64) {
@@ -858,7 +881,7 @@ export class OnlineApp {
     }
     return await context.media.enqueue({
       kind: 'image',
-      params: { prompt, mode: 'edit', model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', provenance },
+      params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, mode: 'edit', model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', provenance },
       subject: session.accountId,
       filenameHint: `${rec.id}-image-edit`,
       signal: requestSignal,
@@ -886,6 +909,7 @@ export class OnlineApp {
   }
 
   async understandImage(body, session) {
+    const industryMode = requestedIndustryMode(body)
     const nativeReady = this.nativeMultimodalModelsFor('image')
     const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-image'
     const rec = this.multimodalHost.records.get(targetModel)
@@ -902,7 +926,9 @@ export class OnlineApp {
     if (!sourceBytes || sourceBytes.length === 0) {
       throw failure('invalid_parameters', 'Supply either imageBase64 or a valid sourceJobId for vision understanding.', 400)
     }
-    return this.multimodalHost.understandImage({ modelId: rec.id, imageBuffer: sourceBytes, prompt: body.prompt || '' })
+    const { prompt } = mediaPromptFor(body, 'image', 'analyze', { allowEmpty: true })
+    const result = await this.multimodalHost.understandImage({ modelId: rec.id, imageBuffer: sourceBytes, prompt })
+    return { ...result, industryMode }
   }
 
   /** Whether this installation can start a video job now: a gateway key+model OR a verified first-party video checkpoint. */
@@ -920,6 +946,7 @@ export class OnlineApp {
    * the job record and nothing else; polling, cancellation and the restart rule live in the queue.
    */
   async startVideo(body, session, requestSignal = null) {
+    const industryMode = requestedIndustryMode(body)
     const tier = body.tier === undefined || body.tier === null ? null : body.tier
     if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
     const tierPreset = tier === null ? null : this.store.klyvaronPreset(tier, 'video')
@@ -938,9 +965,7 @@ export class OnlineApp {
       if (!rec.verified) {
         throw failure('klyvaron_model_unavailable', `First-party model '${targetModel}' is missing or failed SHA-256 verification.`, 503)
       }
-      const prompt = body.prompt
-      if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
-      if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps video prompts at 4,000 characters.', 400)
+      const { userPrompt, prompt } = mediaPromptFor(body, 'video', 'generate')
       if (Number(body.durationMs ?? 2000) > 6000 || body.resolution === '4k' || body.audioTrack === true) {
         throw failure(
           'unsupported_video_scope',
@@ -972,7 +997,7 @@ export class OnlineApp {
       const job = await context.media.enqueue({
         kind: 'video',
         timeoutMs: 5 * 60 * 1000,
-        params: { prompt, aspectRatio, resolution, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
+        params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, aspectRatio, resolution, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
         subject: session.accountId,
         filenameHint: `${rec.id}-video`,
         signal: requestSignal,
@@ -1012,9 +1037,7 @@ export class OnlineApp {
     if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
     const wire = wireFor(config.wire)
     if (typeof wire.generate !== 'function') throw failure('capability_unavailable', 'That connection does not generate video.', 409)
-    const prompt = body.prompt
-    if (typeof prompt !== 'string' || !prompt.trim()) throw failure('invalid_prompt', 'A prompt is required.', 400)
-    if (prompt.length > 4000) throw failure('invalid_prompt', 'This product caps video prompts at 4,000 characters.', 400)
+    const { userPrompt, prompt } = mediaPromptFor(body, 'video', 'generate')
     // A wire with an empty list does not send that control at all. Replicate video, for
     // example, documents no common geometry input across its models; sending one would be a
     // guess. An unsupported value on a wire that DOES document the control is a 400 here.
@@ -1034,7 +1057,7 @@ export class OnlineApp {
       // Video renders for minutes and the provider operation is paid for once; the deadline is
       // bounded and stated in the job record, and the job is failed honestly if it is exceeded.
       timeoutMs: 15 * 60 * 1000,
-      params: { prompt, aspectRatio: aspectRatio ?? null, resolution: resolution ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
+      params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, aspectRatio: aspectRatio ?? null, resolution: resolution ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
       subject: session.accountId,
       filenameHint: `${config.id}-video`,
       signal: requestSignal,
@@ -1053,6 +1076,7 @@ export class OnlineApp {
     return job
   }
   async understandVideo(body, session) {
+    const industryMode = requestedIndustryMode(body)
     const nativeReady = this.nativeMultimodalModelsFor('video')
     const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-video'
     const rec = this.multimodalHost.records.get(targetModel)
@@ -1069,7 +1093,9 @@ export class OnlineApp {
     if (!sourceBytes || sourceBytes.length === 0) {
       throw failure('invalid_parameters', 'Supply either videoBase64 or a valid sourceJobId for video understanding.', 400)
     }
-    return this.multimodalHost.understandVideo({ modelId: rec.id, videoBuffer: sourceBytes, prompt: body.prompt || '' })
+    const { prompt } = mediaPromptFor(body, 'video', 'analyze', { allowEmpty: true })
+    const result = await this.multimodalHost.understandVideo({ modelId: rec.id, videoBuffer: sourceBytes, prompt })
+    return { ...result, industryMode }
   }
 
   async startVoiceSynthesis(body, session) {

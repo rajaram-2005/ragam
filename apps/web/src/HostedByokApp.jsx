@@ -209,6 +209,7 @@ function HostedWorkspace({ account, onSignOut }) {
         <button className="hosted-quiet-button" onClick={() => setMessages([])} disabled={!messages.length}>New chat</button></div>
       <IndustryOperationsPanel
         enabled={industryMode}
+        mediaAvailable={false}
         onEnabledChange={(enabled) => setIndustryMode(writeIndustryMode(enabled))}
         onStartTask={(taskPrompt) => { setIndustryMode(writeIndustryMode(true)); setDraft((current) => current.trim() ? `${current.trim()}\n\n${taskPrompt}` : taskPrompt) }}
       />

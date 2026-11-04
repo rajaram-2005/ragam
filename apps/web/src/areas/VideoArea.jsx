@@ -25,7 +25,7 @@ const when = (value) => {
   return Number.isFinite(time) && time > 0 ? new Date(time).toLocaleString() : '—'
 }
 
-export default function VideoArea({ provider, readiness, refreshReadiness, onSettings }) {
+export default function VideoArea({ provider, readiness, refreshReadiness, onSettings, industryMode = false }) {
   const [jobs, setJobs] = useState([])
   const [prompt, setPrompt] = useState('')
   const [aspectRatio, setAspectRatio] = useState(ASPECT_RATIOS[0])
@@ -102,7 +102,7 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
     if (!connection || !model || !prompt.trim()) return
     setBusy(true); setError(null); setNotice('')
     try {
-      const job = await api.generateVideo({ prompt, aspectRatio, resolution, model })
+      const job = await api.generateVideo({ prompt, aspectRatio, resolution, model, ...(industryMode ? { industryMode: 'manufacturing' } : {}) })
       setJobs((current) => [job, ...current.filter((entry) => entry.id !== job.id)])
       setPrompt('')
       setNotice('Generation queued. A provider renders this for minutes; the clip appears here only when its bytes pass validation.')
@@ -144,6 +144,7 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
           <p>Use <strong>Test connection</strong> in Provider Settings to read the video-model list. A generation without a listed model is refused rather than guessed.</p>
         </Banner>
       : null}
+    {industryMode && connection ? <Banner tone="warn" title="Manufacturing prompt guidance is on"><p>Guidance is appended to video prompts as advisory text. Generated clips are illustrative, not evidence of actual equipment, safe operation or approved procedures.</p></Banner> : null}
 
     {connection && models.length
       ? <form onSubmit={generate}>
@@ -192,6 +193,7 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
             <small>{when(job.createdAt)}</small>
           </div>
           <p className="small"><strong>Prompt:</strong> {job.params?.prompt}</p>
+          {job.params?.industryMode === 'manufacturing' ? <p className="small">Manufacturing prompt guidance applied · illustrative clip only.</p> : null}
           <p className="small">
             {job.params?.provider} · {job.result?.model ?? job.params?.model}
             {job.result?.durationSeconds != null ? ` · ${seconds(job.result.durationSeconds)}` : ''}
@@ -230,6 +232,7 @@ export default function VideoArea({ provider, readiness, refreshReadiness, onSet
                   const res = await api.understandVideo({
                     model: model.startsWith('klyvaron-') ? model : undefined,
                     sourceJobId: job.id,
+                    ...(industryMode ? { industryMode: 'manufacturing' } : {}),
                   })
                   setVideoAnalysisByJob((prev) => ({ ...prev, [job.id]: res }))
                 } catch (e) { setError(e) } finally { setBusy(false) }

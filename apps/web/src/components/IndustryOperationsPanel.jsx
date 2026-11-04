@@ -1,7 +1,7 @@
 import React from 'react'
 import { INDUSTRY_TASKS } from '../industry-operations.js'
 
-export default function IndustryOperationsPanel({ enabled, onEnabledChange, onStartTask }) {
+export default function IndustryOperationsPanel({ enabled, onEnabledChange, onStartTask, mediaAvailable = true }) {
   return <section className="industry-ops-card" aria-label="Industry operations copilot">
     <div className="industry-ops-heading">
       <div>
@@ -20,7 +20,7 @@ export default function IndustryOperationsPanel({ enabled, onEnabledChange, onSt
     </div>
     {enabled ? <div className="industry-ops-actions">
       {INDUSTRY_TASKS.map((task) => <button key={task.id} className="btn block" type="button" onClick={() => onStartTask?.(task.prompt)}>{task.label}</button>)}
-    </div> : <p className="small">Turn on to apply safety-first manufacturing guidance to supported text Chat models.</p>}
-    <p className="industry-ops-note">Advice only · verify against approved site procedures. Company Knowledge is used only when available and explicitly approved per Chat request.</p>
+    </div> : <p className="small">Turn on to apply advisory guidance to supported text, image and video requests.</p>}
+    <p className="industry-ops-note">Advice only · verify against approved site procedures. {mediaAvailable ? 'Generated media is illustrative, not site evidence. ' : ''}Company Knowledge is used only when available and explicitly approved per Chat request.</p>
   </section>
 }

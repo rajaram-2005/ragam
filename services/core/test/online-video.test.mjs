@@ -103,6 +103,7 @@ async function fixture(t) {
 
   const boot = async () => {
     app = new OnlineApp({ dataDir: dir, trustedOrigins: [f.vendorUrl, f.foreignUrl], timeoutMs: 3000, mediaPoll: { initialMs: 1, maxMs: 2, factor: 1 } })
+    f.app = app
     server = app.server()
     f.url = await listen(server)
   }
@@ -220,6 +221,43 @@ test('the video area renders the completed job and serves the stored MP4', async
   assert.deepEqual((await f.request('GET', '/api/video/jobs')).data.jobs.map((entry) => entry.id), [job.id])
 })
 
+test('manufacturing video mode adds advisory guidance to the selected provider prompt', async (t) => {
+  const f = await fixture(t)
+  await f.configure()
+  const created = await f.request('POST', '/api/video/generate', { prompt: 'a technician inspects a pump', model: 'veo-3.1-generate-preview', industryMode: 'manufacturing' })
+  assert.equal(created.status, 202, JSON.stringify(created.data))
+  const job = await f.waitFor(created.data.id)
+  assert.equal(job.state, JOB_STATES.SUCCEEDED, JSON.stringify(job))
+  assert.equal(job.params.prompt, 'a technician inspects a pump')
+  assert.equal(job.params.industryMode, 'manufacturing')
+  assert.match(job.params.appliedPrompt, /illustrative concept only/)
+  const started = f.calls.find((call) => call.path.endsWith(':predictLongRunning'))
+  assert.match(started.body.instances[0].prompt, /never show guards defeated/)
+  assert.match(started.body.instances[0].prompt, /a technician inspects a pump/)
+})
+
+test('native Klyvaron video prompts receive opt-in guidance without a remote provider request', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  f.app.multimodalHost.records.set('klyvaron-pro-video', {
+    id: 'klyvaron-pro-video', modality: 'video', verified: true, weightsSha256: 'b'.repeat(64), parameterCount: 2_221_482,
+  })
+  let appliedPrompt = ''
+  f.app.multimodalHost.generateVideo = async ({ prompt }) => {
+    appliedPrompt = prompt
+    return { buffer: MP4, mimeType: 'video/mp4', fps: 24, frameCount: 96, durationSeconds: 4, motionEnergy: 0.1, predictedMotion: 'steady', predictedEnvironment: 'indoor', latencyMs: 1 }
+  }
+  const created = await f.request('POST', '/api/video/generate', { prompt: 'show a safe inspection', model: 'klyvaron-pro-video', industryMode: 'manufacturing' })
+  assert.equal(created.status, 202, JSON.stringify(created.data))
+  const job = await f.waitFor(created.data.id)
+  assert.equal(job.state, JOB_STATES.SUCCEEDED, JSON.stringify(job))
+  assert.equal(job.params.provider, 'klyvaron-native')
+  assert.equal(job.params.prompt, 'show a safe inspection')
+  assert.equal(job.params.industryMode, 'manufacturing')
+  assert.match(appliedPrompt, /never show guards defeated/)
+  assert.equal(f.calls.some((call) => call.path.endsWith(':predictLongRunning')), false)
+})
+
 test('a failed operation, a filtered result and a still image are failed jobs with no artifact', async (t) => {
   const f = await fixture(t)
   await f.configure()
@@ -249,6 +287,7 @@ test('video prompts, aspect ratios, resolutions and models are validated before 
     [{ prompt: 'ok', aspectRatio: '1:1' }, 400, 'invalid_parameters'],
     [{ prompt: 'ok', resolution: '4k' }, 400, 'invalid_parameters'],
     [{ prompt: 'ok', model: 'not-listed' }, 409, 'model_unavailable'],
+    [{ prompt: 'ok', industryMode: 'unrecognized' }, 400, 'invalid_industry_mode'],
   ]
   for (const [body, status, code] of cases) {
     const r = await f.request('POST', '/api/video/generate', { model: 'veo-3.1-generate-preview', ...body })

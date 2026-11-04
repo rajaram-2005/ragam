@@ -57,6 +57,7 @@ async function fixture(t) {
   f.vendorUrl = await listen(vendor)
   const boot = async () => {
     app = new OnlineApp({ dataDir: dir, trustedOrigins: [f.vendorUrl], timeoutMs: 3000 })
+    f.app = app
     server = app.server()
     f.url = await listen(server)
   }
@@ -171,6 +172,43 @@ test('the image area generates, validates, stores and serves a real image', asyn
   assert.equal(listed.data.jobs[0].id, job.id)
 })
 
+test('manufacturing image mode is appended to supported generation prompts and records exact user and sent text', async (t) => {
+  const f = await fixture(t)
+  await f.configure()
+  const created = await f.request('POST', '/api/image/generate', { prompt: 'illustrate a maintenance toolbox', model: 'gpt-image-1', industryMode: 'manufacturing' })
+  assert.equal(created.status, 202, JSON.stringify(created.data))
+  const job = await f.waitFor(created.data.id)
+  assert.equal(job.state, JOB_STATES.SUCCEEDED, JSON.stringify(job))
+  assert.equal(job.params.prompt, 'illustrate a maintenance toolbox')
+  assert.equal(job.params.industryMode, 'manufacturing')
+  assert.match(job.params.appliedPrompt, /illustrative concept only/)
+  const call = f.calls.find((entry) => entry.path === '/v1/images/generations')
+  assert.match(call.body.prompt, /never show guards defeated/)
+  assert.match(call.body.prompt, /illustrate a maintenance toolbox/)
+})
+
+test('native Klyvaron image prompts receive the same opt-in guidance without a gateway call', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  f.app.multimodalHost.records.set('klyvaron-pro-image', {
+    id: 'klyvaron-pro-image', modality: 'image', verified: true, weightsSha256: 'a'.repeat(64), parameterCount: 3_728_352,
+  })
+  let appliedPrompt = ''
+  f.app.multimodalHost.generateImage = async ({ prompt }) => {
+    appliedPrompt = prompt
+    return { buffer: PNG_BYTES, mimeType: 'image/png', measured: { width: 1, height: 1 }, latencyMs: 1, weightsSha256: 'a'.repeat(64) }
+  }
+  const created = await f.request('POST', '/api/image/generate', { prompt: 'show a maintenance cart', model: 'klyvaron-pro-image', industryMode: 'manufacturing' })
+  assert.equal(created.status, 202, JSON.stringify(created.data))
+  const job = await f.waitFor(created.data.id)
+  assert.equal(job.state, JOB_STATES.SUCCEEDED, JSON.stringify(job))
+  assert.equal(job.params.provider, 'klyvaron-native')
+  assert.equal(job.params.prompt, 'show a maintenance cart')
+  assert.equal(job.params.industryMode, 'manufacturing')
+  assert.match(appliedPrompt, /never show guards defeated/)
+  assert.equal(f.calls.some((call) => call.path === '/v1/images/generations'), false)
+})
+
 test('an image connection refuses chat without sending a request, and a video request stays unavailable', async (t) => {
   const f = await fixture(t)
   await f.configure()
@@ -211,6 +249,7 @@ test('image prompts, sizes and models are validated before anything is queued', 
     [{ prompt: 'x'.repeat(4001) }, 400, 'invalid_prompt'],
     [{ prompt: 'ok', size: '999x999' }, 400, 'invalid_parameters'],
     [{ prompt: 'ok', model: 'not-listed' }, 409, 'model_unavailable'],
+    [{ prompt: 'ok', industryMode: 'unrecognized' }, 400, 'invalid_industry_mode'],
   ]
   for (const [body, status, code] of cases) {
     const r = await f.request('POST', '/api/image/generate', { model: 'gpt-image-1', ...body })
