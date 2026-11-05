@@ -61,6 +61,13 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
+      - name: Install virtual display for Linux desktop smoke test
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes xvfb
+          command -v xvfb-run
+
       - name: Smoke-test the packaged desktop app and loopback Core
         run: npm run smoke
         working-directory: apps/desktop
