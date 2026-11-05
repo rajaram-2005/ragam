@@ -43,7 +43,7 @@ if (child.error || child.status !== 0) {
   const detail = [child.error?.message, ...output.split(/\r?\n/).filter(Boolean).slice(-12)]
     .filter(Boolean).join(' | ').slice(0, 2500)
     .replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')
-  process.stderr.write(`::error title=Packaged desktop smoke details::${detail}\n`)
+  process.stdout.write(`::error title=Packaged desktop smoke details::${detail}\n`)
 }
 if (child.error) throw child.error
 assert.equal(child.status, 0, `packaged Ragam exited with ${child.status ?? child.signal}`)
