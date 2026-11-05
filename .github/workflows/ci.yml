@@ -28,12 +28,15 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Keep an in-flight CPU-heavy acceptance run alive when a newer commit arrives.
+  # New commits may replace the pending run, but they must not cancel a Max inference test.
+  cancel-in-progress: false
 
 jobs:
   core:
     name: Core service (Node, zero dependencies)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -47,7 +50,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install multimodal runtime dependencies and verified first-party weights
+      - name: Provision legacy Pro/Max artifacts for acceptance tests only
+        # These artifacts are isolated test inputs, never app startup or desktop dependencies.
         run: |
           python -m pip install --upgrade pip && pip install numpy jax av Pillow
           mkdir -p .aetheris-data/online/klyvaron/models
@@ -88,7 +92,9 @@ jobs:
           # Match the release-verification invocation and retain the TAP diagnostics.
           # A separate Core job must expose its failure reason in check annotations too.
           set +e
-          node --test --test-reporter=tap test/*.test.mjs test/klyvaron-release/*.test.mjs > /tmp/core.tap 2>&1
+          # Max acceptance exercises a 92M-parameter CPU runtime. Run one test file at a time
+          # so unrelated suites cannot compete for the worker-thread and memory budget.
+          node --test --test-concurrency=1 --test-reporter=tap test/*.test.mjs test/klyvaron-release/*.test.mjs > /tmp/core.tap 2>&1
           status=$?
           tail -n 10 /tmp/core.tap
           if [ "$status" -ne 0 ]; then
@@ -394,7 +400,8 @@ jobs:
       - name: Enforce the no-direct-release registry policy
         run: node services/core/scripts/verify-klyvaron-release.mjs --policy-check
 
-      - name: Install multimodal runtime dependencies and verified first-party weights
+      - name: Provision legacy Pro/Max artifacts for acceptance tests only
+        # These artifacts are isolated test inputs, never app startup or desktop dependencies.
         run: |
           python -m pip install --upgrade pip > /dev/null && pip install numpy jax av Pillow pytest
           mkdir -p .aetheris-data/online/klyvaron/models
@@ -415,7 +422,9 @@ jobs:
         working-directory: services/core
         run: |
           set +e
-          node --test --test-reporter=tap test/*.test.mjs test/klyvaron-release/*.test.mjs > /tmp/core.tap 2>&1
+          # Max acceptance exercises a 92M-parameter CPU runtime. Run one test file at a time
+          # so unrelated suites cannot compete for the worker-thread and memory budget.
+          node --test --test-concurrency=1 --test-reporter=tap test/*.test.mjs test/klyvaron-release/*.test.mjs > /tmp/core.tap 2>&1
           status=$?
           tail -n 10 /tmp/core.tap
           if [ "$status" -ne 0 ]; then

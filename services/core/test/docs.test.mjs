@@ -761,17 +761,17 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**1039 tests**'), 'current core test inventory must be stated')
+  assert.ok(status.includes('**1043 tests**'), 'current core test inventory must be stated')
   assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
-  assert.ok(status.includes('**131 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1992 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('**130 tests**'), 'web test inventory must be stated')
+  assert.ok(status.includes('1995 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1992 tests: core 1039, web 131, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('1995 tests: core 1043, web 130, fabric 822'),
     'README must state the current inventory as docs/03 does')
   assert.ok(squash(doc.readme()).includes('latest completed full CI run')
     && squash(doc.readme()).includes('41394564087')
     && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
-    && squash(doc.readme()).includes('The current tree has 1,992 tests (Core 1,039, Web 131, Fabric 822). The full Core suite passed 1,033/1,039 with six skipped legacy model-artifact checks; the focused processor/route tests passed 13/13. Web passed 131/131 and the production bundle built. Fabric test command exited nonzero: 821 passed and one optional multimodal training test failed because JAX is unavailable. This was not a skip; the separate model-training path was not pursued.')
+    && squash(doc.readme()).includes('The current tree has 1,995 tests (Core 1,043, Web 130, Fabric 822). The full Core suite passed 1,038/1,043 with five skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 130/130 and the production bundle built. Fabric’s latest local run passed 821 tests and one optional multimodal-training test failed because JAX was unavailable.')
     && squash(doc.readme()).includes('Full CI for this current tree is pending')
     && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
   'README must distinguish the last full CI run from the current full local suite')
@@ -780,14 +780,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(1039), `core heading must say 1039, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(1043), `core heading must say 1043, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(131), `web heading must say 131, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(130), `web heading must say 130, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1992,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1992`,
+    1995,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1995`,
   )
 })
 
@@ -1617,9 +1617,10 @@ test('CI exists, covers all three components, and is documented', () => {
   assert.ok(workflow.includes('weak.registry.current() is None'),
     'CI must assert an undertrained run cannot become the released model')
 
-  // Least privilege, and superseded runs are cancelled.
+  // Least privilege; in-flight CPU-heavy Max acceptance work must not be cancelled by a newer commit.
   assert.ok(workflow.includes('contents: read'))
-  assert.ok(workflow.includes('cancel-in-progress: true'))
+  assert.ok(workflow.includes('cancel-in-progress: false'))
+  assert.ok(workflow.includes('--test-concurrency=1'))
 
   // The docs job needs history: the model card asserts a real SHA re-verified at a
   // different revision, which a depth-1 checkout cannot support.

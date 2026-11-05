@@ -25,16 +25,10 @@ import { McpRegistry, RISK, SERVER_KINDS } from '../mcp/layer.mjs'
 import { RemoteServerManager } from './remote-servers.mjs'
 import { PROVIDERS, catalogueReport, describeProvider } from '../providers/catalog.mjs'
 import { normaliseCredential, wireFor } from '../providers/wires/index.mjs'
-import { KLYVARON_TIERS, MODALITIES, KLYVARON_NOTE, tierFor, provenanceFor, resolveTier } from './klyvaron.mjs'
+import { KLYVARON_TIERS, KLYVARON_NOTE } from './klyvaron.mjs'
 import { NativeKlyvaronHost } from './native-klyvaron.mjs'
 import { NativeMultimodalHost } from '../klyvaron/multimodal-host.mjs'
-import { RuntimeQualificationRegistry, detectHardwareProfile } from '../klyvaron/qualification.mjs'
-import { KLYVARON_MODEL_REGISTRY, PRODUCT_SUBSCRIPTION_TIERS } from '../klyvaron/tiers.mjs'
 import { KLYVARON_PROCESSOR_PROFILES, KLYVARON_PROCESSOR_TASKS } from '../klyvaron/processor.mjs'
-import { KlyvaronModelRegistryStore } from '../klyvaron/model-registry-store.mjs'
-import { loadKlyvaronEvidenceTrustStore } from '../klyvaron/evidence-trust.mjs'
-import { LocalTrainingWorkerManager } from '../klyvaron/training-worker.mjs'
-import { UserTrainingController } from '../klyvaron/training-controller.mjs'
 
 /**
  * Session bounds.
@@ -150,6 +144,10 @@ const PROVIDER_CONNECTION = new RegExp(`^${PROVIDER_CONNECTION_PREFIX}([a-z0-9]+
 
 /** Answered identically for a known and an unknown address, on purpose. */
 export const RESET_REQUESTED_MESSAGE = 'If an account on this installation uses that email address, a single-use reset code is available through its configured recovery method. It expires in 15 minutes.'
+// Unknown and known-account reset requests perform comparable scrypt work, then
+// share a bounded 500ms response floor. The delay is capped at this floor so it
+// cannot accumulate or become an unbounded request hold.
+export const RESET_REQUEST_MIN_RESPONSE_MS = 500
 
 
 // Rules whose presence in a reply is a product failure rather than a style note. These are the
@@ -280,12 +278,6 @@ export class OnlineApp {
     if (providerStore && (typeof providerStore.public !== 'function' || typeof providerStore.config !== 'function' || typeof providerStore.flush !== 'function')) {
       throw new TypeError('providerStore must implement the OnlineStore API and durable flush()')
     }
-    this.klyvaronEvidenceTrustStore = loadKlyvaronEvidenceTrustStore(join(this.dir, 'klyvaron', 'evidence-trust.json'))
-    this.modelReleaseRegistry = new KlyvaronModelRegistryStore({
-      filePath: join(this.dir, 'klyvaron', 'model-release-registry.json'),
-      initialRecords: KLYVARON_MODEL_REGISTRY,
-      trustStore: this.klyvaronEvidenceTrustStore,
-    })
     this.gateway = new OnlineGateway({ trustedOrigins, timeoutMs })
     // The video wire polls a long-running operation. Tests shorten the interval; production uses
     // the documented 10-second cadence. This is a timing seam, not a behaviour switch.
@@ -385,29 +377,15 @@ export class OnlineApp {
     } })
     this.plugins.enable('aetheris.installation-guides')
     this.remoteServers = new RemoteServerManager({ dir: this.dir, gateway: this.gateway, credentialStore: this.store, mcp: this.mcp, plugins: this.plugins, ledger: this.ledger })
-    this.nativeKlyvaron = new NativeKlyvaronHost({ root: join(this.dir, 'klyvaron'), dataDir: this.dir, ledger: this.ledger })
-    this.qualificationRegistry = new RuntimeQualificationRegistry({
-      statePath: join(this.dir, 'klyvaron', 'qualified-runtimes.json'),
-    })
+    this.nativeKlyvaron = new NativeKlyvaronHost({ root: join(this.dir, 'klyvaron'), dataDir: this.dir, ledger: this.ledger, enableLegacyArtifacts: false })
     this.multimodalHost = new NativeMultimodalHost({
       modelsRoot: join(this.dir, 'klyvaron', 'models'),
       nativeKlyvaron: this.nativeKlyvaron,
-      qualificationRegistry: this.qualificationRegistry,
+      enableLegacyArtifacts: false,
     })
-    this.trainingWorker = new LocalTrainingWorkerManager({ root: join(this.dir, 'klyvaron'), ledger: this.ledger })
-    this.trainingController = new UserTrainingController({
-      root: join(this.dir, 'klyvaron'),
-      nativeKlyvaron: this.nativeKlyvaron,
-      multimodalHost: this.multimodalHost,
-      qualificationRegistry: this.qualificationRegistry,
-      ledger: this.ledger,
-      contextFor: (accountId) => this.contextFor(accountId),
-    })
-    this.multimodalHost.userTrainingController = this.trainingController
+
   }
   close() {
-    this.trainingWorker.close()
-    this.trainingController.disconnectWorker()
     void this.nativeKlyvaron.close()
     this.sessions.clear()
     const closeContext = (context) => {
@@ -497,258 +475,91 @@ export class OnlineApp {
       providers: PROVIDERS.map((provider) => describeProvider(provider.id)),
     }
   }
-  /**
-   * Klyvaron product tiers, with the exact provider and model each preset resolves to.
-   *
-   * The name on the outside is a tier; the model on the inside is a third-party API the operator
-   * configured. A tier with no preset is returned as `configured: false` rather than silently
-   * pointing at the active connection: the label would otherwise describe a different model than
-   * the one the operator chose.
-   */
-  nativeMultimodalModelsFor(modality) {
-    return [...this.multimodalHost.records.values()].filter((m) => m.modality === modality && m.verified)
-  }
-
+  /** Read-only Klyvaron capability profiles; provider and model selection is independent. */
   klyvaronView() {
-    const view = this.store.public()
-    const connections = new Map(view.connections.map((connection) => [connection.id, connection]))
-    const nativeSummary = this.nativeKlyvaron.summary()
-    const mmStatus = this.multimodalHost.status()
-    const mmReadyCount = Object.values(mmStatus.models).filter((m) => m.verified).length
-    const workerCaps = this.trainingController.isLocalWorkerConnected()
-      ? this.trainingController.workerConnection?.capabilities
-      : null
-    const allModalities = [...MODALITIES, 'voice']
     return {
       product: 'klyvaron',
       modelIndependentProcessor: {
-        engine: 'klyvaron-deterministic-v1', modelRequired: false, weightsRequired: false, networkRequired: false,
-        profiles: KLYVARON_PROCESSOR_PROFILES, tasks: KLYVARON_PROCESSOR_TASKS,
+        engine: 'klyvaron-deterministic-v1',
+        modelRequired: false,
+        weightsRequired: false,
+        networkRequired: false,
+        profiles: KLYVARON_PROCESSOR_PROFILES,
+        tasks: KLYVARON_PROCESSOR_TASKS,
       },
-      independentWeights: nativeSummary.readyCount + mmReadyCount > 0,
       note: KLYVARON_NOTE,
-      revision: view.revision,
-      productSubscriptionTiers: PRODUCT_SUBSCRIPTION_TIERS,
-      modelReleaseRegistry: this.modelReleaseRegistry.snapshot(),
-      firstPartyModels: nativeSummary,
-      firstPartyMultimodal: mmStatus,
-      capabilityManifests: this.multimodalHost.buildCapabilityManifests({ hardwareCapabilities: workerCaps }),
-      qualificationRecords: this.qualificationRegistry.list(),
-      trainingWorker: {
-        jobs: this.trainingWorker.listJobs(),
-      },
       tiers: KLYVARON_TIERS.map((tier) => ({
         id: tier.id,
         label: tier.label,
         intent: tier.intent,
-        presets: Object.fromEntries(allModalities.map((modality) => {
-          const preset = this.store.klyvaronPreset(tier.id, modality)
-          if (!preset) return [modality, { configured: false, provenance: null }]
-          if (preset.connectionId === 'klyvaron-native') {
-            if (modality === 'chat') {
-              const nativeRec = this.nativeKlyvaron.get(preset.model)
-              const ok = Boolean(nativeRec && nativeRec.status === 'ready' && nativeRec.selectorEnabled)
-              return [modality, {
-                configured: ok,
-                connectionId: 'klyvaron-native',
-                provider: 'Klyvaron Native',
-                wire: 'klyvaron-native',
-                model: preset.model,
-                provenance: nativeRec ? {
-                  kind: 'first_party_native',
-                  providerId: 'klyvaron-native',
-                  provider: 'Klyvaron Native',
-                  wire: 'klyvaron-native',
-                  model: preset.model,
-                  firstPartyWeights: ok,
-                  weightsSha256: nativeRec.weightsSha256,
-                  parameters: nativeRec.parameters,
-                  training: 'first_party_trained_from_scratch',
-                  statement: ok
-                    ? `Served locally by verified first-party weights ${preset.model} (SHA-256 ${nativeRec.weightsSha256.slice(0, 16)}…).`
-                    : `${preset.model} is not currently inference-verified (${nativeRec.status}).`,
-                } : null,
-              }]
-            }
-            const mmRec = this.multimodalHost.records.get(preset.model)
-            const ok = Boolean(mmRec && mmRec.verified && mmRec.modality === modality)
-            return [modality, {
-              configured: ok,
-              connectionId: 'klyvaron-native',
-              provider: 'Klyvaron Native',
-              wire: 'klyvaron-native',
-              model: preset.model,
-              provenance: mmRec ? {
-                kind: 'first_party_native',
-                providerId: 'klyvaron-native',
-                provider: 'Klyvaron Native',
-                wire: 'klyvaron-native',
-                model: preset.model,
-                firstPartyWeights: ok,
-                weightsSha256: mmRec.weightsSha256,
-                parameters: mmRec.parameterCount,
-                training: 'first_party_trained_from_scratch',
-                statement: ok
-                  ? `Served locally by verified first-party ${modality} model ${preset.model} (SHA-256 ${mmRec.weightsSha256.slice(0, 16)}…).`
-                  : `${preset.model} is not ready (${mmRec.reason ?? mmRec.status}).`,
-              } : null,
-            }]
-          }
-          const connection = connections.get(preset.connectionId)
-          return [modality, {
-            configured: Boolean(connection?.configured),
-            connectionId: preset.connectionId,
-            provider: connection?.label ?? preset.connectionId,
-            wire: connection?.wire ?? null,
-            model: preset.model,
-            provenance: connection ? provenanceFor(connection, preset.model) : null,
-          }]
-        })),
+        profile: KLYVARON_PROCESSOR_PROFILES[tier.id],
       })),
     }
   }
 
-  /** Point a tier at a saved connection (or verified `klyvaron-native`) and a model. */
-  setKlyvaronPreset(tier, body, session) {
-    const entry = tierFor(tier)
-    if (!entry) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
-    const allowedMods = [...MODALITIES, 'voice']
-    if (!allowedMods.includes(body?.modality)) throw failure('invalid_modality', 'A tier preset is for chat, image, video or voice.', 400)
-    if (typeof body?.connectionId !== 'string' || typeof body?.model !== 'string') throw failure('invalid_preset', 'A preset needs a saved connection and a listed model.', 400)
-    if (body.connectionId === 'klyvaron-native') {
-      if (body.modality === 'chat') {
-        this.nativeKlyvaron.requireProvider(body.model)
-      } else {
-        const mmRec = this.multimodalHost.records.get(body.model)
-        if (!mmRec || mmRec.modality !== body.modality) {
-          throw failure('klyvaron_tier_modality', `${entry.label} ${body.modality} preset cannot target '${body.model}'.`, 409)
-        }
-        if (!mmRec.verified) {
-          throw failure('klyvaron_model_unavailable', `${body.model} is not verified: ${mmRec.reason ?? mmRec.status}`, 503)
-        }
-      }
-      this.store.saveKlyvaronPreset(tier, body.modality, { connectionId: 'klyvaron-native', model: body.model })
-      this.ledger.record({ category: 'provider', action: 'klyvaron_preset', outcome: 'success', subject: session?.accountId ?? null, detail: { tier, modality: body.modality, provider: 'klyvaron-native', model: body.model } })
-      return this.klyvaronView()
-    }
-    const config = this.store.config(body.connectionId)
-    const wire = wireFor(config.wire)
-    const actual = wire.modality ?? 'chat'
-    if (actual !== body.modality) {
-      throw failure('klyvaron_tier_modality', `${entry.label} is a ${body.modality} tier; ${config.label} serves ${actual}.`, 409)
-    }
-    this.store.saveKlyvaronPreset(tier, body.modality, { connectionId: body.connectionId, model: body.model })
-    this.ledger.record({ category: 'provider', action: 'klyvaron_preset', outcome: 'success', subject: session?.accountId ?? null, detail: { tier, modality: body.modality, provider: config.id, model: body.model } })
-    return this.klyvaronView()
-  }
-
-  clearKlyvaronPreset(tier, modality) {
-    if (!tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
-    this.store.removeKlyvaronPreset(tier, modality)
-    return this.klyvaronView()
-  }
-
   defaultSelectedModel() {
-    if (this.store.selectedNativeModel && this.nativeKlyvaron.isSelectable(this.store.selectedNativeModel)) {
-      return this.store.selectedNativeModel
-    }
-    if (this.store.state.selectedModel) return this.store.state.selectedModel
-    const nativeModels = this.nativeKlyvaron.selectableModelEntries()
-    return nativeModels[0]?.id ?? ''
+    // This is the provider's explicitly selected model, not a Klyvaron tier assignment.
+    return this.store.state.selectedModel || ''
   }
 
   readiness() {
-    const s = this.store.public()
-    const nativeSummary = this.nativeKlyvaron.summary()
-    const nativeReady = nativeSummary.readyCount
+    const state = this.store.public()
     let chatWire = null
-    try { chatWire = s.kind ? wireFor(runtimeFor(s.kind).wire) : null } catch { chatWire = null }
-    const gatewayChatReady = s.configured && s.models.length > 0 && typeof chatWire?.chat === 'function'
-    const nativeImgModels = this.nativeMultimodalModelsFor('image')
-    const nativeVidModels = this.nativeMultimodalModelsFor('video')
-    const nativeVocModels = this.nativeMultimodalModelsFor('voice')
+    try { chatWire = state.kind ? wireFor(runtimeFor(state.kind).wire) : null } catch { chatWire = null }
+    const gatewayChatReady = state.configured && state.models.length > 0 && typeof chatWire?.chat === 'function'
     const mediaFor = (kind) => {
-      const id = s.preferred?.[kind] ?? null
-      const connection = id ? (s.connections ?? []).find((entry) => entry.id === id) : null
-      const nativeModels = this.nativeMultimodalModelsFor(kind)
-      if (!connection && nativeModels.length > 0) {
-        return {
-          connectionId: 'klyvaron-native',
-          wire: 'klyvaron-native',
-          firstParty: true,
-          sizes: kind === 'image' ? ['256x256', '512x512', '768x512', '512x768'] : [],
-          aspectRatios: kind === 'video' ? ['16:9', '9:16', '1:1'] : [],
-          resolutions: kind === 'video' ? ['480p', '720p'] : [],
-          models: nativeModels.map((m) => m.id),
-          keyConfigured: true,
-        }
-      }
+      const connectionId = state.preferred?.[kind] ?? null
+      const connection = connectionId ? (state.connections ?? []).find((entry) => entry.id === connectionId) : null
       return {
-        connectionId: id,
+        connectionId,
         wire: connection?.wire ?? null,
         sizes: connection?.sizes ?? [],
         aspectRatios: connection?.aspectRatios ?? [],
         resolutions: connection?.resolutions ?? [],
-        models: [...nativeModels.map((m) => m.id), ...(connection?.models ?? [])],
-        keyConfigured: Boolean(connection?.keyConfigured || nativeModels.length > 0),
+        models: connection?.models ?? [],
+        keyConfigured: Boolean(connection?.keyConfigured),
       }
     }
-    const mmTotalReady = nativeImgModels.length + nativeVidModels.length + nativeVocModels.length
-    const status = s.configured
-      ? (s.checkedAt ? 'configured' : 'connection_unchecked')
-      : (nativeReady + mmTotalReady > 0 ? 'configured' : 'setup_required')
     const accountTotal = typeof this.accounts.countForReadiness === 'function'
       ? this.accounts.countForReadiness()
       : this.accounts.count()
-    const base = {
-      status,
+    return {
+      status: state.configured ? (state.checkedAt ? 'configured' : 'connection_unchecked') : 'setup_required',
       policy: 'online_only',
       offlineEnforced: false,
-      models: {
-        total: s.models.length + nativeReady + mmTotalReady,
-        ready: Object.keys(s.verified).length + nativeReady + mmTotalReady,
-      },
+      models: { total: state.models.length, ready: Object.keys(state.verified).length },
       capabilities: {
-        chat: gatewayChatReady || nativeReady > 0,
+        chat: gatewayChatReady,
         imageGeneration: this.imageAvailable(),
-        imageEditing: nativeImgModels.length > 0,
-        visionUnderstanding: nativeImgModels.length > 0,
+        imageEditing: false,
+        visionUnderstanding: false,
         videoGeneration: this.videoAvailable(),
-        videoUnderstanding: nativeVidModels.length > 0,
-        speechSynthesis: nativeVocModels.length > 0,
-        speechTranscription: nativeVocModels.length > 0,
+        videoUnderstanding: false,
+        speechSynthesis: false,
+        speechTranscription: false,
       },
       media: { image: mediaFor('image'), video: mediaFor('video'), voice: mediaFor('voice') },
       provider: {
-        kind: s.kind,
-        name: s.name,
-        baseUrl: s.baseUrl,
+        kind: state.kind,
+        name: state.name,
+        baseUrl: state.baseUrl,
         selectedModel: this.defaultSelectedModel(),
-        checkedAt: s.checkedAt,
+        checkedAt: state.checkedAt,
       },
       accounts: { total: accountTotal },
-      note: nativeReady > 0
-        ? `${nativeReady} verified first-party Klyvaron model(s) ready locally; external gateway models list availability separately without automatic fallback.`
-        : 'Listing a model does not verify inference or modality support. No local inference or fallback.',
+      klyvaron: {
+        engine: 'klyvaron-deterministic-v1',
+        modelRequired: false,
+        weightsRequired: false,
+        networkRequired: false,
+      },
+      note: 'Klyvaron tiers use one shared model-independent processing engine. Separate local Pro/Max model artifacts are not loaded; optional provider routes are listed separately.',
     }
-    if (nativeReady > 0 || nativeSummary.models.some((m) => m.status === 'failed')) {
-      base.firstPartyModels = {
-        ...nativeSummary,
-        localWorkerConnected: this.trainingController.isLocalWorkerConnected(),
-        models: nativeSummary.models.map((m) => ({
-          ...m,
-          releaseGates: this.trainingController.releaseGatesFor(m.id).gates,
-          capabilityGates: this.trainingController.releaseGatesFor(m.id).capabilityGates,
-        })),
-      }
-    }
-    return base
   }
 
   models() {
-    const nativeEntries = this.nativeKlyvaron.selectableModelEntries()
     const kind = this.store.kind()
-    const gatewayEntries = this.store.state.models.map((id) => ({
+    return this.store.state.models.map((id) => ({
       id,
       displayName: id,
       provider: kind,
@@ -756,7 +567,6 @@ export class OnlineApp {
       availability: this.store.state.verified[id] ? 'inference_observed' : 'listed_unverified',
       selectable: true,
     }))
-    return [...nativeEntries, ...gatewayEntries]
   }
 
   /**
@@ -772,9 +582,8 @@ export class OnlineApp {
     return this.store.config(id)
   }
 
-  /** Whether the installation can generate an image now: a gateway key+model OR a verified first-party image checkpoint. */
+  /** Whether an explicitly configured external image connection can generate an image now. */
   imageAvailable() {
-    if (this.nativeMultimodalModelsFor('image').length > 0) return true
     try {
       const config = this.imageConnection()
       const record = this.store.connections.find((connection) => connection.id === config.id)
@@ -788,75 +597,18 @@ export class OnlineApp {
   async startImage(body, session, requestSignal = null) {
     const localOnly = requestedLocalOnly(body)
     const industryMode = requestedIndustryMode(body)
-    const tier = body.tier === undefined || body.tier === null ? null : body.tier
-    if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
-    const tierPreset = tier === null ? null : this.store.klyvaronPreset(tier, 'image')
-    const nativeReady = this.nativeMultimodalModelsFor('image')
-    const hasPreferredGateway = Boolean(this.store.public().preferred.image)
-    const explicitNativeModel = tierPreset?.connectionId === 'klyvaron-native'
-      ? tierPreset.model
-      : (this.multimodalHost.isFirstPartyMultimodalModel(body.model) ? body.model : null)
+    if (body.tier !== undefined && body.tier !== null) throw failure('model_independent_tier', 'Lite/Pro/Max are processor resource profiles, not image-provider model mappings. Choose an image provider and model directly.', 410)
+    const explicitNativeModel = this.multimodalHost.isFirstPartyMultimodalModel(body.model) ? body.model : null
 
-    if (explicitNativeModel || body.provider === 'klyvaron-native' || (!hasPreferredGateway && tier === null && !body.model && nativeReady.length > 0)) {
-      const targetModel = explicitNativeModel ?? nativeReady[0]?.id ?? 'klyvaron-pro-image'
-      const rec = this.multimodalHost.records.get(targetModel)
-      if (!rec || rec.modality !== 'image') {
-        throw failure('model_unavailable', `Unknown image model '${targetModel}'. No substitution is performed.`, 409)
-      }
-      if (!rec.verified) {
-        throw failure('klyvaron_model_unavailable', `First-party model '${targetModel}' is missing or failed SHA-256 verification.`, 503)
-      }
-      const { userPrompt, prompt } = mediaPromptFor(body, 'image', 'generate')
-      const allowedSizes = ['256x256', '512x512', '768x512', '512x768']
-      if (body.size !== undefined && body.size !== '' && !allowedSizes.includes(body.size)) {
-        throw failure('invalid_parameters', `Size must be one of ${allowedSizes.join(', ')}.`, 400)
-      }
-      const size = body.size || '256x256'
-      const provenance = {
-        kind: 'first_party_native',
-        providerId: 'klyvaron-native',
-        provider: 'Klyvaron Native',
-        wire: 'klyvaron-native',
-        model: rec.id,
-        firstPartyWeights: true,
-        weightsSha256: rec.weightsSha256,
-        parameters: rec.parameterCount,
-        training: 'first_party_trained_from_scratch',
-        statement: `Generated locally by verified first-party model ${rec.id} (SHA-256 ${rec.weightsSha256.slice(0, 16)}…).`,
-      }
-      const context = await this.contextFor(session.accountId)
-      const job = await context.media.enqueue({
-        kind: 'image',
-        params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, size, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
-        subject: session.accountId,
-        filenameHint: `${rec.id}-image`,
-        signal: requestSignal,
-        run: async () => {
-          const gen = await this.multimodalHost.generateImage({ modelId: rec.id, prompt, size })
-          return {
-            bytes: gen.buffer,
-            mime: gen.mimeType,
-            meta: {
-              width: gen.measured.width,
-              height: gen.measured.height,
-              predictedScene: gen.predictedScene,
-              sceneConfidence: gen.sceneConfidence,
-              latencyMs: gen.latencyMs,
-              weightsSha256: gen.weightsSha256,
-            },
-          }
-        },
-      })
-      this.ledger.record({ category: 'media', action: 'klyvaron_native_image_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, model: rec.id, tier } })
-      return job
+    if (explicitNativeModel || body.provider === 'klyvaron-native') {
+      throw failure('model_independent_architecture', 'Klyvaron does not load separate image weights. Select an explicitly configured image provider.', 410)
     }
 
-    const resolved = tier === null ? null : resolveTier({ tier, modality: 'image', store: this.store, configFor: (id) => this.store.config(id), wireFor })
-    const config = resolved?.config ?? this.imageConnection()
+    const config = this.imageConnection()
     if (localOnly) assertLocalOnlyProvider(body, config, 'image')
     const record = this.store.connections.find((connection) => connection.id === config.id)
     const models = record?.models ?? []
-    const model = resolved?.model ?? (typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0]))
+    const model = typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0])
     if (!model) throw failure('model_unavailable', 'Test the image connection to list its models, then choose one.', 409)
     if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
     const wire = wireFor(config.wire)
@@ -874,7 +626,7 @@ export class OnlineApp {
     const context = await this.contextFor(session.accountId)
     const job = await context.media.enqueue({
       kind: 'image',
-      params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, size: size ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
+      params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, size: size ?? null, model, provider: config.id, wire: config.wire, tier: null, provenance: null },
       subject: session.accountId,
       filenameHint: `${config.id}-image`,
       signal: requestSignal,
@@ -884,7 +636,7 @@ export class OnlineApp {
         trustedOrigins: this.gateway.trustedOrigins,
       }),
     })
-    this.ledger.record({ category: 'media', action: 'image_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model, tier: resolved?.tier ?? null } })
+    this.ledger.record({ category: 'media', action: 'image_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model } })
     return job
   }
 
@@ -895,94 +647,16 @@ export class OnlineApp {
     return this.store.config(id)
   }
 
-  async startImageEdit(body, session, requestSignal = null) {
-    requestedLocalOnly(body)
-    const industryMode = requestedIndustryMode(body)
-    const nativeReady = this.nativeMultimodalModelsFor('image')
-    const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-image'
-    const rec = this.multimodalHost.records.get(targetModel)
-    if (!rec || rec.modality !== 'image') throw failure('model_unavailable', `Unknown first-party image model '${targetModel}'.`, 409)
-    if (!rec.verified) throw failure('klyvaron_model_unavailable', `Model '${targetModel}' is missing or unverified.`, 503)
-    const { userPrompt, prompt } = mediaPromptFor(body, 'image', 'edit')
-    const context = await this.contextFor(session.accountId)
-    let sourceBytes = null
-    if (typeof body.imageBase64 === 'string' && body.imageBase64) {
-      sourceBytes = Buffer.from(body.imageBase64, 'base64')
-    } else if (typeof body.sourceJobId === 'string' && await context.media.has(body.sourceJobId)) {
-      const read = await context.media.readArtifact(body.sourceJobId)
-      sourceBytes = Buffer.from(read.bytes)
-    }
-    if (!sourceBytes || sourceBytes.length === 0) {
-      throw failure('invalid_parameters', 'Supply either imageBase64 or a valid sourceJobId for image editing.', 400)
-    }
-    const provenance = {
-      kind: 'first_party_native',
-      providerId: 'klyvaron-native',
-      provider: 'Klyvaron Native',
-      wire: 'klyvaron-native',
-      model: rec.id,
-      firstPartyWeights: true,
-      weightsSha256: rec.weightsSha256,
-      parameters: rec.parameterCount,
-      training: 'first_party_trained_from_scratch',
-      statement: `Edited locally by verified first-party model ${rec.id}.`,
-    }
-    return await context.media.enqueue({
-      kind: 'image',
-      params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, mode: 'edit', model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', provenance },
-      subject: session.accountId,
-      filenameHint: `${rec.id}-image-edit`,
-      signal: requestSignal,
-      run: async () => {
-        const edited = await this.multimodalHost.editImage({
-          modelId: rec.id,
-          imageBuffer: sourceBytes,
-          prompt,
-          strength: Number(body.strength ?? 0.72),
-        })
-        return {
-          bytes: edited.buffer,
-          mime: edited.mimeType,
-          meta: {
-            width: edited.measured.width,
-            height: edited.measured.height,
-            sourceScene: edited.sourceScene,
-            editedScene: edited.editedScene,
-            meanAbsPixelDelta: edited.meanAbsPixelDelta,
-            latencyMs: edited.latencyMs,
-          },
-        }
-      },
-    })
+  async startImageEdit() {
+    throw failure('capability_unavailable', 'The shared Klyvaron processor is text-only and does not load separate image-editing weights. Configure an explicit external image provider for this task.', 410)
   }
 
-  async understandImage(body, session) {
-    requestedLocalOnly(body)
-    const industryMode = requestedIndustryMode(body)
-    const nativeReady = this.nativeMultimodalModelsFor('image')
-    const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-image'
-    const rec = this.multimodalHost.records.get(targetModel)
-    if (!rec || rec.modality !== 'image') throw failure('model_unavailable', `Unknown first-party image model '${targetModel}'.`, 409)
-    if (!rec.verified) throw failure('klyvaron_model_unavailable', `Model '${targetModel}' is missing or unverified.`, 503)
-    const context = await this.contextFor(session.accountId)
-    let sourceBytes = null
-    if (typeof body.imageBase64 === 'string' && body.imageBase64) {
-      sourceBytes = Buffer.from(body.imageBase64, 'base64')
-    } else if (typeof body.sourceJobId === 'string' && await context.media.has(body.sourceJobId)) {
-      const read = await context.media.readArtifact(body.sourceJobId)
-      sourceBytes = Buffer.from(read.bytes)
-    }
-    if (!sourceBytes || sourceBytes.length === 0) {
-      throw failure('invalid_parameters', 'Supply either imageBase64 or a valid sourceJobId for vision understanding.', 400)
-    }
-    const { prompt } = mediaPromptFor(body, 'image', 'analyze', { allowEmpty: true })
-    const result = await this.multimodalHost.understandImage({ modelId: rec.id, imageBuffer: sourceBytes, prompt })
-    return { ...result, industryMode }
+  async understandImage() {
+    throw failure('capability_unavailable', 'The shared Klyvaron processor does not interpret image bytes. No separate image model weights are loaded.', 410)
   }
 
-  /** Whether this installation can start a video job now: a gateway key+model OR a verified first-party video checkpoint. */
+  /** Whether an explicitly configured external video connection can start a job now. */
   videoAvailable() {
-    if (this.nativeMultimodalModelsFor('video').length > 0) return true
     try {
       const config = this.videoConnection()
       const record = this.store.connections.find((connection) => connection.id === config.id)
@@ -997,93 +671,18 @@ export class OnlineApp {
   async startVideo(body, session, requestSignal = null) {
     const localOnly = requestedLocalOnly(body)
     const industryMode = requestedIndustryMode(body)
-    const tier = body.tier === undefined || body.tier === null ? null : body.tier
-    if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
-    const tierPreset = tier === null ? null : this.store.klyvaronPreset(tier, 'video')
-    const nativeReady = this.nativeMultimodalModelsFor('video')
-    const hasPreferredGateway = Boolean(this.store.public().preferred.video)
-    const explicitNativeModel = tierPreset?.connectionId === 'klyvaron-native'
-      ? tierPreset.model
-      : (this.multimodalHost.isFirstPartyMultimodalModel(body.model) ? body.model : null)
+    if (body.tier !== undefined && body.tier !== null) throw failure('model_independent_tier', 'Lite/Pro/Max are processor resource profiles, not video-provider model mappings. Choose a video provider and model directly.', 410)
+    const explicitNativeModel = this.multimodalHost.isFirstPartyMultimodalModel(body.model) ? body.model : null
 
-    if (explicitNativeModel || body.provider === 'klyvaron-native' || (!hasPreferredGateway && tier === null && !body.model && nativeReady.length > 0)) {
-      const targetModel = explicitNativeModel ?? nativeReady[0]?.id ?? 'klyvaron-pro-video'
-      const rec = this.multimodalHost.records.get(targetModel)
-      if (!rec || rec.modality !== 'video') {
-        throw failure('model_unavailable', `Unknown video model '${targetModel}'. No substitution is performed.`, 409)
-      }
-      if (!rec.verified) {
-        throw failure('klyvaron_model_unavailable', `First-party model '${targetModel}' is missing or failed SHA-256 verification.`, 503)
-      }
-      const { userPrompt, prompt } = mediaPromptFor(body, 'video', 'generate')
-      if (Number(body.durationMs ?? 2000) > 6000 || body.resolution === '4k' || body.audioTrack === true) {
-        throw failure(
-          'unsupported_video_scope',
-          `${rec.id} supports short silent motion clips (<= 6s at 480p or 720p); long-form video, 4K cinema rendering, and synchronized audio tracks are outside scope.`,
-          409,
-        )
-      }
-      const aspectRatio = body.aspectRatio || '16:9'
-      const resolution = body.resolution || '720p'
-      if (!['16:9', '9:16', '1:1'].includes(aspectRatio)) {
-        throw failure('invalid_parameters', 'Aspect ratio must be one of 16:9, 9:16, 1:1.', 400)
-      }
-      if (!['480p', '720p'].includes(resolution)) {
-        throw failure('invalid_parameters', 'Resolution must be one of 480p, 720p.', 400)
-      }
-      const provenance = {
-        kind: 'first_party_native',
-        providerId: 'klyvaron-native',
-        provider: 'Klyvaron Native',
-        wire: 'klyvaron-native',
-        model: rec.id,
-        firstPartyWeights: true,
-        weightsSha256: rec.weightsSha256,
-        parameters: rec.parameterCount,
-        training: 'first_party_trained_from_scratch',
-        statement: `Generated locally as multi-frame H.264 MP4 by verified first-party model ${rec.id} (SHA-256 ${rec.weightsSha256.slice(0, 16)}…).`,
-      }
-      const context = await this.contextFor(session.accountId)
-      const job = await context.media.enqueue({
-        kind: 'video',
-        timeoutMs: 5 * 60 * 1000,
-        params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, aspectRatio, resolution, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native', tier, provenance },
-        subject: session.accountId,
-        filenameHint: `${rec.id}-video`,
-        signal: requestSignal,
-        run: async () => {
-          const gen = await this.multimodalHost.generateVideo({
-            modelId: rec.id,
-            prompt,
-            aspectRatio,
-            resolution,
-            durationMs: Number(body.durationMs ?? 2000),
-          })
-          return {
-            bytes: gen.buffer,
-            mime: gen.mimeType,
-            meta: {
-              fps: gen.fps,
-              frameCount: gen.frameCount,
-              durationSeconds: gen.durationSeconds,
-              motionEnergy: gen.motionEnergy,
-              predictedMotion: gen.predictedMotion,
-              predictedEnvironment: gen.predictedEnvironment,
-              latencyMs: gen.latencyMs,
-            },
-          }
-        },
-      })
-      this.ledger.record({ category: 'media', action: 'klyvaron_native_video_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, model: rec.id, tier } })
-      return job
+    if (explicitNativeModel || body.provider === 'klyvaron-native') {
+      throw failure('model_independent_architecture', 'Klyvaron does not load separate video weights. Select an explicitly configured video provider.', 410)
     }
 
-    const resolved = tier === null ? null : resolveTier({ tier, modality: 'video', store: this.store, configFor: (id) => this.store.config(id), wireFor })
-    const config = resolved?.config ?? this.videoConnection()
+    const config = this.videoConnection()
     if (localOnly) assertLocalOnlyProvider(body, config, 'video')
     const record = this.store.connections.find((connection) => connection.id === config.id)
     const models = record?.models ?? []
-    const model = resolved?.model ?? (typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0]))
+    const model = typeof body.model === 'string' && body.model ? body.model : (record?.selectedModel || models[0])
     if (!model) throw failure('model_unavailable', 'Test the video connection to list its models, then choose one.', 409)
     if (models.length && !models.includes(model)) throw failure('model_unavailable', 'Choose a model this connection listed. No substitution is performed.', 409)
     const wire = wireFor(config.wire)
@@ -1108,7 +707,7 @@ export class OnlineApp {
       // Video renders for minutes and the provider operation is paid for once; the deadline is
       // bounded and stated in the job record, and the job is failed honestly if it is exceeded.
       timeoutMs: 15 * 60 * 1000,
-      params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, aspectRatio: aspectRatio ?? null, resolution: resolution ?? null, model, provider: config.id, wire: config.wire, tier: resolved?.tier ?? null, provenance: resolved?.provenance ?? null },
+      params: { prompt: userPrompt, appliedPrompt: prompt, industryMode, aspectRatio: aspectRatio ?? null, resolution: resolution ?? null, model, provider: config.id, wire: config.wire, tier: null, provenance: null },
       subject: session.accountId,
       filenameHint: `${config.id}-video`,
       signal: requestSignal,
@@ -1123,90 +722,19 @@ export class OnlineApp {
         trustedOrigins: this.gateway.trustedOrigins,
       }),
     })
-    this.ledger.record({ category: 'media', action: 'video_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model, tier: resolved?.tier ?? null } })
+    this.ledger.record({ category: 'media', action: 'video_generate', outcome: 'queued', subject: session.accountId, detail: { jobId: job.id, provider: config.id, model } })
     return job
   }
-  async understandVideo(body, session) {
-    requestedLocalOnly(body)
-    const industryMode = requestedIndustryMode(body)
-    const nativeReady = this.nativeMultimodalModelsFor('video')
-    const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-video'
-    const rec = this.multimodalHost.records.get(targetModel)
-    if (!rec || rec.modality !== 'video') throw failure('model_unavailable', `Unknown first-party video model '${targetModel}'.`, 409)
-    if (!rec.verified) throw failure('klyvaron_model_unavailable', `Model '${targetModel}' is missing or unverified.`, 503)
-    const context = await this.contextFor(session.accountId)
-    let sourceBytes = null
-    if (typeof body.videoBase64 === 'string' && body.videoBase64) {
-      sourceBytes = Buffer.from(body.videoBase64, 'base64')
-    } else if (typeof body.sourceJobId === 'string' && await context.media.has(body.sourceJobId)) {
-      const read = await context.media.readArtifact(body.sourceJobId)
-      sourceBytes = Buffer.from(read.bytes)
-    }
-    if (!sourceBytes || sourceBytes.length === 0) {
-      throw failure('invalid_parameters', 'Supply either videoBase64 or a valid sourceJobId for video understanding.', 400)
-    }
-    const { prompt } = mediaPromptFor(body, 'video', 'analyze', { allowEmpty: true })
-    const result = await this.multimodalHost.understandVideo({ modelId: rec.id, videoBuffer: sourceBytes, prompt })
-    return { ...result, industryMode }
+  async understandVideo() {
+    throw failure('capability_unavailable', 'The shared Klyvaron processor does not interpret video bytes. No separate video model weights are loaded.', 410)
   }
 
-  async startVoiceSynthesis(body, session) {
-    const nativeReady = this.nativeMultimodalModelsFor('voice')
-    const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-voice'
-    const rec = this.multimodalHost.records.get(targetModel)
-    if (!rec || rec.modality !== 'voice') throw failure('model_unavailable', `Unknown first-party voice model '${targetModel}'.`, 409)
-    if (!rec.verified) throw failure('klyvaron_model_unavailable', `Model '${targetModel}' is missing or unverified.`, 503)
-    const text = body.text ?? body.prompt
-    if (typeof text !== 'string' || !text.trim()) throw failure('invalid_prompt', 'Non-empty text is required for speech synthesis.', 400)
-    const context = await this.contextFor(session.accountId)
-    const synth = await this.multimodalHost.synthesizeSpeech({ modelId: rec.id, text })
-    const job = await context.media.enqueue({
-      kind: 'audio',
-      params: { text, model: rec.id, provider: 'klyvaron-native', wire: 'klyvaron-native' },
-      subject: session.accountId,
-      filenameHint: `${rec.id}-voice`,
-      run: async () => ({
-        bytes: synth.buffer,
-        mime: synth.mimeType,
-        meta: {
-          durationSeconds: synth.durationSeconds,
-          sampleRate: synth.sampleRate,
-          meanPitchHz: synth.meanPitchHz,
-          rmsAmplitude: synth.rmsAmplitude,
-        },
-      }),
-    })
-    return {
-      job,
-      modelId: rec.id,
-      weightsSha256: synth.weightsSha256,
-      durationSeconds: synth.durationSeconds,
-      sampleRate: synth.sampleRate,
-      meanPitchHz: synth.meanPitchHz,
-      rmsAmplitude: synth.rmsAmplitude,
-      audioBase64: synth.buffer.toString('base64'),
-      latencyMs: synth.latencyMs,
-    }
+  async startVoiceSynthesis() {
+    throw failure('capability_unavailable', 'The shared Klyvaron processor does not synthesize speech. No separate voice model weights are loaded.', 410)
   }
 
-  async transcribeVoice(body, session) {
-    const nativeReady = this.nativeMultimodalModelsFor('voice')
-    const targetModel = body.model || nativeReady[0]?.id || 'klyvaron-pro-voice'
-    const rec = this.multimodalHost.records.get(targetModel)
-    if (!rec || rec.modality !== 'voice') throw failure('model_unavailable', `Unknown first-party voice model '${targetModel}'.`, 409)
-    if (!rec.verified) throw failure('klyvaron_model_unavailable', `Model '${targetModel}' is missing or unverified.`, 503)
-    const context = await this.contextFor(session.accountId)
-    let sourceBytes = null
-    if (typeof body.audioBase64 === 'string' && body.audioBase64) {
-      sourceBytes = Buffer.from(body.audioBase64, 'base64')
-    } else if (typeof body.sourceJobId === 'string' && await context.media.has(body.sourceJobId)) {
-      const read = await context.media.readArtifact(body.sourceJobId)
-      sourceBytes = Buffer.from(read.bytes)
-    }
-    if (!sourceBytes || sourceBytes.length === 0) {
-      throw failure('invalid_parameters', 'Supply either audioBase64 or a valid sourceJobId for speech transcription.', 400)
-    }
-    return this.multimodalHost.transcribeSpeech({ modelId: rec.id, audioBuffer: sourceBytes })
+  async transcribeVoice() {
+    throw failure('capability_unavailable', 'The shared Klyvaron processor does not transcribe audio. No separate voice model weights are loaded.', 410)
   }
 
   async configure(body, { session, kind } = {}) {
@@ -1290,185 +818,20 @@ export class OnlineApp {
     const industryInstruction = industryInstructionFor(industryMode)
     const context = await this.contextFor(session.accountId)
     const state = this.store.state, revision = state.revision
-    const tier = body.tier === undefined || body.tier === null ? null : body.tier
-    if (tier !== null && !tierFor(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
-
-    const tierPreset = tier === null ? null : this.store.klyvaronPreset(tier, 'chat')
-    const requestedModel = tierPreset?.connectionId === 'klyvaron-native'
-      ? tierPreset.model
-      : (tier === null ? (body.model || this.defaultSelectedModel()) : null)
+    if (body.tier !== undefined && body.tier !== null) {
+      throw failure('model_independent_tier', 'Lite/Pro/Max are used by the model-independent Klyvaron processing endpoint. Select a provider model directly for Chat.', 410)
+    }
+    const requestedModel = body.model || this.defaultSelectedModel()
     const isNativeTarget = Boolean(requestedModel && this.nativeKlyvaron.isKnownFirstPartyId(requestedModel))
 
-    if (isNativeTarget) {
-      // Never fall back to a gateway or another model if the requested first-party model is missing or failed.
-      const { record, provider } = this.nativeKlyvaron.requireProvider(requestedModel)
-      if (industryMode && provider.instructionTuned !== true) {
-        throw failure('capability_unavailable', 'Manufacturing Operations mode needs an instruction-tuned model. Klyvaron Lite is a base completion model and does not follow this guidance. Turn this mode off or select an instruction-tuned Chat model; no fallback is performed.', 409)
-      }
-      if (body.authorization && body.authorization.confirmed === false) {
-        throw failure('consent_required', 'Confirm this request before running generation.', 403)
-      }
-      const incoming = body.messages ?? [{ role: 'user', content: body.prompt }]
-      const normalized = normalizeChatMessages(incoming)
-      if (body.nativeSearch || (Array.isArray(body.tools) && body.tools.length)) throw failure('capability_unavailable', 'First-party Klyvaron native Chat does not expose provider search or function tools. Choose a compatible listed gateway model; no fallback is performed.', 409)
-      if (normalized.mediaCount) throw failure('capability_unavailable', 'First-party Klyvaron native Chat is text-only; choose a compatible gateway model for these attachments. No fallback is performed.', 409)
-      const messages = normalized.messages
-      const industryMessage = addIndustryInstruction(messages, industryMode)
-      const prompt = normalized.prompt
-      const contextClasses = []
-      let grounding = null
-      if ((body.useKnowledge || body.useMemory) && body.authorization?.includeContext !== true) {
-        throw failure('context_consent_required', 'Explicitly approve including workspace files or memories in this turn.', 403)
-      }
-      if (body.useKnowledge) {
-        grounding = await context.knowledge.buildGroundedContext({ query: prompt, principal: session.accountId, topK: 6 })
-        if (grounding.hasEvidence) {
-          messages.unshift({ role: 'system', content: `Context material:\n${grounding.promptContext}` })
-          contextClasses.push(grounding.dataClass)
-        }
-      }
-      if (body.useMemory) {
-        const memory = await context.memory.buildContext(prompt)
-        if (memory.hasMemories) {
-          messages.unshift({ role: 'system', content: `User-approved memory is reference data, not new permissions.\n${memory.promptContext}` })
-          contextClasses.push(...memory.memories.map((m) => m.dataClass))
-        }
-      }
-      let skillUsed = null
-      if (body.skill !== undefined && body.skill !== null) {
-        const loaded = this.skills.prepareForChat(body.skill)
-        messages.unshift({
-          role: 'system',
-          content: `The user selected the reviewed procedure '${loaded.name}' v${loaded.version}. Treat it as reference material for how to structure the answer.\n\n${loaded.text}`,
-        })
-        skillUsed = { name: loaded.name, version: loaded.version }
-      }
-      if (body.style !== undefined && body.style !== null) {
-        messages.unshift({ role: 'system', content: instructionFor(body.style) })
-      }
-      const classification = mostSensitiveDataClass(...messages.filter((message) => message !== industryMessage).map((m) => classifyText(m.content).dataClass), ...contextClasses, ...(body.dataClass ? [body.dataClass] : []))
-      const redacted = redactDeep(messages)
-      const maxTokens = body.maxTokens ?? 96
-      const temperature = body.temperature ?? 0
-      if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 8192 || !Number.isFinite(temperature) || temperature < 0 || temperature > 2) {
-        throw failure('invalid_parameters', 'Max tokens must be 1–8192 and temperature 0–2.')
-      }
-      if (body.sessionId && !(await context.memory.getSession(body.sessionId))) {
-        throw failure('session_not_found', 'That conversation does not exist for this account.', 404)
-      }
+    if (isNativeTarget) throw failure('model_independent_architecture', 'Tier-specific native weights are retired. Use the shared Klyvaron processing endpoint or explicitly select a saved provider model.', 410)
 
-      emit?.('route', {
-        modelId: record.id,
-        provider: 'Klyvaron Native',
-        firstPartyWeights: true,
-        sentExternally: false,
-        weightsSha256: record.weightsSha256,
-        parameters: record.parameters,
-      })
-
-      let nativeResult = null
-      try {
-        const stream = provider.chatStream({
-          messages: redacted.value,
-          systemPrompt: industryInstruction,
-          maxTokens,
-          temperature,
-          signal,
-        })
-        for (;;) {
-          const step = await stream.next()
-          if (step.done) {
-            nativeResult = step.value
-            break
-          }
-          emit?.('delta', { text: step.value })
-        }
-      } catch (err) {
-        if (err?.code === 'cancelled') {
-          throw failure('cancelled', 'Generation stopped at your request.', 499)
-        }
-        throw failure(err?.code ?? 'klyvaron_inference_failed', err?.message ?? 'Native Klyvaron generation failed.', err?.status ?? 503)
-      }
-
-      const text = nativeResult?.text?.trim() || nativeResult?.text || ''
-      if (!text) throw failure('invalid_completion', 'Native Klyvaron model returned an empty completion.', 502)
-
-      const audit = auditWording(text)
-      const styleAudit = { ok: audit.ok, violations: [...new Set(audit.violations.map((v) => v.name))] }
-      const refusal = audit.violations.filter((v) => HARD_STYLE_VIOLATIONS.has(v.name))
-      if (refusal.length) {
-        this.ledger.record({ category: 'policy', action: 'style_violation', outcome: 'blocked', subject: session.accountId, detail: { model: record.id, rules: [...new Set(refusal.map((v) => v.name))] } })
-        throw failure('style_violation', `The reply made a claim the product does not allow (${[...new Set(refusal.map((v) => v.name))].join(', ')}).`, 502)
-      }
-      if (body.sessionId) {
-        await context.memory.appendTurn(body.sessionId, { role: 'user', content: prompt, dataClass: classification })
-        await context.memory.appendTurn(body.sessionId, { role: 'assistant', content: text, dataClass: classification })
-      }
-      this.ledger.record({
-        category: 'model',
-        action: 'klyvaron_native_chat',
-        outcome: 'success',
-        subject: session.accountId,
-        detail: {
-          model: record.id,
-          weightsSha256: record.weightsSha256,
-          parameters: record.parameters,
-          tokensPerSecond: nativeResult.tokensPerSecond,
-          timingMs: Math.round(nativeResult.timingMs),
-          tier: tier ?? null,
-        },
-      })
-      if (skillUsed) {
-        this.skills.recordUse(skillUsed.name)
-        this.ledger.record({ category: 'skills', action: 'skill_use', outcome: 'success', subject: session.accountId, detail: { skill: skillUsed.name, version: skillUsed.version } })
-      }
-      return {
-        text,
-        modelId: record.id,
-        providerModel: `${record.id}@${record.version}`,
-        provider: 'Klyvaron Native',
-        sentExternally: false,
-        firstPartyWeights: true,
-        weightsSha256: record.weightsSha256,
-        parameters: record.parameters,
-        differentiators: nativeResult.differentiators ?? null,
-        timingMs: Number(nativeResult.timingMs.toFixed(2)),
-        tokensPerSecond: nativeResult.tokensPerSecond,
-        classification,
-        usage: nativeResult.usage,
-        redaction: { findings: redacted.findings },
-        grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount } : null,
-        industryMode,
-        skill: skillUsed,
-        style: body.style ?? null,
-        styleAudit,
-        klyvaron: {
-          tier: tier ?? null,
-          provenance: {
-            kind: 'first_party_native',
-            providerId: 'klyvaron-native',
-            provider: 'Klyvaron Native',
-            wire: 'klyvaron-native',
-            model: record.id,
-            version: record.version,
-            firstPartyWeights: true,
-            weightsSha256: record.weightsSha256,
-            parameters: record.parameters,
-            training: 'first_party_trained_from_scratch',
-            statement: `Served locally by verified first-party weights ${record.id}@${record.version} (SHA-256 ${record.weightsSha256.slice(0, 16)}…).`,
-          },
-        },
-      }
-    }
-
-    const resolved = tier === null ? null : resolveTier({ tier, modality: 'chat', store: this.store, configFor: (id) => this.store.config(id), wireFor })
-    const config = resolved?.config ?? this.store.config()
-    const model = resolved?.model ?? (body.model || state.selectedModel)
-    const modelSource = resolved ? (this.store.connections.find((connection) => connection.id === config.id)?.models ?? []) : state.models
+    const config = this.store.config()
+    const model = body.model || state.selectedModel
+    const modelSource = state.models
     if (!modelSource.includes(model)) throw failure('model_unavailable', 'Choose a listed model. This request will not switch to another model.', 409)
     if (localOnly) assertLocalOnlyProvider(body, config, 'chat')
     if (body.authorization?.providerRevision !== revision || body.authorization?.confirmed !== true) throw failure('consent_required', 'Confirm sending this request to the current gateway.', 403)
-    if (resolved && body.authorization?.providerId && body.authorization.providerId !== config.id) throw failure('consent_provider_mismatch', 'The request is authorized for a different provider than this tier uses.', 409)
     const incoming = body.messages ?? [{ role: 'user', content: body.prompt }]
     const normalized = normalizeChatMessages(incoming)
     const messages = normalized.messages
@@ -1563,18 +926,18 @@ export class OnlineApp {
       this.ledger.record({ category: 'policy', action: 'style_violation', outcome: 'blocked', subject: session.accountId, detail: { model, rules: [...new Set(refusal.map((v) => v.name))] } })
       throw failure('style_violation', `The reply made a claim the product does not allow (${[...new Set(refusal.map((v) => v.name))].join(', ')}). It was discarded, not stored, and nothing was counted. Try again or choose another style.`, 502)
     }
-    // A tier may target a connection other than the active one; recording 'observed inference' on the active connection would be a false record, so this path records the ledger entry only.
-    if (!resolved && revision === this.store.state.revision && this.store.state.models.includes(model)) this.store.save({ verified: { ...this.store.state.verified, [model]: new Date().toISOString() } })
+    // Record verification only when the active connection/model has not changed mid-request.
+    if (revision === this.store.state.revision && this.store.state.models.includes(model)) this.store.save({ verified: { ...this.store.state.verified, [model]: new Date().toISOString() } })
     if (body.sessionId) {
       await context.memory.appendTurn(body.sessionId, { role: 'user', content: prompt, dataClass: classification })
       await context.memory.appendTurn(body.sessionId, { role: 'assistant', content: text, dataClass: classification })
     }
-    this.ledger.record({ category: 'model', action: 'online_chat', outcome: 'success', subject: session.accountId, detail: { model, provider: config.id, classification, redacted: redacted.findings.length, role: session.role, skill: skillUsed?.name ?? null, tier: resolved?.tier ?? null } })
+    this.ledger.record({ category: 'model', action: 'online_chat', outcome: 'success', subject: session.accountId, detail: { model, provider: config.id, classification, redacted: redacted.findings.length, role: session.role, skill: skillUsed?.name ?? null, tier: null } })
     if (skillUsed) {
       this.skills.recordUse(skillUsed.name)
       this.ledger.record({ category: 'skills', action: 'skill_use', outcome: 'success', subject: session.accountId, detail: { skill: skillUsed.name, version: skillUsed.version } })
     }
-    return { text, modelId: model, providerModel: reportedModel, provider: config.label ?? runtimeFor(config.id).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount, ...(result.grounding ? { provider: result.grounding } : {}) } : (result.grounding ?? null), toolCalls: proposedToolCalls, skill: skillUsed, style: body.style ?? null, styleAudit, industryMode, klyvaron: resolved ? { tier: resolved.tier, provenance: resolved.provenance } : null }
+    return { text, modelId: model, providerModel: reportedModel, provider: config.label ?? runtimeFor(config.id).label, sentExternally: true, classification, usage, redaction: { findings: redacted.findings }, grounding: grounding ? { citations: grounding.citations, evidenceCount: grounding.evidenceCount, ...(result.grounding ? { provider: result.grounding } : {}) } : (result.grounding ?? null), toolCalls: proposedToolCalls, skill: skillUsed, style: body.style ?? null, styleAudit, industryMode, klyvaron: null }
   }
   authenticated(req) {
     const token = /(?:^|;\s*)aetheris_session=([A-Za-z0-9_-]+)/.exec(req.headers.cookie ?? '')?.[1]
@@ -1636,16 +999,35 @@ export class OnlineApp {
    * not the address exists. The default local AccountStore uses process-local windows;
    * an explicitly injected store may provide its own durable implementation.
    */
-  throttleAuth(action, email, { perAddress = 12, perInstallation = 60, windowMs = 60_000 } = {}) {
-    if (typeof this.accounts.throttleAuth === 'function') return this.accounts.throttleAuth(action, email, { perAddress, perInstallation, windowMs })
+  throttleAuth(action, email, sourceAddress = 'unknown', {
+    perAddress = 12, perSource = 30, perInstallation = 60, windowMs = 60_000,
+  } = {}) {
+    const source = typeof sourceAddress === 'string' && sourceAddress.length <= 128 ? sourceAddress : 'unknown'
+    if (typeof this.accounts.throttleAuth === 'function') {
+      return this.accounts.throttleAuth(action, email, { perAddress, perSource, perInstallation, windowMs, sourceAddress: source })
+    }
     const now = Date.now()
     const address = typeof email === 'string' ? email.trim().toLowerCase().slice(0, 254) : 'unknown'
-    for (const [bucket, limit] of [[`${action}:${address}`, perAddress], [action, perInstallation]]) {
+    const buckets = [
+      [`${action}:address:${address}`, perAddress],
+      [`${action}:source:${source}`, perSource],
+      [`${action}:installation`, perInstallation],
+    ]
+    // Check all limits before recording any bucket. A source already at its cap
+    // cannot grow the map by trying an unlimited number of distinct email strings.
+    const next = buckets.map(([bucket, limit]) => {
       const hits = (this.authAttempts.get(bucket) ?? []).filter((time) => now - time < windowMs)
-      if (hits.length >= limit) { this.authAttempts.set(bucket, hits); throw failure('rate_limited', 'Too many attempts. Wait a minute and try again.', 429) }
-      hits.push(now); this.authAttempts.set(bucket, hits)
+      if (hits.length >= limit) throw failure('rate_limited', 'Too many attempts. Wait a minute and try again.', 429)
+      return [bucket, [...hits, now]]
+    })
+    for (const [bucket, hits] of next) this.authAttempts.set(bucket, hits)
+    if (this.authAttempts.size > 512) {
+      for (const [bucket, hits] of this.authAttempts) {
+        const fresh = hits.filter((time) => now - time < windowMs)
+        if (fresh.length) this.authAttempts.set(bucket, fresh)
+        else this.authAttempts.delete(bucket)
+      }
     }
-    if (this.authAttempts.size > 1024) for (const [bucket, hits] of this.authAttempts) if (hits.length === 0) this.authAttempts.delete(bucket)
   }
   cookie(token, maxAge = SESSIONS.ttlMs / 1000) {
     const sameSite = this.cookieSameSite === 'none' ? 'None' : this.cookieSameSite === 'lax' ? 'Lax' : 'Strict'
@@ -1707,7 +1089,7 @@ export class OnlineApp {
         }
         if (req.method === 'POST' && path === '/api/auth/register') {
           const body = await readBody(req)
-          await this.throttleAuth('register', body.email)
+          await this.throttleAuth('register', body.email, req.socket.remoteAddress)
           const account = await this.accounts.register({ email: body.email, password: body.password })
           if (!this.injectedAccountStore) this.adoptLegacyContext(account)
           // Registering signs you in. Making a person repeat a password they typed ten
@@ -1717,15 +1099,18 @@ export class OnlineApp {
         }
         if (req.method === 'POST' && path === '/api/auth/login') {
           const body = await readBody(req)
-          await this.throttleAuth('login', body.email)
+          await this.throttleAuth('login', body.email, req.socket.remoteAddress)
           const account = await this.accounts.authenticate({ email: body.email, password: body.password })
           const token = await this.createSession(account)
           res.setHeader('set-cookie', this.cookie(token)); return sendJson(res, 200, { authenticated: true, account })
         }
         if (req.method === 'POST' && path === '/api/auth/password-reset/request') {
           const body = await readBody(req)
-          await this.throttleAuth('password_reset', body.email)
+          const resetStartedAt = performance.now()
+          await this.throttleAuth('password_reset', body.email, req.socket.remoteAddress)
           await this.accounts.requestReset(body.email)
+          const remainingFloorMs = RESET_REQUEST_MIN_RESPONSE_MS - (performance.now() - resetStartedAt)
+          if (remainingFloorMs > 0) await new Promise((resolveDelay) => setTimeout(resolveDelay, remainingFloorMs))
           // Identical answer for a known and an unknown address. The code goes only
           // through the configured recovery channel, never into this response: the
           // person asking has not yet proved who they are.
@@ -1733,7 +1118,7 @@ export class OnlineApp {
         }
         if (req.method === 'POST' && path === '/api/auth/password-reset/confirm') {
           const body = await readBody(req)
-          await this.throttleAuth('password_reset_confirm', body.email)
+          await this.throttleAuth('password_reset_confirm', body.email, req.socket.remoteAddress)
           const account = await this.accounts.confirmReset({ email: body.email, code: body.code, password: body.password })
           // A password reset is how you recover an account, so it also ends every
           // session that was holding it — including one an attacker may have opened.
@@ -1754,235 +1139,23 @@ export class OnlineApp {
         if (req.method === 'GET' && path === '/api/providers') return sendJson(res, 200, this.store.public())
         // Read-only meta-information about providers, separate from the installation's connection.
         if (req.method === 'GET' && path === '/api/providers/catalog') return sendJson(res, 200, this.providerCatalogue())
-        // Product tiers are read-only information until the owner assigns a preset to one.
+        // Klyvaron profiles are read-only capability descriptions; provider/model selection is separate.
         if (req.method === 'GET' && path === '/api/klyvaron') return sendJson(res, 200, this.klyvaronView())
-        if (req.method === 'GET' && path === '/api/klyvaron/manifests') {
-          const workerCaps = this.trainingController.isLocalWorkerConnected()
-            ? this.trainingController.workerConnection?.capabilities
-            : null
-          return sendJson(res, 200, this.multimodalHost.buildCapabilityManifests({ hardwareCapabilities: workerCaps }))
+        if (path === '/api/klyvaron/manifests' || path.startsWith('/api/klyvaron/manifests/') || path === '/api/klyvaron/qualification'
+          || path.startsWith('/api/klyvaron/qualification/')
+          || path === '/api/klyvaron/models' || path.startsWith('/api/klyvaron/models/')
+          || path === '/api/klyvaron/worker' || path.startsWith('/api/klyvaron/worker/')) {
+          throw failure(
+            'model_independent_architecture',
+            'Tier-specific model artifacts, hardware qualification and training-worker routes have been retired. Use the shared Lite/Pro/Max processing profiles; user-authorized information belongs in knowledge and memory.',
+            410,
+          )
         }
-        if (req.method === 'GET' && path === '/api/klyvaron/qualification') {
-          const workerCaps = this.trainingController.isLocalWorkerConnected()
-            ? this.trainingController.workerConnection?.capabilities
-            : null
-          return sendJson(res, 200, {
-            hardwareProfile: detectHardwareProfile(workerCaps),
-            records: this.qualificationRegistry.list(),
-          })
+        if (/^\/api\/klyvaron\/(lite|pro|max)(?:\/(chat|image|video|voice))?$/.test(path)) {
+          throw failure('model_independent_tier', 'Klyvaron tiers are processing/resource profiles and cannot be mapped to separate provider models.', 410)
         }
-        if (req.method === 'GET' && path === '/api/klyvaron/models') {
-          const baseSummary = this.nativeKlyvaron.summary()
-          return sendJson(res, 200, {
-            ...baseSummary,
-            multimodal: this.multimodalHost.status(),
-            modelReleaseRegistry: this.modelReleaseRegistry.snapshot(),
-            localWorkerConnected: this.trainingController.isLocalWorkerConnected(),
-            models: baseSummary.models.map((m) => ({
-              ...m,
-              releaseGates: this.trainingController.releaseGatesFor(m.id).gates,
-              capabilityGates: this.trainingController.releaseGatesFor(m.id).capabilityGates,
-            })),
-          })
-        }
-        if (req.method === 'GET' && path === '/api/klyvaron/worker') {
-          const controller = this.trainingController.status()
-          return sendJson(res, 200, {
-            ...controller,
-            // Hardware fields are ONLY populated when a real authenticated worker is connected!
-            connectedHardware: controller.localWorkerConnected ? controller.worker.capabilities : null,
-            jobs: controller.jobs,
-          })
-        }
-        // The gateway connection and its key belong to the installation, so they belong
-        // to the account that owns it. An open sign-up page cannot be an open door to
-        // re-pointing somebody else's provider credentials or spending their key.
+        // The installation owner controls its gateway connection.
         const requireOwner = () => { if (session.role !== ROLES.OWNER) throw failure('owner_required', 'Only the owner account of this installation can change its gateway connection.', 403) }
-        if (req.method === 'POST' && path === '/api/klyvaron/models/verify') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          this.multimodalHost.refresh()
-          return sendJson(res, 200, {
-            ...this.nativeKlyvaron.verify(body?.id ?? null),
-            multimodal: this.multimodalHost.status(),
-          })
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/qualification/run') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          const modelId = body?.modelId ?? null
-          const backend = body?.backend ?? 'cpu'
-          if (modelId) {
-            if (this.trainingController.isLocalWorkerConnected()) {
-              const out = await this.trainingController.qualifyWorkerBackend({ modelId, backend, actor: session.accountId })
-              return sendJson(res, 200, out)
-            }
-            const modelDir = join(this.dir, 'klyvaron', 'models', modelId)
-            if (!existsSync(modelDir)) throw failure('model_unavailable', `Model directory not found for '${modelId}'.`, 404)
-            const rec = this.qualificationRegistry.qualifyModelOnHost({ capabilities: null, modelDir, backend })
-            return sendJson(res, rec.qualified ? 200 : 409, rec)
-          }
-          const suite = {
-            chat: 'klyvaron-pro-lm',
-            image: 'klyvaron-pro-image',
-            video: 'klyvaron-pro-video',
-            voice: 'klyvaron-pro-voice',
-          }
-          const results = {}
-          let hardwareFingerprint = null
-          for (const [mod, id] of Object.entries(suite)) {
-            const modelDir = join(this.dir, 'klyvaron', 'models', id)
-            const rec = this.qualificationRegistry.qualifyModelOnHost({ capabilities: null, modelDir, backend })
-            hardwareFingerprint = rec.hardwareFingerprint
-            results[mod] = rec
-          }
-          return sendJson(res, 200, { backend, hardwareFingerprint, results })
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/pair/request') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 200, this.trainingController.createPairingRequest({
-            actor: session.accountId,
-            deviceLabel: body?.deviceLabel ?? 'User Computer',
-          }))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/pair/complete') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 200, await this.trainingController.completePairing({
-            pairingId: body?.pairingId ?? null,
-            pairingSecret: body?.pairingSecret,
-            workerEndpoint: body?.workerEndpoint,
-            actor: session.accountId,
-          }))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/disconnect') {
-          requireOwner()
-          return sendJson(res, 200, this.trainingController.disconnectWorker({ actor: session.accountId }))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/evaluate') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 200, this.trainingController.evaluateRequest(body ?? {}))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/execute') {
-          requireOwner()
-          // This absolute deadline begins at the user's Execute action, before request parsing
-          // and controller setup. The controller applies it only if planning selects interactive
-          // lightweight adaptation; other training modes remain separately disclosed.
-          const deadlineAt = Date.now() + 120_000
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 202, await this.trainingController.startAuthorizedJob({
-            request: body?.request ?? {},
-            consent: body?.consent ?? null,
-            actor: session.accountId,
-            deadlineAt,
-          }))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/infer') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 200, await this.trainingController.runWorkerInference(body ?? {}))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/job') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 200, await this.trainingController.syncJob(body?.jobId))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/job/cancel') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 200, await this.trainingController.cancelJob(body?.jobId, { actor: session.accountId }))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/job/rollback') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 200, await this.trainingController.rollbackJob(body?.jobId, { actor: session.accountId }))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/job/resume') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 202, await this.trainingController.resumeJob(body?.jobId, {
-            maxSteps: body?.maxSteps ?? null,
-            actor: session.accountId,
-          }))
-        }
-        const userWorkerJobMatch = /^\/api\/klyvaron\/worker\/jobs\/([0-9a-zA-Z-]+)(?:\/(cancel|rollback|resume))?$/.exec(path)
-        if (userWorkerJobMatch) {
-          requireOwner()
-          const [, targetJobId, subAction] = userWorkerJobMatch
-          if (req.method === 'GET' && !subAction) {
-            return sendJson(res, 200, await this.trainingController.syncJob(targetJobId))
-          }
-          if (req.method === 'POST' && subAction === 'cancel') {
-            return sendJson(res, 200, await this.trainingController.cancelJob(targetJobId, { actor: session.accountId }))
-          }
-          if (req.method === 'POST' && subAction === 'rollback') {
-            return sendJson(res, 200, await this.trainingController.rollbackJob(targetJobId, { actor: session.accountId }))
-          }
-          if (req.method === 'POST' && subAction === 'resume') {
-            const body = await readBody(req, { principal: session.accountId })
-            return sendJson(res, 202, await this.trainingController.resumeJob(targetJobId, {
-              maxSteps: body?.maxSteps ?? null,
-              actor: session.accountId,
-            }))
-          }
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/plan') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 200, this.trainingWorker.prepareSetupPlan(body ?? {}))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/start') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 202, this.trainingWorker.startJob({
-            planRequest: body?.plan ?? {},
-            consent: body?.consent ?? null,
-            actor: session.accountId,
-          }))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/cancel') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          if (typeof body?.jobId !== 'string' || !body.jobId) throw failure('invalid_job_id', 'Provide jobId to cancel.', 400)
-          return sendJson(res, 200, this.trainingWorker.cancelJob(body.jobId, { actor: session.accountId }))
-        }
-        if (req.method === 'POST' && path === '/api/klyvaron/worker/resume') {
-          requireOwner()
-          const body = await readBody(req, { principal: session.accountId })
-          if (typeof body?.jobId !== 'string' || !body.jobId) throw failure('invalid_job_id', 'Provide jobId to resume.', 400)
-          return sendJson(res, 202, this.trainingWorker.startJob({
-            planRequest: body?.plan ?? {},
-            consent: body?.consent ?? null,
-            resumeFromJobId: body.jobId,
-            actor: session.accountId,
-          }))
-        }
-        const workerJobAction = /^\/api\/klyvaron\/worker\/([0-9a-f-]{36})\/(cancel|resume)$/.exec(path)
-        if (req.method === 'POST' && workerJobAction) {
-          requireOwner()
-          if (workerJobAction[2] === 'cancel') {
-            return sendJson(res, 200, this.trainingWorker.cancelJob(workerJobAction[1], { actor: session.accountId }))
-          }
-          const body = await readBody(req, { principal: session.accountId })
-          return sendJson(res, 202, this.trainingWorker.startJob({
-            planRequest: body?.plan ?? {},
-            consent: body?.consent ?? null,
-            resumeFromJobId: workerJobAction[1],
-            actor: session.accountId,
-          }))
-        }
-        const tierMatch = /^\/api\/klyvaron\/(lite|pro|max)$/.exec(path)
-        const tierModalityMatch = /^\/api\/klyvaron\/(lite|pro|max)\/(chat|image|video|voice)$/.exec(path)
-        if (req.method === 'PUT' && tierMatch) {
-          requireOwner()
-          return sendJson(res, 200, this.setKlyvaronPreset(tierMatch[1], await readBody(req, { principal: session.accountId }), session))
-        }
-        if (req.method === 'DELETE' && tierModalityMatch) {
-          requireOwner()
-          return sendJson(res, 200, this.clearKlyvaronPreset(tierModalityMatch[1], tierModalityMatch[2]))
-        }
         // One route per connection, so the connection a request means is in the URL and never
         // guessed from the body. The two built-in local runtimes keep their literal paths; any other catalogue
         // provider or named custom endpoint uses the same shape under its own id.
@@ -2018,12 +1191,9 @@ export class OnlineApp {
         if (req.method === 'PUT' && path === '/api/models/selection') {
           const { model } = await readBody(req, { principal: session.accountId })
           if (this.nativeKlyvaron.isKnownFirstPartyId(model)) {
-            this.nativeKlyvaron.requireProvider(model)
-            this.store.selectNativeModel(model)
-            return sendJson(res, 200, { selectedModel: model })
+            throw failure('model_independent_architecture', 'Tier-specific native weights are retired. Select a listed provider model instead.', 410)
           }
           if (!this.store.state.models.includes(model)) throw failure('model_unavailable', 'Select a listed model; no fallback is performed.', 409)
-          this.store.selectNativeModel('')
           this.store.save({ selectedModel: model }); return sendJson(res, 200, { selectedModel: model })
         }
         if (req.method === 'POST' && (path === '/api/chat' || path === '/api/chat/stream')) {

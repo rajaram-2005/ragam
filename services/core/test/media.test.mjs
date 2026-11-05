@@ -297,6 +297,49 @@ test('cancelling a running job aborts the provider call and records the cancella
   })
 })
 
+test('cancelling one identical-output job during finalization preserves the other job artifact', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'aetheris-media-owner-'))
+  let queue
+  let secondId = null
+  let cancelScheduled = false
+  queue = new MediaJobQueue({
+    storageDir: dir,
+    onEvent: (event) => {
+      if (event.type === 'job_state' && event.state === JOB_STATES.VALIDATING && secondId && !cancelScheduled) {
+        cancelScheduled = true
+        // Let finalization begin its asynchronous store, then race cancellation with it.
+        setImmediate(() => queue.cancel(secondId, 'regression test cancellation'))
+      }
+    },
+  })
+  try {
+    const bytes = fakePng(4096)
+    const first = queue.enqueue({
+      kind: MEDIA_KINDS.IMAGE, filenameHint: 'same-output',
+      run: async () => ({ bytes, contentType: 'image/png' }),
+    })
+    const firstFinished = await queue.waitFor(first.id, { timeoutMs: 5000 })
+    assert.equal(firstFinished.state, JOB_STATES.SUCCEEDED)
+
+    const second = queue.enqueue({
+      kind: MEDIA_KINDS.IMAGE, filenameHint: 'same-output',
+      run: async () => ({ bytes, contentType: 'image/png' }),
+    })
+    secondId = second.id
+    const secondFinished = await queue.waitFor(second.id, { timeoutMs: 5000 })
+    assert.equal(cancelScheduled, true, 'cancellation must land during second-job finalization')
+    assert.equal(secondFinished.state, JOB_STATES.CANCELLED)
+    assert.equal(secondFinished.artifact, null)
+
+    const firstArtifact = await queue.readArtifact(first.id)
+    assert.deepEqual(Buffer.from(firstArtifact.bytes), Buffer.from(bytes))
+    assert.equal(firstArtifact.artifact.jobId, first.id)
+    assert.notEqual(firstArtifact.artifact.path, secondFinished.artifact?.path)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('a job stays QUEUED while the single worker is busy', async () => {
   await withQueue(async ({ queue }) => {
     const blocker = queue.enqueue({ kind: MEDIA_KINDS.IMAGE, run: async () => { await new Promise((r) => setTimeout(r, 150)); return { bytes: fakePng(2048), contentType: 'image/png' } } })
@@ -414,6 +457,16 @@ test('artifact deletion removes the file from disk', async () => {
     const finished = await queue.waitFor(job.id, { timeoutMs: 5000 })
     const path = join(dir, finished.artifact.path)
     await readFile(path) // exists
+    // A legacy artifact has no explicit owner. It stays readable but cannot unlink the file.
+    const artifact = queue.jobs.get(job.id).artifact
+    const ownerId = artifact.jobId
+    artifact.jobId = undefined
+    assert.equal((await queue.readArtifact(job.id)).bytes.byteLength, finished.artifact.byteLength)
+    assert.equal((await queue.deleteArtifact(job.id)).deleted, false)
+    await readFile(path)
+    artifact.jobId = ownerId
+    queue.jobs.get(job.id).artifact = artifact
+
     const result = await queue.deleteArtifact(job.id)
     assert.equal(result.deleted, true)
     await assert.rejects(() => readFile(path))

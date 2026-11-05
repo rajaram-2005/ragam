@@ -3,16 +3,19 @@ import { contentTokens, splitSentences } from '../knowledge/text.mjs'
 
 export const KLYVARON_PROCESSOR_PROFILES = Object.freeze({
   lite: Object.freeze({
-    id: 'lite', label: 'Lite', contextChars: 16_000, maxTasks: 2, maxSummarySentences: 4,
-    retrievalTopK: 4, parallelTasks: 1,
+    id: 'lite', label: 'Lite', contextChars: 16_000, maxTasks: 2, processingDepth: 2,
+    maxSummarySentences: 4, retrievalTopK: 4, maxMemoryItems: 4, maxMemoryChars: 4_000,
+    parallelTasks: 1, resourceClass: 'low',
   }),
   pro: Object.freeze({
-    id: 'pro', label: 'Pro', contextChars: 64_000, maxTasks: 5, maxSummarySentences: 8,
-    retrievalTopK: 8, parallelTasks: 3,
+    id: 'pro', label: 'Pro', contextChars: 64_000, maxTasks: 5, processingDepth: 5,
+    maxSummarySentences: 8, retrievalTopK: 8, maxMemoryItems: 8, maxMemoryChars: 16_000,
+    parallelTasks: 3, resourceClass: 'medium',
   }),
   max: Object.freeze({
-    id: 'max', label: 'Max', contextChars: 100_000, maxTasks: 8, maxSummarySentences: 12,
-    retrievalTopK: 12, parallelTasks: 4,
+    id: 'max', label: 'Max', contextChars: 100_000, maxTasks: 8, processingDepth: 8,
+    maxSummarySentences: 12, retrievalTopK: 12, maxMemoryItems: 16, maxMemoryChars: 32_000,
+    parallelTasks: 4, resourceClass: 'high',
   }),
 })
 
@@ -97,25 +100,25 @@ function inspect(text) {
   }
 }
 
-function extract(text) {
+function extract(text, { maxItems = 16 } = {}) {
   return {
-    emails: captures(text, EMAIL),
-    urls: captures(text, URL),
-    isoDates: captures(text, ISO_DATE),
-    numbers: captures(text, NUMBER),
-    headings: captures(text, MARKDOWN_HEADING),
-    listItems: captures(text, BULLET),
+    emails: captures(text, EMAIL).slice(0, maxItems),
+    urls: captures(text, URL).slice(0, maxItems),
+    isoDates: captures(text, ISO_DATE).slice(0, maxItems),
+    numbers: captures(text, NUMBER).slice(0, maxItems),
+    headings: captures(text, MARKDOWN_HEADING).slice(0, maxItems),
+    listItems: captures(text, BULLET).slice(0, maxItems),
     codeBlockCount: (text.match(/```/g) ?? []).length >> 1,
     note: 'Pattern-based extraction only; names, entities and meaning are not inferred.',
   }
 }
 
-function outline(text) {
+function outline(text, { maxItems = 16 } = {}) {
   const headings = []
   for (const match of text.matchAll(MARKDOWN_HEADING)) headings.push({ heading: match[1].trim(), offset: match.index })
   const bullets = captures(text, BULLET)
-  if (headings.length || bullets.length) return { method: 'markdown_structure', headings, bullets }
-  const summary = sentenceSummary(text, 8)
+  if (headings.length || bullets.length) return { method: 'markdown_structure', headings: headings.slice(0, maxItems), bullets: bullets.slice(0, maxItems) }
+  const summary = sentenceSummary(text, maxItems)
   return { method: 'extractive_sentence_starts', items: summary.sentences.map((item) => item.sentence) }
 }
 
@@ -208,10 +211,11 @@ function formatTaskResult(task, result) {
 
 async function runTask(task, { input, comparisonInput, knowledge, memory, principal, profile, useKnowledge, useMemory, signal }) {
   if (signal?.aborted) throw Object.assign(new Error('Processing cancelled.'), { name: 'AbortError', code: 'cancelled', status: 499 })
+  const depthBudget = Math.max(1, profile.processingDepth * 2)
   if (task === 'inspect') return inspect(input)
-  if (task === 'summarize') return sentenceSummary(input, profile.maxSummarySentences)
-  if (task === 'extract') return extract(input)
-  if (task === 'outline') return outline(input)
+  if (task === 'summarize') return sentenceSummary(input, Math.min(profile.maxSummarySentences, depthBudget))
+  if (task === 'extract') return extract(input, { maxItems: depthBudget })
+  if (task === 'outline') return outline(input, { maxItems: depthBudget })
   if (task === 'compare') {
     if (!comparisonInput.trim()) throw fail('compare requires comparisonInput text')
     return compare(input, comparisonInput)
@@ -219,16 +223,22 @@ async function runTask(task, { input, comparisonInput, knowledge, memory, princi
   if (task === 'calculate') return calculate(input)
   if (task === 'retrieve' || task === 'answer') {
     const results = useKnowledge && knowledge
-      ? knowledge.search({ query: input, principal, topK: profile.retrievalTopK, useNeural: false }).results
+      ? knowledge.search({ query: input, principal, topK: Math.min(profile.retrievalTopK, depthBudget), useNeural: false }).results
       : []
     const memories = useMemory && memory
-      ? await memory.searchMemories(input, { topK: profile.retrievalTopK })
+      ? await memory.searchMemories(input, { topK: Math.min(profile.maxMemoryItems, depthBudget) })
       : []
+    let remainingMemoryChars = profile.maxMemoryChars
+    const boundedMemories = memories.map((item) => {
+      const text = String(item.memory.text ?? '').slice(0, remainingMemoryChars)
+      remainingMemoryChars = Math.max(0, remainingMemoryChars - text.length)
+      return { text, id: item.memory.id, kind: item.memory.kind, subject: item.memory.subject, tags: item.memory.tags }
+    }).filter((item) => item.text.length > 0)
     return {
       results: results.map((item) => ({ text: item.text, citation: item.citation, score: item.score })),
-      memories: memories.map((item) => ({ text: item.memory.text, id: item.memory.id, kind: item.memory.kind, subject: item.memory.subject, tags: item.memory.tags })),
+      memories: boundedMemories,
       evidenceCount: results.length,
-      memoryCount: memories.length,
+      memoryCount: boundedMemories.length,
       method: 'local_bm25',
     }
   }

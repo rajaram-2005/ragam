@@ -196,25 +196,18 @@ test('manufacturing image mode is appended to supported generation prompts and r
   assert.match(call.body.prompt, /illustrate a maintenance toolbox/)
 })
 
-test('native Klyvaron image prompts receive the same opt-in guidance without a gateway call', async (t) => {
+test('retired native Klyvaron image models are unavailable and never fall back', async (t) => {
   const f = await fixture(t)
   await f.login()
   f.app.multimodalHost.records.set('klyvaron-pro-image', {
     id: 'klyvaron-pro-image', modality: 'image', verified: true, weightsSha256: 'a'.repeat(64), parameterCount: 3_728_352,
   })
-  let appliedPrompt = ''
-  f.app.multimodalHost.generateImage = async ({ prompt }) => {
-    appliedPrompt = prompt
-    return { buffer: PNG_BYTES, mimeType: 'image/png', measured: { width: 1, height: 1 }, latencyMs: 1, weightsSha256: 'a'.repeat(64) }
-  }
-  const created = await f.request('POST', '/api/image/generate', { prompt: 'show a maintenance cart', model: 'klyvaron-pro-image', industryMode: 'manufacturing', localOnly: true })
-  assert.equal(created.status, 202, JSON.stringify(created.data))
-  const job = await f.waitFor(created.data.id)
-  assert.equal(job.state, JOB_STATES.SUCCEEDED, JSON.stringify(job))
-  assert.equal(job.params.provider, 'klyvaron-native')
-  assert.equal(job.params.prompt, 'show a maintenance cart')
-  assert.equal(job.params.industryMode, 'manufacturing')
-  assert.match(appliedPrompt, /never show guards defeated/)
+  let generated = false
+  f.app.multimodalHost.generateImage = async () => { generated = true; return { buffer: PNG_BYTES, mimeType: 'image/png' } }
+  const result = await f.request('POST', '/api/image/generate', { prompt: 'show a maintenance cart', model: 'klyvaron-pro-image', industryMode: 'manufacturing', localOnly: true })
+  assert.equal(result.status, 410, JSON.stringify(result.data))
+  assert.equal(result.data.error, 'model_independent_architecture')
+  assert.equal(generated, false)
   assert.equal(f.calls.some((call) => call.path === '/v1/images/generations'), false)
 })
 

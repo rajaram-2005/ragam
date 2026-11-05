@@ -58,6 +58,28 @@ async function fixture(t, options = {}) {
 test('online entry has no local startup requirements and defaults to setup required', async (t) => {
  const f = await fixture(t); assert.equal(f.app.readiness().policy,'online_only'); assert.equal(f.app.readiness().status,'setup_required'); assert.equal('localExecution' in f.app,false); assert.equal('hardware' in f.app,false)
 })
+test('Klyvaron starts without loading model files and retires artifact, qualification, and worker APIs', async (t) => {
+ const f = await fixture(t)
+ assert.equal(f.app.nativeKlyvaron.enableLegacyArtifacts, false)
+ assert.equal(f.app.nativeKlyvaron.providers.size, 0)
+ assert.ok([...f.app.nativeKlyvaron.records.values()].every((record) => record.status === 'legacy_artifacts_disabled'))
+ await f.login()
+ const product = await f.request('GET', '/api/klyvaron')
+ assert.equal(product.status, 200)
+ assert.equal(product.data.modelIndependentProcessor.modelRequired, false)
+ assert.equal(product.data.modelIndependentProcessor.weightsRequired, false)
+ assert.deepEqual(product.data.tiers.map((tier) => tier.id), ['lite', 'pro', 'max'])
+ for (const path of [
+   '/api/klyvaron/manifests', '/api/klyvaron/qualification', '/api/klyvaron/qualification/run',
+   '/api/klyvaron/models', '/api/klyvaron/models/verify', '/api/klyvaron/worker',
+   '/api/klyvaron/worker/execute',
+ ]) {
+   const method = path.endsWith('/manifests') || path.endsWith('/qualification') || path.endsWith('/models') || path.endsWith('/worker') ? 'GET' : 'POST'
+   const response = await f.request(method, path, method === 'GET' ? undefined : {})
+   assert.equal(response.status, 410, `${path}: ${JSON.stringify(response.data)}`)
+   assert.equal(response.data.error, 'model_independent_architecture')
+ }
+})
 test('provider, context, model and tool routes require owner authentication', async (t) => {
  const f = await fixture(t)
  for (const path of ['/api/providers','/api/models','/api/sessions','/api/memory','/api/knowledge/documents','/api/plugins','/api/mcp/tools']) assert.equal((await f.request('GET',path)).status,401,path)
@@ -190,7 +212,7 @@ test('file knowledge and approved memory remain opt-in and backed by real stores
  assert.equal((await f.request('POST','/api/chat',body)).status,200)
  assert.ok(f.calls.at(-1).body.messages.some((m)=>m.content.includes('orchard')))
 })
-test('manufacturing operations guidance reaches selected gateway and native Klyvaron models without fallback', async (t) => {
+test('manufacturing operations guidance reaches the selected gateway; retired native models fail closed without fallback', async (t) => {
  const f=await fixture(t); await f.configure()
  const requestCount=f.calls.length
  const blockedRemote=await f.request('POST','/api/chat',f.chat({localOnly:true}))
@@ -211,22 +233,11 @@ test('manufacturing operations guidance reaches selected gateway and native Klyv
  assert.equal(invalid.status,400)
  assert.equal(invalid.data.error,'invalid_industry_mode')
 
- const native=f.app.nativeKlyvaron, nativeMessages=[]; let nativeSystemPrompt='', instructionTuned=true
- native.isKnownFirstPartyId=(id)=>id==='klyvaron-pro-lm'
- native.requireProvider=(id)=>({
-   record:{id,version:'test-v1',weightsSha256:'a'.repeat(64),parameters:100},
-   provider:{get instructionTuned() { return instructionTuned },async *chatStream({messages,systemPrompt}) { nativeMessages.push(...messages); nativeSystemPrompt=systemPrompt; yield 'Advisory answer.'; return {text:'Advisory answer.',timingMs:1,tokensPerSecond:5,usage:{completionTokens:2}} }},
- })
- const local=await f.app.chat(f.chat({model:'klyvaron-pro-lm',industryMode:'manufacturing'}),{session:f.session()})
- assert.equal(local.provider,'Klyvaron Native')
- assert.equal(local.sentExternally,false)
- assert.equal(local.industryMode,'manufacturing')
- assert.ok(nativeMessages.some((message)=>message.role==='system' && message.content.includes('lockout/tagout')))
- assert.match(nativeSystemPrompt,/lockout\/tagout/,'instruction-tuned Klyvaron receives the manufacturing rules in its actual system prompt')
- const callsBeforeBaseRefusal=f.calls.length
- instructionTuned=false
- await assert.rejects(() => f.app.chat(f.chat({model:'klyvaron-pro-lm',industryMode:'manufacturing'}),{session:f.session()}),{code:'capability_unavailable'})
- assert.equal(f.calls.length,callsBeforeBaseRefusal,'unsupported native weights must not silently fall back to a gateway')
+ const beforeRetiredModel=f.calls.length
+ const retired=await f.request('POST','/api/chat',f.chat({model:'klyvaron-pro-lm',industryMode:'manufacturing'}))
+ assert.equal(retired.status,410,JSON.stringify(retired.data))
+ assert.equal(retired.data.error,'model_independent_architecture')
+ assert.equal(f.calls.length,beforeRetiredModel,'retired first-party model IDs must not silently fall back to a gateway')
 
  const localSaved=await f.request('PUT','/api/providers/ollama',{baseUrl:f.gatewayUrl+'/v1'})
  assert.equal(localSaved.status,200,JSON.stringify(localSaved.data))
@@ -304,7 +315,7 @@ test('a schema-1 store migrates to one connection without losing the key', (t) =
 
 test('the migration is pure and refuses a record that is neither schema', () => {
   const fresh = migrateState(null)
-  assert.deepEqual(fresh, { schema: STORE_SCHEMA, revision: 0, active: null, connections: {}, klyvaron: { tiers: {} } })
+  assert.deepEqual(fresh, { schema: STORE_SCHEMA, revision: 0, active: null, connections: {} })
   const legacy = migrateState({ kind: 'openai', baseUrl: 'https://g.example/v1', key: null, revision: 2 })
   assert.equal(legacy.active, 'openai')
   assert.equal(legacy.revision, 2)
@@ -330,6 +341,13 @@ test('the migration is pure and refuses a record that is neither schema', () => 
   assert.deepEqual(Object.keys(dirty.connections), ['openai'])
   assert.equal(dirty.active, 'openai')
   assert.equal(Object.getPrototypeOf(dirty.connections).baseUrl, undefined, 'the prototype was not polluted')
+  const oldTierModels = migrateState({
+    schema: STORE_SCHEMA, revision: 5, active: 'openai',
+    connections: { openai: { models: ['model-a'], selectedModel: 'model-a' } },
+    klyvaron: { selectedModel: 'klyvaron:legacy', tiers: { max: { chat: { connectionId: 'openai', model: 'model-a' } } } },
+  })
+  assert.equal(Object.hasOwn(oldTierModels, 'klyvaron'), false)
+  assert.equal(oldTierModels.connections.openai.selectedModel, 'model-a', 'external provider selection is preserved')
 
   // LiteLLM is retired: upgrading old schema-1 or schema-2 state drops that connection,
   // its credential, and any Klyvaron tier pointer to it rather than leaving a hidden route.
@@ -340,7 +358,7 @@ test('the migration is pure and refuses a record that is neither schema', () => 
   })
   assert.equal(retired.active, null)
   assert.deepEqual(retired.connections, {})
-  assert.deepEqual(retired.klyvaron.tiers, {})
+  assert.equal(Object.hasOwn(retired, 'klyvaron'), false)
   const retiredSchema1 = migrateState({ kind: 'litellm', baseUrl: 'https://old-gateway.example/v1', key: 'sealed-old-key' })
   assert.equal(retiredSchema1.active, null)
   assert.deepEqual(retiredSchema1.connections, {})

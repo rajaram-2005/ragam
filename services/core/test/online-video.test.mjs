@@ -245,25 +245,18 @@ test('manufacturing video mode adds advisory guidance to the selected provider p
   assert.match(started.body.instances[0].prompt, /a technician inspects a pump/)
 })
 
-test('native Klyvaron video prompts receive opt-in guidance without a remote provider request', async (t) => {
+test('retired native Klyvaron video models are unavailable and never fall back', async (t) => {
   const f = await fixture(t)
   await f.login()
   f.app.multimodalHost.records.set('klyvaron-pro-video', {
     id: 'klyvaron-pro-video', modality: 'video', verified: true, weightsSha256: 'b'.repeat(64), parameterCount: 2_221_482,
   })
-  let appliedPrompt = ''
-  f.app.multimodalHost.generateVideo = async ({ prompt }) => {
-    appliedPrompt = prompt
-    return { buffer: MP4, mimeType: 'video/mp4', fps: 24, frameCount: 96, durationSeconds: 4, motionEnergy: 0.1, predictedMotion: 'steady', predictedEnvironment: 'indoor', latencyMs: 1 }
-  }
-  const created = await f.request('POST', '/api/video/generate', { prompt: 'show a safe inspection', model: 'klyvaron-pro-video', industryMode: 'manufacturing', localOnly: true })
-  assert.equal(created.status, 202, JSON.stringify(created.data))
-  const job = await f.waitFor(created.data.id)
-  assert.equal(job.state, JOB_STATES.SUCCEEDED, JSON.stringify(job))
-  assert.equal(job.params.provider, 'klyvaron-native')
-  assert.equal(job.params.prompt, 'show a safe inspection')
-  assert.equal(job.params.industryMode, 'manufacturing')
-  assert.match(appliedPrompt, /never show guards defeated/)
+  let generated = false
+  f.app.multimodalHost.generateVideo = async () => { generated = true; return { buffer: MP4, mimeType: 'video/mp4' } }
+  const result = await f.request('POST', '/api/video/generate', { prompt: 'show a safe inspection', model: 'klyvaron-pro-video', industryMode: 'manufacturing', localOnly: true })
+  assert.equal(result.status, 410, JSON.stringify(result.data))
+  assert.equal(result.data.error, 'model_independent_architecture')
+  assert.equal(generated, false)
   assert.equal(f.calls.some((call) => call.path.endsWith(':predictLongRunning')), false)
 })
 

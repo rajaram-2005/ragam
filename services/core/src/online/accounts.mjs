@@ -13,9 +13,9 @@
 //      r=8, p=1) plus a per-password 16-byte salt, and compared in constant time.
 //      There is no encrypted-password column, because a key that can decrypt a
 //      password can also be used to recover it; a hash cannot.
-//   2. THE RESPONSES DO NOT ENUMERATE. "Unknown email" and "wrong password" return
-//      the same code, the same status and — because a missing account still pays for
-//      one scrypt pass against a dummy hash — approximately the same wall time.
+//   2. THE RESPONSES DO NOT ENUMERATE. Unknown sign-in and password-reset addresses
+//      still pay for one scrypt pass against a fixed dummy hash, and the HTTP reset
+//      route applies a bounded minimum response time in addition to the same status/body.
 //   3. GUESSING IS BOUNDED. Eight consecutive failures lock that account for fifteen
 //      minutes. The counter is per account, so one person's typo storm cannot lock
 //      everybody out, and the route layer rate-limits the endpoint as a whole.
@@ -366,6 +366,9 @@ export class AccountStore {
     const row = this.db.prepare('SELECT * FROM accounts WHERE email = ?').get(address)
     const expiresAt = now + RESET_CODE_TTL_MS
     if (!row) {
+      // Match the dominant scrypt cost of a real reset request. The result is
+      // discarded: unknown addresses must neither receive nor persist a code.
+      verifyPassword(randomBytes(24).toString('base64url'), this.dummyHash)
       this.audit?.({ category: 'auth', action: 'password_reset_request', outcome: 'failure', subject: address, detail: { reason: 'unknown_email' } })
       return { created: false, code: null, expiresAt }
     }

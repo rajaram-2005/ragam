@@ -20,7 +20,7 @@ import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
-import { COOKIE_SAME_SITE, OnlineApp, SESSIONS, RESET_REQUESTED_MESSAGE } from '../src/online/app.mjs'
+import { COOKIE_SAME_SITE, OnlineApp, SESSIONS, RESET_REQUESTED_MESSAGE, RESET_REQUEST_MIN_RESPONSE_MS } from '../src/online/app.mjs'
 import { main, parseTrustedWebOrigins } from '../src/server.mjs'
 import {
   AccountStore, MAX_FAILED_LOGINS, PASSWORD_MIN_LENGTH, ROLES, RESET_CODE_TTL_MS,
@@ -727,8 +727,15 @@ test('a reset code is delivered on the host, works once, and ends every session'
   const oldCookie = cookieOf(signedIn)
 
   // The answer does not depend on whether the address exists.
+  const ghostStarted = performance.now()
   const ghost = await f.request('POST', '/api/auth/password-reset/request', { email: 'nobody@example.test' }, { cookie: '' })
+  const ghostMs = performance.now() - ghostStarted
+  const knownStarted = performance.now()
   const known = await f.request('POST', '/api/auth/password-reset/request', { email: OWNER.email }, { cookie: '' })
+  const knownMs = performance.now() - knownStarted
+  assert.ok(ghostMs >= RESET_REQUEST_MIN_RESPONSE_MS - 25, `unknown path returned too quickly (${ghostMs.toFixed(1)}ms)`)
+  assert.ok(knownMs >= RESET_REQUEST_MIN_RESPONSE_MS - 25, `known path returned too quickly (${knownMs.toFixed(1)}ms)`)
+  assert.ok(Math.abs(ghostMs - knownMs) < 200, `known/unknown reset timings diverged: ${ghostMs.toFixed(1)}ms vs ${knownMs.toFixed(1)}ms`)
   assert.equal(ghost.status, 202); assert.equal(known.status, 202)
   assert.deepEqual(ghost.data, { requested: true, message: RESET_REQUESTED_MESSAGE })
   assert.deepEqual(known.data, ghost.data)
@@ -757,6 +764,34 @@ test('a reset code is delivered on the host, works once, and ends every session'
   assert.equal(f.app.accounts.pendingResets().length, 0)
   // The session open before the reset is dead, which is why somebody resets a password.
   assert.equal((await f.request('GET', '/api/auth', undefined, { cookie: oldCookie })).data.authenticated, false)
+})
+
+test('public auth rate limits are enforced by normalized address, source address, and installation', async (t) => {
+  const f = await fixture(t)
+
+  for (let index = 0; index < 30; index += 1) {
+    f.app.throttleAuth('password_reset', `unique-${index}@example.test`, '203.0.113.20')
+  }
+  assert.throws(
+    () => f.app.throttleAuth('password_reset', 'unbounded@example.test', '203.0.113.20'),
+    { code: 'rate_limited' },
+    'the source bucket blocks address rotation',
+  )
+  assert.ok(f.app.authAttempts.size <= 90, 'blocked requests do not create unbounded per-address buckets')
+
+  const addressApp = new OnlineApp({ dataDir: mkdtempSync(join(tmpdir(), 'aetheris-auth-address-limit-')), secureCookie: false })
+  t.after(() => { addressApp.close(); rmSync(addressApp.dir, { recursive: true, force: true }) })
+  for (let index = 0; index < 12; index += 1) {
+    addressApp.throttleAuth('password_reset', 'same@example.test', `198.51.100.${index + 1}`)
+  }
+  assert.throws(() => addressApp.throttleAuth('password_reset', 'same@example.test', '198.51.100.99'), { code: 'rate_limited' })
+
+  const installationApp = new OnlineApp({ dataDir: mkdtempSync(join(tmpdir(), 'aetheris-auth-install-limit-')), secureCookie: false })
+  t.after(() => { installationApp.close(); rmSync(installationApp.dir, { recursive: true, force: true }) })
+  for (let index = 0; index < 60; index += 1) {
+    installationApp.throttleAuth('password_reset', `person-${index}@example.test`, `192.0.2.${index + 1}`)
+  }
+  assert.throws(() => installationApp.throttleAuth('password_reset', 'sixty-first@example.test', '192.0.2.200'), { code: 'rate_limited' })
 })
 
 test('changing a password from inside a session keeps that session and drops the others', async (t) => {

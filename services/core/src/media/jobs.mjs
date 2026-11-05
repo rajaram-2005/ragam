@@ -185,6 +185,8 @@ export class MediaJobQueue {
   async readArtifact(id) {
     const job = this.jobs.get(id)
     if (!job?.artifact?.path) throw new Error(`job '${id}' has no stored artifact`)
+    // Older persisted records lack an owner id and remain readable; they cannot unlink the file.
+    if (job.artifact.jobId && job.artifact.jobId !== job.id) throw new Error(`job '${id}' does not own the referenced artifact`)
     const full = this.#safePath(job.artifact.path)
     return { bytes: new Uint8Array(await readFile(full)), artifact: this.publicView(job).artifact }
   }
@@ -208,13 +210,16 @@ export class MediaJobQueue {
   async deleteArtifact(id) {
     const job = this.jobs.get(id)
     if (!job?.artifact?.path) return { deleted: false }
+    // Old persisted records did not carry explicit ownership. Detach those records
+    // without unlinking: two legacy jobs may point at the same shared file.
+    const owned = job.artifact.jobId === job.id
     const full = this.#safePath(job.artifact.path)
-    await unlink(full).catch(() => {})
-    const removed = job.artifact.path
+    if (owned) await unlink(full).catch(() => {})
+    const removed = owned ? job.artifact.path : null
     job.artifact = null
     this.#persist()
     this.#audit('delete_artifact', 'success', { jobId: id, removed }, job.subject)
-    return { deleted: true, removed }
+    return { deleted: Boolean(removed), removed }
   }
 
   // --- internals ----------------------------------------------------------
@@ -274,6 +279,7 @@ export class MediaJobQueue {
   }
 
   async #finalize(job, result, filenameHint) {
+    if (TERMINAL.has(job.state)) return
     const expectedKind = job.kind
     const bytes = this.#extractBytes(result, job.kind)
 
@@ -326,7 +332,13 @@ export class MediaJobQueue {
           platform: text(result.platform),
         }
       : null
-    this.#transition(job, JOB_STATES.SUCCEEDED, { stage: 'complete', progress: 100, artifact, validation, result: resultMeta, finishedAt: Date.now() })
+    const applied = this.#transition(job, JOB_STATES.SUCCEEDED, { stage: 'complete', progress: 100, artifact, validation, result: resultMeta, finishedAt: Date.now() })
+    if (!applied) {
+      // Every artifact path is job-owned, so this cleanup cannot remove another
+      // job's output when cancellation wins the race with finalization.
+      if (artifact.jobId === job.id) await unlink(this.#safePath(artifact.path)).catch(() => {})
+      return
+    }
     this.#audit(
       `succeed:${job.kind}`,
       'success',
@@ -365,11 +377,12 @@ export class MediaJobQueue {
     const sha256 = createHash('sha256').update(bytes).digest('hex')
     const ext = extensionFor(validation.format)
     const base = (filenameHint || `${job.kind}-${job.id.slice(0, 8)}`).replace(/[^a-zA-Z0-9._-]/g, '_')
-    const filename = `${base}-${sha256.slice(0, 12)}.${ext}`
+    const filename = `${base}-${job.id}-${sha256.slice(0, 12)}.${ext}`
     const full = join(dir, filename)
     await writeFile(full, bytes)
     const stats = await stat(full)
     return {
+      jobId: job.id,
       path: `${job.kind}${sep}${filename}`,
       filename,
       format: validation.format,
@@ -390,12 +403,14 @@ export class MediaJobQueue {
   }
 
   #transition(job, state, extra = {}) {
+    if (TERMINAL.has(job.state)) return false
     job.state = state
     Object.assign(job, extra)
     job.history.push({ at: Date.now(), state, stage: job.stage, progress: job.progress })
     // Durability is per state change, not per progress tick: the states are what a restart needs.
     if (TERMINAL.has(state)) this.#persist()
     this.onEvent({ type: 'job_state', jobId: job.id, state, stage: job.stage, progress: job.progress })
+    return true
   }
 
   #audit(action, outcome, detail, subject) {
