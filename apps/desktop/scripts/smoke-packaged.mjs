@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 function fail(message) {
@@ -25,12 +25,18 @@ if (process.platform === 'win32') {
     if (existsSync(candidate)) { executable = candidate; break }
   }
 } else {
+  const productName = JSON.parse(readFileSync(resolve('package.json'), 'utf8')).build?.productName ?? 'Ragam'
   for (const name of names.filter((entry) => entry.endsWith('-unpacked'))) {
-    const candidate = join(release, name, 'ragam')
-    if (existsSync(candidate)) { executable = candidate; break }
+    const unpacked = join(release, name)
+    const binary = readdirSync(unpacked).find((entry) => entry.toLocaleLowerCase() === productName.toLocaleLowerCase())
+    if (binary) { executable = join(unpacked, binary); break }
   }
 }
-if (!executable) fail(`No unpacked Ragam executable found for ${process.platform}/${process.arch} in ${release}; entries: ${names.join(', ')}`)
+if (!executable) {
+  const contents = names.filter((name) => name.endsWith('-unpacked'))
+    .map((name) => `${name}=[${readdirSync(join(release, name)).join(', ')}]`).join('; ')
+  fail(`No unpacked Ragam executable found for ${process.platform}/${process.arch} in ${release}; entries: ${names.join(', ')}; unpacked contents: ${contents}`)
+}
 
 const command = process.platform === 'linux' && process.env.CI === 'true' ? 'xvfb-run' : executable
 const args = command === 'xvfb-run' ? ['-a', executable] : []
