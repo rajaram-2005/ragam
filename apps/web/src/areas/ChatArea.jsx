@@ -1,14 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { api, streamChat } from '../api.js'
 import { Banner, Button, CopyButton, Field, Panel } from '../components/ui.jsx'
 import { KnowledgePanel, MemoryPanel, HistoryPanel, SkillsPanel } from '../components/ContextPanels.jsx'
-import UserTrainingPanel from '../components/UserTrainingPanel.jsx'
 import GettingStarted from '../components/GettingStarted.jsx'
 import ChatToolRunner from '../components/ChatToolRunner.jsx'
 import { recommendationsForProfile } from '../profile.js'
 import { CHAT_FILE_LIMITS, messageWithChatFiles, readChatAttachment } from '../chat-files.js'
 import { setSetupGuideDismissed, setupGuideDismissed } from '../onboarding.js'
-import { recordedBlobToWav, VOICE_CAPTURE_LIMITS } from '../voice-capture.js'
 
 const LOCAL_CHAT_CONNECTIONS = new Set(['ollama', 'llamacpp', 'vllm', 'localai'])
 const PROCESSOR_PROFILE_TASK_LIMITS = Object.freeze({ lite: 2, pro: 5, max: 8 })
@@ -25,21 +23,10 @@ const BUILT_IN_RECOMMENDATIONS = [
   { id: 'outline', number: '04', title: 'Build a short outline', detail: 'Create an outline from headings and source sentences', prompt: 'Build a short outline from the following text:\n\n' },
 ]
 
-async function blobToBase64(blob) {
-  const bytes = new Uint8Array(await blob.arrayBuffer())
-  let binary = ''
-  const chunk = 0x8000
-  for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
-  return btoa(binary)
-}
-
 export default function ChatArea({ provider, readiness, refreshReadiness, onSettings, onProfile, profile, account, industryMode = false, localOnlyMode = false, industryPrompt = '', onIndustryPromptConsumed }) {
-  const firstPartyAll = readiness?.firstPartyModels?.models ?? []
-  const firstPartyReady = firstPartyAll.filter((entry) => entry.status === 'ready' && entry.selectorEnabled)
-  const firstPartyUnavailable = firstPartyAll.filter((entry) => !(entry.status === 'ready' && entry.selectorEnabled))
   const gatewayModels = provider?.models ?? []
-  const hasSelectableModels = firstPartyReady.length > 0 || gatewayModels.length > 0
-  const preferredDefault = readiness?.provider?.selectedModel || provider?.selectedModel || firstPartyReady[0]?.id || ''
+  const hasSelectableModels = gatewayModels.length > 0
+  const preferredDefault = readiness?.provider?.selectedModel || provider?.selectedModel || ''
 
   const [messages, setMessages] = useState([]), [prompt, setPrompt] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(null)
   const [model, setModel] = useState(preferredDefault), [saving, setSaving] = useState(false)
@@ -60,13 +47,10 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
   const abort = useRef(null), thread = useRef(null), composerInput = useRef(null)
 
   useEffect(() => {
-    setModel(readiness?.provider?.selectedModel || provider?.selectedModel || firstPartyReady[0]?.id || '')
-  }, [readiness?.provider?.selectedModel, provider?.selectedModel, provider?.revision, firstPartyReady.length])
+    setModel(readiness?.provider?.selectedModel || provider?.selectedModel || '')
+  }, [readiness?.provider?.selectedModel, provider?.selectedModel, provider?.revision])
   useEffect(() => () => {
     abort.current?.abort()
-    if (recordingTimer.current) clearTimeout(recordingTimer.current)
-    if (recorder.current) { recorder.current.onstop = null; if (recorder.current.state !== 'inactive') recorder.current.stop() }
-    recordingStream.current?.getTracks().forEach((track) => track.stop())
   }, [])
   // The preference is read from the server, never inferred from what is typed here.
   useEffect(() => { api.styles().then((data) => { setStyles(data.styles); setStyle(data.preference?.style ?? '') }).catch(() => {}) }, [])
@@ -77,31 +61,10 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     onIndustryPromptConsumed?.()
   }, [industryPrompt, onIndustryPromptConsumed])
 
-  const voiceModels = readiness?.media?.voice?.models ?? []
-  const canRecordVoice = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== 'undefined'
-  const [voiceModel, setVoiceModel] = useState(voiceModels[0] || 'klyvaron-pro-voice')
-  const [voiceText, setVoiceText] = useState('status check')
-  const [voiceSynthResult, setVoiceSynthResult] = useState(null)
-  const [voiceTranscript, setVoiceTranscript] = useState(null)
-  const [audioDraft, setAudioDraft] = useState(null)
-  const [audioPreviewUrl, setAudioPreviewUrl] = useState('')
-  const [recording, setRecording] = useState(false)
-  const [voiceBusy, setVoiceBusy] = useState(false)
-  const [spokenResponses, setSpokenResponses] = useState({})
-  const recorder = useRef(null), recordingStream = useRef(null), recordingTimer = useRef(null), recordingChunks = useRef([])
-
-  useEffect(() => {
-    if (!audioDraft?.blob) { setAudioPreviewUrl(''); return undefined }
-    const url = URL.createObjectURL(audioDraft.blob)
-    setAudioPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [audioDraft])
-
-  const selectedFirstParty = firstPartyReady.find((entry) => entry.id === model) ?? null
-  const industryUnsupported = Boolean(!modelIndependent && industryMode && selectedFirstParty && selectedFirstParty.instructionTuned !== true)
-  const localOnlyUnsupported = Boolean(!modelIndependent && localOnlyMode && !selectedFirstParty && !LOCAL_CHAT_CONNECTIONS.has(provider?.kind))
   const selectedModelEvidence = provider?.modelDetails?.find((entry) => entry.id === model) ?? null
-  const selectedModelReady = Boolean(model && (gatewayModels.includes(model) || firstPartyReady.some((entry) => entry.id === model)))
+  const industryUnsupported = Boolean(!modelIndependent && industryMode && selectedModelEvidence?.instructionTuned === false)
+  const localOnlyUnsupported = Boolean(!modelIndependent && localOnlyMode && !LOCAL_CHAT_CONNECTIONS.has(provider?.kind))
+  const selectedModelReady = Boolean(model && gatewayModels.includes(model))
   const setSetupGuideOpen = (open) => {
     setShowSetupGuide(open)
     setSetupGuideDismissed(!open)
@@ -111,15 +74,15 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     event.preventDefault(); if (busy || saving || (!prompt.trim() && !attachments.length) || (!modelIndependent && !model)) return
     if (modelIndependent && processorTaskLimitExceeded) { setError(Error(`The ${processorTier.toUpperCase()} profile permits at most ${PROCESSOR_PROFILE_TASK_LIMITS[processorTier]} task(s). Remove a processing step or choose a larger profile.`)); return }
     if (modelIndependent && processorTasks.includes('compare') && !comparisonInput.trim()) { setError(Error('Add comparison text for the lexical comparison task.')); return }
-    if (!modelIndependent && localOnlyUnsupported) { setError(Error('Local-only mode blocked this remote provider. Select verified first-party Klyvaron or a self-hosted local endpoint, or turn Local-only off to use remote APIs that may bill.')); return }
-    if (!modelIndependent && industryUnsupported) { setError(Error('Manufacturing Operations mode needs an instruction-tuned model. Klyvaron Lite is a base completion model; switch the mode off or choose an instruction-tuned Chat model.')); return }
+    if (!modelIndependent && localOnlyUnsupported) { setError(Error('Local-only mode blocks this provider. Select an allowed self-hosted local endpoint, or turn Local-only off to use remote APIs that may bill.')); return }
+    if (!modelIndependent && industryUnsupported) { setError(Error('Manufacturing Operations mode needs a model documented as instruction-tuned. Switch the mode off or choose a compatible Chat model.')); return }
     const content = messageWithChatFiles(prompt, attachments)
     const mediaAttachments = attachments.filter((file) => ['image', 'audio', 'video'].includes(file.kind))
     if (modelIndependent && mediaAttachments.length) {
       setError(Error('The built-in Klyvaron processor handles text and locally extracted document text only. It does not interpret image, audio or video bytes.'))
       return
     }
-    const allowedMediaKinds = new Set(selectedFirstParty ? [] : (provider?.chatInputKinds ?? []))
+    const allowedMediaKinds = new Set(provider?.chatInputKinds ?? [])
     const unsupportedMedia = mediaAttachments.filter((file) => !allowedMediaKinds.has(file.kind))
     if (unsupportedMedia.length) {
       setError(Error(`The selected Chat wire cannot send ${[...new Set(unsupportedMedia.map((file) => file.kind))].join(', ')} attachments. Choose a compatible listed provider; no fallback will occur.`))
@@ -129,11 +92,11 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
       setError(Error('Before sending, confirm that these selected media files may be transferred to the selected provider.'))
       return
     }
-    if (!modelIndependent && nativeSearchConsent && (!provider?.chatNativeSearch || selectedFirstParty)) {
+    if (!modelIndependent && nativeSearchConsent && !provider?.chatNativeSearch) {
       setError(Error('Provider-native search is not available on the selected Chat wire.'))
       return
     }
-    if (!modelIndependent && toolsConsent && offeredTools.length && (!provider?.chatTools || selectedFirstParty)) {
+    if (!modelIndependent && toolsConsent && offeredTools.length && !provider?.chatTools) {
       setError(Error('Function tool proposals are not available on the selected Chat wire.'))
       return
     }
@@ -227,69 +190,6 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     setPrompt(value)
     composerInput.current?.focus()
   }
-  const transcribeAudioDraft = async () => {
-    if (!audioDraft?.blob || !voiceModels.length) return
-    setVoiceBusy(true); setError(null); setVoiceTranscript(null)
-    try {
-      const audioBase64 = await blobToBase64(audioDraft.blob)
-      const transcript = await api.transcribeVoice({ model: voiceModel, audioBase64 })
-      setVoiceTranscript(transcript)
-    } catch (caught) { setError(caught) } finally { setVoiceBusy(false) }
-  }
-  const addTranscriptToDraft = () => {
-    const text = voiceTranscript?.text?.trim()
-    if (!text) return
-    setPrompt((current) => current.trim() ? `${current.trim()}\n\n${text}` : text)
-    composerInput.current?.focus()
-  }
-  const speakResponse = async (index, text) => {
-    if (!voiceModels.length || !text?.trim()) return
-    setVoiceBusy(true); setError(null)
-    try {
-      const result = await api.synthesizeVoice({ model: voiceModel, text: text.trim() })
-      setSpokenResponses((current) => ({ ...current, [index]: result }))
-    } catch (caught) { setError(caught) } finally { setVoiceBusy(false) }
-  }
-  const stopVoiceRecording = () => {
-    if (recordingTimer.current) clearTimeout(recordingTimer.current)
-    recordingTimer.current = null
-    if (recorder.current?.state === 'recording') recorder.current.stop()
-  }
-  const startVoiceRecording = async () => {
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      setError(Error('This browser does not provide microphone recording. Upload a short WAV file instead.'))
-      return
-    }
-    setError(null); setVoiceTranscript(null); setAudioDraft(null)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const activeRecorder = new MediaRecorder(stream)
-      recordingStream.current = stream
-      recorder.current = activeRecorder
-      recordingChunks.current = []
-      activeRecorder.ondataavailable = (event) => { if (event.data?.size) recordingChunks.current.push(event.data) }
-      activeRecorder.onstop = async () => {
-        setRecording(false)
-        if (recordingTimer.current) clearTimeout(recordingTimer.current)
-        recordingTimer.current = null
-        stream.getTracks().forEach((track) => track.stop())
-        recordingStream.current = null
-        try {
-          const blob = new Blob(recordingChunks.current, { type: activeRecorder.mimeType || 'audio/webm' })
-          const wav = await recordedBlobToWav(blob)
-          setAudioDraft({ name: 'microphone-recording.wav', size: wav.size, blob: wav })
-        } catch (caught) { setError(caught) }
-      }
-      activeRecorder.onerror = () => setError(Error('The microphone recording failed.'))
-      activeRecorder.start()
-      setRecording(true)
-      recordingTimer.current = setTimeout(stopVoiceRecording, VOICE_CAPTURE_LIMITS.durationSeconds * 1000)
-    } catch (caught) {
-      recordingStream.current?.getTracks().forEach((track) => track.stop())
-      recordingStream.current = null
-      setError(caught)
-    }
-  }
   const addToolResultToDraft = (value) => {
     setPrompt((current) => current.trim() ? `${current.trim()}\n\n${value}` : value)
     composerInput.current?.focus()
@@ -309,7 +209,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
       try {
         const attachment = await readChatAttachment(file)
         if (['image', 'audio', 'video'].includes(attachment.kind)) {
-          if (selectedFirstParty || !(provider?.chatInputKinds ?? []).includes(attachment.kind)) {
+          if (!(provider?.chatInputKinds ?? []).includes(attachment.kind)) {
             problems.push(`${attachment.kind} attachments cannot be sent through the currently selected Chat wire. Choose a compatible provider; there is no fallback.`)
             continue
           }
@@ -342,7 +242,6 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     setMessages(session.turns
       .filter((turn) => ['user', 'assistant'].includes(turn.role))
       .map((turn) => ({ role: turn.role, content: turn.content, historical: true })))
-    setSpokenResponses({})
     setSessionId(session.id)
     setPrompt('')
     setAttachments([])
@@ -363,12 +262,12 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
   }
 
   return <div className="online-chat">
-    {localOnlyMode ? <Banner tone="info" title="Local-only mode is active"><p>{modelIndependent ? 'The built-in Klyvaron processor runs deterministic text workflows on this Core host without a model, provider, or network request.' : 'Remote gateways are blocked for this request. Only verified native Klyvaron or an allowed self-hosted local Chat endpoint can run; no external model provider is contacted.'}</p></Banner> : null}
+    {localOnlyMode ? <Banner tone="info" title="Local-only mode is active"><p>{modelIndependent ? 'The built-in Klyvaron processor runs deterministic text workflows on this Core host without a model, provider, or network request.' : 'Remote gateways are blocked for this request. Only an allowed self-hosted local Chat endpoint can run; no external model provider is contacted.'}</p></Banner> : null}
     {localOnlyUnsupported ? <Banner tone="warn" title="Selected model is remote"><p>Local-only mode prevents sending this Chat request to {provider?.name ?? 'the selected provider'}. Choose an allowed local model or turn Local-only off; remote APIs may bill.</p></Banner> : null}
-    {industryMode ? <Banner tone="info" title="Manufacturing Operations mode is active"><p>{modelIndependent ? 'The deterministic Klyvaron processor can inspect or summarize supplied text, but it does not provide manufacturing advice or operate equipment.' : 'Safety-first context is added to this text Chat request for the selected Klyvaron or gateway model. This does not retrain model weights or guarantee correct advice. Retrieved files are included only when you separately enable Knowledge and approve context transfer; verify every action against approved site procedures.'}</p></Banner> : null}
-    {industryUnsupported ? <Banner tone="bad" title="The selected Klyvaron model cannot use this mode"><p>Klyvaron Lite is a base completion model and does not follow instructions. Turn Manufacturing Operations mode off or select an instruction-tuned Chat model; Ragam will not switch models for you.</p></Banner> : null}
+    {industryMode ? <Banner tone="info" title="Manufacturing Operations mode is active"><p>{modelIndependent ? 'The deterministic Klyvaron processor can inspect or summarize supplied text, but it does not provide manufacturing advice or operate equipment.' : 'Safety-first context is added to this text Chat request for the selected gateway model. This does not train model weights or guarantee correct advice. Retrieved files are included only when you separately enable Knowledge and approve context transfer; verify every action against approved site procedures.'}</p></Banner> : null}
+    {industryUnsupported ? <Banner tone="bad" title="The selected model cannot use this mode"><p>The provider's catalogue does not mark this model as instruction-tuned. Turn Manufacturing Operations mode off or choose a compatible Chat model; Ragam will not switch models for you.</p></Banner> : null}
     <GettingStarted
-      providerReady={Boolean(provider?.configured || selectedFirstParty)}
+      providerReady={Boolean(provider?.configured)}
       modelReady={selectedModelReady}
       modelIndependent={modelIndependent}
       onSettings={onSettings}
@@ -376,7 +275,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
       onDismiss={() => setSetupGuideOpen(false)}
       hidden={!showSetupGuide}
     />
-    {!modelIndependent && !showSetupGuide && !provider?.configured && firstPartyReady.length === 0 ? <Banner tone="info" title="Connect an optional model provider"><p>Klyvaron works without a model. If you switch to the optional provider engine, connect using your own API key. Provider API use may incur charges and follow that provider's policies.</p><Button onClick={onSettings}>Choose a provider</Button></Banner> : null}
+    {!modelIndependent && !showSetupGuide && !provider?.configured ? <Banner tone="info" title="Connect an optional model provider"><p>Klyvaron works without a model. If you switch to the optional provider engine, connect using your own API key. Provider API use may incur charges and follow that provider's policies.</p><Button onClick={onSettings}>Choose a provider</Button></Banner> : null}
     <Panel className="chat-panel" title="Conversation">
       <div className="row between chat-toolbar">
         <div className="chat-model-fields">
@@ -425,13 +324,11 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
           {processorTaskLimitExceeded ? <p className="small" role="alert">This task set exceeds the {processorTier.toUpperCase()} profile limit. Remove steps or choose a larger profile.</p> : null}
         </> : null}
         <Field label="Optional provider">
-          <span className="chat-provider-value"><i className="chat-provider-dot" aria-hidden="true" />{modelIndependent ? 'Not used by built-in processor' : selectedFirstParty ? 'Klyvaron Native model' : (provider?.name ?? 'No provider connected')}</span>
+          <span className="chat-provider-value"><i className="chat-provider-dot" aria-hidden="true" />{modelIndependent ? 'Not used by built-in processor' : (provider?.name ?? 'No provider connected')}</span>
         </Field>
         <Field label="Optional model" hint="Used only with the optional provider engine. No silent substitution: the built-in Klyvaron processor never loads weights.">
           <select aria-label="Model" className="select" value={model} disabled={modelIndependent || busy || saving || !hasSelectableModels} onChange={async (e) => { const next = e.target.value; setSaving(true); setError(null); try { await api.selectModel(next); setModel(next); setMediaConsent(false); setToolsConsent(false); setNativeSearchConsent(false); await refreshReadiness?.() } catch (err) { setError(err) } finally { setSaving(false) } }}>
             <option value="" disabled>Choose a model</option>
-            {firstPartyReady.map((entry) => <option key={entry.id} value={entry.id}>{entry.displayName ?? entry.id}</option>)}
-            {firstPartyUnavailable.map((entry) => <option key={entry.id} value={entry.id} disabled>{entry.label ?? entry.id} ({entry.id}) — {entry.status}</option>)}
             {gatewayModels.map((id) => <option key={id} value={id}>{id}</option>)}
           </select>
         </Field>
@@ -439,16 +336,14 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
         <div className="chat-toolbar-actions">
           <span className="chat-online-label"><i aria-hidden="true" />Online</span>
           <Button className="ghost small" type="button" aria-expanded={showSetupGuide} aria-controls="chat-getting-started" onClick={() => setSetupGuideOpen(!showSetupGuide)}>Setup guide</Button>
-          <Button disabled={busy} onClick={() => { setMessages([]); setSpokenResponses({}); setSessionId(null); setLoadedSavedSession(false); setLoadedSavedSessionHasMedia(false); setMediaConsent(false); setToolsConsent(false); setNativeSearchConsent(false); setError(null); setPrompt(''); setAttachments([]); setAttachmentError('') }}>New conversation</Button>
+          <Button disabled={busy} onClick={() => { setMessages([]); setSessionId(null); setLoadedSavedSession(false); setLoadedSavedSessionHasMedia(false); setMediaConsent(false); setToolsConsent(false); setNativeSearchConsent(false); setError(null); setPrompt(''); setAttachments([]); setAttachmentError('') }}>New conversation</Button>
           <Button className="chat-settings-button" disabled={busy} onClick={onSettings}>Provider Settings</Button>
         </div>
       </div>
       <p className="small chat-model-note">
         {modelIndependent
           ? `Klyvaron deterministic processor · ${processorTier.toUpperCase()} · tasks: ${processorTasks.join(', ')} · no model, weights, training, download, provider or network call.`
-          : selectedFirstParty
-            ? `First-party weights ${selectedFirstParty.id} (${selectedFirstParty.parameters.toLocaleString('en-US')} params · SHA-256 ${selectedFirstParty.weightsSha256.slice(0, 16)}…) · verified in-host without external transfer.`
-            : `${provider?.baseUrl || 'No gateway configured'} · Listed models are not inference-verified until a request succeeds.`}
+          : `${provider?.baseUrl || 'No gateway configured'} · Listed models are not inference-verified until a request succeeds.`}
       </p>
       {modelIndependent ? <Banner tone="info" title="Model-independent Klyvaron processing"><p>Uses deterministic parsing, extractive ranking, local retrieval and bounded arithmetic. It does not train or download AI models and does not claim open-ended language reasoning. Text and locally extracted document text only; binary image, audio and video understanding are not included.</p></Banner> : null}
       {modelIndependent && processorTasks.includes('compare') ? <Field label="Comparison text">
@@ -458,7 +353,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
         Provider catalogue for {selectedModelEvidence.name ?? model}: input {(selectedModelEvidence.capabilities.input ?? ['unknown']).join(', ')}, output {(selectedModelEvidence.capabilities.output ?? ['unknown']).join(', ')}, streaming {selectedModelEvidence.capabilities.streaming ?? 'unknown'}, image input {selectedModelEvidence.capabilities.imageInput ?? 'unknown'}, tools {provider?.chatTools && selectedModelEvidence.capabilities.tools === 'not_exposed_by_ragam' ? 'unknown' : selectedModelEvidence.capabilities.tools ?? 'unknown'}.
         {selectedModelEvidence.capabilities.provenance?.source ? ` Evidence source: ${selectedModelEvidence.capabilities.provenance.source}.` : ''}
         {' '}Catalogue metadata is not an inference or modality test. This wire accepts function schemas, but the selected model may not support them. Search and function calls are opt-in; any returned function call is a proposal, never automatic execution.
-      </p> : model && !selectedFirstParty ? <p className="small chat-capability-evidence">This provider has not supplied capability evidence for the selected model. Ragam does not infer image, search, audio or tool support from a model name.</p> : null}
+      </p> : model ? <p className="small chat-capability-evidence">This provider has not supplied capability evidence for the selected model. Ragam does not infer image, search, audio or tool support from a model name.</p> : null}
       {loadedSavedSession ? <p className="small chat-history-disclosure" role="status">Saved conversation opened. The earlier provider/model was not recorded. When you press Send, this visible transcript will be processed by the selected engine.{loadedSavedSessionHasMedia ? ' Earlier binary media is not stored in history; reattach it if you want an optional model provider to inspect it again.' : ''}</p> : null}
       <div className="thread" ref={thread} aria-live="polite" aria-label="Conversation transcript">
         {messages.length ? messages.map((m, i) => (
@@ -467,16 +362,14 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
               <strong className="message-role">{m.historical && m.role === 'assistant' ? 'Earlier assistant reply' : m.role === 'user' ? 'You' : m.meta?.engine ? 'Klyvaron Processor' : m.meta?.modelId ?? model}</strong>
               {m.content ? <div className="message-actions" style={{ marginLeft: 'auto' }}>
                 <CopyButton text={m.content} label="Copy" className="ghost small" />
-                {m.role === 'assistant' && !m.pending && voiceModels.length ? <Button className="ghost small" disabled={voiceBusy} busy={voiceBusy} onClick={() => speakResponse(i, m.content)}>Speak with local voice</Button> : null}
               </div> : null}
             </div>
-            <div className="message-body message-text" style={{ whiteSpace: 'pre-wrap' }}>{m.content || (m.pending ? (modelIndependent ? 'Processing with deterministic Klyvaron workflows…' : selectedFirstParty ? 'Generating with verified first-party weights…' : 'Waiting for the gateway…') : 'No completed response.')}</div>
+            <div className="message-body message-text" style={{ whiteSpace: 'pre-wrap' }}>{m.content || (m.pending ? (modelIndependent ? 'Processing with deterministic Klyvaron workflows…' : 'Waiting for the gateway…') : 'No completed response.')}</div>
             {m.meta?.toolCalls?.length ? <div className="chat-tool-proposals" role="status"><strong>Provider function-call proposals — not executed</strong><p className="small">Review these untrusted model-proposed arguments. No provider or MCP tool runs unless you separately choose it in the manual tool panel.</p>{m.meta.toolCalls.map((call, index) => <details key={`${call.name}-${index}`}><summary>{call.name}</summary><pre className="code">{JSON.stringify(call.arguments, null, 2)}</pre></details>)}</div> : null}
             {(() => { const sources = m.meta?.grounding?.sources ?? m.meta?.grounding?.provider?.sources ?? []; return sources.length ? <div className="chat-grounding-sources"><strong>Provider search sources</strong><ul>{sources.map((source, index) => <li key={`${source.url}-${index}`}><a href={source.url} target="_blank" rel="noreferrer">{source.title || source.url}</a></li>)}</ul><small>Sources were returned by the provider; verify them independently.</small></div> : null })()}
-            {spokenResponses[i]?.audioBase64 ? <audio className="chat-spoken-response" controls src={`data:audio/wav;base64,${spokenResponses[i].audioBase64}`} aria-label="Locally synthesized response audio" /> : null}
             {m.attachments?.length ? <small>Attached: {m.attachments.map((file) => `${file.kind} ${file.name}`).join(', ')}. Binary content is not stored in this transcript.</small> : null}
             {m.failed ? <small>Not completed {m.role === 'user' ? <Button className="ghost small" onClick={() => retry(i)}>Retry</Button> : null}</small> : null}
-            {m.meta ? (m.meta.engine === 'klyvaron-deterministic-v1' ? <small>Processed by {m.meta.engine} · tier {m.meta.tier} · modelUsed: false · weightsUsed: false · networkUsed: false{m.meta.persistence?.requested ? ' · saved to local knowledge by explicit request' : ''}</small> : m.meta.firstPartyWeights ? <small>Served by verified first-party Klyvaron weights ({m.meta.modelId} · SHA-256 {m.meta.weightsSha256?.slice(0, 12)}… · {m.meta.tokensPerSecond} tok/s · sentExternally: false){m.meta.differentiators ? ` · verdict: ${m.meta.differentiators.verdict} · state: ${m.meta.differentiators.state}` : ''}</small> : <small>Executed online via {m.meta.provider ?? provider?.name ?? 'the gateway'}{m.meta.redaction?.findings?.length ? ' · credentials redacted' : ''}</small>) : null}
+            {m.meta ? (m.meta.engine === 'klyvaron-deterministic-v1' ? <small>Processed by {m.meta.engine} · tier {m.meta.tier} · modelUsed: false · weightsUsed: false · networkUsed: false{m.meta.persistence?.requested ? ' · saved to local knowledge by explicit request' : ''}</small> : <small>Executed online via {m.meta.provider ?? provider?.name ?? 'the gateway'}{m.meta.redaction?.findings?.length ? ' · credentials redacted' : ''}</small>) : null}
             {typeof m.meta?.providerModel === 'string' && m.meta.providerModel !== m.meta.modelId ? <small>Reported model: {m.meta.providerModel}</small> : null}
             {m.meta?.industryMode === 'manufacturing' ? <small>Manufacturing Operations guidance was applied to this text Chat request; verify the answer against your approved procedures.</small> : null}
             {m.meta?.skill ? <small>Procedure used: {m.meta.skill.name} v{m.meta.skill.version}</small> : null}
@@ -541,8 +434,8 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
             </li>)}</ul> : null}
             {!modelIndependent && attachments.some((file) => ['image', 'audio', 'video'].includes(file.kind)) ? <label className="checkbox chat-media-consent"><input type="checkbox" checked={mediaConsent} disabled={busy} onChange={(event) => setMediaConsent(event.target.checked)} />I approve sending these selected binary attachments to {provider?.name ?? 'the selected provider'} with this one Chat request. The selected model's support may be unknown and the provider may retain data or charge for use.</label> : null}
           </div>
-          {provider?.chatNativeSearch && !selectedFirstParty ? <label className="checkbox chat-media-consent"><input type="checkbox" checked={nativeSearchConsent} disabled={busy} onChange={(event) => setNativeSearchConsent(event.target.checked)} />I approve provider-native web search for this one request to {provider?.name ?? 'the selected provider'}. The provider and its search service may receive the query and prompt context; data may be retained and charges may apply. OpenAI-compatible endpoints must implement Responses API web search; OpenRouter uses its documented openrouter:web_search tool. No Chat Completions fallback is attempted. Search is not enabled unless checked.</label> : null}
-          {offeredTools.length && !selectedFirstParty ? <label className="checkbox chat-media-consent"><input type="checkbox" checked={toolsConsent} disabled={busy || !provider?.chatTools} onChange={(event) => setToolsConsent(event.target.checked)} />I approve sending {offeredTools.length} selected MCP function schema{offeredTools.length === 1 ? '' : 's'} to {provider?.name ?? 'the selected provider'} for this request. The model may propose a call; Ragam will never execute it automatically.</label> : null}
+          {provider?.chatNativeSearch ? <label className="checkbox chat-media-consent"><input type="checkbox" checked={nativeSearchConsent} disabled={busy} onChange={(event) => setNativeSearchConsent(event.target.checked)} />I approve provider-native web search for this one request to {provider?.name ?? 'the selected provider'}. The provider and its search service may receive the query and prompt context; data may be retained and charges may apply. OpenAI-compatible endpoints must implement Responses API web search; OpenRouter uses its documented openrouter:web_search tool. No Chat Completions fallback is attempted. Search is not enabled unless checked.</label> : null}
+          {offeredTools.length ? <label className="checkbox chat-media-consent"><input type="checkbox" checked={toolsConsent} disabled={busy || !provider?.chatTools} onChange={(event) => setToolsConsent(event.target.checked)} />I approve sending {offeredTools.length} selected MCP function schema{offeredTools.length === 1 ? '' : 's'} to {provider?.name ?? 'the selected provider'} for this request. The model may propose a call; Ragam will never execute it automatically.</label> : null}
           {offeredTools.length && !provider?.chatTools ? <p className="small">The current Chat wire cannot receive function tool schemas. Choose a supported provider; no fallback occurs.</p> : null}
           <div className="composer-actions">
             <details style={{ display: 'inline-block' }}>
@@ -567,90 +460,13 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
             {busy ? <Button variant="danger" onClick={() => abort.current?.abort()}>{modelIndependent ? 'Stop processing' : 'Stop generation'}</Button> : <Button type="submit" variant="primary" disabled={saving || (modelIndependent && processorTaskLimitExceeded) || (!modelIndependent && !model) || industryUnsupported || localOnlyUnsupported || (!prompt.trim() && !attachments.length)}>Send</Button>}
           </div>
         </div>
-        <div className="chat-composer-foot"><span>Enter to send <b>·</b> Shift + Enter for a new line</span><span>{modelIndependent ? `Klyvaron ${processorTier.toUpperCase()} · deterministic local processing · no model, weights or network` : selectedFirstParty ? 'Processed on this Core host · no external transfer' : localOnlyMode && LOCAL_CHAT_CONNECTIONS.has(provider?.kind) ? 'Sent only to the configured self-hosted runtime · remote vendor requests blocked' : localOnlyMode ? 'Local-only mode · remote requests blocked' : 'Sent to the selected provider · charges and retention policies may apply'}</span></div>
+        <div className="chat-composer-foot"><span>Enter to send <b>·</b> Shift + Enter for a new line</span><span>{modelIndependent ? `Klyvaron ${processorTier.toUpperCase()} · deterministic local processing · no model, weights or network` : localOnlyMode && LOCAL_CHAT_CONNECTIONS.has(provider?.kind) ? 'Sent only to the configured self-hosted runtime · remote vendor requests blocked' : localOnlyMode ? 'Local-only mode · remote requests blocked' : 'Sent to the selected provider · charges and retention policies may apply'}</span></div>
       </form>
     </Panel>
-    <details className="context-section">
-      <summary>Voice input &amp; spoken replies (local, explicit)</summary>
-      <Panel title="Klyvaron Voice (Bidirectional Neural TTS + ASR)">
-        <p className="small">
-          {voiceModels.length
-            ? `Verified first-party voice models ready: ${voiceModels.join(', ')}. Recording, transcription and speech synthesis run on this Core host with the installed 16 kHz model; no audio is sent to a cloud provider. Recording starts only when you press Start recording.`
-            : 'No verified first-party voice model checkpoint installed in this workspace yet. Uploading, recording and transcription controls stay disabled.'}
-        </p>
-        <div className="row" style={{ gap: 8 }}>
-          <Field label="Voice model">
-            <select aria-label="Voice model" className="select" value={voiceModel} disabled={voiceBusy} onChange={(e) => setVoiceModel(e.target.value)}>
-              {(voiceModels.length ? voiceModels : ['klyvaron-pro-voice', 'klyvaron-max-voice']).map((id) => (
-                <option key={id} value={id}>{id}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Speech synthesis text">
-            <input className="input" value={voiceText} disabled={voiceBusy} onChange={(e) => setVoiceText(e.target.value)} placeholder="Phrase to synthesize…" />
-          </Field>
-          <Button disabled={voiceBusy || !voiceModels.length || !voiceText.trim()} onClick={async () => {
-            setVoiceBusy(true); setError(null)
-            try {
-              const out = await api.synthesizeVoice({ model: voiceModel, text: voiceText.trim() })
-              setVoiceSynthResult(out)
-            } catch (err) { setError(err) } finally { setVoiceBusy(false) }
-          }}>Synthesize WAV</Button>
-          {(voiceSynthResult?.jobId || voiceSynthResult?.job?.id) ? (
-            <Button disabled={voiceBusy} onClick={async () => {
-              setVoiceBusy(true); setError(null); setVoiceTranscript(null)
-              try {
-                const transcript = await api.transcribeVoice({ model: voiceModel, sourceJobId: voiceSynthResult.jobId ?? voiceSynthResult.job.id })
-                setVoiceTranscript(transcript)
-              } catch (caught) { setError(caught) } finally { setVoiceBusy(false) }
-            }}>Transcribe generated speech locally</Button>
-          ) : null}
-          <Field label="Upload audio for local review" hint="Audio is normalized in this browser. It is sent to the local Core only when you press Transcribe locally.">
-            <input aria-label="Choose audio for local transcription" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg,.webm" disabled={voiceBusy || recording || !voiceModels.length} onChange={async (event) => {
-              const file = event.target.files?.[0]
-              event.target.value = ''
-              if (!file) return
-              setVoiceBusy(true); setError(null); setVoiceTranscript(null)
-              try {
-                if (file.size > VOICE_CAPTURE_LIMITS.bytes) throw Error('Audio input is limited to 2 MiB.')
-                const wav = await recordedBlobToWav(file)
-                setAudioDraft({ name: file.name, size: wav.size, blob: wav })
-              } catch (caught) { setError(caught) } finally { setVoiceBusy(false) }
-            }} />
-          </Field>
-          {canRecordVoice ? <Button disabled={voiceBusy || recording || !voiceModels.length} onClick={startVoiceRecording}>Start recording (max 30 seconds)</Button> : null}
-          {recording ? <Button variant="danger" onClick={stopVoiceRecording}>Stop recording</Button> : null}
-          {audioDraft ? <>
-            <p className="small">Ready for local transcription: {audioDraft.name} · {audioDraft.size.toLocaleString()} bytes. Nothing has been transcribed or sent yet.</p>
-            {audioPreviewUrl ? <audio controls src={audioPreviewUrl} aria-label="Review selected audio before transcription" /> : null}
-            <Button disabled={voiceBusy || !voiceModels.length} busy={voiceBusy} onClick={transcribeAudioDraft}>Transcribe locally</Button>
-          </> : null}
-        </div>
-        {voiceSynthResult ? (
-          <div style={{ marginTop: 8 }}>
-            <audio controls src={voiceSynthResult.artifactUrl || (voiceSynthResult.audioBase64 ? `data:audio/wav;base64,${voiceSynthResult.audioBase64}` : undefined)} />
-            <p className="small">
-              Synthesized by {voiceSynthResult.modelId} ({voiceSynthResult.durationSeconds}s · {voiceSynthResult.sampleRate} Hz · SHA-256 {voiceSynthResult.weightsSha256?.slice(0, 12)}…)
-            </p>
-          </div>
-        ) : null}
-        {voiceTranscript ? (
-          <div className="voice-transcript-review" role="status">
-            <p className="small">Review this locally produced transcript before using it: <strong>{voiceTranscript.text}</strong>{voiceTranscript.nearestCommand ? ` · command: ${voiceTranscript.nearestCommand}` : ''} (confidence {(Number(voiceTranscript.commandConfidence ?? voiceTranscript.utteranceConfidence ?? 0) * 100).toFixed(1)}%)</p>
-            <Button className="ghost small" disabled={!voiceTranscript.text?.trim()} onClick={addTranscriptToDraft}>Add reviewed transcript to Chat draft</Button>
-          </div>
-        ) : null}
-      </Panel>
-    </details>
     <details className="context-section"><summary>Conversation history</summary><HistoryPanel sessionId={sessionId} onOpen={openSavedSession} onDelete={handleDeletedSession} disabled={busy || saving} /></details>
     <details className="context-section"><summary>Use a connected MCP tool (manual, optional)</summary><ChatToolRunner onAddResult={addToolResultToDraft} onToolsChange={setOfferedTools} /></details>
     <details className="context-section"><summary>Optional files & knowledge</summary><KnowledgePanel /></details>
     <details className="context-section"><summary>Optional approved memory</summary><MemoryPanel /></details>
     <details className="context-section"><summary>Reviewed procedure (optional)</summary><SkillsPanel value={skill} onChange={setSkill} account={account} model={model} provider={provider} /></details>
-    <details className="context-section">
-      <summary>Create or adapt model weights (your computer · explicit opt-in)</summary>
-      <p className="small">Provider Settings registers existing inference endpoints and their listed models. This separate workflow plans user-authorized adaptation or training on your paired computer; it does not create a provider endpoint or mark third-party weights as Klyvaron.</p>
-      <UserTrainingPanel readiness={readiness} refreshReadiness={refreshReadiness} />
-    </details>
   </div>
 }

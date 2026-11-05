@@ -390,7 +390,7 @@ test('the Klyvaron panel names the provider behind each tier and offers no model
   const markup = render('KlyvaronTiers', React.createElement(components.KlyvaronTiers, { owner: false, providers: { connections: [] } }))
   // The component fetches on mount; before that it says so and offers no control. A panel that
   // rendered a tier row it had not read would be describing a destination it cannot name.
-  assert.match(markup, /not loaded yet/)
+  assert.match(markup, /loading/)
   assert.doesNotMatch(markup, /<(button|select)\b/)
 })
 
@@ -710,7 +710,7 @@ test('Provider Settings offers supported local runtimes and no LiteLLM connectio
   assert.match(comfySettings, /ComfyUI must be reachable from the Core container/)
 })
 
-test('optional provider models remain distinct from the model-independent built-in processor', () => {
+test('archived Pro/Max artifacts are not selectable; provider models stay separate from the built-in processor', () => {
   const proSha = '11'.repeat(32)
   const readiness = {
     status: 'configured',
@@ -745,91 +745,31 @@ test('optional provider models remain distinct from the model-independent built-
     provider: { kind: 'openai', name: 'OpenAI', configured: true, models: ['gpt-external-demo'], selectedModel: '' },
     readiness,
   }))
-  // Verified Pro is selectable without disabled attribute; unverified Max is disabled; gateway model stays distinct.
-  assert.match(chat, /<option value="klyvaron-pro-lm"[^>]*>Klyvaron Pro \(first-party · 27\.6M\)<\/option>/)
-  assert.match(chat, /<option value="klyvaron-max-lm"[^>]*disabled[^>]*>Klyvaron Max \(klyvaron-max-lm\) — missing<\/option>/)
+  // Legacy artifact records cannot be selected in the model-independent product surface.
+  assert.doesNotMatch(chat, /klyvaron-pro-lm|klyvaron-max-lm/)
   assert.match(chat, /<option value="gpt-external-demo">gpt-external-demo<\/option>/)
   assert.match(chat, /Klyvaron built-in \(no AI model\)/)
   assert.match(chat, /Model-independent Klyvaron processing/)
   assert.doesNotMatch(chat, /Connect a model provider/)
 })
 
-test('KlyvaronTiers presents model-independent processing and labels provider/model paths optional', () => {
+test('KlyvaronTiers presents only shared model-independent capability profiles', () => {
   const panel = render('KlyvaronTiers (initial)', React.createElement(components.KlyvaronTiers, {
-    providers: { connections: [] },
-    owner: true,
-    onChanged: noop,
+    providers: { connections: [] }, owner: true, onChanged: noop,
   }))
-  assert.match(panel, /Klyvaron product tiers/)
+  assert.match(panel, /Klyvaron capability profiles/)
   const source = readFileSync(resolve(WEB, 'src/components/KlyvaronTiers.jsx'), 'utf8')
-  assert.match(source, /model-independent deterministic processing profiles/)
-  assert.match(source, /not required for Klyvaron processing/)
-  assert.match(source, /Optional legacy model research/)
+  assert.match(source, /same deterministic engine/)
+  assert.match(source, /processing depth/)
+  assert.match(source, /Memory budget/)
+  assert.match(source, /User information is added to knowledge or persistent memory only through the corresponding explicit save\/remember action/)
+  assert.doesNotMatch(source, /firstPartyModels|Optional legacy model research|Re-verify first-party weights|Training corpus path/)
 })
 
-test('UserTrainingPanel defaults to unpaired user-computer-first mode and never claims server-host execution', () => {
-  const unpaired = render('UserTrainingPanel (unpaired)', React.createElement(components.UserTrainingPanel, {
-    readiness: READINESS_DEGRADED,
-    refreshReadiness: noop,
-  }))
-  assert.match(unpaired, /No local worker is paired\. Your computer is not connected/)
-  assert.match(unpaired, /never runs neural weight training silently from ordinary chat messages/)
-  assert.match(unpaired, /max 120s including setup &amp; finalization/)
+test('the retired training panel communicates that profiles need no weights or training', () => {
+  const panel = render('UserTrainingPanel (retired)', React.createElement(components.UserTrainingPanel))
+  assert.match(panel, /Model training is not part of Klyvaron tiers/)
+  assert.match(panel, /do not require separate models, weight downloads or training jobs/)
+  assert.match(panel, /account-local knowledge or persistent memory/)
+  assert.match(panel, /not used to train model weights/)
 })
-
-test('UserTrainingPanel discloses real paired worker hardware, mode-downgrade approval gate, and rollback control', () => {
-  const paired = render('UserTrainingPanel (paired + downgrade gate)', React.createElement(components.UserTrainingPanel, {
-    readiness: READINESS_READY,
-    refreshReadiness: noop,
-    initialStatus: {
-      localWorkerConnected: true,
-      releaseGates: {
-        'klyvaron-pro-lm': {
-          modelId: 'klyvaron-pro-lm',
-          gates: { architectureImplemented: true, localWorkerConnected: true, availableInRagamChat: true },
-        },
-      },
-      worker: {
-        capabilities: {
-          platform: 'darwin',
-          arch: 'arm64',
-          cpu: { logicalCores: 8 },
-          memory: { availableRamBytes: 1_600_000_000 },
-          gpu: { available: false, devices: [] },
-          software: { supportedBackends: ['python-numpy-cpu'] },
-        },
-      },
-    },
-    initialPlan: {
-      disclosureDigest: 'sha256-demo-digest',
-      readyToExecute: false,
-      blockers: ['Full weight training exceeds 1.6 GB available RAM.'],
-      spec: {
-        selectedMode: 'full_fine_tune',
-        stoppingCriteria: { maxSteps: 4, maxDurationMs: null },
-        resourceEstimate: { selectedBackend: 'python-numpy-cpu', requiredRamBytes: 2_800_000_000 },
-        dataProvenance: { datasetSha256: '0123456789abcdef0123456789abcdef' },
-        modeDowngradeProposal: {
-          requestedMode: 'full_fine_tune',
-          proposedMode: 'lightweight_adapter',
-          approvedByUser: false,
-          differenceExplanation: 'Full fine-tuning updates all 92.1M parameters; rank-8 LoRA updates only adapter matrices.',
-        },
-      },
-    },
-    initialJob: {
-      jobId: 'job-rollback-demo',
-      state: 'completed',
-      promotedToChat: true,
-      workerJob: { progress: { step: 4, totalSteps: 4, trainLoss: 4.91 }, result: { elapsedMs: 1850 } },
-    },
-  }))
-  assert.match(paired, /darwin\/arm64/)
-  assert.match(paired, /uncapped \(foundation session\)/)
-  assert.match(paired, /Full fine-tuning updates all 92\.1M parameters/)
-  assert.match(paired, /Approve switching from full_fine_tune to lightweight_adapter/)
-  assert.match(paired, /Roll back weights/)
-  assert.match(paired, /Klyvaron Pro &amp; Max release gate matrix \(9 separate checks\)/)
-})
-
-

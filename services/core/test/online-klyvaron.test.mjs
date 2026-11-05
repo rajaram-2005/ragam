@@ -1,7 +1,4 @@
-// Optional Klyvaron BYOK presets are pointers, not the built-in processor.
-//
-// The built-in deterministic processor works independently of providers; these assertions
-// ensure the separate optional integration continues to name its exact external destination.
+// Klyvaron tiers are model-independent processing profiles. External provider/model choice is separate.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -42,7 +39,7 @@ async function imageServer(t) {
   return { base, calls }
 }
 
-async function fixture(t, trustedOrigins) {
+async function fixture(t, trustedOrigins = []) {
   const dir = mkdtempSync(join(tmpdir(), 'aetheris-klyvaron-test-'))
   const f = { dir }
   f.app = new OnlineApp({ dataDir: dir, trustedOrigins, timeoutMs: 3000 })
@@ -51,7 +48,6 @@ async function fixture(t, trustedOrigins) {
     const payload = body ? { localOnly: false, ...body } : body
     const response = await fetch(f.url + path, {
       method,
-      // The same-origin marker is required on every mutating request, body or not.
       headers: { cookie: opts.cookie ?? '', ...(payload ? { 'content-type': 'application/json' } : {}), ...(method === 'GET' ? {} : { 'x-aetheris-request': '1' }) },
       ...(payload ? { body: JSON.stringify(payload) } : {}),
     })
@@ -78,7 +74,7 @@ async function saveConnection(f, id, baseUrl, apiKey = 'synthetic-key') {
 }
 
 test('model-independent Klyvaron processor works without a provider and keeps user data account-local', async (t) => {
-  const f = await fixture(t, [])
+  const f = await fixture(t)
   await f.login()
   const info = await f.owner('GET', '/api/klyvaron/processor')
   assert.equal(info.status, 200)
@@ -86,7 +82,7 @@ test('model-independent Klyvaron processor works without a provider and keeps us
   assert.equal(info.data.modelUsed, false)
   assert.equal(info.data.weightsUsed, false)
   assert.equal(info.data.networkUsed, false)
-  assert.deepEqual(info.data.profiles && Object.keys(info.data.profiles), ['lite', 'pro', 'max'])
+  assert.deepEqual(Object.keys(info.data.profiles), ['lite', 'pro', 'max'])
 
   const session = await f.owner('POST', '/api/sessions', { title: 'Local Klyvaron processing' })
   assert.equal(session.status, 201)
@@ -112,141 +108,78 @@ test('model-independent Klyvaron processor works without a provider and keeps us
   assert.equal(persisted.status, 200)
   assert.equal(persisted.data.persistence.requested, true)
   assert.equal(context.knowledge.stats().store.documents, 1)
-
-  const unknown = await f.owner('POST', '/api/klyvaron/process', {
-    tier: 'lite', input: 'text', tasks: ['inspect'], bypassModelGate: true,
-  })
-  assert.equal(unknown.status, 400)
-  assert.equal(unknown.data.error, 'invalid_processing_request')
 })
 
-test('Klyvaron tiers are unconfigured until the owner assigns a saved connection', async (t) => {
-  const a = await chatServer(t, ['model-a'])
-  const f = await fixture(t, [a.base])
+test('Klyvaron overview exposes resource profiles without assigning provider models', async (t) => {
+  const f = await fixture(t)
   assert.equal((await f.request('GET', '/api/klyvaron')).status, 401)
   await f.login()
   const view = await f.owner('GET', '/api/klyvaron')
   assert.equal(view.status, 200)
   assert.equal(view.data.product, 'klyvaron')
-  assert.equal(view.data.independentWeights, false)
+  assert.equal(view.data.modelIndependentProcessor.weightsRequired, false)
   assert.match(view.data.note, /model-independent processing profiles/)
-  assert.match(view.data.note, /requires no AI model, weights, training, download, provider or network call/)
-  assert.equal(view.data.modelIndependentProcessor.engine, 'klyvaron-deterministic-v1')
-  assert.equal(view.data.modelIndependentProcessor.modelRequired, false)
+  assert.match(view.data.note, /External provider\/model selection is separate and is not tier-bound/)
   assert.deepEqual(view.data.modelIndependentProcessor.profiles && Object.keys(view.data.modelIndependentProcessor.profiles), ['lite', 'pro', 'max'])
   assert.deepEqual(view.data.tiers.map((tier) => tier.id), ['lite', 'pro', 'max'])
-  const assistantPlan = Object.values(view.data.modelReleaseRegistry)
-    .filter((entry) => entry.ownership === 'first_party_fine_tuned_assistant')
-  assert.equal(assistantPlan.length, 3)
-  assert.ok(assistantPlan.every((entry) => entry.status === 'planned' && entry.foundationModel === null && !entry.available))
-  const modelView = await f.owner('GET', '/api/klyvaron/models')
-  assert.equal(modelView.status, 200)
-  assert.deepEqual(modelView.data.modelReleaseRegistry, view.data.modelReleaseRegistry)
-  for (const tier of view.data.tiers) {
-    assert.equal(tier.presets.chat.configured, false)
-    assert.equal(tier.presets.image.provenance, null)
+  assert.ok(view.data.tiers.every((tier) => !Object.hasOwn(tier, 'presets')))
+  const retired = await f.owner('GET', '/api/klyvaron/models')
+  assert.equal(retired.status, 410)
+  assert.equal(retired.data.error, 'model_independent_architecture')
+})
+
+test('legacy tier-to-provider mapping routes return Gone for every method', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  for (const method of ['GET', 'PUT', 'DELETE']) {
+    const response = await f.owner(method, '/api/klyvaron/lite', method === 'PUT' ? { modality: 'chat', connectionId: 'openai', model: 'gpt-test' } : undefined)
+    assert.equal(response.status, 410, `${method} must not create or expose a tier-specific external model`)
+    assert.equal(response.data.error, 'model_independent_tier')
   }
-  // Selecting an unconfigured tier refuses by name; it does not fall back to the active model.
-  await saveConnection(f, 'openai', `${a.base}/v1`, 'synthetic-key')
-  const refused = await f.owner('POST', '/api/chat', { prompt: 'hello', tier: 'lite', authorization: { confirmed: true, providerRevision: f.app.store.state.revision } })
-  assert.equal(refused.status, 409)
-  assert.equal(refused.data.error, 'klyvaron_tier_unconfigured')
 })
 
-test('a preset must name a listed model and the right modality', async (t) => {
-  const a = await chatServer(t, ['model-a'])
-  const f = await fixture(t, [a.base])
+test('external Chat model selection stays direct; a Klyvaron tier cannot reroute it', async (t) => {
+  const provider = await chatServer(t, ['model-a'])
+  const f = await fixture(t, [provider.base])
   await f.login()
-  await saveConnection(f, 'openai', `${a.base}/v1`)
-
-  const unlisted = await f.owner('PUT', '/api/klyvaron/lite', { modality: 'chat', connectionId: 'openai', model: 'invented-model' })
-  assert.equal(unlisted.status, 409)
-  assert.equal(unlisted.data.error, 'model_unlisted')
-
-  // A chat connection cannot back an image tier: the adapter says which modality it serves.
-  const wrongModality = await f.owner('PUT', '/api/klyvaron/pro', { modality: 'image', connectionId: 'openai', model: 'model-a' })
-  assert.equal(wrongModality.status, 409)
-  assert.equal(wrongModality.data.error, 'klyvaron_tier_modality')
-
-  // An id no catalogue entry or saved record names is refused before anything is stored.
-  const unknownConnection = await f.owner('PUT', '/api/klyvaron/lite', { modality: 'chat', connectionId: 'nope', model: 'model-a' })
-  assert.equal(unknownConnection.status, 400)
-  assert.equal(unknownConnection.data.error, 'invalid_runtime')
-
-  // A member cannot re-point a shared product tier.
-  const member = await f.request('POST', '/api/auth/register', { email: 'member@example.test', password: 'another-long-password' })
-  const memberCookie = member.headers.get('set-cookie').split(';')[0]
-  const denied = await f.request('PUT', '/api/klyvaron/lite', { modality: 'chat', connectionId: 'openai', model: 'model-a' }, { cookie: memberCookie })
-  assert.equal(denied.status, 403)
-  assert.equal(denied.data.error, 'owner_required')
-})
-
-test('a chat tier routes to its own connection and reports third-party provenance', async (t) => {
-  const a = await chatServer(t, ['model-a'])
-  const b = await chatServer(t, ['model-b'])
-  const f = await fixture(t, [a.base, b.base])
-  await f.login()
-  await saveConnection(f, 'openrouter', `${a.base}/v1`)
-  await saveConnection(f, 'openai', `${b.base}/v1`) // active, and a different destination
-
-  const saved = await f.owner('PUT', '/api/klyvaron/lite', { modality: 'chat', connectionId: 'openrouter', model: 'model-a' })
-  assert.equal(saved.status, 200, JSON.stringify(saved.data))
-  const preset = saved.data.tiers.find((tier) => tier.id === 'lite').presets.chat
-  assert.equal(preset.configured, true)
-  assert.equal(preset.provider, 'OpenRouter')
-  assert.equal(preset.model, 'model-a')
-  assert.equal(preset.provenance.kind, 'third_party_api')
-  assert.equal(preset.provenance.training, 'none_by_this_project')
-  assert.equal(preset.provenance.firstPartyWeights, false)
-  assert.match(preset.provenance.statement, /Served by OpenRouter .*model-a/)
-
+  await saveConnection(f, 'openai', `${provider.base}/v1`)
   const revision = f.app.store.state.revision
-  const reply = await f.owner('POST', '/api/chat', { prompt: 'tiered question', tier: 'lite', authorization: { confirmed: true, providerRevision: revision, providerId: 'openrouter' } })
+
+  const rejected = await f.owner('POST', '/api/chat', {
+    prompt: 'tiered question', tier: 'lite',
+    authorization: { confirmed: true, providerRevision: revision },
+  })
+  assert.equal(rejected.status, 410)
+  assert.equal(rejected.data.error, 'model_independent_tier')
+  assert.equal(provider.calls.filter((call) => call.path.endsWith('/chat/completions')).length, 0)
+
+  const reply = await f.owner('POST', '/api/chat', {
+    prompt: 'direct provider question', model: 'model-a',
+    authorization: { confirmed: true, providerRevision: revision },
+  })
   assert.equal(reply.status, 200, JSON.stringify(reply.data))
   assert.equal(reply.data.modelId, 'model-a')
-  assert.equal(reply.data.klyvaron.tier, 'lite')
-  assert.equal(reply.data.klyvaron.provenance.providerId, 'openrouter')
-  assert.equal(reply.data.klyvaron.provenance.model, 'model-a')
-  // The preset, not the active connection, received the request.
-  assert.equal(a.calls.filter((call) => call.path.endsWith('/chat/completions')).length, 1)
-  assert.equal(b.calls.filter((call) => call.path.endsWith('/chat/completions')).length, 0)
-
-  // Consent for a different provider than the tier uses is refused, not silently redirected.
-  const mismatch = await f.owner('POST', '/api/chat', { prompt: 'tiered question', tier: 'lite', authorization: { confirmed: true, providerRevision: revision, providerId: 'openai' } })
-  assert.equal(mismatch.status, 409)
-  assert.equal(mismatch.data.error, 'consent_provider_mismatch')
-
-  // Without a tier, the active connection is still the destination.
-  const plain = await f.owner('POST', '/api/chat', { prompt: 'plain question', model: 'model-b', authorization: { confirmed: true, providerRevision: revision } })
-  assert.equal(plain.status, 200, JSON.stringify(plain.data))
-  assert.equal(plain.data.modelId, 'model-b')
-  assert.equal(plain.data.klyvaron, null)
+  assert.equal(reply.data.klyvaron, null)
+  assert.equal(provider.calls.filter((call) => call.path.endsWith('/chat/completions')).length, 1)
 })
 
-test('an image tier queues its own provider and model, and reports provenance on the job', async (t) => {
-  const a = await chatServer(t, ['model-a'])
+test('external image provider selection is direct and cannot be overridden by a Klyvaron tier', async (t) => {
   const img = await imageServer(t)
-  const f = await fixture(t, [a.base, img.base])
+  const f = await fixture(t, [img.base])
   await f.login()
-  await saveConnection(f, 'openai', `${a.base}/v1`)
-  const stability = await saveConnection(f, 'stability', img.base, 'synthetic-stability-key')
-  assert.ok(stability.connections.find((connection) => connection.id === 'stability').models.includes('core'))
+  const provider = await saveConnection(f, 'stability', img.base, 'synthetic-stability-key')
+  assert.ok(provider.connections.find((connection) => connection.id === 'stability').models.includes('core'))
 
-  const chatPreset = await f.owner('PUT', '/api/klyvaron/lite', { modality: 'chat', connectionId: 'openai', model: 'model-a' })
-  assert.equal(chatPreset.status, 200)
-  const preset = await f.owner('PUT', '/api/klyvaron/pro', { modality: 'image', connectionId: 'stability', model: 'core' })
-  assert.equal(preset.status, 200, JSON.stringify(preset.data))
-  const imagePreset = preset.data.tiers.find((tier) => tier.id === 'pro').presets.image
-  assert.equal(imagePreset.provider, 'Stability AI')
-  assert.equal(imagePreset.provenance.training, 'none_by_this_project')
+  const rejected = await f.owner('POST', '/api/image/generate', { prompt: 'a small red square', tier: 'pro' })
+  assert.equal(rejected.status, 410)
+  assert.equal(rejected.data.error, 'model_independent_tier')
+  assert.equal(img.calls.length, 0, 'tier rejection must happen before any image provider request')
 
-  const queued = await f.owner('POST', '/api/image/generate', { prompt: 'a small red square', size: '1024x1024', tier: 'pro' })
+  const queued = await f.owner('POST', '/api/image/generate', { prompt: 'a small red square', size: '1024x1024', model: 'core' })
   assert.equal(queued.status, 202, JSON.stringify(queued.data))
-  assert.equal(queued.data.params.tier, 'pro')
+  assert.equal(queued.data.params.tier, null)
   assert.equal(queued.data.params.provider, 'stability')
-  assert.equal(queued.data.params.provenance.provider, 'Stability AI')
-  assert.equal(queued.data.params.provenance.model, 'core')
-
+  assert.equal(queued.data.params.model, 'core')
   let job
   for (let attempt = 0; attempt < 50; attempt++) {
     job = await f.owner('GET', `/api/image/jobs/${queued.data.id}`)
@@ -254,53 +187,15 @@ test('an image tier queues its own provider and model, and reports provenance on
     await new Promise((done) => setTimeout(done, 50))
   }
   assert.equal(job.data.state, 'succeeded', JSON.stringify(job.data))
-  // Provenance travels on the job's own parameters, not inferred from the active connection.
-  assert.equal(job.data.params.provenance.provider, 'Stability AI')
-  assert.equal(job.data.params.provenance.model, 'core')
-  assert.equal(job.data.params.provenance.training, 'none_by_this_project')
   assert.equal(job.data.result.model, 'core')
-  // The key went to the configured API origin, and the adapter asked for an image representation.
-  assert.equal(img.calls.length, 1)
-  assert.equal(img.calls[0].authorization, 'Bearer synthetic-stability-key')
-  assert.equal(img.calls[0].accept, 'image/*')
+  assert.equal(img.calls.at(-1).authorization, 'Bearer synthetic-stability-key')
+  assert.equal(img.calls.at(-1).accept, 'image/*')
 })
 
-test('presets survive a restart and can be cleared without touching the connection', async (t) => {
-  const a = await chatServer(t, ['model-a'])
-  const dir = mkdtempSync(join(tmpdir(), 'aetheris-klyvaron-restart-'))
-  const options = (app) => ({ app, dir })
-  let app = new OnlineApp({ dataDir: dir, trustedOrigins: [a.base], timeoutMs: 3000 })
-  let server = app.server(); let url = await listen(server)
-  const call = async (method, path, body, cookie = '') => {
-    const response = await fetch(url + path, { method, headers: { cookie, ...(body ? { 'content-type': 'application/json' } : {}), ...(method === 'GET' ? {} : { 'x-aetheris-request': '1' }) }, ...(body ? { body: JSON.stringify(body) } : {}) })
-    const text = await response.text(); let data; try { data = JSON.parse(text) } catch { data = text }
-    return { status: response.status, data, headers: response.headers }
-  }
-  t.after(async () => { await close(server); app.close(); rmSync(dir, { recursive: true, force: true }) })
-
-  let registered = await call('POST', '/api/auth/register', { email: 'owner@example.test', password: 'a-long-owner-password' })
-  let cookie = registered.headers.get('set-cookie').split(';')[0]
-  let saved = await call('PUT', '/api/providers/openai', { baseUrl: `${a.base}/v1`, apiKey: 'synthetic-key' }, cookie)
-  assert.equal(saved.status, 200)
-  let tested = await call('POST', '/api/providers/openai/test', null, cookie)
-  assert.equal(tested.status, 200)
-  let preset = await call('PUT', '/api/klyvaron/max', { modality: 'chat', connectionId: 'openai', model: 'model-a' }, cookie)
-  assert.equal(preset.status, 200)
-
-  await close(server); app.close()
-  app = new OnlineApp({ dataDir: dir, trustedOrigins: [a.base], timeoutMs: 3000 })
-  server = app.server(); url = await listen(server)
-  const logged = await call('POST', '/api/auth/login', { email: 'owner@example.test', password: 'a-long-owner-password' })
-  cookie = logged.headers.get('set-cookie').split(';')[0]
-  const view = await call('GET', '/api/klyvaron', null, cookie)
-  assert.equal(view.status, 200)
-  assert.equal(view.data.tiers.find((tier) => tier.id === 'max').presets.chat.model, 'model-a')
-
-  const removed = await call('DELETE', '/api/klyvaron/max/chat', null, cookie)
-  assert.equal(removed.status, 200)
-  assert.equal(removed.data.tiers.find((tier) => tier.id === 'max').presets.chat.configured, false)
-  // Clearing the preset leaves the connection and its model list intact.
-  const provider = await call('GET', '/api/providers', null, cookie)
-  assert.equal(provider.data.connections.find((connection) => connection.id === 'openai').configured, true)
-  assert.ok(options(app).dir)
+test('external video provider selection also refuses a Klyvaron tier argument', async (t) => {
+  const f = await fixture(t)
+  await f.login()
+  const rejected = await f.owner('POST', '/api/video/generate', { prompt: 'a short clip', tier: 'max' })
+  assert.equal(rejected.status, 410)
+  assert.equal(rejected.data.error, 'model_independent_tier')
 })

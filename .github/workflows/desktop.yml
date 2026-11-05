@@ -49,20 +49,6 @@ jobs:
       - name: Verify the cross-platform CPU model runtime
         run: node --test services/core/test/klyvaron-runtime.test.mjs
 
-      - name: Install the digest-pinned Pro and Max language-model artifacts for real inference checks
-        shell: bash
-        run: |
-          mkdir -p .aetheris-data/online/klyvaron/models
-          curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40 | tar -xz --strip-components=1 -C .aetheris-data/online/klyvaron/models
-          (
-            cd .aetheris-data/online/klyvaron/models
-            cat klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part* > klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz
-            rm -f klyvaron-max-lm/klyvaron-max-lm-0.1.0.npz.part*
-          )
-
-      - name: Verify real Pro and Max local inference on this operating system
-        run: node --test services/core/test/klyvaron-pro-max-acceptance.test.mjs
-
       - name: Test the desktop loopback server
         run: npm test
         working-directory: apps/desktop

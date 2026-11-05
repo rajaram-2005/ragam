@@ -71,34 +71,34 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 42,932 source lines, 27,480 test lines
+### `services/core` — 42,034 source lines, 26,854 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
 | `hardware/detect.mjs` | 61 | OS memory, CPU features, disk and optional bounded GPU probes |
 | `hardware/admission.mjs` | 92 | Measured model/workload eligibility, GPU qualification and tier recommendations |
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
-| `online/accounts.mjs` | 439 | Local Core accounts, scrypt password hashes, lockouts, throttling, owner bootstrap and host-delivered reset codes |
+| `online/accounts.mjs` | 442 | Local Core accounts, scrypt password hashes, lockouts, throttling, owner bootstrap and host-delivered reset codes |
 | `hosted/byok.mjs` | 386 | Stateless Vercel BYOK API: Supabase Auth sessions, per-user AES-GCM provider secrets, strict origin/endpoint checks, explicit request/Search consent, and provider isolation |
-| `online/app.mjs` | 2,145 | Online application with a local single-user security boundary, retained direct-Core account mode, authenticated deterministic Klyvaron processor routes, awaitable storage contexts, optional model/provider paths and exact-model gateway routing |
-| `online/native-klyvaron.mjs` | 470 | First-party Klyvaron Pro (27,559,946 params) and Klyvaron Max (92,077,066 params) SHA-256 verification, preset-architecture enforcement, startup live inference self-test, and fail-closed selector gating |
+| `online/app.mjs` | 1,315 | Online application with authenticated deterministic Klyvaron processing profiles, account-scoped memory and knowledge, optional BYOK providers, and exact-model gateway routing; legacy tier-specific model, qualification, media-weight and training routes are retired |
+| `online/native-klyvaron.mjs` | 506 | Legacy Pro/Max artifact verifier retained for isolated compatibility tests; artifact scanning and loading are disabled in the active app |
 | `online/context-routes.mjs` | 321 | Authenticated deterministic processor routes, account-scoped retrieval/session context, request-cancellation handling, reviewed read-only tool routes, and owner-managed remote server routes |
 | `online/gateway.mjs` | 259 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
 | `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
 | `online/chat-content.mjs` | 109 | Validates bounded multimodal messages, media signatures, redaction and text-only history placeholders |
 | `providers/industry-operations.mjs` | 40 | Supplies opt-in advisory guidance for text Chat and bounded safety-first additions to manufacturing image/video prompts |
 | `online/http.mjs` | 33 | Bounded streamed JSON requests and no-store responses |
-| `online/klyvaron.mjs` | 87 | Klyvaron product tiers in the online build: resolve a tier to a saved connection and a listed model, refuse an unconfigured tier by name, and name the third-party provider and model as provenance |
-| `online/store.mjs` | 424 | Multi-connection encrypted local store (schema 3): one sealed credential per connection, an active id, a store-wide revision, native first-party model selection persistence, optional Klyvaron tier presets, and retired-connection migration |
+| `online/klyvaron.mjs` | 25 | Read-only Klyvaron tier labels and architecture note; external provider/model selection is deliberately not tier-bound |
+| `online/store.mjs` | 337 | Multi-connection encrypted local store (schema 3): one sealed credential per connection, an active id, a store-wide revision, selected-model persistence, and migration that discards retired Klyvaron model state |
 | `online/remote-servers.mjs` | 299 | Owner-managed MCP Streamable HTTP and Ragam plugin endpoints, encrypted credentials, schema-checked discovery, per-call consent, bounded transport and persisted enable state |
 | `app.mjs` | 1,835 | Composition root, the HTTP route table, error→status mapping, chat/image/video/skill entry points, readiness |
 | `godcore/lifecycle.mjs` | 738 | The eight-phase lifecycle, budgets, retries, checkpoints, pause/resume/cancel/approve, verification |
 | `klyvaron/format.mjs` | 721 | The Klyvaron artifact format: manifest validation, character and learned Byte-BPE vocabulary digests, differentiator head metadata, and a ZIP/`.npy` reader that refuses a mismatched checkpoint |
 | `builtins.mjs` | 378 | Two built-in plugins and the in-process MCP server |
-| `media/jobs.mjs` | 444 | Job queue, progress, cancellation, timeouts, image/video/audio artifact storage |
+| `media/jobs.mjs` | 459 | Job queue, progress, cancellation, timeouts, job-owned image/video/audio artifact storage |
 | `klyvaron/runtime.mjs` | 1,045 | Retained legacy model-artifact inference runtime, separate from the built-in Klyvaron processor |
-| `klyvaron/processor.mjs` | 310 | Model-independent deterministic text tasks, bounded Lite/Pro/Max resource profiles, extractive summaries with source offsets, local retrieval and opt-in persistence |
-| `klyvaron/multimodal-host.mjs` | 677 | First-party multimodal host for Klyvaron Image, Video, and Voice (`pro` & `max`): SHA-256 verification, native Python runtime execution, PNG/MP4/WAV output validation, and runtime qualification |
+| `klyvaron/processor.mjs` | 320 | Model-independent deterministic text tasks, bounded Lite/Pro/Max resource profiles, extractive summaries with source offsets, local retrieval and opt-in persistence |
+| `klyvaron/multimodal-host.mjs` | 694 | Legacy multimodal artifact host retained for isolated compatibility tests; active app disables model-file scanning and loading |
 | `klyvaron/qualification.mjs` | 257 | Persistent runtime qualification registry keyed by hardware signature, backend, runtime version, model version, and SHA-256 digest with automatic staleness invalidation |
 | `klyvaron/training-worker.mjs` | 700 | Consent-gated local training worker setup and execution manager: hardware/software inspection, stable preflight snapshot with live-resource separation, compute/license/storage/energy pre-consent disclosure, expiry-bound consent, resource re-checks, atomic checkpointing, cancellation, and recovery |
 | `klyvaron/training-controller.mjs` | 1,262 | User-computer-first training & adaptation controller: unpaired fail-closed default, Adaptive planning/evaluation, 5-mode resource-aware planner across all 8 models, non-silent downgrade approval gate, 7-field training specification + disclosure consent, 120s interactive deadline vs operator-budgeted foundation pretraining, and hot rollback |
@@ -256,7 +256,7 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 7,821 source lines, 2,483 test lines
+### `apps/web` — 7,165 source lines, 2,424 test lines
 
 Five local-workspace area components, three retained direct-Core account pages, the separate opt-in `HostedByokApp`, a local-first app shell, shared primitives and an API client. The Direct-Core account pages are not used by the standard Docker deployment; the hosted account flow and its security boundary are documented in [30 — Hosted BYOK](30-hosted-byok.md). The Web suite has nine test files. Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).

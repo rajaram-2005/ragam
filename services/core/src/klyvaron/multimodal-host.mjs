@@ -1,6 +1,8 @@
-// Phase 3, Phase 6 & Phase 7 — Native First-Party Multimodal Model Host & Capability Manifest Builder.
+// Archived compatibility host for legacy first-party multimodal model artifacts.
 //
-// Manages all six first-party multimodal Klyvaron models:
+// The active OnlineApp constructs this host with `enableLegacyArtifacts: false`. The model-independent
+// Klyvaron processor does not load image, video or voice weights; explicit enablement remains only
+// for isolated artifact-format compatibility tests. When explicitly enabled, this host manages:
 //   - Image: `klyvaron-pro-image@0.1.0`, `klyvaron-max-image@0.1.0` (`aetheris-image-v1`)
 //   - Video: `klyvaron-pro-video@0.1.0`, `klyvaron-max-video@0.1.0` (`aetheris-video-v1`)
 //   - Voice: `klyvaron-pro-voice@0.1.0`, `klyvaron-max-voice@0.1.0` (`aetheris-voice-v1`)
@@ -158,12 +160,14 @@ export class NativeMultimodalHost {
     qualificationRegistry = null,
     userTrainingController = null,
     pythonBinary = 'python3',
+    enableLegacyArtifacts = false,
   }) {
     this.modelsRoot = resolve(modelsRoot)
     this.nativeKlyvaron = nativeKlyvaron
     this.qualificationRegistry = qualificationRegistry
     this.userTrainingController = userTrainingController
     this.pythonBinary = pythonBinary
+    this.enableLegacyArtifacts = enableLegacyArtifacts === true
     this.records = new Map()
     this.activeAdapters = new Map() // modelId -> { directory, previous }
     this.lastInferenceProof = new Map() // `${modelId}::${task}` -> measured proof
@@ -176,6 +180,19 @@ export class NativeMultimodalHost {
 
   refresh() {
     this.records.clear()
+    if (!this.enableLegacyArtifacts) {
+      for (const spec of Object.values(FIRST_PARTY_MULTIMODAL_MODELS)) {
+        this.records.set(spec.id, {
+          ...spec,
+          status: 'legacy_artifacts_disabled',
+          verified: false,
+          selectorEnabled: false,
+          directory: null,
+          reason: 'Klyvaron tiers use one shared model-independent processor; separate modality model artifacts are disabled.',
+        })
+      }
+      return this.status()
+    }
     for (const spec of Object.values(FIRST_PARTY_MULTIMODAL_MODELS)) {
       const modelDir = join(this.modelsRoot, spec.id)
       const manifestPath = join(modelDir, 'manifest.json')

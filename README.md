@@ -217,7 +217,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 1992 tests: core 1039, web 131, fabric 822
+npm test          # 1995 tests: core 1043, web 130, fabric 822
 ```
 
 The old Fabric and from-scratch model-training commands are retained as separate
@@ -239,7 +239,7 @@ component, a Docker Compose build/health/persistence/restore smoke, documentatio
 checks, and suite-count verification plus tests for the separate legacy release-gate code. The latest completed full CI run
 [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all
 1,916 tests (Core 985, Web 109, Fabric 822), plus release verification and the
-loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 1,992 tests (Core 1,039, Web 131, Fabric 822). The full Core suite passed 1,033/1,039 with six skipped legacy model-artifact checks; the focused processor/route tests passed 13/13. Web passed 131/131 and the production bundle built. Fabric test command exited nonzero: 821 passed and one optional multimodal training test failed because JAX is unavailable. This was not a skip; the separate model-training path was not pursued. Signing and qualification-capture tests use synthetic fixtures and do not establish a production signature or qualification. Full CI for this current tree is pending. The added Chat API paths use deterministic contract fixtures;
+loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 1,995 tests (Core 1,043, Web 130, Fabric 822). The full Core suite passed 1,038/1,043 with five skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 130/130 and the production bundle built. Fabric’s latest local run passed 821 tests and one optional multimodal-training test failed because JAX was unavailable. Signing and qualification-capture tests use synthetic fixtures and do not establish a production signature or qualification. Full CI for this current tree is pending. The added Chat API paths use deterministic contract fixtures;
 neither the tests nor CI made live vendor calls. The
 Fabric job tests the retained retriever experiment's gate in **both** directions. This is
 separate from the active model-independent Klyvaron processor and is not evidence that a
@@ -299,9 +299,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 42,932 | 27,480 | **zero npm packages** | 1039 |
+| `services/core` | Node 22 ESM | 42,034 | 26,854 | **zero npm packages** | 1043 |
 | `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 7,821 | 2,483 | pdfjs-dist, react, react-dom | 131 |
+| `apps/web` | React 18 + Vite | 7,165 | 2,424 | pdfjs-dist, react, react-dom | 130 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

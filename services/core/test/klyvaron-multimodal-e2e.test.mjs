@@ -1,11 +1,8 @@
 /**
- * Phase 8 End-to-End Acceptance Verification for Klyvaron Pro & Max Multimodal Stack:
+ * Compatibility tests for archived Klyvaron artifacts and isolated local-worker tooling.
  *
- * Exercises live, unmocked execution across all 8 first-party models:
- *   - Chat:  `klyvaron-pro-lm@0.1.0` (27.56M) & `klyvaron-max-lm@0.1.0` (92.08M)
- *   - Image: `klyvaron-pro-image@0.1.0` (3.73M) & `klyvaron-max-image@0.1.0` (13.66M)
- *   - Video: `klyvaron-pro-video@0.1.0` (2.22M) & `klyvaron-max-video@0.1.0` (8.13M)
- *   - Voice: `klyvaron-pro-voice@0.1.0` (3.08M) & `klyvaron-max-voice@0.1.0` (11.26M)
+ * Active Klyvaron uses one deterministic processor with Lite/Pro/Max resource profiles; these
+ * artifact/worker fixtures are not loaded by the application or required for desktop packaging.
  */
 
 import test from 'node:test'
@@ -108,7 +105,7 @@ async function waitForMediaJob(call, jobId, timeoutMs = 90_000) {
   throw new Error(`Timed out waiting for media job ${jobId}`)
 }
 
-test('Phase 1 & 4: product subscription tiers, 8 first-party model identities, and programmatic readiness are strictly separated', () => {
+test('historical artifact records remain separate from active model-independent resource profiles', () => {
   assert.deepEqual(Object.keys(PRODUCT_SUBSCRIPTION_TIERS), ['lite', 'pro', 'max'])
   for (const plan of Object.values(PRODUCT_SUBSCRIPTION_TIERS)) {
     assert.equal(plan.kind, 'product_subscription_tier')
@@ -162,206 +159,69 @@ test('Phase 1 & 4: product subscription tiers, 8 first-party model identities, a
   assert.equal(plan.valid, true)
 })
 
-test('Phase 2, 3, 6, 7 & 8: end-to-end HTTP verification of Chat, Image, Video, Voice, Qualification & Separate Pro/Max Manifests', { skip: LIVE_ACCEPTANCE_SKIP }, async () => {
-  const workDir = mkdtempSync(join(tmpdir(), 'ragam-mm-e2e-'))
+test('active Klyvaron HTTP surface uses shared resource profiles and retires modality-specific model APIs', async () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'ragam-model-independent-http-'))
+  const app = new OnlineApp({ dataDir: workDir, secureCookie: false })
+  const server = app.server()
+  await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen))
+  const baseUrl = `http://127.0.0.1:${server.address().port}`
   try {
-    const modelsDir = join(workDir, 'klyvaron', 'models')
-    stageInstalledModels(modelsDir)
+    const { call } = await createAuthedClient(baseUrl)
 
-    const app = new OnlineApp({ dataDir: workDir, secureCookie: false })
-    const server = app.server()
-    await new Promise((r) => server.listen(0, '127.0.0.1', r))
-    const baseUrl = `http://127.0.0.1:${server.address().port}`
+    // Active startup has no first-party model hosts, even when historical artifacts exist elsewhere.
+    assert.equal(app.nativeKlyvaron.enableLegacyArtifacts, false)
+    assert.equal(app.nativeKlyvaron.providers.size, 0)
+    const ready = await call('GET', '/api/ready')
+    assert.equal(ready.status, 200)
+    assert.equal(ready.data.klyvaron.weightsRequired, false)
+    assert.equal(ready.data.capabilities.chat, false)
 
-    try {
-      const { call } = await createAuthedClient(baseUrl)
+    const info = await call('GET', '/api/klyvaron/processor')
+    assert.equal(info.status, 200)
+    assert.equal(info.data.modelUsed, false)
+    assert.equal(info.data.weightsUsed, false)
+    assert.deepEqual(Object.keys(info.data.profiles), ['lite', 'pro', 'max'])
+    assert.deepEqual((await call('GET', '/api/models')).data.models, [])
 
-      // 1. Check /api/ready independent per-modality readiness across chat, image, video, voice
-      const ready = await call('GET', '/api/ready')
-      assert.equal(ready.status, 200)
-      assert.equal(ready.data.capabilities.chat, true)
-      assert.equal(ready.data.capabilities.imageGeneration, true)
-      assert.equal(ready.data.capabilities.imageEditing, true)
-      assert.equal(ready.data.capabilities.visionUnderstanding, true)
-      assert.equal(ready.data.capabilities.videoGeneration, true)
-      assert.equal(ready.data.capabilities.videoUnderstanding, true)
-      assert.equal(ready.data.capabilities.speechSynthesis, true)
-      assert.equal(ready.data.capabilities.speechTranscription, true)
-      assert.equal(ready.data.media.image.connectionId, 'klyvaron-native')
-      assert.equal(ready.data.media.video.connectionId, 'klyvaron-native')
-      assert.deepEqual(ready.data.media.voice.models, ['klyvaron-pro-voice', 'klyvaron-max-voice'])
-
-      // 2. Chat inference on both klyvaron-pro-lm and klyvaron-max-lm
-      for (const chatModel of ['klyvaron-pro-lm', 'klyvaron-max-lm']) {
-        const chatRes = await call('POST', '/api/chat', {
-          model: chatModel,
-          messages: [{ role: 'user', content: 'Summarize first-party verification.' }],
-        })
-        assert.equal(chatRes.status, 200, `${chatModel} should return 200`)
-        assert.equal(chatRes.data.provider, 'Klyvaron Native')
-        assert.equal(chatRes.data.modelId, chatModel)
-        assert.equal(chatRes.data.sentExternally, false)
-        assert.equal(chatRes.data.firstPartyWeights, true)
-        assert.equal(chatRes.data.weightsSha256.length, 64)
-      }
-
-      // 3. Image generation + PNG container validation + Vision understanding + Neural image editing (Pro & Max)
-      for (const imgModel of ['klyvaron-pro-image', 'klyvaron-max-image']) {
-        const gen = await call('POST', '/api/image/generate', {
-          model: imgModel,
-          prompt: 'sunset horizon warm glow golden sky',
-          size: '256x256',
-        })
-        assert.equal(gen.status, 202)
-        const genDone = await waitForMediaJob(call, gen.data.id)
-        assert.equal(genDone.params.provenance.firstPartyWeights, true)
-        assert.equal(genDone.params.provenance.model, imgModel)
-
-        const rawPng = await call('GET', `/api/image/jobs/${gen.data.id}/content`)
-        assert.equal(rawPng.status, 200)
-        const mediaCheck = validateMedia({ bytes: rawPng.data, expectedKind: MEDIA_KINDS.IMAGE, claimedContentType: 'image/png' })
-        assert.equal(mediaCheck.valid, true)
-        assert.equal(mediaCheck.format, 'png')
-
-        const understood = await call('POST', '/api/image/understand', {
-          model: imgModel,
-          sourceJobId: gen.data.id,
-        })
-        assert.equal(understood.status, 200)
-        assert.equal(typeof understood.data.scene, 'string')
-        assert.ok(understood.data.confidence > 0.3)
-
-        const edited = await call('POST', '/api/image/edit', {
-          model: imgModel,
-          sourceJobId: gen.data.id,
-          prompt: 'cobalt ocean waves deep blue water',
-          strength: 0.72,
-        })
-        assert.equal(edited.status, 202)
-        const editedDone = await waitForMediaJob(call, edited.data.id)
-        assert.notEqual(editedDone.artifact.sha256, genDone.artifact.sha256)
-      }
-
-      // 4. Video generation (genuine multi-frame H.264 MP4) + Temporal understanding + Honest scope refusal
-      for (const vidModel of ['klyvaron-pro-video', 'klyvaron-max-video']) {
-        const genVid = await call('POST', '/api/video/generate', {
-          model: vidModel,
-          prompt: 'pan right glowing beacon steady motion',
-          aspectRatio: '16:9',
-          resolution: '480p',
-        })
-        assert.equal(genVid.status, 202)
-        const vidDone = await waitForMediaJob(call, genVid.data.id)
-        assert.equal(vidDone.params.provenance.firstPartyWeights, true)
-
-        const rawMp4 = await call('GET', `/api/video/jobs/${genVid.data.id}/content`)
-        assert.equal(rawMp4.status, 200)
-        const vidCheck = validateMedia({ bytes: rawMp4.data, expectedKind: MEDIA_KINDS.VIDEO, claimedContentType: 'video/mp4' })
-        const genuine = assertGenuineVideo(vidCheck, { minBytes: 1024 })
-        assert.equal(genuine.genuine, true)
-        const mp4Probe = probeMp4(rawMp4.data)
-        assert.ok(mp4Probe && mp4Probe.durationSeconds >= 1.0, `Expected real MP4 mvhd duration >= 1s, got ${JSON.stringify(mp4Probe)}`)
-
-        const vidUnderstood = await call('POST', '/api/video/understand', {
-          model: vidModel,
-          sourceJobId: genVid.data.id,
-        })
-        assert.equal(vidUnderstood.status, 200)
-        assert.equal(typeof vidUnderstood.data.motion, 'string')
-        assert.ok(vidUnderstood.data.videoMetadata.decodedFrames >= 8)
-      }
-
-      // Unsupported long-form / 4K / audio-track video requests fail closed cleanly with 409 unsupported_video_scope
-      const refusedLongVideo = await call('POST', '/api/video/generate', {
-        model: 'klyvaron-pro-video',
-        prompt: 'ten minute feature film with soundtrack',
-        durationMs: 60_000,
-      })
-      assert.equal(refusedLongVideo.status, 409)
-      assert.equal(refusedLongVideo.data.error, 'unsupported_video_scope')
-
-      // 5. Voice synthesis (16 kHz PCM RIFF WAV) + Neural speech-to-text round-trip (Pro & Max)
-      for (const voiceModel of ['klyvaron-pro-voice', 'klyvaron-max-voice']) {
-        const synth = await call('POST', '/api/voice/synthesize', {
-          model: voiceModel,
-          text: 'status check',
-        })
-        assert.equal(synth.status, 202)
-        assert.equal(synth.data.modelId, voiceModel)
-        assert.equal(synth.data.sampleRate, 16000)
-        const wavBytes = Buffer.from(synth.data.audioBase64, 'base64')
-        assert.equal(wavBytes.subarray(0, 4).toString('ascii'), 'RIFF')
-        assert.equal(wavBytes.subarray(8, 12).toString('ascii'), 'WAVE')
-
-        await waitForMediaJob(call, synth.data.job.id)
-        const trans = await call('POST', '/api/voice/transcribe', {
-          model: voiceModel,
-          sourceJobId: synth.data.job.id,
-        })
-        assert.equal(trans.status, 200)
-        assert.equal(trans.data.nearestCommand, 'status check')
-        assert.ok(trans.data.commandConfidence > 0.7)
-      }
-
-      // 6. Per-backend Runtime Qualification + Stale Digest Invalidation
-      const qualCpu = await call('POST', '/api/klyvaron/qualification/run', { backend: 'cpu' })
-      assert.equal(qualCpu.status, 200)
-      for (const mod of ['chat', 'image', 'video', 'voice']) {
-        assert.equal(qualCpu.data.results[mod].qualified, true, `CPU backend must qualify ${mod} via real inference`)
-        assert.ok(qualCpu.data.results[mod].latencyMs > 0)
-      }
-
-      const qualCuda = await call('POST', '/api/klyvaron/qualification/run', { backend: 'cuda' })
-      assert.equal(qualCuda.status, 200)
-      assert.equal(qualCuda.data.results.image.qualified, false)
-
-      const staleCheck = app.qualificationRegistry.getValidQualification({
-        capabilities: null,
-        backend: 'cpu',
-        modelId: 'klyvaron-pro-image',
-        modelVersion: '0.1.0',
-        artifactSha256: 'f'.repeat(64),
-      })
-      assert.equal(staleCheck.valid, false)
-      assert.equal(staleCheck.status, 'invalidated_re_qualification_required')
-      assert.match(staleCheck.invalidatedReason, /artifact_digest_changed/)
-
-      // 7. Separate Pro and Max Capability Manifests after CPU qualification
-      const manifestsRes = await call('GET', '/api/klyvaron/manifests')
-      assert.equal(manifestsRes.status, 200)
-      const { pro, max } = manifestsRes.data
-      assert.equal(pro.tier, 'pro')
-      assert.equal(max.tier, 'max')
-      assert.equal(pro.overallReadinessStatus, 'partially_available')
-      assert.equal(max.overallReadinessStatus, 'partially_available')
-      for (const mod of ['chat', 'image', 'video', 'voice']) {
-        assert.notEqual(pro.modalities[mod].modelId, max.modalities[mod].modelId)
-        assert.notEqual(pro.modalities[mod].artifactSha256, max.modalities[mod].artifactSha256)
-        assert.equal(pro.modalities[mod].evaluationStatus, 'passed_held_out_gates')
-        assert.equal(max.modalities[mod].evaluationStatus, 'passed_held_out_gates')
-      }
-
-      // 8. Tampered weight file fails closed on verification
-      const weightPath = join(modelsDir, 'klyvaron-max-voice', 'weights.npz')
-      const origBytes = readFileSync(weightPath)
-      const corrupted = Buffer.from(origBytes)
-      corrupted[corrupted.length - 17] ^= 0xff
-      writeFileSync(weightPath, corrupted)
-      const reverify = app.multimodalHost.refresh()
-      assert.equal(reverify.models['klyvaron-max-voice'].verified, false)
-      assert.equal(reverify.models['klyvaron-max-voice'].status, 'missing_artifact')
-      writeFileSync(weightPath, origBytes)
-      app.multimodalHost.refresh()
-    } finally {
-      await new Promise((r) => server.close(r))
-      app.close?.()
+    // Old model and modality-specific routes fail closed; no fallback or artifact scan occurs.
+    for (const path of ['/api/klyvaron/manifests', '/api/klyvaron/models', '/api/klyvaron/qualification', '/api/klyvaron/worker']) {
+      const retired = await call('GET', path)
+      assert.equal(retired.status, 410, path)
+      assert.equal(retired.data.error, 'model_independent_architecture')
     }
+    for (const modelId of ['klyvaron-pro-lm', 'klyvaron-max-lm']) {
+      const selection = await call('PUT', '/api/models/selection', { model: modelId })
+      assert.equal(selection.status, 410)
+      const chat = await call('POST', '/api/chat', {
+        model: modelId,
+        messages: [{ role: 'user', content: 'This must not invoke a model artifact.' }],
+        authorization: { confirmed: true, providerRevision: 0 },
+      })
+      assert.equal(chat.status, 410)
+      assert.equal(chat.data.error, 'model_independent_architecture')
+    }
+    for (const [path, tier] of [['/api/image/generate', 'pro'], ['/api/video/generate', 'max']]) {
+      const retired = await call('POST', path, { prompt: 'no tier-specific media model', tier })
+      assert.equal(retired.status, 410)
+      assert.equal(retired.data.error, 'model_independent_tier')
+    }
+
+    const processed = await call('POST', '/api/klyvaron/process', {
+      tier: 'max', input: 'The shared Klyvaron processor runs bounded deterministic workflows.', tasks: ['summarize'],
+    })
+    assert.equal(processed.status, 200)
+    assert.equal(processed.data.modelUsed, false)
+    assert.equal(processed.data.weightsUsed, false)
+    assert.match(processed.data.text, /shared Klyvaron processor/)
   } finally {
+    server.closeAllConnections()
+    await new Promise((resolveClose) => server.close(resolveClose))
+    app.close()
     rmSync(workDir, { recursive: true, force: true })
   }
 })
 
-test('Phase 2 & 5: authenticated local user worker executes hardware detection, single-use pairing, multimodal inference, and training policy gates', { skip: LIVE_ACCEPTANCE_SKIP }, async () => {
+test('legacy isolated local-worker compatibility keeps pairing, memory-first policy, and hardware-gated inference', { skip: LIVE_ACCEPTANCE_SKIP }, async () => {
   const workDir = mkdtempSync(join(tmpdir(), 'ragam-worker-mm-'))
   try {
     const modelsDir = join(workDir, 'models')

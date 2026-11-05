@@ -17,59 +17,27 @@ import { wireFor } from '../providers/wires/index.mjs'
 // connections are not multiple concurrent recipients — a request goes to the active one, and the
 // UI says which.
 //
-// Schema 3 is `{ schema, revision, active, connections: { [id]: record }, klyvaron }`. `klyvaron`
-// holds optional product-tier presets (tier -> modality -> { connectionId, model }); it is
-// additive, so a schema-2 file written before the field existed loads with no presets rather than
-// failing. A schema-1 file was a
-// single record `{ kind, baseUrl, key, models, selectedModel, verified, revision }`; supported
-// connection ids migrate to schema 3. The removed `litellm` id and its tier presets are discarded,
-// including their sealed credentials, rather than being silently carried forward.
+// Schema 3 is `{ schema, revision, active, connections: { [id]: record } }`. Legacy
+// Klyvaron tier-to-model mappings and native-model selections are discarded during migration; a
+// capability profile never selects an external or first-party model. A schema-1 file was a single
+// record `{ kind, baseUrl, key, models, selectedModel, verified, revision }`; supported connection
+// ids migrate to schema 3. The removed `litellm` id is discarded, including its sealed credential.
 
 export const STORE_SCHEMA = 3
 
 /** Ids a connection may carry: a catalogue provider, or a named custom OpenAI-compatible endpoint. */
 export const CONNECTION_ID = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*)$/
 
-const KLYVARON_TIERS = ['lite', 'pro', 'max']
-const KLYVARON_MODALITIES = ['chat', 'image', 'video']
-
 /**
- * Product-tier presets are pointers to a saved connection and a listed model. They hold no
- * credential: the connection names the secret, and `public()` never exposes one.
- */
-function normaliseKlyvaron(raw) {
-  const source = raw && typeof raw === 'object' && raw.tiers && typeof raw.tiers === 'object' ? raw.tiers : {}
-  const tiers = {}
-  for (const tier of KLYVARON_TIERS) {
-    const entry = source[tier]
-    if (!entry || typeof entry !== 'object') continue
-    const presets = {}
-    for (const modality of KLYVARON_MODALITIES) {
-      const preset = entry[modality]
-      if (preset && typeof preset === 'object'
-        && typeof preset.connectionId === 'string' && preset.connectionId !== 'litellm' && CONNECTION_ID.test(preset.connectionId)
-        && typeof preset.model === 'string' && preset.model.length > 0 && preset.model.length <= 200) {
-        presets[modality] = { connectionId: preset.connectionId, model: preset.model }
-      }
-    }
-    if (Object.keys(presets).length) tiers[tier] = presets
-  }
-  const selectedModel = typeof raw?.selectedModel === 'string' && raw.selectedModel.length <= 200
-    ? raw.selectedModel
-    : ''
-  return { tiers, selectedModel }
-}
-
-/**
- * Migrate whatever was on disk into schema 3. LiteLLM records and tier presets are deliberately
- * discarded: that provider is no longer supported, and its stored credential must not remain usable.
+ * Migrate whatever was on disk into schema 3. LiteLLM records and legacy tier-to-model mappings
+ * are deliberately discarded; their saved provider credentials remain independent connections.
  *
  * Exported so the test can feed it a schema-1 record without writing a file first — and so the
  * migration has one implementation rather than one per caller.
  */
 export function migrateState(raw) {
   if (raw === null || raw === undefined) {
-    return { schema: STORE_SCHEMA, revision: 0, active: null, connections: {}, klyvaron: { tiers: {} } }
+    return { schema: STORE_SCHEMA, revision: 0, active: null, connections: {} }
   }
   // A schema this build does not know is refused rather than read as schema 1. Reading it as
   // schema 1 would treat a future file as a single connection with no fields and silently drop
@@ -86,7 +54,7 @@ export function migrateState(raw) {
     }
     const active = typeof raw.active === 'string' && Object.hasOwn(connections, raw.active)
       ? raw.active : (Object.keys(connections)[0] ?? null)
-    return { schema: STORE_SCHEMA, revision: Number.isInteger(raw.revision) ? raw.revision : 0, active, connections, klyvaron: normaliseKlyvaron(raw.klyvaron) }
+    return { schema: STORE_SCHEMA, revision: Number.isInteger(raw.revision) ? raw.revision : 0, active, connections }
   }
   // Schema 1: one connection, whose id was its `kind`.
   const legacyKind = typeof raw.kind === 'string' && CONNECTION_ID.test(raw.kind) ? raw.kind : null
@@ -96,7 +64,6 @@ export function migrateState(raw) {
     revision: Number.isInteger(raw.revision) ? raw.revision : 0,
     active: kind,
     connections: kind ? { [kind]: normaliseRecord(kind, raw) } : {},
-    klyvaron: normaliseKlyvaron(raw.klyvaron),
   }
 }
 
@@ -127,9 +94,8 @@ export class OnlineStore {
     // A migrated file is written back immediately, so a later read never has to infer the schema
     // from a record that happens to look like both.
     const hasLegacyLiteConnection = Object.hasOwn(raw?.connections ?? {}, 'litellm') || raw?.kind === 'litellm' || raw?.active === 'litellm'
-    const hasLegacyLitePreset = Object.values(raw?.klyvaron?.tiers ?? {}).some((tier) =>
-      Object.values(tier ?? {}).some((preset) => preset?.connectionId === 'litellm'))
-    if (raw !== null && (raw.schema !== STORE_SCHEMA || hasLegacyLiteConnection || hasLegacyLitePreset)) this.#persist()
+    const hasLegacyKlyvaronState = Object.hasOwn(raw ?? {}, 'klyvaron')
+    if (raw !== null && (raw.schema !== STORE_SCHEMA || hasLegacyLiteConnection || hasLegacyKlyvaronState)) this.#persist()
     if (existsSync(this.file)) chmodSync(this.file, 0o600)
   }
 
@@ -210,58 +176,6 @@ export class OnlineStore {
     if (Object.hasOwn(safePatch, 'options')) safePatch.options = normaliseOptions(safePatch.options)
     this.data.connections[id] = { ...existing, ...safePatch, id }
     this.data.active = id
-    this.data.revision += 1
-    this.#persist()
-    return this.public()
-  }
-
-  /** A saved product-tier preset, or null. Null means the tier is not configured for that modality. */
-  klyvaronPreset(tier, modality) {
-    const preset = this.data.klyvaron.tiers?.[tier]?.[modality]
-    return preset ? { ...preset } : null
-  }
-
-  /** Currently selected first-party Klyvaron model id (independent of external gateways). */
-  get selectedNativeModel() {
-    return this.data.klyvaron.selectedModel || ''
-  }
-
-  selectNativeModel(model) {
-    this.data.klyvaron.selectedModel = typeof model === 'string' ? model : ''
-    this.#persist()
-    return this.public()
-  }
-
-  /**
-   * Point a Klyvaron tier at a saved connection and a listed model.
-   *
-   * The preset is a pointer, never a credential, and the model must already be listed for that
-   * connection. That rule is what stops a tier from becoming a place to type an unverified model
-   * id that no probe has ever returned. Changing a preset bumps the store revision, so the next
-   * chat request re-asks for consent to the destination it will actually use.
-   */
-  saveKlyvaronPreset(tier, modality, { connectionId, model }) {
-    if (!KLYVARON_TIERS.includes(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
-    if (!KLYVARON_MODALITIES.includes(modality)) throw failure('invalid_modality', 'A tier preset is for chat, image or video.', 400)
-    if (connectionId !== 'klyvaron-native') {
-      if (!this.#record(connectionId)) throw failure('connection_not_found', `No saved connection '${connectionId}'.`, 404)
-      const record = this.#record(connectionId)
-      if (!record.models.includes(model)) throw failure('model_unlisted', 'Test the connection and choose a model it lists.', 409)
-    }
-    this.data.klyvaron.tiers[tier] ??= {}
-    this.data.klyvaron.tiers[tier][modality] = { connectionId, model }
-    this.data.revision += 1
-    this.#persist()
-    return this.public()
-  }
-
-  /** Clear one tier's preset. The connection and its key are untouched. */
-  removeKlyvaronPreset(tier, modality) {
-    if (!KLYVARON_TIERS.includes(tier)) throw failure('invalid_tier', 'Klyvaron tiers are lite, pro or max.', 400)
-    if (!KLYVARON_MODALITIES.includes(modality)) throw failure('invalid_modality', 'A tier preset is for chat, image or video.', 400)
-    if (!this.data.klyvaron.tiers?.[tier]?.[modality]) throw failure('tier_not_configured', 'That tier has no preset for this modality.', 404)
-    delete this.data.klyvaron.tiers[tier][modality]
-    if (Object.keys(this.data.klyvaron.tiers[tier]).length === 0) delete this.data.klyvaron.tiers[tier]
     this.data.revision += 1
     this.#persist()
     return this.public()
@@ -379,7 +293,6 @@ export class OnlineStore {
       verified: record?.verified ?? {},
       revision: this.data.revision,
       connections: records,
-      klyvaron: { tiers: structuredClone(this.data.klyvaron.tiers) },
       // The connection each media area will act on, and why it is not simply the active one:
       // chat may be pointed at a text provider while images are rendered by another.
       preferred: {

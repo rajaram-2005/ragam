@@ -8,10 +8,52 @@ function pipeline(defaultPrincipal = 'account-a') {
   return new KnowledgePipeline({ dbFile: ':memory:', defaultPrincipal })
 }
 
-test('tier profiles scale bounded context and orchestration without changing the processing engine', () => {
+test('Lite, Pro and Max are resource profiles of one model-independent engine', async () => {
+  const profiles = Object.values(KLYVARON_PROCESSOR_PROFILES)
+  assert.deepEqual(profiles.map((profile) => profile.id), ['lite', 'pro', 'max'])
   assert.ok(KLYVARON_PROCESSOR_PROFILES.lite.contextChars < KLYVARON_PROCESSOR_PROFILES.pro.contextChars)
   assert.ok(KLYVARON_PROCESSOR_PROFILES.pro.contextChars < KLYVARON_PROCESSOR_PROFILES.max.contextChars)
-  assert.ok(KLYVARON_PROCESSOR_PROFILES.lite.maxTasks < KLYVARON_PROCESSOR_PROFILES.max.maxTasks)
+  assert.ok(KLYVARON_PROCESSOR_PROFILES.lite.processingDepth < KLYVARON_PROCESSOR_PROFILES.pro.processingDepth)
+  assert.ok(KLYVARON_PROCESSOR_PROFILES.pro.processingDepth < KLYVARON_PROCESSOR_PROFILES.max.processingDepth)
+  assert.ok(KLYVARON_PROCESSOR_PROFILES.lite.maxMemoryChars < KLYVARON_PROCESSOR_PROFILES.pro.maxMemoryChars)
+  assert.ok(KLYVARON_PROCESSOR_PROFILES.pro.maxMemoryChars < KLYVARON_PROCESSOR_PROFILES.max.maxMemoryChars)
+  assert.deepEqual(profiles.map((profile) => profile.resourceClass), ['low', 'medium', 'high'])
+  assert.ok(KLYVARON_PROCESSOR_PROFILES.lite.parallelTasks < KLYVARON_PROCESSOR_PROFILES.max.parallelTasks)
+
+  for (const tier of ['lite', 'pro', 'max']) {
+    const result = await processKlyvaronInput({ tier, input: 'User authorized input remains ordinary data.', tasks: ['inspect'] })
+    assert.equal(result.tier, tier)
+    assert.equal(result.engine, 'klyvaron-deterministic-v1')
+    assert.equal(result.modelUsed, false)
+    assert.equal(result.weightsUsed, false)
+    assert.equal(result.networkUsed, false)
+  }
+})
+
+test('memory retrieval obeys each profile item and aggregate character budget', async () => {
+  const memory = {
+    async searchMemories(_query, { topK }) {
+      return Array.from({ length: topK + 5 }, (_, index) => ({
+        memory: { id: `m-${index}`, text: 'x'.repeat(2_000), kind: 'preference', subject: null, tags: [] },
+      }))
+    },
+  }
+  for (const tier of ['lite', 'pro', 'max']) {
+    const profile = KLYVARON_PROCESSOR_PROFILES[tier]
+    const result = await processKlyvaronInput({ tier, input: 'retrieve authorized notes', tasks: ['retrieve'], memory, useMemory: true })
+    const items = result.results[0].result.memories
+    assert.ok(items.length <= profile.maxMemoryItems)
+    assert.ok(items.reduce((sum, item) => sum + item.text.length, 0) <= profile.maxMemoryChars)
+  }
+})
+
+test('processing depth bounds deterministic extraction work and output size', async () => {
+  const input = Array.from({ length: 20 }, (_, index) => `ops${index}@example.test`).join(' ')
+  const lite = await processKlyvaronInput({ tier: 'lite', input, tasks: ['extract'] })
+  const max = await processKlyvaronInput({ tier: 'max', input, tasks: ['extract'] })
+  assert.equal(lite.results[0].result.emails.length, KLYVARON_PROCESSOR_PROFILES.lite.processingDepth * 2)
+  assert.equal(max.results[0].result.emails.length, KLYVARON_PROCESSOR_PROFILES.max.processingDepth * 2)
+  assert.ok(max.results[0].result.emails.length > lite.results[0].result.emails.length)
 })
 
 test('extractive summary only returns verbatim source sentences with traceable offsets', async () => {

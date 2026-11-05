@@ -1,7 +1,9 @@
-// First-party Klyvaron Pro (`klyvaron-pro-lm`) and Klyvaron Max (`klyvaron-max-lm`)
-// native model manager for `OnlineApp`.
+// Archived compatibility verifier for legacy Pro/Max language-model artifacts.
 //
-// Enforces every non-negotiable readiness invariant:
+// The active OnlineApp creates this host with `enableLegacyArtifacts: false`; the built-in
+// Klyvaron processor does not select or load these artifacts. Explicit enablement exists only
+// for isolated legacy-package compatibility tests, not as a product tier or runtime dependency.
+// When explicitly enabled, the verifier enforces:
 //   1. Never marks a model loaded or `selectorEnabled: true` until BOTH full artifact/SHA-256
 //      verification AND a genuine live `generate()` inference pass succeed on its own weights.
 //   2. Strictly checks architecture parameters against `PRESETS.pro` (27,559,946) and
@@ -65,14 +67,45 @@ function matchesPresetArchitecture(manifestArch, expected) {
 }
 
 export class NativeKlyvaronHost {
-  constructor({ root, dataDir = null, ledger = null, idleTimeoutMs = 60_000 } = {}) {
+  constructor({ root, dataDir = null, ledger = null, idleTimeoutMs = 60_000, enableLegacyArtifacts = false } = {}) {
     this.root = resolve(root)
     this.store = new KlyvaronStore({ root: this.root, dataDir })
     this.executor = new LocalCpuExecutor({ idleTimeoutMs })
     this.ledger = ledger
+    this.enableLegacyArtifacts = enableLegacyArtifacts === true
     this.records = new Map()
     this.providers = new Map()
-    this.#initializeAndVerifyInstalled()
+    if (this.enableLegacyArtifacts) this.#initializeAndVerifyInstalled()
+    else this.#initializeDisabled()
+  }
+
+  #initializeDisabled() {
+    for (const spec of Object.values(FIRST_PARTY_MODEL_SPECS)) {
+      this.records.set(spec.id, {
+        id: spec.id,
+        label: spec.label,
+        displayName: spec.displayName,
+        preset: spec.preset,
+        status: 'legacy_artifacts_disabled',
+        selectorEnabled: false,
+        expectedParameters: spec.expectedParameters,
+        expectedArchitectureDigest: spec.expectedArchitectureDigest,
+        version: null,
+        format: null,
+        quantization: null,
+        weightsSha256: null,
+        bytes: null,
+        residentWeightBytes: null,
+        parameters: null,
+        contextTokens: null,
+        tokenizer: null,
+        inferenceVerification: null,
+        error: {
+          code: 'model_independent_architecture',
+          message: 'Klyvaron tiers use one shared model-independent processor; tier-specific model artifacts are not loaded.',
+        },
+      })
+    }
   }
 
   /** Synchronously load, validate, run real inference, and gate every installed model. */
@@ -346,6 +379,9 @@ export class NativeKlyvaronHost {
 
   /** Re-verify one or all first-party models on disk (e.g. after training or restart). */
   verify(id = null) {
+    if (!this.enableLegacyArtifacts) {
+      throw failure('model_independent_architecture', 'Tier-specific native weights are disabled; use the shared Klyvaron processing profiles.', 410)
+    }
     if (id !== null) {
       const record = this.#verifySingleSync(id)
       this.#rejectCrossTierWeightReuse()
