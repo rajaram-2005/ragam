@@ -277,7 +277,7 @@ test('[Pro + Max] 8-10: real artifacts stay isolated from the active model-indep
   assert.match(processedBody.text, /shared deterministic processor/)
 
   // (10) Standalone legacy compatibility hosts remain fail-closed for unprovisioned/tampered artifacts.
-  const emptyHost = new NativeKlyvaronHost({ root: mkdtempSync(join(tmpdir(), 'klyvaron-empty-')) })
+  const emptyHost = new NativeKlyvaronHost({ root: mkdtempSync(join(tmpdir(), 'klyvaron-empty-')), enableLegacyArtifacts: true })
   assert.equal(emptyHost.get('klyvaron-pro-lm').status, 'not_installed')
   assert.equal(emptyHost.get('klyvaron-pro-lm').selectorEnabled, false)
   assert.throws(() => emptyHost.requireProvider('klyvaron-pro-lm'), { code: 'klyvaron_model_missing' })
@@ -298,7 +298,7 @@ test('[Pro + Max] 8-10: real artifacts stay isolated from the active model-indep
   fixtureProManifest.provenance.origin = 'test_fixture'
   writeFileSync(fixtureProManifestPath, JSON.stringify(fixtureProManifest))
 
-  const tamperedHost = new NativeKlyvaronHost({ root: isolatedRoot })
+  const tamperedHost = new NativeKlyvaronHost({ root: isolatedRoot, enableLegacyArtifacts: true })
   const summary = tamperedHost.summary()
   const proRec = summary.models.find((m) => m.id === 'klyvaron-pro-lm')
   const maxRec = summary.models.find((m) => m.id === 'klyvaron-max-lm')
@@ -321,7 +321,7 @@ test('[Pro + Max] 8-10: real artifacts stay isolated from the active model-indep
   writeFileSync(join(swappedRoot, 'models', 'klyvaron-max-lm', 'klyvaron-max-lm.klyvaron.json'), JSON.stringify(fakeMaxManifest))
   rmSync(fakeMaxManifestPath, { force: true })
 
-  const swappedHost = new NativeKlyvaronHost({ root: swappedRoot })
+  const swappedHost = new NativeKlyvaronHost({ root: swappedRoot, enableLegacyArtifacts: true })
   const swappedMax = swappedHost.get('klyvaron-max-lm')
   assert.equal(swappedMax.status, 'failed')
   assert.equal(swappedMax.selectorEnabled, false)
