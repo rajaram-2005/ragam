@@ -25,10 +25,12 @@ if (process.platform === 'win32') {
     if (existsSync(candidate)) { executable = candidate; break }
   }
 } else {
-  const productName = JSON.parse(readFileSync(resolve('package.json'), 'utf8')).build?.productName ?? 'Ragam'
+  const appPackage = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
+  const binaryNames = [appPackage.build?.executableName, appPackage.name, appPackage.build?.productName]
+    .filter(Boolean).map((name) => name.toLocaleLowerCase())
   for (const name of names.filter((entry) => entry.endsWith('-unpacked'))) {
     const unpacked = join(release, name)
-    const binary = readdirSync(unpacked).find((entry) => entry.toLocaleLowerCase() === productName.toLocaleLowerCase())
+    const binary = readdirSync(unpacked).find((entry) => binaryNames.includes(entry.toLocaleLowerCase()))
     if (binary) { executable = join(unpacked, binary); break }
   }
 }
