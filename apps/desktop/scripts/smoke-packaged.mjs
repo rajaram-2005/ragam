@@ -1,10 +1,16 @@
-import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
+function fail(message) {
+  const escaped = message.slice(0, 2500)
+    .replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')
+  process.stdout.write(`::error title=Packaged desktop smoke details::${escaped}\n`)
+  throw new Error(message)
+}
+
 const release = resolve('release')
-if (!existsSync(release)) throw new Error('No unpacked desktop app found; run electron-builder --dir first.')
+if (!existsSync(release)) fail('No unpacked desktop app found; run electron-builder --dir first.')
 const names = readdirSync(release)
 let executable
 
@@ -24,7 +30,7 @@ if (process.platform === 'win32') {
     if (existsSync(candidate)) { executable = candidate; break }
   }
 }
-assert.ok(executable, `No unpacked Ragam executable found for ${process.platform}/${process.arch} in ${release}`)
+if (!executable) fail(`No unpacked Ragam executable found for ${process.platform}/${process.arch} in ${release}; entries: ${names.join(', ')}`)
 
 const command = process.platform === 'linux' && process.env.CI === 'true' ? 'xvfb-run' : executable
 const args = command === 'xvfb-run' ? ['-a', executable] : []
@@ -37,14 +43,14 @@ const child = spawnSync(command, args, {
 })
 const output = `${child.stdout ?? ''}\n${child.stderr ?? ''}`
 process.stdout.write(output)
-if (child.error || child.status !== 0) {
-  // Keep the actionable child failure in the check annotation as well as the job log.
-  // This makes cross-platform smoke failures diagnosable when hosted log archives are unavailable.
-  const detail = [child.error?.message, ...output.split(/\r?\n/).filter(Boolean).slice(-12)]
-    .filter(Boolean).join(' | ').slice(0, 2500)
-    .replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')
-  process.stdout.write(`::error title=Packaged desktop smoke details::${detail}\n`)
+const smokePassed = /RAGAM_DESKTOP_SMOKE_OK/.test(output)
+if (child.error || child.status !== 0 || !smokePassed) {
+  const detail = [
+    `command=${command} ${args.join(' ')}`,
+    `status=${child.status ?? 'null'}`,
+    `signal=${child.signal ?? 'none'}`,
+    child.error?.stack ?? child.error?.message,
+    ...output.split(/\r?\n/).filter(Boolean).slice(-12),
+  ].filter(Boolean).join(' | ')
+  fail(detail)
 }
-if (child.error) throw child.error
-assert.equal(child.status, 0, `packaged Ragam exited with ${child.status ?? child.signal}`)
-assert.match(output, /RAGAM_DESKTOP_SMOKE_OK/, 'packaged UI must start Core and pass the same-origin health/auth checks')
