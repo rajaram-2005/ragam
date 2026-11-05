@@ -200,11 +200,8 @@ for (const spec of EXPECTED_SPECS) {
   })
 }
 
-test('[Pro + Max] 8-10: distinct digests, OnlineApp HTTP/SSE chat & AbortController cancellation for BOTH models, restart persistence, and strict fail-closed error handling without fallback', { timeout: 600_000, skip: proMaxSkip }, async (t) => {
-  const proManifest = JSON.parse(readFileSync(join(PRO_DIR, 'klyvaron-pro-lm.klyvaron.json'), 'utf8'))
+test('[Pro + Max] 8-10: real artifacts stay isolated from the active model-independent app; legacy hosts still fail closed', { timeout: 600_000, skip: proMaxSkip }, async (t) => {
   const maxManifest = JSON.parse(readFileSync(join(MAX_DIR, 'klyvaron-max-lm.klyvaron.json'), 'utf8'))
-  assert.notEqual(proManifest.weights.sha256, maxManifest.weights.sha256, 'Pro and Max weights MUST be completely distinct')
-  assert.equal(proManifest.provenance.parameterCount, 27_559_946)
   assert.equal(maxManifest.provenance.parameterCount, 92_077_066)
 
   const dataDir = mkdtempSync(join(tmpdir(), 'klyvaron-online-acceptance-'))
@@ -213,7 +210,7 @@ test('[Pro + Max] 8-10: distinct digests, OnlineApp HTTP/SSE chat & AbortControl
   let app = new OnlineApp({ dataDir, secureCookie: false })
   let server = app.server()
   await new Promise((done, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', done) })
-  let baseUrl = `http://127.0.0.1:${server.address().port}`
+  const baseUrl = `http://127.0.0.1:${server.address().port}`
   t.after(async () => {
     server.closeAllConnections()
     await new Promise((r) => server.close(r))
@@ -221,7 +218,9 @@ test('[Pro + Max] 8-10: distinct digests, OnlineApp HTTP/SSE chat & AbortControl
     rmSync(dataDir, { recursive: true, force: true })
   })
 
-  // Register owner session (with ZERO external gateways configured!).
+  // Even with the real Pro/Max packages present on disk, the active app does not scan or load them.
+  assert.equal(app.nativeKlyvaron.enableLegacyArtifacts, false)
+  assert.equal(app.nativeKlyvaron.providers.size, 0)
   const regRes = await fetch(`${baseUrl}/api/auth/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-aetheris-request': '1' },
@@ -229,119 +228,55 @@ test('[Pro + Max] 8-10: distinct digests, OnlineApp HTTP/SSE chat & AbortControl
   })
   assert.equal(regRes.status, 201)
   const cookie = regRes.headers.get('set-cookie').split(';')[0]
-  const authed = (method, path, body, signal) => fetch(`${baseUrl}${path}`, {
+  const authed = (method, path, body) => fetch(`${baseUrl}${path}`, {
     method,
-    headers: {
-      cookie,
-      ...(body !== undefined ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}),
-    },
+    headers: { cookie, ...(body !== undefined ? { 'content-type': 'application/json', 'x-aetheris-request': '1' } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
-    signal,
   })
 
-  // Verify readiness & `/api/models` expose BOTH verified first-party models while gateways are empty.
-  const readyRes = await (await authed('GET', '/api/ready')).json()
-  assert.equal(readyRes.status, 'configured')
-  assert.equal(readyRes.capabilities.chat, true)
-  assert.equal(readyRes.firstPartyModels.readyCount, 2)
+  const ready = await (await authed('GET', '/api/ready')).json()
+  assert.equal(ready.status, 'setup_required')
+  assert.equal(ready.capabilities.chat, false)
+  assert.equal(ready.klyvaron.weightsRequired, false)
+  assert.equal((await app.nativeKlyvaron.summary()).models.every((model) => model.status === 'legacy_artifacts_disabled'), true)
 
-  const modelsRes = await (await authed('GET', '/api/models')).json()
-  const listedIds = modelsRes.models.map((m) => m.id)
-  assert.deepEqual(listedIds, ['klyvaron-pro-lm', 'klyvaron-max-lm'])
+  const processor = await (await authed('GET', '/api/klyvaron/processor')).json()
+  assert.equal(processor.modelUsed, false)
+  assert.equal(processor.weightsUsed, false)
+  assert.deepEqual(Object.keys(processor.profiles), ['lite', 'pro', 'max'])
+  const models = await (await authed('GET', '/api/models')).json()
+  assert.deepEqual(models.models, [])
 
-  // (9) Invoke real RAGAM Chat (selection + SSE stream) on BOTH `klyvaron-pro-lm` AND `klyvaron-max-lm`!
+  // Legacy first-party selectors and inference routes refuse both tier ids without fallback.
   for (const modelId of ['klyvaron-pro-lm', 'klyvaron-max-lm']) {
-    const sel = await authed('PUT', '/api/models/selection', { model: modelId })
-    assert.equal(sel.status, 200)
-    assert.equal((await sel.json()).selectedModel, modelId)
-
-    const sessionRes = await (await authed('POST', '/api/sessions', { title: `Acceptance ${modelId}` })).json()
-    const streamRes = await authed('POST', '/api/chat/stream', {
+    const selection = await authed('PUT', '/api/models/selection', { model: modelId })
+    assert.equal(selection.status, 410)
+    assert.equal((await selection.json()).error, 'model_independent_architecture')
+    const chat = await authed('POST', '/api/chat', {
       model: modelId,
-      sessionId: sessionRes.id,
-      messages: [{ role: 'user', content: 'Summarize how Klyvaron handles grounded context.' }],
-      maxTokens: 9,
-      temperature: 0,
-      authorization: { confirmed: true, providerRevision: 0, includeContext: false, allowSensitive: false },
+      messages: [{ role: 'user', content: 'This must not invoke legacy weights.' }],
+      authorization: { confirmed: true, providerRevision: 0 },
     })
-    assert.equal(streamRes.status, 200)
-    const rawSse = await streamRes.text()
-    const frames = rawSse.trim().split('\n\n').map((block) => ({
-      name: /^event:\s*(.+)$/m.exec(block)[1].trim(),
-      data: JSON.parse(/^data:\s*(.+)$/m.exec(block)[1]),
-    }))
-    assert.equal(frames[0].name, 'route')
-    assert.equal(frames[0].data.modelId, modelId)
-    assert.equal(frames[0].data.sentExternally, false)
-    assert.ok(frames.some((f) => f.name === 'delta'))
-    const doneFrame = frames.at(-1)
-    assert.equal(doneFrame.name, 'done')
-    assert.equal(doneFrame.data.modelId, modelId)
-    assert.equal(doneFrame.data.firstPartyWeights, true)
-    assert.equal(doneFrame.data.sentExternally, false)
-    assert.ok(doneFrame.data.text.length > 0)
-    assert.ok(doneFrame.data.tokensPerSecond > 0)
-    t.diagnostic(JSON.stringify({
-      sseChatModel: modelId,
-      routeFrame: frames[0].data,
-      deltaCount: frames.filter((f) => f.name === 'delta').length,
-      doneFrame: doneFrame.data,
-    }))
+    assert.equal(chat.status, 410)
+    assert.equal((await chat.json()).error, 'model_independent_architecture')
+  }
+  for (const path of ['/api/klyvaron/models', '/api/klyvaron/manifests', '/api/klyvaron/qualification', '/api/klyvaron/worker']) {
+    const response = await authed('GET', path)
+    assert.equal(response.status, 410, path)
   }
 
-  // Verify live stream cancellation via AbortController does not hang or corrupt the worker host!
-  const abortController = new AbortController()
-  const cancelPromise = authed('POST', '/api/chat/stream', {
-    model: 'klyvaron-max-lm',
-    messages: [{ role: 'user', content: 'Generate a detailed explanation of causal self-attention across 12 layers.' }],
-    maxTokens: 64,
-    temperature: 0,
-    authorization: { confirmed: true, providerRevision: 0, includeContext: false, allowSensitive: false },
-  }, abortController.signal).then(async (res) => {
-    const reader = res.body.getReader()
-    await reader.read()
-    abortController.abort()
-    await reader.cancel().catch(() => {})
-  }).catch((err) => {
-    assert.equal(err.name, 'AbortError')
+  // The shared deterministic processor remains usable without any model artifact or provider.
+  const processed = await authed('POST', '/api/klyvaron/process', {
+    tier: 'max', input: 'Klyvaron uses a shared deterministic processor with configurable resource profiles.',
+    tasks: ['summarize'],
   })
-  await cancelPromise
+  assert.equal(processed.status, 200)
+  const processedBody = await processed.json()
+  assert.equal(processedBody.modelUsed, false)
+  assert.equal(processedBody.weightsUsed, false)
+  assert.match(processedBody.text, /shared deterministic processor/)
 
-  // (8) Restart persistence: close server & OnlineApp completely, reconstruct on same dataDir, verify persistence!
-  server.closeAllConnections()
-  await new Promise((r) => server.close(r))
-  app.close()
-
-  app = new OnlineApp({ dataDir, secureCookie: false })
-  server = app.server()
-  await new Promise((done, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', done) })
-  baseUrl = `http://127.0.0.1:${server.address().port}`
-
-  const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-aetheris-request': '1' },
-    body: JSON.stringify({ email: 'owner@ragam.local', password: 'correct-horse-battery-staple' }),
-  })
-  assert.equal(loginRes.status, 200)
-  const cookie2 = loginRes.headers.get('set-cookie').split(';')[0]
-  const chatAfterRestart = await fetch(`${baseUrl}/api/chat`, {
-    method: 'POST',
-    headers: { cookie: cookie2, 'content-type': 'application/json', 'x-aetheris-request': '1' },
-    body: JSON.stringify({
-      model: 'klyvaron-pro-lm',
-      messages: [{ role: 'user', content: 'Verify post-restart generation.' }],
-      maxTokens: 10,
-      temperature: 0,
-      authorization: { confirmed: true },
-    }),
-  })
-  assert.equal(chatAfterRestart.status, 200)
-  const postRestartBody = await chatAfterRestart.json()
-  assert.equal(postRestartBody.modelId, 'klyvaron-pro-lm')
-  assert.equal(postRestartBody.firstPartyWeights, true)
-
-  // (10) Safe failure cases: unprovisioned model (`not_installed`), corrupt weights (`digest_mismatch`),
-  // `provenance.origin: 'test_fixture'`, and Pro-as-Max substitution (`preset_architecture_mismatch`) MUST fail closed without fallback.
+  // (10) Standalone legacy compatibility hosts remain fail-closed for unprovisioned/tampered artifacts.
   const emptyHost = new NativeKlyvaronHost({ root: mkdtempSync(join(tmpdir(), 'klyvaron-empty-')) })
   assert.equal(emptyHost.get('klyvaron-pro-lm').status, 'not_installed')
   assert.equal(emptyHost.get('klyvaron-pro-lm').selectorEnabled, false)

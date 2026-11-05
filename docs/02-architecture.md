@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 42,034 source lines, 27,059 test lines
+### `services/core` — 42,034 source lines, 26,854 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
