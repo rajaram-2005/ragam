@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "description": "Ragam local desktop app for Windows, macOS and Linux",
+  "homepage": "https://github.com/rajaram-2005/ragam",
   "main": "main.mjs",
   "license": "MIT",
   "engines": {
@@ -69,6 +70,7 @@
     "linux": {
       "target": ["AppImage", "deb"],
       "category": "Office",
+      "maintainer": "Ragam maintainers",
       "artifactName": "Ragam-${version}-Linux-${arch}.${ext}"
     }
   }
