@@ -41,7 +41,8 @@ if (!executable) {
 }
 
 const command = process.platform === 'linux' && process.env.CI === 'true' ? 'xvfb-run' : executable
-const args = command === 'xvfb-run' ? ['-a', executable] : []
+// GitHub's Linux runner does not install Electron's setuid sandbox as root; disable it only for this isolated smoke process.
+const args = command === 'xvfb-run' ? ['-a', executable, '--no-sandbox'] : []
 const child = spawnSync(command, args, {
   cwd: process.cwd(),
   env: { ...process.env, RAGAM_DESKTOP_SMOKE: '1' },
