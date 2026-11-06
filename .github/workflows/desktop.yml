@@ -30,8 +30,11 @@ jobs:
           - name: Windows x64 and ARM64
             runner: windows-latest
             target: --win nsis --x64 --arm64
+          # GitHub retired the macOS 14 hosted image on 2026-11-02. The old label
+          # cancelled this job before its first step; macos-15 is the supported
+          # hosted arm64 image and can cross-package both x64 and arm64 DMGs.
           - name: macOS Intel and Apple Silicon
-            runner: macos-14
+            runner: macos-15
             target: --mac dmg --x64 --arm64
     steps:
       - uses: actions/checkout@v4

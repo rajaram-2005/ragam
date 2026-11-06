@@ -204,4 +204,8 @@ test('desktop packaging does not cancel an in-flight platform matrix', () => {
   assert.match(workflow, /concurrency:[\s\S]*?cancel-in-progress:\s*false/)
   assert.match(workflow, /strategy:[\s\S]*?fail-fast:\s*false/)
   assert.doesNotMatch(workflow, /cancel-in-progress:\s*true/)
+  // A retired hosted image cancels the macOS job before setup, which is not
+  // platform evidence. Pin the supported label and refuse the retired one.
+  assert.match(workflow, /runner:\s*macos-15/)
+  assert.doesNotMatch(workflow, /macos-14/)
 })

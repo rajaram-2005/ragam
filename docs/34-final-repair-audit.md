@@ -24,6 +24,7 @@ This is an evidence-based inventory, not a release claim. It records what was re
 | P1 | JS/Python tokenizer dropped hyphen parts | Medium | A query for `ZEPHYR` could not match `ZEPHYR-9`; parity fixture had no hyphen-part case | Both stemmers now index whole token plus parts; parity fixture regenerated; archived model card and improvement-cycle erratum corrected without claiming a new artifact |
 | P1 | Training consent accepted far-future timestamps | Medium | `Date.now() - createdAt` was only checked for being too large; `Date.now() + 1e12` never expired | Shared `consent.mjs` bounds missing, expired and future-dated consent with 60 s clock skew; worker and controller use it |
 | P2 | Desktop workflow could cancel an in-flight platform matrix | Medium | `cancel-in-progress: true`; macOS job in run 42247207344 was cancelled | `cancel-in-progress: false` plus a release-test guard; `fail-fast: false` retained |
+| P0 | Retired macOS 14 hosted runner label | High | PR Desktop run [42259100183](https://github.com/rajaram-2005/ragam/actions/runs/42259100183) cancelled macOS before setup: `The configuration 'macos-14-arm64-us-default' is not supported` | Use the supported `macos-15` hosted arm64 label and pin it with a release-test guard |
 | P2 | Duplicate web API skills surface | Low | `api.js` declared `skills` twice; the first block was unreachable and unused | Dead block removed; source-level duplicate-key regression test |
 | P2 | Voice preset integration from PR #13 | Informational | PR #13 assumed first-party voice weights; current `main` retires tier-specific model artifacts and voice routes fail closed | No voice weights claimed; explicit 410 fail-closed regression test |
 | P2 | Model artifact SHA-256 verification | Informational | `klyvaron-store.test.mjs` and `klyvaron-quantized.test.mjs` already reject digest mismatches; no weight payloads exist in the checkout | **PASS** on code paths; no model release claimed |
@@ -56,6 +57,7 @@ Local suites on the repair branch, with `AETHERIS_PYTHON` pointing at an isolate
 | Plugin member boundary | Member can invoke read-only tools; writing tools and state changes remain owner-only | **PASS** |
 | Worker cancellation | Pre-abort starts no child; running child receives SIGTERM; spawn failure is coded | **PASS** |
 | Tokenizer parity | JS/Python parity fixture includes hyphen-part cases; both sides pass | **PASS** |
+| Desktop workflow guard | `macos-15` label pinned, retired `macos-14` refused, no in-progress cancellation | **PASS** |
 
 ## 5. Security and architecture findings
 
