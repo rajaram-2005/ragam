@@ -18,6 +18,7 @@ const TEXTS = [
   Array.from({ length: 60 }, (_, i) => `Sentence ${i} describes the contactor and thermal limits in detail.`).join(' '),
   'Multiple\n\nparagraphs. With! Newlines? And   collapsed    spacing.',
   'a i 7 5G running studies boxes churches status analysis',
+  'The project codename is ZEPHYR-9 and the model id is klyvaron-pro-lm version 0-1-0.',
 ]
 
 const QUERIES = [
@@ -26,6 +27,8 @@ const QUERIES = [
   'the and of',
   'thermal limits',
   'nothing matches this at all',
+  'ZEPHYR codename',
+  'klyvaron pro model',
 ]
 
 const index = new Bm25Index()

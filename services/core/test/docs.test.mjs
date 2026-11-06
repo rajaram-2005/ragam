@@ -761,18 +761,18 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**1043 tests**'), 'current core test inventory must be stated')
-  assert.ok(status.includes('**822 tests**'), 'fabric test inventory must be stated')
-  assert.ok(status.includes('**130 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('1995 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('**1053 tests**'), 'current core test inventory must be stated')
+  assert.ok(status.includes('**823 tests**'), 'fabric test inventory must be stated')
+  assert.ok(status.includes('**131 tests**'), 'web test inventory must be stated')
+  assert.ok(status.includes('2007 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('1995 tests: core 1043, web 130, fabric 822'),
+  assert.ok(squash(doc.readme()).includes('2007 tests: core 1053, web 131, fabric 823'),
     'README must state the current inventory as docs/03 does')
   assert.ok(squash(doc.readme()).includes('latest completed full CI run')
     && squash(doc.readme()).includes('41394564087')
     && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
-    && squash(doc.readme()).includes('The current tree has 1,995 tests (Core 1,043, Web 130, Fabric 822). The full Core suite passed 1,038/1,043 with five skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 130/130 and the production bundle built. Fabric’s latest local run passed 821 tests and one optional multimodal-training test failed because JAX was unavailable.')
-    && squash(doc.readme()).includes('Full CI for this current tree is pending')
+    && squash(doc.readme()).includes('The current tree has 2,007 tests (Core 1,053, Web 131, Fabric 823). The full Core suite passed 1,049/1,053 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 131/131 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv.')
+    && squash(doc.readme()).includes('Full CI for this current tree is recorded in the pull-request checks and final engineering report')
     && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
   'README must distinguish the last full CI run from the current full local suite')
   assert.ok(status.includes('(75 files'), 'the file count must move with the suite')
@@ -780,14 +780,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(1043), `core heading must say 1043, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(822), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(130), `web heading must say 130, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(1053), `core heading must say 1043, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(823), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(131), `web heading must say 130, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    1995,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 1995`,
+    2007,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 2007`,
   )
 })
 
@@ -1498,6 +1498,15 @@ test('the model card JSON is machine-readable and self-consistent', () => {
   assert.deepEqual(reverified.excluded, ['metrics.latencyMs'],
     'only the wall-clock measurement may be excluded, and it must be named')
 
+  // The ended bit-for-bit claim is corrected on the card itself, with the
+  // re-measured figure and an explicit refusal to claim a replacement artifact.
+  assert.equal(wrapper.corrections.length, 1, 'the ended bit-for-bit claim must be corrected on the card')
+  const [correction] = wrapper.corrections
+  assert.ok(correction.was.includes('bit-for-bit'), 'the correction must quote the claim it ends')
+  assert.ok(correction.now.includes('0.787269'), 'the correction must state the re-measured MRR')
+  assert.ok(correction.now.includes('no replacement model artifact'), 'the correction must not mint an unverified release')
+  assert.equal(correction.measuredValuesChanged, false)
+
   // The card's own limitations are the properties of the ARTIFACT (3). The run's
   // limitations (12) are a different list, and the Markdown card must keep them
   // distinct rather than presenting one as the other.
@@ -1518,7 +1527,13 @@ test('the Markdown model card keeps the two limitation lists distinct', () => {
     'the mixed list must not come back')
 
   assert.ok(text.includes('## Reproducibility across revisions'))
-  assert.ok(text.includes('This card is therefore **not stale**: it reproduces bit-for-bit at `HEAD`.'))
+  // The bit-for-bit claim was true through the re-verification revision and
+  // stopped being true when the tokenizer was corrected. The card records that,
+  // with the re-measured figure, rather than keep claiming currency.
+  assert.ok(text.includes('At that revision this card was **not stale**'))
+  assert.ok(text.includes('no longer reproduces these weights bit-for-bit'))
+  assert.ok(text.includes('0.787269'), 'the correction must state the re-measured MRR')
+  assert.ok(text.includes('no replacement model'), 'the correction must not claim a replacement artifact')
   assert.ok(text.includes('`6be52b98dfdc6c4d741ff7d521541758ef512175`'),
     'the Markdown card must name the revision it was re-verified at')
 

@@ -214,9 +214,14 @@ class TestTheRecordedOutcomeAtTheReleasedConfiguration:
 
         # Robust, and the reason the fusion was kept.
         assert summary["recallAt5NeverBelowDense"] is True
-        # Not robust, and the reason the docs must not claim it.
-        assert summary["mrrGainExceedsSeedSpread"] is False
-        assert summary["mrrGainPositiveOnEverySeed"] is False
+        # Re-baselined 2026-10-25: under the corrected tokenizer (hyphen-part
+        # tokens in the stemmed stream) the paired mrr gain on `high` is now
+        # positive on every seed and exceeds the seed spread — but only just
+        # (mean gain 0.0277 vs dense mrr stdev 0.0263). Treat a future flip
+        # here as the measurement moving, and re-record rather than re-tune.
+        # Historically both were False; see the erratum in docs/07.
+        assert summary["mrrGainExceedsSeedSpread"] is True
+        assert summary["mrrGainPositiveOnEverySeed"] is True
         # The original defect is narrowed but not eliminated: BM25 has perfect
         # recall@5 on this condition and neither ranker matches it on every seed.
         assert summary["hybridRecallRegressedVsBm25"] < summary["denseRecallRegressedVsBm25"]

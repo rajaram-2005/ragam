@@ -1,10 +1,20 @@
 """Tests for the Sparsiz improvement cycle driver.
 
-These pin the *decision* the cycle reaches, not merely that it ran. The negative
-control is the first test: the dense retriever alone must be rejected on the high
-overlap condition with the same reason the historical run was rejected. If that
-assertion ever passes without the rejection, the ledger has stopped enforcing its
-recall tolerance.
+These pin the *decision* the cycle reaches, not merely that it ran.
+
+Re-baselined 2026-10-25. The dense tokenizer previously dropped the parts of a
+hyphenated term from the stemmed stream, so an untrained compound was entirely
+out of vocabulary; the corrected tokenizer emits the stemmed parts (the parity
+fix shared with the JS knowledge stemmer). On the `high` condition that moved
+the dense retriever's recall@5 regression against BM25 from 0.0833 to 0.0417 —
+inside the ledger's 5% tolerance — so the dense-alone experiment is now
+accepted, correctly, and one of the two captured failures no longer occurs.
+The ledger's recall enforcement itself is pinned at the mechanism level in
+``test_experiments.py`` (a target gain that regresses a guarded metric is
+rejected) and end-to-end by the forced-verdict release gate in
+``test_pipeline.py``; it does not depend on this benchmark outcome. The
+historical rejection and its reason remain recorded in
+``docs/07-improvement-cycle.md`` §4, with a dated erratum.
 """
 
 from __future__ import annotations
@@ -49,8 +59,10 @@ class TestRootCauseEvidence:
 
 class TestFailureCapture:
     def test_a_failure_is_captured_and_promoted(self, high_condition):
-        assert len(high_condition["failuresCaptured"]) == 2
-        assert len(high_condition["regressionCases"]) == 2
+        # Measured count: 1 since the 2026-10-25 tokenizer re-baseline (was 2
+        # under the previous stemmed token stream; see the module docstring).
+        assert len(high_condition["failuresCaptured"]) == 1
+        assert len(high_condition["regressionCases"]) == 1
 
     def test_regression_cases_name_a_checker_that_exists(self, high_condition):
         module = _load_module()
@@ -68,8 +80,8 @@ class TestFailureCapture:
         # Capturing alone is not enough: a failure that was never triaged and
         # validated cannot become a permanent regression check.
         summary = high_condition["failureMemory"]
-        assert summary["failures"] == 2
-        assert summary["byStage"].get("promoted") == 2
+        assert summary["failures"] == 1
+        assert summary["byStage"].get("promoted") == 1
 
     def test_every_captured_failure_became_a_regression_case(self, high_condition):
         summary = high_condition["failureMemory"]
@@ -86,14 +98,22 @@ class TestLedgerVerdicts:
                 return experiment
         raise AssertionError(f"no experiment matching {change_fragment!r}")
 
-    def test_dense_retriever_alone_is_rejected(self, high_condition):
+    def test_dense_retriever_alone_is_now_within_the_recall_tolerance(self, high_condition):
+        # Historically rejected (recall@5 1.0000 -> 0.9167). Under the corrected
+        # tokenizer the regression is 0.0417, inside the 5% tolerance, so the
+        # ledger accepts. Assert the measured relationship that justifies the
+        # verdict, not just the verdict string: if the regression ever crosses
+        # tolerance again, test_experiments.py pins that the ledger rejects it.
         experiment = self._experiment(high_condition, "no fusion")
-        assert experiment["verdict"] == "reject"
-        assert experiment["accepted"] is False
+        assert experiment["verdict"] == "accept"
+        assert experiment["accepted"] is True
+        baseline_recall = experiment["baselineMetrics"]["recall@5"]
+        variant_recall = experiment["variantMetrics"]["recall@5"]
+        assert variant_recall >= baseline_recall * (1 - 0.05)
 
-    def test_rejection_reason_is_the_recall_regression(self, high_condition):
+    def test_dense_acceptance_reason_is_the_target_gain(self, high_condition):
         experiment = self._experiment(high_condition, "no fusion")
-        assert any("recall@5 regressed" in reason for reason in experiment["reasons"])
+        assert any("target 'mrr' improved" in reason for reason in experiment["reasons"])
 
     def test_hybrid_fusion_is_accepted(self, high_condition):
         experiment = self._experiment(high_condition, "0.5/0.5")

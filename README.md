@@ -23,6 +23,8 @@ Aetheris Omni is an AI workspace, not a model. Run the default single-user works
 
 **Klyvaron's built-in Chat path is model-independent.** It uses deterministic parsing, extractive summaries, lexical comparison, local BM25 retrieval and bounded workflows; it does not require model training, model weights, a download, provider credentials or network access. Lite, Pro and Max change context and workflow limits, not model identity. This is not open-ended language reasoning; unsupported inference is not implied. See [model-independent Klyvaron](docs/33-model-independent-klyvaron.md).
 
+**Tokenizer correction (2026-11-06):** the JavaScript and Python stemmers now index the parts of hyphenated terms with cross-language parity. This changes archived retriever measurements: the 0.1.0 configuration now measures MRR 0.787269 instead of the archived 0.849702. The archived model card is dated-corrected, no weight payload is present in this checkout, and no replacement model artifact or production release is claimed. See [the improvement-cycle erratum](docs/07-improvement-cycle.md).
+
 > **Important distinction:** “hosted locally” describes where the Aetheris Omni app and its workspace run. The built-in Klyvaron text processor is local and deterministic. If you switch to an optional cloud-model provider, the prompts you send go to that provider and its usage terms and charges apply. A local ComfyUI connection is optional for image generation; no model weights are bundled or downloaded by Aetheris Omni.
 
 **Five product areas:** Chat · Image · Video · Plugins · MCP<br>
@@ -217,7 +219,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 1995 tests: core 1043, web 130, fabric 822
+npm test          # 2007 tests: core 1053, web 131, fabric 823
 ```
 
 The old Fabric and from-scratch model-training commands are retained as separate
@@ -239,7 +241,7 @@ component, a Docker Compose build/health/persistence/restore smoke, documentatio
 checks, and suite-count verification plus tests for the separate legacy release-gate code. The latest completed full CI run
 [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all
 1,916 tests (Core 985, Web 109, Fabric 822), plus release verification and the
-loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 1,995 tests (Core 1,043, Web 130, Fabric 822). The full Core suite passed 1,038/1,043 with five skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 130/130 and the production bundle built. Fabric’s latest local run passed 821 tests and one optional multimodal-training test failed because JAX was unavailable. Signing and qualification-capture tests use synthetic fixtures and do not establish a production signature or qualification. Full CI for this current tree is pending. The added Chat API paths use deterministic contract fixtures;
+loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 2,007 tests (Core 1,053, Web 131, Fabric 823). The full Core suite passed 1,049/1,053 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 131/131 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv. Signing and qualification-capture tests use synthetic fixtures and do not establish a production signature or qualification. Full CI for this current tree is recorded in the pull-request checks and final engineering report. The added Chat API paths use deterministic contract fixtures;
 neither the tests nor CI made live vendor calls. The
 Fabric job tests the retained retriever experiment's gate in **both** directions. This is
 separate from the active model-independent Klyvaron processor and is not evidence that a
@@ -299,9 +301,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 42,034 | 26,854 | **zero npm packages** | 1043 |
-| `services/fabric` | Python 3.11 | 17,241 | 10,540 | NumPy only | 822 |
-| `apps/web` | React 18 + Vite | 7,165 | 2,424 | pdfjs-dist, react, react-dom | 130 |
+| `services/core` | Node 22 ESM | 42,244 | 27,108 | **zero npm packages** | 1053 |
+| `services/fabric` | Python 3.11 | 17,256 | 10,582 | NumPy only | 823 |
+| `apps/web` | React 18 + Vite | 7,143 | 2,443 | pdfjs-dist, react, react-dom | 131 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web
@@ -487,6 +489,8 @@ Details, including seven open items stated plainly:
 | [`docs/klyvaron-release-governance.md`](docs/klyvaron-release-governance.md) | Mandatory per-tier production gate, lifecycle, CI behavior and current HOLD / NOT RELEASED decisions |
 | [`docs/klyvaron-evidence-standard.md`](docs/klyvaron-evidence-standard.md) | Signed production evidence package schemas, verifier rules and trust roles |
 | [`docs/33-model-independent-klyvaron.md`](docs/33-model-independent-klyvaron.md) | Built-in deterministic processor, tier resource profiles, tasks and limitations |
+| [`docs/34-final-repair-audit.md`](docs/34-final-repair-audit.md) | Evidence-based defect inventory, PR #13 reconciliation and verification results |
+| [`docs/35-release-readiness.md`](docs/35-release-readiness.md) | Release gates, artifact/checksum procedure, rollback and outstanding blockers |
 | [`docs/23-training-free-tiers.md`](docs/23-training-free-tiers.md) | The composed path this family considered and refused, kept because the refusal is a checked rule |
 | [`docs/24-own-models.md`](docs/24-own-models.md) | Pro and Max as this family's own models: the `aetheris-core-v1` architecture, the two differentiators as parts of it, and what training them costs |
 | [`docs/12-feature-matrix.md`](docs/12-feature-matrix.md) | Every capability marked completed / partial / planned / unsupported |
