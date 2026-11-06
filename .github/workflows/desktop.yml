@@ -12,7 +12,9 @@ permissions:
 
 concurrency:
   group: desktop-${{ github.ref }}
-  cancel-in-progress: true
+  # Platform packaging must finish rather than be silently cancelled by a newer
+  # push. A cancelled macOS job cannot be used as release evidence.
+  cancel-in-progress: false
 
 jobs:
   package:

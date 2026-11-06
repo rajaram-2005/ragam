@@ -158,7 +158,7 @@ test('assertReleasable throws a ReleaseError carrying every problem', () => {
 test('the parsers read the documented forms exactly and report absence rather than guessing', () => {
   assert.deepEqual(parseStatusTotals(GOOD_STATUS), { core: 700, total: 1_590, suites: { 'services/core': 700, 'services/fabric': 800, 'apps/web': 90 } })
   const inventoryStatus = readFileSync(resolve(REPO, 'docs/03-status.md'), 'utf8')
-  assert.deepEqual(parseStatusTotals(inventoryStatus), { core: 1043, total: 1_995, suites: { 'services/core': 1043, 'services/fabric': 822, 'apps/web': 130 } })
+  assert.deepEqual(parseStatusTotals(inventoryStatus), { core: 1053, total: 2_007, suites: { 'services/core': 1053, 'services/fabric': 823, 'apps/web': 131 } })
   assert.deepEqual(parseStatusTotals('nothing here'), { core: null, total: null, suites: {} })
   assert.deepEqual(parseReadmeTotals(GOOD_README), { total: 1_590, core: 700, web: 90, fabric: 800 })
   assert.equal(parseReadmeTotals('no numbers'), null)
@@ -195,4 +195,13 @@ test('the status document states every suite the release reports', () => {
   assert.ok(totals.total > totals.core)
   assert.equal(totals.suites['services/core'], totals.core)
   assert.equal(totals.suites['services/fabric'] + totals.suites['apps/web'] + totals.suites['services/core'], totals.total)
+})
+
+test('desktop packaging does not cancel an in-flight platform matrix', () => {
+  // A cancelled macOS job is NOT platform evidence. A newer push must not
+  // silently cancel a still-running Desktop packages run on the same ref.
+  const workflow = readFileSync(resolve(REPO, '.github/workflows/desktop.yml'), 'utf8')
+  assert.match(workflow, /concurrency:[\s\S]*?cancel-in-progress:\s*false/)
+  assert.match(workflow, /strategy:[\s\S]*?fail-fast:\s*false/)
+  assert.doesNotMatch(workflow, /cancel-in-progress:\s*true/)
 })
