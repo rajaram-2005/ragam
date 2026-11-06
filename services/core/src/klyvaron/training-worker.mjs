@@ -20,11 +20,13 @@ import { fileURLToPath } from 'node:url'
 
 import { detectHardware, memorySnapshot } from '../hardware/detect.mjs'
 import { SIZE_PRESETS, configDigest, parameterCount } from './architecture.mjs'
+import { CONSENT_CLOCK_SKEW_MS, CONSENT_EXPIRY_MS, consentFreshness } from './consent.mjs'
+import { pythonCandidates } from './python-executable.mjs'
 
 export const INTERACTIVE_ADAPTATION_LIMIT_MS = 120_000
 export const DEFAULT_MIN_FREE_DISK_BYTES = 1_000_000_000 // 1 GB safety floor
 export const MIN_AVAILABLE_RAM_BYTES = 1_400_000_000 // 1.4 GB: host floor for NumPy/JAX training
-export const PREFLIGHT_EXPIRY_MS = 30 * 60 * 1000 // 30 minutes: consent bound to a stable snapshot, not live resources
+export const PREFLIGHT_EXPIRY_MS = CONSENT_EXPIRY_MS // 30 minutes: consent bound to a stable snapshot, not live resources
 export const APPROVED_CORPUS_LICENCES = Object.freeze(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'PSF-2.0', 'ISC', 'CC0-1.0'])
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url))
@@ -132,7 +134,10 @@ export class LocalTrainingWorkerManager {
     const logicalCpus = cpus().length
     const simdFlags = readCpuSimdFlags()
 
-    const candidates = ['/tmp/accel-venv/bin/python', '/tmp/fabric-venv/bin/python', 'python3']
+    // An explicit AETHERIS_PYTHON wins; otherwise keep the historical venv and
+    // PATH fallbacks. Probing a different interpreter than the configured one
+    // could execute a Python environment the operator did not authorize.
+    const candidates = pythonCandidates(['/tmp/accel-venv/bin/python', '/tmp/fabric-venv/bin/python', 'python3'])
     let runtime = null
     for (const candidate of candidates) {
       if (candidate.startsWith('/') && !existsSync(candidate)) continue
@@ -408,16 +413,19 @@ export class LocalTrainingWorkerManager {
       })
     }
 
-    if (typeof consent.createdAt !== 'number' || (Date.now() - consent.createdAt) > PREFLIGHT_EXPIRY_MS) {
+    const freshness = consentFreshness(consent)
+    if (!freshness.valid) {
       throw new TrainingWorkerError(
-        'Consent is expired or missing a createdAt timestamp. A fresh consent matching the current preflight disclosureDigest is required.',
+        'Consent is expired, future-dated, or missing a createdAt timestamp. A fresh consent matching the current preflight disclosureDigest is required.',
         {
           code: 'consent_expired',
           status: 403,
           detail: {
             createdAt: consent.createdAt ?? null,
-            ageMs: typeof consent.createdAt === 'number' ? Date.now() - consent.createdAt : null,
+            ageMs: freshness.ageMs,
+            reason: freshness.reason,
             maxAgeMs: PREFLIGHT_EXPIRY_MS,
+            clockSkewMs: CONSENT_CLOCK_SKEW_MS,
           },
         },
       )

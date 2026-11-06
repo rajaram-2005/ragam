@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url'
 
 import { detectHardware, memorySnapshot } from '../hardware/detect.mjs'
 import { ADAPTER_FORMAT, ArtifactError, loadAdapterArtifact, loadArtifact } from './format.mjs'
+import { pythonCandidates } from './python-executable.mjs'
 import { KlyvaronRuntime } from './runtime.mjs'
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url))
@@ -131,9 +132,10 @@ function probeCrossPlatformGpu() {
 }
 
 function probePythonBackend() {
-  const candidates = process.platform === 'win32'
+  const fallback = process.platform === 'win32'
     ? ['python', 'python3']
     : ['/tmp/accel-venv/bin/python', '/tmp/fabric-venv/bin/python', 'python3', 'python']
+  const candidates = pythonCandidates(fallback)
 
   for (const bin of candidates) {
     if (isAbsolute(bin) && !existsSync(bin)) continue

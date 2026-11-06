@@ -104,7 +104,7 @@ npm ci               # install exact versions from package-lock.json
 npm run dev          # dev server with HMR
 npm run build        # production bundle into dist/
 npm run preview      # serve the built bundle
-npm test             # 130 web tests
+npm test             # 131 web tests
 ```
 
 | Variable | Default | Purpose |
@@ -298,10 +298,10 @@ PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs services/c
 The pinned archive includes the model manifests and checksum list. The full CI run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all 985 Core tests with the pinned Pro/Max artifacts and Python prerequisites. The Baidu Qianfan contract fixtures make no vendor calls. Without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-PATH="$PWD/.venv/bin:$PATH" npm test  # all three suites (1995 tests)
-npm run test:core                  # 1043
-npm run test:web                   # 130
-npm run test:fabric                # 822 — needs numpy + pytest on the interpreter
+PATH="$PWD/.venv/bin:$PATH" npm test  # all three suites (2007 tests)
+npm run test:core                  # 1053
+npm run test:web                   # 131
+npm run test:fabric                # 823 — needs numpy + pytest on the interpreter
 ```
 
 Beyond the suites, one check is run by hand rather than by CI, because it costs nine suite
@@ -320,6 +320,11 @@ point the Python scripts at it:
 ```bash
 AETHERIS_PYTHON=/path/to/venv/bin/python npm run test:fabric
 ```
+
+The same `AETHERIS_PYTHON` value is honored by Core's retained Python worker
+paths, so a configured interpreter is used consistently rather than probing a
+different `python3` environment. It is documented as a commented optional value
+in [`.env.example`](../.env.example).
 
 Without that, `npm run test:fabric` fails with `No module named pytest` — which is
 the correct failure, not a broken test.
@@ -354,9 +359,9 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 1043 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) is a historical CI result and does not establish a Klyvaron model release; Baidu Qianfan is covered by local contract fixtures. |
-| **Fabric** | 822 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
-| **Web app** | `npm ci`, 130 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
+| **Core service** | Current suite: 1053 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) is a historical CI result and does not establish a Klyvaron model release; Baidu Qianfan is covered by local contract fixtures. |
+| **Fabric** | 823 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
+| **Web app** | `npm ci`, 131 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docker Compose** | Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed: builds both images, starts Core/web/Caddy on loopback, checks local-workspace health and the provider catalogue with account creation disabled, then cold-backs up and restores the named volume and verifies workspace identity plus a SQLite history marker. Synthetic CI only: no live provider inference or persistent-deployment guarantee. |
 | **Docs** | The 51-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |
 | **Release** | Runs all three suites with TAP output, counts what they reported, and passes those counts to `services/core/scripts/release-check.mjs`; then runs the benchmark harness and fails if any benchmark failed. This is the job that makes "the documents state the measured totals" a checked claim rather than a convention |

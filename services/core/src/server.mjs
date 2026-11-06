@@ -64,6 +64,9 @@ export async function main({ env = process.env, stdout = console.log } = {}) {
     app = new OnlineApp({
       ...config,
       timeoutMs: Number(env.AETHERIS_ONLINE_TIMEOUT_MS || 120_000),
+      // Optional Python workers use the explicitly configured interpreter when
+      // the Fabric dependencies are not installed on the default python3.
+      pythonBinary: env.AETHERIS_PYTHON?.trim() || 'python3',
       logger: (record) => log(record),
     })
   } catch (error) {

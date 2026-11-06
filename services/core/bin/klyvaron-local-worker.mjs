@@ -23,6 +23,8 @@ async function main() {
       '  --host <loopback>       Loopback interface (default: 127.0.0.1)',
       '  --port <port>           TCP port (default: 4319)',
       '  --label <name>          Human-readable device label',
+      'Environment:',
+      '  AETHERIS_PYTHON         Optional Python interpreter with NumPy for retained worker tooling',
     ].join('\n') + '\n')
     return
   }

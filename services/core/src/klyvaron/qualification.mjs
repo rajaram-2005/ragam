@@ -15,6 +15,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { defaultPythonBinary } from './python-executable.mjs'
+
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url))
 const WORKER_EXEC_PY = join(REPO_ROOT, 'services', 'fabric', 'scripts', 'worker_exec.py')
 
@@ -93,7 +95,7 @@ export function detectHardwareProfile(capabilities) {
 }
 
 export class RuntimeQualificationRegistry {
-  constructor({ statePath, pythonBinary = 'python3', workerExecScript = WORKER_EXEC_PY } = {}) {
+  constructor({ statePath, pythonBinary = defaultPythonBinary(), workerExecScript = WORKER_EXEC_PY } = {}) {
     this.statePath = resolve(statePath)
     this.pythonBinary = pythonBinary
     this.workerExecScript = workerExecScript

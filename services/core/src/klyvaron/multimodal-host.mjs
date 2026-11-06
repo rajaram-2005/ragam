@@ -15,14 +15,13 @@
 //     and 16 kHz PCM `.wav` (`validateMedia` audio header + non-silent waveform).
 //   - Programmatic derivation of separate Pro & Max Capability Manifests (Phase 7) without manual overrides.
 
-import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import { MEDIA_KINDS, assertGenuineVideo, probeMp4, validateMedia } from '../media/validate.mjs'
+import { defaultPythonBinary } from './python-executable.mjs'
+import { runWorkerExec } from './worker-exec.mjs'
 
 function measureImage(bytes) {
   const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes)
@@ -48,9 +47,6 @@ function measureVideo(bytes) {
     byteLength: buf.length,
   }
 }
-
-const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url))
-const WORKER_EXEC_PY = join(REPO_ROOT, 'services', 'fabric', 'scripts', 'worker_exec.py')
 
 export const FIRST_PARTY_MULTIMODAL_MODELS = Object.freeze({
   'klyvaron-pro-image': {
@@ -113,53 +109,13 @@ function sha256File(filePath) {
   return createHash('sha256').update(readFileSync(filePath)).digest('hex')
 }
 
-function runWorkerExec(op, spec, { pythonBinary = 'python3', timeoutMs = 120_000 } = {}) {
-  return new Promise((resolveOut, rejectOut) => {
-    mkdirSync(tmpdir(), { recursive: true })
-    const specPath = join(tmpdir(), `klyvaron-mm-${op}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)
-    writeFileSync(specPath, JSON.stringify(spec), 'utf8')
-    const child = spawn(pythonBinary, [WORKER_EXEC_PY, op, specPath], {
-      cwd: REPO_ROOT,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, XLA_PYTHON_CLIENT_PREALLOCATE: 'false' },
-    })
-    let stdout = ''
-    let stderr = ''
-    const timer = setTimeout(() => {
-      try { child.kill('SIGTERM') } catch {}
-    }, timeoutMs)
-    timer.unref()
-    child.stdout.on('data', (c) => { stdout += c })
-    child.stderr.on('data', (c) => { stderr += c })
-    child.on('exit', (code) => {
-      clearTimeout(timer)
-      try { rmSync(specPath, { force: true }) } catch {}
-      const lines = stdout.trim().split(/\r?\n/).filter(Boolean)
-      let last = null
-      for (let i = lines.length - 1; i >= 0; i -= 1) {
-        try {
-          last = JSON.parse(lines[i])
-          break
-        } catch {}
-      }
-      if (code === 0 && last?.ok) {
-        resolveOut(last)
-      } else {
-        const err = new Error(last?.message || stderr.trim() || `worker_exec '${op}' exited with code ${code}`)
-        err.code = last?.code || 'multimodal_exec_failed'
-        rejectOut(err)
-      }
-    })
-  })
-}
-
 export class NativeMultimodalHost {
   constructor({
     modelsRoot,
     nativeKlyvaron = null,
     qualificationRegistry = null,
     userTrainingController = null,
-    pythonBinary = 'python3',
+    pythonBinary = defaultPythonBinary(),
     enableLegacyArtifacts = false,
   }) {
     this.modelsRoot = resolve(modelsRoot)
@@ -315,7 +271,7 @@ export class NativeMultimodalHost {
     return { modelId, activeAdapterDir: this.activeAdapters.get(modelId)?.directory ?? null }
   }
 
-  async #executeTask(modelId, task, extraSpec = {}) {
+  async #executeTask(modelId, task, extraSpec = {}, { signal = null } = {}) {
     const rec = this.#requireReady(modelId)
     const adapterDir = this.activeAdapters.get(modelId)?.directory ?? null
     const spec = {
@@ -332,11 +288,11 @@ export class NativeMultimodalHost {
     if (this.userTrainingController?.isLocalWorkerConnected()) {
       const workerModels = this.userTrainingController.workerConnection?.inspectedModels ?? []
       if (workerModels.some((m) => m.id === modelId && m.verified)) {
-        execOut = await this.userTrainingController.runWorkerInference(spec)
+        execOut = await this.userTrainingController.runWorkerInference(spec, { signal })
       }
     }
     if (!execOut) {
-      execOut = await runWorkerExec('infer', spec, { pythonBinary: this.pythonBinary })
+      execOut = await runWorkerExec('infer', spec, { pythonBinary: this.pythonBinary, signal })
     }
 
     this.lastInferenceProof.set(`${modelId}::${task}`, {
@@ -348,8 +304,8 @@ export class NativeMultimodalHost {
     return execOut
   }
 
-  async generateImage({ modelId = 'klyvaron-pro-image', prompt, size = '256x256', width = null, height = null, seed = 42 }) {
-    const res = await this.#executeTask(modelId, 'image.generate', { prompt, size, width, height, seed })
+  async generateImage({ modelId = 'klyvaron-pro-image', prompt, size = '256x256', width = null, height = null, seed = 42, signal = null }) {
+    const res = await this.#executeTask(modelId, 'image.generate', { prompt, size, width, height, seed }, { signal })
     const bytes = Buffer.from(res.output.mediaBase64, 'base64')
     const validation = validateMedia({ bytes, expectedKind: MEDIA_KINDS.IMAGE })
     if (!validation.valid) {
@@ -370,7 +326,7 @@ export class NativeMultimodalHost {
     }
   }
 
-  async editImage({ modelId = 'klyvaron-pro-image', imageBuffer, prompt, strength = 0.72, width = null, height = null, seed = 42 }) {
+  async editImage({ modelId = 'klyvaron-pro-image', imageBuffer, prompt, strength = 0.72, width = null, height = null, seed = 42, signal = null }) {
     const checkIn = validateMedia({ bytes: imageBuffer, expectedKind: MEDIA_KINDS.IMAGE })
     if (!checkIn.valid) {
       throw new Error(`Source image buffer for editing is invalid: ${checkIn.reasons.join('; ')}`)
@@ -382,7 +338,7 @@ export class NativeMultimodalHost {
       width,
       height,
       seed,
-    })
+    }, { signal })
     const bytes = Buffer.from(res.output.mediaBase64, 'base64')
     const validation = validateMedia({ bytes, expectedKind: MEDIA_KINDS.IMAGE })
     if (!validation.valid) {
@@ -402,7 +358,7 @@ export class NativeMultimodalHost {
     }
   }
 
-  async understandImage({ modelId = 'klyvaron-pro-image', imageBuffer, prompt = '' }) {
+  async understandImage({ modelId = 'klyvaron-pro-image', imageBuffer, prompt = '', signal = null }) {
     const checkIn = validateMedia({ bytes: imageBuffer, expectedKind: MEDIA_KINDS.IMAGE })
     if (!checkIn.valid) {
       throw new Error(`Image input for vision understanding is invalid: ${checkIn.reasons.join('; ')}`)
@@ -410,7 +366,7 @@ export class NativeMultimodalHost {
     const res = await this.#executeTask(modelId, 'vision.understand', {
       imageBase64: Buffer.from(imageBuffer).toString('base64'),
       prompt,
-    })
+    }, { signal })
     return {
       modelId,
       weightsSha256: res.weightsSha256,
@@ -426,6 +382,7 @@ export class NativeMultimodalHost {
     resolution = '720p',
     durationMs = 2000,
     seed = 42,
+    signal = null,
   }) {
     const res = await this.#executeTask(modelId, 'video.generate', {
       prompt,
@@ -433,7 +390,7 @@ export class NativeMultimodalHost {
       resolution,
       durationMs,
       seed,
-    })
+    }, { signal })
     const bytes = Buffer.from(res.output.mediaBase64, 'base64')
     const validation = validateMedia({ bytes, expectedKind: MEDIA_KINDS.VIDEO })
     const genuine = assertGenuineVideo(validation, { minBytes: 1024 })
@@ -461,7 +418,7 @@ export class NativeMultimodalHost {
     }
   }
 
-  async understandVideo({ modelId = 'klyvaron-pro-video', videoBuffer, prompt = '' }) {
+  async understandVideo({ modelId = 'klyvaron-pro-video', videoBuffer, prompt = '', signal = null }) {
     const checkIn = validateMedia({ bytes: videoBuffer, expectedKind: MEDIA_KINDS.VIDEO })
     const genuine = assertGenuineVideo(checkIn, { minBytes: 1024 })
     if (!genuine.genuine) {
@@ -470,7 +427,7 @@ export class NativeMultimodalHost {
     const res = await this.#executeTask(modelId, 'video.understand', {
       videoBase64: Buffer.from(videoBuffer).toString('base64'),
       prompt,
-    })
+    }, { signal })
     return {
       modelId,
       weightsSha256: res.weightsSha256,
@@ -479,11 +436,11 @@ export class NativeMultimodalHost {
     }
   }
 
-  async synthesizeSpeech({ modelId = 'klyvaron-pro-voice', text }) {
+  async synthesizeSpeech({ modelId = 'klyvaron-pro-voice', text, signal = null }) {
     if (typeof text !== 'string' || !text.trim()) {
       throw new Error('Speech synthesis requires non-empty input text.')
     }
-    const res = await this.#executeTask(modelId, 'speech.synthesize', { prompt: text })
+    const res = await this.#executeTask(modelId, 'speech.synthesize', { prompt: text }, { signal })
     const bytes = Buffer.from(res.output.mediaBase64, 'base64')
     const validation = validateMedia({ bytes, expectedKind: MEDIA_KINDS.AUDIO })
     if (!validation.valid) {
@@ -504,14 +461,14 @@ export class NativeMultimodalHost {
     }
   }
 
-  async transcribeSpeech({ modelId = 'klyvaron-pro-voice', audioBuffer }) {
+  async transcribeSpeech({ modelId = 'klyvaron-pro-voice', audioBuffer, signal = null }) {
     const checkIn = validateMedia({ bytes: audioBuffer, expectedKind: MEDIA_KINDS.AUDIO })
     if (!checkIn.valid) {
       throw new Error(`Speech input buffer failed audio validation: ${checkIn.reasons.join('; ')}`)
     }
     const res = await this.#executeTask(modelId, 'speech.transcribe', {
       audioBase64: Buffer.from(audioBuffer).toString('base64'),
-    })
+    }, { signal })
     return {
       modelId,
       weightsSha256: res.weightsSha256,
