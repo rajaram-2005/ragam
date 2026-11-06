@@ -1,11 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { AuditLedger } from '../src/audit/ledger.mjs'
 import { LocalTrainingWorkerManager, APPROVED_CORPUS_LICENCES, INTERACTIVE_ADAPTATION_LIMIT_MS } from '../src/klyvaron/training-worker.mjs'
+import { defaultPythonBinary, pythonCandidates } from '../src/klyvaron/python-executable.mjs'
+import { CONSENT_CLOCK_SKEW_MS, CONSENT_EXPIRY_MS, consentFreshness } from '../src/klyvaron/consent.mjs'
 
 function createApprovedCorpusFixture(dir) {
   const corpusDir = join(dir, 'corpus')
@@ -324,6 +326,13 @@ test('regression: missing, false, expired, and invalid consent are all rejected'
     consent: { confirmed: true, disclosureDigest: plan.disclosureDigest, createdAt: expiredAt },
   }), { code: 'consent_expired' })
 
+  // Far-future consent is not a never-expiring consent; the clock-skew bound
+  // refuses it with the same code.
+  assert.throws(() => manager.startJob({
+    planRequest: req,
+    consent: { confirmed: true, disclosureDigest: plan.disclosureDigest, createdAt: Date.now() + 3_600_000 },
+  }), { code: 'consent_expired' })
+
   // Invalid digest (wrong hash)
   assert.throws(() => manager.startJob({
     planRequest: req,
@@ -385,4 +394,40 @@ test('regression: resume requires valid authorization and verified checkpoint', 
     resumeFromJobId: 'nonexistent-job-id',
     consent: { confirmed: true, disclosureDigest: plan.disclosureDigest, createdAt: Date.now() },
   }), { code: 'checkpoint_missing' })
+})
+
+test('AETHERIS_PYTHON is authoritative on the training-worker interpreter path', (t) => {
+  // Regression: a virtualenv with NumPy was ignored because the worker only
+  // probed conventional /tmp venvs and python3. An explicit configured value
+  // must win, and must not silently execute a different interpreter.
+  const root = mkdtempSync(join(tmpdir(), 'klyvaron-python-config-'))
+  const fakePython = join(root, 'configured-python')
+  writeFileSync(fakePython, '#!/bin/sh\nprintf %s \'{"python":"3.11.9","numpy":"2.4.6","jax":null}\'\n')
+  chmodSync(fakePython, 0o755)
+  const previous = process.env.AETHERIS_PYTHON
+  process.env.AETHERIS_PYTHON = fakePython
+  const manager = new LocalTrainingWorkerManager({ root: join(root, 'worker') })
+  t.after(() => {
+    manager.close()
+    if (previous === undefined) delete process.env.AETHERIS_PYTHON
+    else process.env.AETHERIS_PYTHON = previous
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  assert.deepEqual(pythonCandidates(['fallback'], { AETHERIS_PYTHON: '/configured/python' }), ['/configured/python'])
+  assert.equal(defaultPythonBinary({}), 'python3')
+  const environment = manager.inspectEnvironment()
+  assert.equal(environment.software.pythonBinary, fakePython)
+  assert.equal(environment.software.pythonVersion, '3.11.9')
+  assert.equal(environment.software.numpyVersion, '2.4.6')
+})
+
+test('shared consent freshness refuses missing, stale and future-dated timestamps', () => {
+  const now = 1_800_000_000_000
+  assert.equal(consentFreshness({ createdAt: now }, { now }).valid, true)
+  assert.equal(consentFreshness({}, { now }).reason, 'missing_timestamp')
+  assert.equal(consentFreshness({ createdAt: now - CONSENT_EXPIRY_MS - 1 }, { now }).reason, 'expired')
+  assert.equal(consentFreshness({ createdAt: now + CONSENT_CLOCK_SKEW_MS + 1 }, { now }).reason, 'future_dated')
+  assert.equal(consentFreshness({ createdAt: now + CONSENT_CLOCK_SKEW_MS - 1 }, { now }).valid, true,
+    'ordinary browser/host clock drift remains tolerated')
 })

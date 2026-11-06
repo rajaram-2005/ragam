@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 import { AREAS, AREA_IDS } from '../src/areas.js'
+import { api } from '../src/api.js'
 import { AUTH_PAGES, AUTH_PAGE_IDS, PASSWORD_MIN_LENGTH, PASSWORD_RULES, SESSION_ENDED_NOTICE } from '../src/auth.js'
 import { INDUSTRY_TASKS, readIndustryMode, writeIndustryMode, LOCAL_ONLY_MODE_KEY, readLocalOnlyMode, writeLocalOnlyMode } from '../src/industry-operations.js'
 
@@ -672,4 +673,22 @@ test('gateway models are selected explicitly and remote refresh requires an acti
   assert.match(settings,/api\.testProvider/)
   assert.doesNotMatch(chat,/router decides|ModelCatalog|ExecutionMode/)
 
+})
+
+test('the API client has one skills surface and no duplicate method names', () => {
+  // Regression: api.js declared `skills` twice. The later object silently
+  // discarded the earlier procedural-skill methods, leaving dead code and a
+  // misleading second API surface. Duplicate top-level keys are not recoverable
+  // from the imported object, so the source is checked directly.
+  const source = readFileSync(join(srcDir, 'api.js'), 'utf8')
+    .split('\n').filter((line) => !/^\s*\/\//.test(line)).join('\n')
+  const start = source.indexOf('export const api = {')
+  const end = source.indexOf('\n}\n', start)
+  assert.ok(start >= 0 && end > start, 'the api object must be present')
+  const objectSource = source.slice(start, end)
+  const keys = [...objectSource.matchAll(/^ {2}([A-Za-z][A-Za-z0-9]*):/gm)].map((match) => match[1])
+  assert.deepEqual(keys.filter((key, index) => keys.indexOf(key) !== index), [], `duplicate API methods: ${keys.join(', ')}`)
+  for (const method of ['skills', 'skill', 'installSkill', 'validateSkill', 'setSkill', 'deleteSkill', 'measureSkill']) {
+    assert.equal(typeof api[method], 'function', `${method} must remain on the single skills surface`)
+  }
 })

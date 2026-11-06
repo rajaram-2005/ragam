@@ -381,7 +381,12 @@ export class AccountStore {
        ON CONFLICT(account_id) DO UPDATE SET code_hash = excluded.code_hash, requested_at = excluded.requested_at,
          expires_at = excluded.expires_at, consumed_at = NULL`,
     ).run(row.id, hashPassword(code), now, expiresAt)
-    this.#writeResetCodes({ [row.id]: { email: row.email, code, expiresAt, requestedAt: now } })
+    // The plaintext host-readable file is installation-wide. Merge with the
+    // other pending codes instead of replacing it: a second person's reset
+    // request must not silently invalidate the first person's code.
+    const entries = this.#activeResetEntries()
+    entries[row.id] = { email: row.email, code, expiresAt, requestedAt: now }
+    this.#writeResetCodes(entries)
     this.audit?.({ category: 'auth', action: 'password_reset_request', outcome: 'success', subject: row.id, detail: { expiresAt } })
     this.onResetCode?.({ email: row.email, code, expiresAt, file: this.resetFile })
     return { created: true, code, expiresAt }
@@ -404,7 +409,9 @@ export class AccountStore {
       throw failure('weak_password', 'Choose a password this account has not used before.', 400)
     }
     this.db.prepare('UPDATE password_resets SET consumed_at = ? WHERE account_id = ?').run(now, row.id)
-    this.#writeResetCodes({})
+    // Remove only this account's plaintext code. Other accounts' pending codes
+    // are still valid and must survive this confirmation.
+    this.#writeResetCodes(this.#activeResetEntries(now))
     this.audit?.({ category: 'auth', action: 'password_reset_confirm', outcome: 'success', subject: row.id, detail: {} })
     return this.#setPassword(row, password)
   }
@@ -419,6 +426,32 @@ export class AccountStore {
     return this.get(row.id)
   }
 
+  /** Read the host-readable reset file, tolerating a missing or corrupt file. */
+  #readResetCodes() {
+    if (!existsSync(this.resetFile)) return {}
+    try {
+      const parsed = JSON.parse(readFileSync(this.resetFile, 'utf8'))
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+      return Object.fromEntries(Object.entries(parsed).filter(([, entry]) => (
+        entry && typeof entry === 'object' && typeof entry.code === 'string' && Number.isFinite(entry.expiresAt)
+      )))
+    } catch {
+      return {}
+    }
+  }
+
+  /** Plaintext entries that are still backed by an unconsumed, unexpired DB row. */
+  #activeResetEntries(now = Date.now()) {
+    const pending = this.db.prepare(
+      'SELECT 1 FROM password_resets WHERE account_id = ? AND consumed_at IS NULL AND expires_at > ?',
+    )
+    const entries = {}
+    for (const [accountId, entry] of Object.entries(this.#readResetCodes())) {
+      if (entry.expiresAt > now && pending.get(String(accountId), now)) entries[accountId] = entry
+    }
+    return entries
+  }
+
   /** Rewrite the host-readable reset code file atomically, at 0600. */
   #writeResetCodes(entries) {
     const temp = `${this.resetFile}.${randomBytes(6).toString('hex')}.tmp`
@@ -430,13 +463,6 @@ export class AccountStore {
 
   /** Pending codes as the host sees them, for a support command; never served by a route. */
   pendingResets() {
-    if (!existsSync(this.resetFile)) return []
-    try {
-      const parsed = JSON.parse(readFileSync(this.resetFile, 'utf8'))
-      const now = Date.now()
-      return Object.values(parsed).filter((entry) => entry.expiresAt > now)
-    } catch {
-      return []
-    }
+    return Object.values(this.#activeResetEntries())
   }
 }

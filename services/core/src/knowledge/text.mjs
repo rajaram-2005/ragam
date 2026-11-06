@@ -69,7 +69,23 @@ export function stem(token) {
 }
 
 export function stemTokens(text) {
-  return contentTokens(text).map(stem)
+  const out = []
+  for (const token of contentTokens(text)) {
+    out.push(stem(token))
+    // Hyphenated identifiers (`zephyr-9`, `klyvaron-pro-lm`) are one token to
+    // the tokenizer, so a part-only query could never match them. Index the
+    // parts alongside the whole token under the same length/stopword rules.
+    // `tokenize()` is unchanged, so citation offsets still see whole tokens.
+    if (token.includes('-')) {
+      for (const part of token.split('-')) {
+        if (!part) continue
+        if (part.length < 2 && !/[0-9]/.test(part)) continue
+        if (STOPWORDS.has(part)) continue
+        out.push(stem(part))
+      }
+    }
+  }
+  return out
 }
 
 /**

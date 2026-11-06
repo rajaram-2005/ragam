@@ -21,6 +21,7 @@ import { join, resolve } from 'node:path'
 import { SIZE_PRESETS, configDigest, parameterCount } from './architecture.mjs'
 import { ALLOWED_WORKER_OPERATIONS, INTERACTIVE_ADAPTER_WALL_LIMIT_MS } from './local-worker.mjs'
 import { evaluateAdaptiveTraining, planAdaptiveTraining } from '../adaptive/training-orchestrator.mjs'
+import { CONSENT_CLOCK_SKEW_MS, CONSENT_EXPIRY_MS, consentFreshness } from './consent.mjs'
 
 export const TRAINING_MODES = Object.freeze([
   'context_only',
@@ -307,7 +308,7 @@ export class UserTrainingController {
     renameSync(tmp, this.statePath)
   }
 
-  async #workerRpc(op, params = {}, { timeoutMs = 125_000 } = {}) {
+  async #workerRpc(op, params = {}, { timeoutMs = 125_000, signal = null } = {}) {
     if (!this.workerConnection) {
       throw new UserTrainingControllerError(
         'No authenticated local worker is connected on the user computer. Start `klyvaron-local-worker` and complete pairing first.',
@@ -329,9 +330,20 @@ export class UserTrainingController {
           authorization: `Bearer ${this.workerConnection.sessionToken}`,
         },
         body: JSON.stringify({ op, params }),
-        signal: AbortSignal.timeout(Math.max(1, timeoutMs)),
+        // A caller cancellation stops waiting on the worker; the timeout still
+        // applies whichever signal fires first.
+        signal: signal
+          ? AbortSignal.any([AbortSignal.timeout(Math.max(1, timeoutMs)), signal])
+          : AbortSignal.timeout(Math.max(1, timeoutMs)),
       })
     } catch (cause) {
+      if (signal?.aborted) {
+        // The caller cancelled; the worker may be perfectly healthy. Do not mark
+        // the paired connection unreachable for an intentional local abort.
+        const err = new Error(`worker operation '${op}' was cancelled by the caller`)
+        err.code = 'aborted'
+        throw err
+      }
       this.workerConnection.reachable = false
       throw new UserTrainingControllerError(
         `Paired local worker at ${this.workerConnection.endpoint} is unreachable: ${cause.message}`,
@@ -536,8 +548,8 @@ export class UserTrainingController {
   }
 
   /** Run inference directly on the connected local worker and measure loss/latency/memory. */
-  async runWorkerInference(params = {}) {
-    const out = await this.#workerRpc('model.infer', params)
+  async runWorkerInference(params = {}, { signal = null } = {}) {
+    const out = await this.#workerRpc('model.infer', params, { signal })
     const hist = this.modelGateHistory.get(out.modelId) ?? {}
     hist.nativeInferencePassed = true
     this.modelGateHistory.set(out.modelId, hist)
@@ -886,6 +898,23 @@ export class UserTrainingController {
       throw new UserTrainingControllerError(
         'Explicit user consent matching `disclosureDigest` is required before modifying weights or storing authorized data.',
         { code: 'training_consent_required', status: 403, detail: { expectedDisclosureDigest: disclosureDigest } },
+      )
+    }
+    const freshness = consentFreshness(consent)
+    if (!freshness.valid) {
+      throw new UserTrainingControllerError(
+        'Training consent is expired, future-dated, or missing a createdAt timestamp. Confirm the current disclosure again.',
+        {
+          code: 'consent_expired',
+          status: 403,
+          detail: {
+            createdAt: consent.createdAt ?? null,
+            ageMs: freshness.ageMs,
+            reason: freshness.reason,
+            maxAgeMs: CONSENT_EXPIRY_MS,
+            clockSkewMs: CONSENT_CLOCK_SKEW_MS,
+          },
+        },
       )
     }
 

@@ -103,7 +103,22 @@ def stem(token: str) -> str:
 
 
 def stem_tokens(text: object) -> list[str]:
-    return [stem(token) for token in content_tokens(text)]
+    out: list[str] = []
+    for token in content_tokens(text):
+        out.append(stem(token))
+        # Mirrors `stemTokens` in the Node implementation: index the parts of
+        # hyphenated identifiers alongside the whole token. `tokenize()` stays
+        # unchanged, so citation offsets still see whole tokens.
+        if "-" in token:
+            for part in token.split("-"):
+                if not part:
+                    continue
+                if len(part) < 2 and not _DIGIT_RE.search(part):
+                    continue
+                if part in STOPWORDS:
+                    continue
+                out.append(stem(part))
+    return out
 
 
 def split_sentences(text: object) -> list[dict]:

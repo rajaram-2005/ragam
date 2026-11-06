@@ -63,7 +63,6 @@ export async function contextRoutes(request, response, app, session) {
    if (method === 'GET') return sendJson(response, 200, { keys: [], signaturesRequired: false, customInstallationDisabled: true, file: null })
    throw failure('extension_installation_disabled', 'Custom code and trust changes are disabled in the online product.', 403)
  }
- if (path === '/api/plugins/install') throw failure('extension_installation_disabled', 'Only reviewed built-ins can execute. Custom extension installation is disabled.', 403)
   // --- memory -------------------------------------------------------------
   // The surface for the things a user asked to be remembered, and for searching their
   // own past conversations. Both live inside the five areas -- memory is a control in
@@ -268,20 +267,33 @@ export async function contextRoutes(request, response, app, session) {
   // user-managed HTTP plugin must use the bounded ragam-plugin/1 remote contract above.
   if (method === 'POST' && path === '/api/plugins/install') throw failure('extension_installation_disabled', 'Installable plugin code is disabled. Connect an HTTP plugin server through the reviewed Ragam protocol instead.', 403)
   if (method === 'POST' && segments[1] === 'plugins' && segments[2] && segments[3]) {
-    requireOwner()
     const action = segments[3]
     const body = await readJson()
-    if (action === 'enable') return sendJson(response, 200, app.remoteServers?.isUserManagedPlugin(segments[2])
-      ? app.remoteServers.setPluginEnabled(segments[2], true) : app.plugins.enable(segments[2]), app)
-    if (action === 'disable') return sendJson(response, 200, app.remoteServers?.isUserManagedPlugin(segments[2])
-      ? app.remoteServers.setPluginEnabled(segments[2], false) : app.plugins.disable(segments[2]), app)
-    if (action === 'uninstall') {
+    if (action === 'enable' || action === 'disable' || action === 'uninstall') {
+      // Changing what is installed or runnable is an owner act.
+      requireOwner()
+      if (action === 'enable') return sendJson(response, 200, app.remoteServers?.isUserManagedPlugin(segments[2])
+        ? app.remoteServers.setPluginEnabled(segments[2], true) : app.plugins.enable(segments[2]), app)
+      if (action === 'disable') return sendJson(response, 200, app.remoteServers?.isUserManagedPlugin(segments[2])
+        ? app.remoteServers.setPluginEnabled(segments[2], false) : app.plugins.disable(segments[2]), app)
       if (app.remoteServers?.isUserManagedPlugin(segments[2])) return sendJson(response, 200, await app.remoteServers.removePlugin(segments[2]), app)
       if (!app.plugins.has(segments[2])) throw failure('plugin_not_found', 'No plugin has that ID.', 404)
       return sendJson(response, 200, app.plugins.uninstall(segments[2]), app)
     }
-    if (action === 'preflight') return sendJson(response, 200, app.plugins.preflight(segments[2], body.capability, body), app)
-    if (action === 'invoke') return sendJson(response, 200, await app.plugins.invoke(segments[2], body.capability, body.input ?? {}, body), app)
+    if (action === 'preflight' || action === 'invoke') {
+      // Reviewed read-only tools are available to every signed-in account,
+      // exactly like the MCP tools below. Anything not declared read-only
+      // remains owner-only. The registry's preflight is the authority on
+      // read-only-ness, so route policy cannot drift from invoke enforcement.
+      if (session.role !== 'owner') {
+        const check = app.plugins.preflight(segments[2], body.capability, body)
+        if (!check.readOnly) {
+          throw failure('owner_required', 'Only the owner account of this installation can run plugin capabilities that are not read-only.', 403)
+        }
+      }
+      if (action === 'preflight') return sendJson(response, 200, app.plugins.preflight(segments[2], body.capability, body), app)
+      return sendJson(response, 200, await app.plugins.invoke(segments[2], body.capability, body.input ?? {}, body), app)
+    }
   }
 
 

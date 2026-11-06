@@ -307,7 +307,11 @@ export class PluginRegistry {
 
   require(pluginId) {
     const record = this.plugins.get(pluginId)
-    if (!record) throw new Error(`unknown plugin '${pluginId}'`)
+    if (!record) {
+      // HTTP callers name plugins; naming one that does not exist is a client
+      // error, not an uncoded internal fault.
+      throw Object.assign(new Error(`unknown plugin '${pluginId}'`), { code: 'unknown_plugin', status: 404 })
+    }
     return record
   }
 

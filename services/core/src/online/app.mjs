@@ -28,6 +28,7 @@ import { normaliseCredential, wireFor } from '../providers/wires/index.mjs'
 import { KLYVARON_TIERS, KLYVARON_NOTE } from './klyvaron.mjs'
 import { NativeKlyvaronHost } from './native-klyvaron.mjs'
 import { NativeMultimodalHost } from '../klyvaron/multimodal-host.mjs'
+import { defaultPythonBinary } from '../klyvaron/python-executable.mjs'
 import { KLYVARON_PROCESSOR_PROFILES, KLYVARON_PROCESSOR_TASKS } from '../klyvaron/processor.mjs'
 
 /**
@@ -250,7 +251,7 @@ export function readInstallationDoc(name) {
 
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, ownerEmail = undefined, registrationEnabled = true, onResetCode = null, localSingleUser = false, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null, providerStore = null, auditLedger = null }) {
+  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, ownerEmail = undefined, registrationEnabled = true, onResetCode = null, localSingleUser = false, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null, providerStore = null, auditLedger = null, pythonBinary = defaultPythonBinary() }) {
     // Checked before anything is created on disk: a configuration this service refuses
     // should refuse without leaving a half-written data directory behind.
     const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
@@ -381,6 +382,7 @@ export class OnlineApp {
     this.multimodalHost = new NativeMultimodalHost({
       modelsRoot: join(this.dir, 'klyvaron', 'models'),
       nativeKlyvaron: this.nativeKlyvaron,
+      pythonBinary,
       enableLegacyArtifacts: false,
     })
 

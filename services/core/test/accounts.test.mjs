@@ -845,3 +845,48 @@ test('the account store stands alone: caps, roles, reset lifetime and a repeatab
   // Closing twice must not throw: shutdown paths are allowed to overlap.
   store.close(); store.close()
 })
+
+test('reset codes for two accounts coexist, and a weak first attempt does not burn the code', (t) => {
+  // Regression: requestReset rewrote the installation-wide plaintext file with
+  // a single account, and confirmReset cleared it for everyone. That made a
+  // second account's reset request silently invalidate the first account's
+  // code. Both codes must survive independent requests and consumption.
+  const dir = mkdtempSync(join(tmpdir(), 'aetheris-store-resets-many-'))
+  const store = new AccountStore({ dir, maxAccounts: 4 })
+  t.after(() => { store.close(); rmSync(dir, { recursive: true, force: true }) })
+
+  const owner = store.register(OWNER)
+  const member = store.register(MEMBER)
+  assert.equal(owner.role, ROLES.OWNER)
+  assert.equal(member.role, ROLES.MEMBER)
+
+  const ownerReset = store.requestReset(OWNER.email)
+  const memberReset = store.requestReset(MEMBER.email)
+  const resetFile = join(dir, 'password-resets.json')
+  const entries = JSON.parse(readFileSync(resetFile, 'utf8'))
+  assert.equal(Object.keys(entries).length, 2)
+  assert.equal(entries[owner.id].code, ownerReset.code)
+  assert.equal(entries[member.id].code, memberReset.code)
+  assert.equal(store.pendingResets().length, 2)
+  assert.equal(statSync(resetFile).mode & 0o777, 0o600)
+
+  // A wrong code and a reused password are validation failures, not token use.
+  assert.throws(() => store.confirmReset({
+    email: OWNER.email, code: 'not-the-code', password: 'a-brand-new-password',
+  }), { code: 'invalid_reset_code' })
+  assert.throws(() => store.confirmReset({
+    email: OWNER.email, code: ownerReset.code, password: OWNER.password,
+  }), { code: 'weak_password' })
+  assert.equal(store.pendingResets().length, 2, 'a rejected attempt must not consume either code')
+
+  assert.equal(store.confirmReset({
+    email: OWNER.email, code: ownerReset.code, password: 'a-brand-new-password',
+  }).id, owner.id)
+  assert.equal(store.pendingResets().length, 1, 'only the consumed account is removed')
+  assert.equal(store.pendingResets()[0].email, MEMBER.email)
+  assert.equal(store.confirmReset({
+    email: MEMBER.email, code: memberReset.code, password: 'a-brand-member-password',
+  }).id, member.id)
+  assert.equal(store.pendingResets().length, 0)
+  assert.equal(statSync(resetFile).mode & 0o777, 0o600)
+})
