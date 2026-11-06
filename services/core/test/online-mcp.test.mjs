@@ -7,7 +7,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { OnlineApp } from '../src/online/app.mjs'
@@ -145,7 +145,71 @@ test('the plugin surface lists the reviewed built-in and installs nothing custom
   assert.equal(result.data.ok, true)
   assert.ok(result.data.output, 'the status capability returns the readiness record')
 
+  // The raw install route is declared exactly once. An earlier unconditional
+  // guard made the later method-specific guard unreachable and turned even a GET
+  // into a misleading 403.
+  const routes = readFileSync(new URL('../src/online/context-routes.mjs', import.meta.url), 'utf8')
+  assert.equal((routes.match(/path === '\/api\/plugins\/install'/g) ?? []).length, 1)
+  assert.equal((await f.request('GET', '/api/plugins/install')).status, 404)
+
   const install = await f.request('POST', '/api/plugins/install', { manifestVersion: 1 })
   assert.equal(install.status, 403)
   assert.equal(install.data.error, 'extension_installation_disabled')
+})
+
+test('a member can run read-only plugin tools; state changes and writing tools stay owner-only', async (t) => {
+  const f = await fixture(t); await f.login()
+  // A writing capability, installed the same way the app installs its built-in,
+  // so the member boundary has something real to refuse.
+  const schema = { type: 'object', properties: {}, additionalProperties: false }
+  f.app.plugins.install({
+    manifestVersion: 1, id: 'aetheris.test-writer', name: 'Test writer', version: '1.0.0',
+    protocol: 'local_tool', builtin: true, author: 'Aetheris', license: 'MIT', scopes: [],
+    description: 'Test-only writing capability.',
+    capabilities: [{ name: 'write', description: 'Pretend to write.', readOnly: false, inputSchema: schema }],
+  }, { handler: { write: () => ({ wrote: true }) } })
+  f.app.plugins.enable('aetheris.test-writer')
+
+  await f.login(f.member)
+  // Read-only preflight + invoke are available to every signed-in account.
+  const preflight = await f.request('POST', '/api/plugins/aetheris.online-status/preflight', { capability: 'status' })
+  assert.equal(preflight.status, 200)
+  assert.equal(preflight.data.allowed, true)
+  assert.equal(preflight.data.readOnly, true)
+  const invoked = await f.request('POST', '/api/plugins/aetheris.online-status/invoke', { capability: 'status', input: {} })
+  assert.equal(invoked.status, 200)
+  assert.equal(invoked.data.ok, true)
+
+  // A capability that is not read-only stays owner-only.
+  const writing = await f.request('POST', '/api/plugins/aetheris.test-writer/invoke', { capability: 'write', input: {} })
+  assert.equal(writing.status, 403)
+  assert.equal(writing.data.error, 'owner_required')
+  const disable = await f.request('POST', '/api/plugins/aetheris.online-status/disable', {})
+  assert.equal(disable.status, 403)
+  assert.equal(disable.data.error, 'owner_required')
+
+  // Naming a plugin that does not exist is a client error, not a 500.
+  const missing = await f.request('POST', '/api/plugins/no-such-plugin/preflight', { capability: 'status' })
+  assert.equal(missing.status, 404)
+  assert.equal(missing.data.error, 'unknown_plugin')
+
+  await f.login()
+  const ownerWrite = await f.request('POST', '/api/plugins/aetheris.test-writer/invoke', { capability: 'write', input: {} })
+  assert.equal(ownerWrite.status, 200)
+  assert.equal(ownerWrite.data.ok, true)
+})
+
+test('an uncoded internal error is sanitized instead of leaking implementation details', async (t) => {
+  const f = await fixture(t); await f.login()
+  const original = f.app.plugins.list
+  f.app.plugins.list = () => { throw new Error('sensitive internal path / secret value') }
+  try {
+    const reply = await f.request('GET', '/api/plugins')
+    assert.equal(reply.status, 500)
+    assert.equal(reply.data.error, 'internal_error')
+    assert.equal(reply.data.message, 'The request could not be completed.')
+    assert.ok(!JSON.stringify(reply.data).includes('sensitive internal path'))
+  } finally {
+    f.app.plugins.list = original
+  }
 })
