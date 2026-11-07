@@ -15,6 +15,7 @@ signature or production release is claimed.
 - **CI and cleanup:** Desktop packaging no longer cancels an in-flight platform matrix; the retired `macos-14` runner label is replaced by separate supported `macos-15-intel` (Intel x64) and `macos-26` (Apple Silicon arm64) jobs guarded by a test; the web API client has one skills surface; final audit and release-readiness documents record verified results and outstanding blockers.
 - **Artifact upload reliability:** one strict retry with `overwrite: true` handles a transient artifact-service DNS failure without hiding a persistent upload failure; the retry is guarded by the release test.
 - **Final report and audit sync:** the final engineering report is tracked in the repository and release verification; the audit and release-readiness documents now record the passing `main` CI/Desktop evidence, and a docs-accuracy regression test refuses stale `IN PROGRESS` markers.
+- **Chat transcript tools:** local-only in-transcript search/filter, message pins, Markdown transcript export, keyboard shortcuts, opt-in client-side JSON syntax validation and catalogue context-limit reporting. Nine pure helper tests plus one render test cover the features; evidence state is **implemented, contract-tested, not live-verified**. No provider, credential, model-weight, backend or five-area navigation change is included.
 
 ## Unreleased — universal provider framework (phases 1–3)
 
