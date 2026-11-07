@@ -524,6 +524,7 @@ node --test services/core/test/online-skills.test.mjs   # 9 tests, install, revi
 node --test services/core/test/online-styles.test.mjs   # 8 tests, preferences, instructions, audit and refusal
 node --test services/core/test/online-skill-measure.test.mjs # 6 tests, deterministic comparison and honest verdicts
 node --test services/core/test/provider-framework.test.mjs
+node --test services/core/test/orchestration.test.mjs # 8 Phase 3–9 local workflow tests
 npm run test:web                       # includes the catalogue and saved-connection renders
 ```
 

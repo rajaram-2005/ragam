@@ -114,6 +114,10 @@ export const api = {
   events: () => request('GET', '/api/events'),
   audit: (limit = 50) => request('GET', `/api/audit?limit=${limit}`),
 
+  // --- local orchestration (Phase 3–9) ------------------------------------
+  orchestrationPlan: (body, options) => request('POST', '/api/orchestration/plan', body, options),
+  orchestrationExecute: (body, options) => request('POST', '/api/orchestration/execute', body, options),
+
   // --- chat ---------------------------------------------------------------
   chat: (body, options) => request('POST', '/api/chat', body, options),
   knowledgeSearch: (body) => request('POST', '/api/knowledge/search', body),

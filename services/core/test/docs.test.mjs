@@ -760,38 +760,38 @@ test('the status doc reports the real test totals', () => {
   // media workflow, the industry packs, the benchmark harness and the release verifier.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 76)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 77)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 10)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**1063 tests**'), 'current core test inventory must be stated')
+  assert.ok(status.includes('**1072 tests**'), 'current core test inventory must be stated')
   assert.ok(status.includes('**823 tests**'), 'fabric test inventory must be stated')
-  assert.ok(status.includes('**142 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('2028 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('**143 tests**'), 'web test inventory must be stated')
+  assert.ok(status.includes('2038 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('2028 tests: core 1063, web 142, fabric 823'),
+  assert.ok(squash(doc.readme()).includes('2038 tests: core 1072, web 143, fabric 823'),
     'README must state the current inventory as docs/03 does')
   assert.ok(squash(doc.readme()).includes('latest completed full CI run')
     && squash(doc.readme()).includes('41394564087')
     && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
-    && squash(doc.readme()).includes('The current tree has 2,028 tests (Core 1,063, Web 142, Fabric 823). The full Core suite passed 1,059/1,063 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 142/142 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv.')
+    && squash(doc.readme()).includes('The current tree has 2,038 tests (Core 1,072, Web 143, Fabric 823). The full Core suite passed 1,068/1,072 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 143/143 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv.')
     && squash(doc.readme()).includes('Full CI for this current tree is recorded in the pull-request checks and final engineering report')
     && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
   'README must distinguish the last full CI run from the current full local suite')
-  assert.ok(status.includes('(76 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(77 files'), 'the file count must move with the suite')
 
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(1063), `core heading must say 1063, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(1072), `core heading must say 1072, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(823), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(142), `web heading must say 142, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(143), `web heading must say 143, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    2028,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 2028`,
+    2038,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 2038`,
   )
 })
 
@@ -2391,4 +2391,8 @@ test('the final engineering report and audit docs record the verified main evide
   assert.match(squash(doc.readme()), /provider fabric/, 'README must describe provider fabric evidence')
   assert.match(squash(readFileSync(resolve(REPO, 'docs/27-provider-framework.md'), 'utf8')), /Provider fabric Phase 2/, 'docs/27 must describe provider fabric Phase 2')
   assert.match(report, /Provider fabric/, 'docs/36 must record provider fabric Phase 2')
+  assert.match(squash(doc.status()), /Phase 3–9/, 'docs/03 must describe Phase 3–9 orchestration')
+  assert.match(squash(doc.readme()), /orchestration/, 'README must describe local orchestration')
+  assert.match(squash(readFileSync(resolve(REPO, 'docs/27-provider-framework.md'), 'utf8')), /Phase 3–9/, 'docs/27 must describe Phase 3–9 orchestration')
+  assert.match(report, /Phase 3–9 orchestration/, 'docs/36 must record Phase 3–9 orchestration')
 })

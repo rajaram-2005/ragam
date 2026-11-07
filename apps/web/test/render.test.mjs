@@ -546,6 +546,16 @@ test('Chat keeps the saved optional model separate from the built-in processor',
 
 })
 
+test('Chat exposes Phase 3–9 local orchestration without claiming live verification', () => {
+  const markup = render('ChatArea (orchestration)', React.createElement(components.ChatArea))
+  assert.match(markup, /Phase 3–9 local orchestration/)
+  assert.match(markup, /Preview local workflow/)
+  assert.match(markup, /Run local workflow/)
+  assert.match(markup, /Contract-tested local workflows only/)
+  assert.match(markup, /Live provider calls, model inference, sandboxes, deployments, telemetry and release publication are refused/)
+  assert.doesNotMatch(markup, /live-verified/)
+})
+
 test('Chat shows provider fabric evidence without claiming live verification', () => {
   const readiness = {
     providerFabric: {
