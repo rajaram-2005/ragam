@@ -112,9 +112,25 @@ jobs:
           exit "$status"
 
       - name: Upload unsigned desktop package
+        id: upload
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: ragam-${{ matrix.artifact }}
+          path: apps/desktop/release/*
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+      # The artifact service can fail with a transient DNS error while uploading
+      # an otherwise valid installer. Retry once; the retry has no
+      # continue-on-error, so a persistent failure still fails the platform job.
+      - name: Retry artifact upload after transient storage failure
+        if: steps.upload.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: ragam-${{ matrix.artifact }}
           path: apps/desktop/release/*
           if-no-files-found: error
           retention-days: 14
+          overwrite: true

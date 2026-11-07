@@ -212,4 +212,11 @@ test('desktop packaging does not cancel an in-flight platform matrix', () => {
   assert.match(workflow, /target:\s*--mac dmg --x64/)
   assert.match(workflow, /target:\s*--mac dmg --arm64/)
   assert.doesNotMatch(workflow, /macos-14/)
+  // A transient artifact-service DNS error must not be hidden as a pass: the
+  // first attempt is allowed to fail once, then a strict retry replaces it.
+  assert.match(workflow, /id:\s*upload/)
+  assert.match(workflow, /continue-on-error:\s*true/)
+  assert.match(workflow, /if:\s*steps\.upload\.outcome == 'failure'/)
+  assert.match(workflow, /Retry artifact upload after transient storage failure/)
+  assert.match(workflow, /overwrite:\s*true/)
 })

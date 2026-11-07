@@ -100,6 +100,9 @@ release certificate.
 | Post-merge `main` CI | **PASS** | [CI run 42262149788](https://github.com/rajaram-2005/ragam/actions/runs/42262149788) passed on `fc4ae9c`. |
 | Post-merge `main` Desktop | **FAIL** | [Desktop run 42262149899](https://github.com/rajaram-2005/ragam/actions/runs/42262149899) failed overall: Linux and Windows passed, while its single `macos-15` job was cancelled after 15m1s with an empty `runner_name`, no steps and no runner assignment. A cancelled job is not platform verification. |
 | Failed-run remediation | **BLOCKED** | `gh run rerun 42262149899` and `gh run rerun 42262149899 --failed` returned `cannot be rerun; its workflow file may be broken`; `gh workflow run "Desktop packages" --ref main` returned HTTP 403 `Resource not accessible by integration`. |
+| Split-run PR Desktop | **PASS** | [Desktop run 42351310889](https://github.com/rajaram-2005/ragam/actions/runs/42351310889) on `1ab6b7c` completed all five jobs: Linux x64/ARM64, Windows x64/ARM64, macOS Intel x64 and macOS Apple Silicon arm64. This split-run evidence is not yet a `main` release-commit run. |
+| Split-run push Desktop | **FAIL** | [Desktop run 42351292466](https://github.com/rajaram-2005/ragam/actions/runs/42351292466) on the same SHA built all five platform jobs successfully, but the macOS Intel artifact upload failed with a transient Azure Blob DNS `ENOTFOUND`. The rerun was blocked. A successful replacement run is required. |
+| Artifact upload hardening | **IN PROGRESS** | The workflow now allows one transient upload failure and performs a strict retry with `overwrite: true`; a persistent failure still fails the job. The release test pins this guard. |
 | macOS runner repair | **IN PROGRESS** | The Desktop matrix now uses separate standard runners: `macos-15-intel` for Intel x64 and `macos-26` for Apple Silicon arm64, each building and smoke-testing its own native architecture. The release test refuses `macos-14` and asserts both labels/targets. A successful Desktop run on the release commit is still required before publication. |
 | Genuine third-party E2E | **NOT TESTED** | No live provider credentials or connectivity were available. Mocked adapters and loopback HTTP tests are not genuine third-party verification. |
 | Klyvaron trained production models | **NOT TESTED** | No weight payloads are present in the checkout. Lite/Pro/Max remain resource/workflow profiles of one model-independent deterministic engine; archived model cards are metadata, not trained model evidence. The production evidence gate is skipped by design and fails closed. |
@@ -108,7 +111,10 @@ release certificate.
 | Branch protection | **BLOCKED** | The GitHub integration returned HTTP 403 for the branch-protection API; recommendations are recorded in [docs/35](35-release-readiness.md), not claimed as configured. |
 
 The post-merge Desktop failure is an infrastructure/scheduling failure, not a source regression: the
-job never received a runner. The supported-runner split is a workflow hardening change, not evidence
-of success. **Release verdict remains NOT RELEASE READY** until a Desktop run on the current `main`
+job never received a runner. The split PR Desktop run proves the new runner labels can build and
+smoke-test every supported architecture, while the matching push run exposed a transient artifact-
+service DNS failure at upload. Neither is a `main` release-commit verification by itself. The
+supported-runner split and strict upload retry are workflow hardening changes, not evidence of
+success. **Release verdict remains NOT RELEASE READY** until a Desktop run on the current `main`
 commit completes every supported platform job successfully and the remaining evidence gaps above are
 closed or explicitly accepted.

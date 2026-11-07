@@ -32,7 +32,7 @@ Recommended settings: require branches to be up to date, require linear history 
 
 ## Artifacts and checksums
 
-The Desktop workflow uploads unsigned artifacts named `ragam-${{ matrix.artifact }}` from `apps/desktop/release/*` with `if-no-files-found: error`. No code-signing credentials were available; treat every produced installer as **unsigned** until a signing identity is configured and verified.
+The Desktop workflow uploads unsigned artifacts named `ragam-${{ matrix.artifact }}` from `apps/desktop/release/*` with `if-no-files-found: error`. One strict retry with `overwrite: true` handles a transient artifact-service DNS failure; a persistent upload failure still fails the platform job. No code-signing credentials were available; treat every produced installer as **unsigned** until a signing identity is configured and verified.
 
 After a successful, uninterrupted Desktop packages run on the exact release commit, an operator may download artifacts into a clean directory and produce checksums with:
 
