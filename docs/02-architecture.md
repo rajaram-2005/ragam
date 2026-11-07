@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 42,742 source lines, 27,490 test lines
+### `services/core` — 43,489 source lines, 27,783 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -82,7 +82,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `hosted/byok.mjs` | 386 | Stateless Vercel BYOK API: Supabase Auth sessions, per-user AES-GCM provider secrets, strict origin/endpoint checks, explicit request/Search consent, and provider isolation |
 | `online/app.mjs` | 1,327 | Online application with authenticated deterministic Klyvaron processing profiles, account-scoped memory and knowledge, optional BYOK providers, and exact-model gateway routing; legacy tier-specific model, qualification, media-weight and training routes are retired |
 | `online/native-klyvaron.mjs` | 506 | Legacy Pro/Max artifact verifier retained for isolated compatibility tests; artifact scanning and loading are disabled in the active app |
-| `online/context-routes.mjs` | 333 | Authenticated deterministic processor routes, account-scoped retrieval/session context, request-cancellation handling, reviewed read-only tool routes, and owner-managed remote server routes |
+| `online/context-routes.mjs` | 357 | Authenticated deterministic processor routes, account-scoped retrieval/session context, request-cancellation handling, reviewed read-only tool routes, and owner-managed remote server routes |
 | `online/gateway.mjs` | 259 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
 | `online/failure.mjs` | 9 | One coded error shape, in its own module so wire adapters raise it without importing the transport |
 | `online/chat-content.mjs` | 109 | Validates bounded multimodal messages, media signatures, redaction and text-only history placeholders |
@@ -197,6 +197,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/select.mjs` | 173 | Capability selection with reasons: strict offline refuses a remote request before candidates are considered, an unrecorded context limit does not satisfy a stated minimum, and every rejected candidate is returned with a code rather than silently dropped |
 | `providers/errors.mjs` | 228 | One failure shape for every provider: status→code mapping, retryability decided by code, bounded `Retry-After`, and messages redacted against six credential patterns before they can reach a log |
 | `providers/fabric.mjs` | 485 | Phase 2 provider fabric: versioned local-only snapshot, normalized error envelopes, model-discovery metadata, local/cloud and health/evidence states, cost/latency measurement scaffolding, explainable routing and a fail-closed live-qualification gate; no live call, credential value, endpoint or model weight |
+| `orchestration/full.mjs` | 723 | Phases 3–9: versioned task envelope, bounded DAG validation, local-only deterministic workflow execution, explicit refusals for live/model/sandbox/deployment capabilities, benchmark evidence validation and platform-readiness evidence; no provider call, credential, model weight or release publication |
 | `providers/wires/index.mjs` | 143 | The wire registry: `IMPLEMENTED_WIRES` is derived from it, so a provider cannot be promoted onto a wire nothing implements |
 | `providers/wires/openai.mjs` | 87 | OpenAI-compatible chat: `{base}/models`, `{base}/chat/completions`, SSE with a `[DONE]` sentinel |
 | `providers/wires/openai-responses.mjs` | 116 | Shared OpenAI Responses API native web search, completion streaming, citations and proposal parsing for vendor and compatible wires |
@@ -260,7 +261,7 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 7,503 source lines, 2,605 test lines
+### `apps/web` — 7,631 source lines, 2,616 test lines
 
 Five local-workspace area components, three retained direct-Core account pages, the separate opt-in `HostedByokApp`, a local-first app shell, shared primitives and an API client. The Direct-Core account pages are not used by the standard Docker deployment; the hosted account flow and its security boundary are documented in [30 — Hosted BYOK](30-hosted-byok.md). The Web suite has nine test files. Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).

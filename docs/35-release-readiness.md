@@ -69,6 +69,7 @@ The checksum file must be generated from the exact downloaded bytes, committed t
 - Actual installer execution on supported runners: **NOT TESTED**.
 - Live end-to-end journeys with a real configured provider, attachment processing, media generation, queued/running cancellation, restart persistence, permitted plugin execution, unauthorized-operation refusal, and backup/restore: **NOT TESTED** with genuine third-party credentials; loopback/contract coverage only.
 - Live provider qualification: **BLOCKED**. Phase 2 provides a contract-tested fabric snapshot and a fail-closed consent gate, but no authorized live provider call, credential, connectivity proof or evidence digest exists.
+- Live multimodal/model/sandbox/agent/deployment/release capabilities: **BLOCKED**. Phase 3–9 provides local-only contract-tested orchestration and explicit refusals; no provider inference, code sandbox, SCADA write, production rollback, telemetry transmission or release publication was performed.
 - Code signing: **BLOCKED** (no signing credentials available).
 - Published versioned artifacts and checksums: **BLOCKED** pending acceptance and explicit approval.
 - Verified trained Pro/Max model weights: **NOT PRODUCED**. The active architecture is model-independent; archived model cards are metadata, not release evidence.

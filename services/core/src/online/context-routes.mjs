@@ -12,6 +12,7 @@ import { readBody, sendJson } from './http.mjs'
 import { STYLES, STYLE_PROHIBITIONS } from './styles.mjs'
 import { wireFor } from '../providers/wires/index.mjs'
 import { failure } from './gateway.mjs'
+import { WorkflowError, executeWorkflow, planWorkflow } from '../orchestration/full.mjs'
 export async function contextRoutes(request, response, app, session) {
  if (!session?.accountId) throw failure('unauthenticated', 'Sign in to this Aetheris installation.', 401)
  const accountId = session.accountId
@@ -58,6 +59,29 @@ export async function contextRoutes(request, response, app, session) {
      detail: { tier: result.tier, tasks: result.results.map((item) => item.task), modelUsed: false, weightsUsed: false, networkUsed: false, savedToKnowledge: result.persistence.requested },
    })
    return sendJson(response, 200, result, app)
+ }
+ // Phase 3–9 local orchestration. These routes are pure: no provider call, credential,
+ // model weight, filesystem write, sandbox or deployment action is performed here.
+ if (method === 'POST' && (path === '/api/orchestration/plan' || path === '/api/orchestration/execute')) {
+   const body = await readJson({ maxBytes: 256 * 1024 })
+   const envelope = body?.envelope ?? body
+   const context = body?.context ?? {}
+   try {
+     if (path === '/api/orchestration/plan') {
+       const result = planWorkflow(envelope)
+       app.ledger?.record({ category: 'orchestration', action: 'plan', outcome: 'success', subject: accountId, detail: { localOnly: true, liveCall: false } })
+       return sendJson(response, 200, result, app)
+     }
+     const abortController = new AbortController()
+     request.once('aborted', () => abortController.abort())
+     response.once('close', () => { if (!response.writableEnded) abortController.abort() })
+     const result = executeWorkflow(envelope, { ...context, signal: abortController.signal })
+     app.ledger?.record({ category: 'orchestration', action: 'execute', outcome: result.status.toLowerCase(), subject: accountId, detail: { localOnly: true, liveCall: false, providerCalls: 0 } })
+     return sendJson(response, 200, result, app)
+   } catch (error) {
+     if (error instanceof WorkflowError) throw failure(error.code, error.message, error.status)
+     throw error
+   }
  }
  if (path.startsWith('/api/plugins/trust')) {
    if (method === 'GET') return sendJson(response, 200, { keys: [], signaturesRequired: false, customInstallationDisabled: true, file: null })

@@ -83,6 +83,7 @@ test('every API call uses a relative path, never an absolute host', async () => 
   try {
     const samples = [
       () => api.health(), () => api.ready(), () => api.config(), () => api.hardware(),
+      () => api.orchestrationPlan({}), () => api.orchestrationExecute({}),
       () => api.models(), () => api.models(true), () => api.probeModels(), () => api.events(), () => api.audit(10),
       () => api.chat({ prompt: 'hi' }), () => api.knowledgeSearch({ query: 'q' }),
       () => api.knowledgeIngest({ title: 't', text: 'x' }), () => api.knowledgeStats(),

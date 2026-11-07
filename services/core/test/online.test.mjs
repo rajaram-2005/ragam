@@ -129,6 +129,47 @@ test('readiness exposes a contract-tested provider fabric without secrets or a l
   assert.doesNotMatch(text, /synthetic-gateway-secret|"apiKey"|"token"|"secret"|Authorization:/i)
 })
 
+test('Phase 3–9 orchestration routes are authenticated, local-only and leak no secrets', async (t) => {
+  const f = await fixture(t)
+  const envelope = {
+    schemaVersion: 1,
+    taskId: 'task-1',
+    traceId: 'trace-1',
+    kind: 'document',
+    assets: [],
+    requiredCapabilities: ['document.parse'],
+    profile: 'lite',
+    privacyMode: 'local-only',
+    remoteExecutionConsent: false,
+    allowedProviders: [],
+    costCeiling: null,
+    latencyTargetMs: null,
+    resourceBudget: { maxSteps: 2, maxChars: 16000, maxAssets: 0 },
+    steps: [{ id: 'parse', capability: 'document.parse', dependsOn: [], inputRefs: [] }],
+    outputPolicy: { format: 'json', maxBytes: 262144, classification: 'internal', provenance: true },
+    retentionPolicy: { mode: 'session-only', ttlSeconds: 0 },
+  }
+  for (const path of ['/api/orchestration/plan', '/api/orchestration/execute']) {
+    assert.equal((await f.request('POST', path, { envelope, context: { text: '# Local heading' } })).status, 401, path)
+  }
+  await f.login()
+  const callsBefore = f.calls.length
+  const plan = await f.request('POST', '/api/orchestration/plan', { envelope })
+  assert.equal(plan.status, 200)
+  assert.equal(plan.data.evidenceState, 'contract-tested')
+  assert.equal(plan.data.liveCallPerformed, false)
+  assert.equal(plan.data.providerCalls, 0)
+  const run = await f.request('POST', '/api/orchestration/execute', { envelope, context: { text: '# Local heading' } })
+  assert.equal(run.status, 200)
+  assert.equal(run.data.status, 'PASS')
+  assert.equal(run.data.liveCallPerformed, false)
+  assert.equal(run.data.modelWeightsUsed, false)
+  assert.equal(run.data.providerCalls, 0)
+  assert.equal(f.calls.length, callsBefore, 'orchestration must not call the provider gateway')
+  const text = JSON.stringify({ plan: plan.data, run: run.data })
+  assert.doesNotMatch(text, /synthetic-gateway-secret|"apiKey"|"token"|"secret"|Authorization:/i)
+})
+
 test('owner login uses an HttpOnly secure cookie; wrong passwords and cross-origin mutations fail', async (t) => {
  const f = await fixture(t); assert.equal((await f.request('POST','/api/auth/login',{email:f.account.email,password:'a-long-wrong-password'})).status,401)
  const r = await f.login(); assert.match(r.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/); assert.match(r.headers.get('set-cookie'),/Secure/)

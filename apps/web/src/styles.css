@@ -1484,6 +1484,9 @@ pre.code {
 .chat-history-disclosure { margin: 0 0 10px; color: var(--text-muted); }
 .chat-context-limit { margin: 0 0 10px; color: var(--text-muted); }
 .chat-provider-fabric { margin: 0 0 10px; color: var(--text-muted); }
+.orchestration-panel { display: grid; gap: 10px; }
+.orchestration-row { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.orchestration-output { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-transcript-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.018); }
 .chat-search-input { flex: 1 1 220px; min-width: 160px; }
 .chat-transcript-count { color: var(--text-muted); font-size: var(--font-size-xs); white-space: nowrap; }

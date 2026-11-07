@@ -7,6 +7,7 @@ import ChatToolRunner from '../components/ChatToolRunner.jsx'
 import { recommendationsForProfile } from '../profile.js'
 import { CHAT_FILE_LIMITS, messageWithChatFiles, readChatAttachment } from '../chat-files.js'
 import { CHAT_TRANSCRIPT_SEARCH_LIMIT, cleanPinnedIds, contextLimitLabel, downloadMarkdownFile, highlightSegments, isClearSearchKey, isSearchShortcut, isStopShortcut, messageText, normalizeSearchQuery, outputLimitLabel, replaceLastMessage, replaceLastTurn, selectVisibleMessages, transcriptToMarkdown, validateStructuredOutput, withMessageId } from '../chat-transcript.js'
+import { buildLocalOrchestrationContext, buildLocalOrchestrationEnvelope, ORCHESTRATION_CAPABILITY_OPTIONS } from '../orchestration-client.js'
 import { setSetupGuideDismissed, setupGuideDismissed } from '../onboarding.js'
 
 const LOCAL_CHAT_CONNECTIONS = new Set(['ollama', 'llamacpp', 'vllm', 'localai'])
@@ -46,6 +47,10 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
   const [comparisonInput, setComparisonInput] = useState(''), [saveProcessedInput, setSaveProcessedInput] = useState(false)
   const [searchQuery, setSearchQuery] = useState(''), [pinnedIds, setPinnedIds] = useState(new Set()), [pinnedOnly, setPinnedOnly] = useState(false)
   const [structuredOutputCheck, setStructuredOutputCheck] = useState(false), [transcriptNotice, setTranscriptNotice] = useState('')
+  const [orchestrationCapability, setOrchestrationCapability] = useState('document.parse'), [orchestrationProfile, setOrchestrationProfile] = useState('lite')
+  const [orchestrationPlanResult, setOrchestrationPlanResult] = useState(null), [orchestrationRunResult, setOrchestrationRunResult] = useState(null)
+  const [orchestrationError, setOrchestrationError] = useState(''), [orchestrationBusy, setOrchestrationBusy] = useState(false)
+  const orchestrationAbort = useRef(null)
   const [temperature, setTemperature] = useState('0.2'), [maxTokens, setMaxTokens] = useState('512'), [sessionId, setSessionId] = useState(null), [skill, setSkill] = useState(''), [style, setStyle] = useState(''), [styles, setStyles] = useState([])
   const abort = useRef(null), thread = useRef(null), composerInput = useRef(null), searchInput = useRef(null)
   const normalizedSearchQuery = normalizeSearchQuery(searchQuery)
@@ -313,6 +318,26 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
   const structuredValidationFor = (message) => structuredOutputCheck && message.role === 'assistant' && !message.pending
     ? validateStructuredOutput(messageText(message))
     : null
+  const runLocalOrchestration = async (mode) => {
+    const controller = new AbortController()
+    orchestrationAbort.current = controller
+    setOrchestrationBusy(true)
+    setOrchestrationError('')
+    const envelope = buildLocalOrchestrationEnvelope({ prompt, capability: orchestrationCapability, profile: orchestrationProfile })
+    const context = buildLocalOrchestrationContext(prompt, orchestrationCapability)
+    try {
+      const result = mode === 'plan'
+        ? await api.orchestrationPlan(envelope, { signal: controller.signal })
+        : await api.orchestrationExecute({ envelope, context }, { signal: controller.signal })
+      if (mode === 'plan') setOrchestrationPlanResult(result)
+      else setOrchestrationRunResult(result)
+    } catch (caught) {
+      setOrchestrationError(caught?.message ?? 'Local orchestration failed.')
+    } finally {
+      orchestrationAbort.current = null
+      setOrchestrationBusy(false)
+    }
+  }
 
   const openSavedSession = (session) => {
     if (!session?.id || !Array.isArray(session.turns)) {
@@ -583,6 +608,23 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
         <div className="chat-composer-foot"><span>Enter to send <b>·</b> Shift + Enter for a new line <b>·</b> Ctrl/⌘+K search <b>·</b> Esc clear <b>·</b> Ctrl/⌘+Shift+S stop</span><span>{modelIndependent ? `Klyvaron ${processorTier.toUpperCase()} · deterministic local processing · no model, weights or network` : localOnlyMode && LOCAL_CHAT_CONNECTIONS.has(provider?.kind) ? 'Sent only to the configured self-hosted runtime · remote vendor requests blocked' : localOnlyMode ? 'Local-only mode · remote requests blocked' : 'Sent to the selected provider · charges and retention policies may apply'}</span></div>
       </form>
     </Panel>
+    <details className="context-section orchestration-panel"><summary>Phase 3–9 local orchestration</summary>
+      <p className="small">Contract-tested local workflows only. Live provider calls, model inference, sandboxes, deployments, telemetry and release publication are refused; unknown capabilities are never substituted.</p>
+      <div className="orchestration-row">
+        <Field label="Capability"><select aria-label="Local orchestration capability" className="select" value={orchestrationCapability} onChange={(event) => setOrchestrationCapability(event.target.value)} disabled={orchestrationBusy}>
+          {ORCHESTRATION_CAPABILITY_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+        </select></Field>
+        <Field label="Profile"><select aria-label="Local orchestration profile" className="select" value={orchestrationProfile} onChange={(event) => setOrchestrationProfile(event.target.value)} disabled={orchestrationBusy}>
+          <option value="lite">Lite</option><option value="pro">Pro</option><option value="max">Max</option>
+        </select></Field>
+        <Button type="button" className="ghost small" disabled={orchestrationBusy || !prompt.trim()} onClick={() => runLocalOrchestration('plan')}>Preview local workflow</Button>
+        <Button type="button" className="ghost small" disabled={orchestrationBusy || !prompt.trim()} onClick={() => runLocalOrchestration('execute')}>Run local workflow</Button>
+        {orchestrationBusy ? <Button type="button" variant="danger" onClick={() => orchestrationAbort.current?.abort()}>Stop</Button> : null}
+      </div>
+      {orchestrationError ? <p className="small chat-attachment-error" role="status">{orchestrationError}</p> : null}
+      {orchestrationPlanResult ? <pre className="code orchestration-output" aria-label="Local workflow plan">{JSON.stringify(orchestrationPlanResult, null, 2).slice(0, 4000)}</pre> : null}
+      {orchestrationRunResult ? <pre className="code orchestration-output" aria-label="Local workflow result">{JSON.stringify(orchestrationRunResult, null, 2).slice(0, 4000)}</pre> : null}
+    </details>
     <details className="context-section"><summary>Conversation history</summary><HistoryPanel sessionId={sessionId} onOpen={openSavedSession} onDelete={handleDeletedSession} disabled={busy || saving} /></details>
     <details className="context-section"><summary>Use a connected MCP tool (manual, optional)</summary><ChatToolRunner onAddResult={addToolResultToDraft} onToolsChange={setOfferedTools} /></details>
     <details className="context-section"><summary>Optional files & knowledge</summary><KnowledgePanel /></details>
