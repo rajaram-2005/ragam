@@ -205,7 +205,18 @@ test('desktop packaging does not cancel an in-flight platform matrix', () => {
   assert.match(workflow, /strategy:[\s\S]*?fail-fast:\s*false/)
   assert.doesNotMatch(workflow, /cancel-in-progress:\s*true/)
   // A retired hosted image cancels the macOS job before setup, which is not
-  // platform evidence. Pin the supported label and refuse the retired one.
-  assert.match(workflow, /runner:\s*macos-15/)
+  // platform evidence. Intel and Apple Silicon use separate supported standard
+  // runners, and the retired label is refused.
+  assert.match(workflow, /runner:\s*macos-15-intel/)
+  assert.match(workflow, /runner:\s*macos-26/)
+  assert.match(workflow, /target:\s*--mac dmg --x64/)
+  assert.match(workflow, /target:\s*--mac dmg --arm64/)
   assert.doesNotMatch(workflow, /macos-14/)
+  // A transient artifact-service DNS error must not be hidden as a pass: the
+  // first attempt is allowed to fail once, then a strict retry replaces it.
+  assert.match(workflow, /id:\s*upload/)
+  assert.match(workflow, /continue-on-error:\s*true/)
+  assert.match(workflow, /if:\s*steps\.upload\.outcome == 'failure'/)
+  assert.match(workflow, /Retry artifact upload after transient storage failure/)
+  assert.match(workflow, /overwrite:\s*true/)
 })

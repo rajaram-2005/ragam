@@ -301,7 +301,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 42,244 | 27,112 | **zero npm packages** | 1053 |
+| `services/core` | Node 22 ESM | 42,244 | 27,123 | **zero npm packages** | 1053 |
 | `services/fabric` | Python 3.11 | 17,256 | 10,582 | NumPy only | 823 |
 | `apps/web` | React 18 + Vite | 7,143 | 2,443 | pdfjs-dist, react, react-dom | 131 |
 

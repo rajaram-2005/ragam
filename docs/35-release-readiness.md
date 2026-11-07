@@ -23,15 +23,16 @@ Require these checks before merge:
 6. `CI / Release verification (measured, not remembered)`
 7. `Desktop packages / Linux x64 and ARM64`
 8. `Desktop packages / Windows x64 and ARM64`
-9. `Desktop packages / macOS Intel and Apple Silicon`
-10. Dependency advisory checks: web/desktop `npm audit` and `services/fabric/scripts/audit_python_deps.py`
-11. Model/artifact evidence gate: fail closed when required real artifacts are absent
+9. `Desktop packages / macOS Intel (x64)`
+10. `Desktop packages / macOS Apple Silicon (arm64)`
+11. Dependency advisory checks: web/desktop `npm audit` and `services/fabric/scripts/audit_python_deps.py`
+12. Model/artifact evidence gate: fail closed when required real artifacts are absent
 
 Recommended settings: require branches to be up to date, require linear history if the repository chooses it, disallow force-push to `main`, require conversation resolution, and do **not** enable auto-merge until all required checks pass. A cancelled or skipped Desktop job must not be counted as platform evidence.
 
 ## Artifacts and checksums
 
-The Desktop workflow uploads unsigned artifacts named `ragam-${{ matrix.name }}` from `apps/desktop/release/*` with `if-no-files-found: error`. No code-signing credentials were available; treat every produced installer as **unsigned** until a signing identity is configured and verified.
+The Desktop workflow uploads unsigned artifacts named `ragam-${{ matrix.artifact }}` from `apps/desktop/release/*` with `if-no-files-found: error`. One strict retry with `overwrite: true` handles a transient artifact-service DNS failure; a persistent upload failure still fails the platform job. No code-signing credentials were available; treat every produced installer as **unsigned** until a signing identity is configured and verified.
 
 After a successful, uninterrupted Desktop packages run on the exact release commit, an operator may download artifacts into a clean directory and produce checksums with:
 
