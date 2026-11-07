@@ -27,6 +27,7 @@ import { COMPETITOR_MARKERS, FAMILY_STANCE, KLYVARON, TIERS, familyReport, owned
 import { ACCELERATORS, ACCELERATOR_IDS } from '../src/hardware/accelerators.mjs'
 import { MODALITY_MODELS, presetReport } from '../src/klyvaron/architecture.mjs'
 import { PROVIDERS, PROVIDER_STATUS, RECOMMENDED_PROVIDER_IDS, catalogueReport } from '../src/providers/catalog.mjs'
+import { RELEASE_ARTEFACTS } from '../src/release/manifest.mjs'
 
 const idMapOf = (plan) => Object.fromEntries(plan.tiers.map((t) => [t.id, t]))
 const gateIn = (tier, id) => tier.gates.find((g) => g.id === id)
@@ -80,6 +81,9 @@ const doc = {
   notices: () => read('third-party/NOTICES.md'),
   accounts: () => read('docs/20-accounts-and-sign-in.md'),
   phase2: () => read('docs/19-online-only-phase-2.md'),
+  audit: () => read('docs/34-final-repair-audit.md'),
+  readiness: () => read('docs/35-release-readiness.md'),
+  finalReport: () => read('docs/36-final-engineering-report.md'),
 }
 
 /** Environment variable names read anywhere in core or the web build config. */
@@ -761,17 +765,17 @@ test('the status doc reports the real test totals', () => {
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**1053 tests**'), 'current core test inventory must be stated')
+  assert.ok(status.includes('**1054 tests**'), 'current core test inventory must be stated')
   assert.ok(status.includes('**823 tests**'), 'fabric test inventory must be stated')
   assert.ok(status.includes('**131 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('2007 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('2008 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('2007 tests: core 1053, web 131, fabric 823'),
+  assert.ok(squash(doc.readme()).includes('2008 tests: core 1054, web 131, fabric 823'),
     'README must state the current inventory as docs/03 does')
   assert.ok(squash(doc.readme()).includes('latest completed full CI run')
     && squash(doc.readme()).includes('41394564087')
     && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
-    && squash(doc.readme()).includes('The current tree has 2,007 tests (Core 1,053, Web 131, Fabric 823). The full Core suite passed 1,049/1,053 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 131/131 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv.')
+    && squash(doc.readme()).includes('The current tree has 2,008 tests (Core 1,054, Web 131, Fabric 823). The full Core suite passed 1,050/1,054 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 131/131 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv.')
     && squash(doc.readme()).includes('Full CI for this current tree is recorded in the pull-request checks and final engineering report')
     && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
   'README must distinguish the last full CI run from the current full local suite')
@@ -780,14 +784,14 @@ test('the status doc reports the real test totals', () => {
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(1053), `core heading must say 1043, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(1054), `core heading must say 1054, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(823), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(131), `web heading must say 130, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    2007,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 2007`,
+    2008,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 2008`,
   )
 })
 
@@ -2351,3 +2355,32 @@ test('all archived model-card records are explicitly not release evidence', () =
   assert.match(statusText, /historical records only/)
 })
 
+test('the final engineering report and audit docs record the verified main evidence', () => {
+  // A workspace-only report and stale IN PROGRESS markers would make the release evidence
+  // uncheckable. Pin the tracked report, the final main run IDs and the absence of stale states.
+  const report = squash(doc.finalReport())
+  const audit = squash(doc.audit())
+  const readiness = squash(doc.readiness())
+  for (const phrase of [
+    '36fef57e51c6b36a1efc6c5e16c3a699ea796665',
+    '42352898134',
+    '42352898123',
+    'NOT RELEASE READY',
+    'final engineering report',
+  ]) {
+    assert.ok(report.includes(phrase), `docs/36 must record ${phrase}`)
+  }
+  assert.doesNotMatch(audit, /IN PROGRESS/)
+  assert.doesNotMatch(audit, /A successful Desktop run on the release commit is still required/)
+  assert.ok(audit.includes('42352898123') && audit.includes('**PASS**'), 'docs/34 must record the passing main Desktop run')
+  assert.doesNotMatch(readiness, /Status on 2026-11-06/)
+  assert.doesNotMatch(readiness, /Uninterrupted CI and Desktop packages runs on the exact release commit, including macOS: \*\*NOT TESTED\*\* at audit time/)
+  assert.ok(readiness.includes('42352898123') && readiness.includes('**PASS**'), 'docs/35 must record the passing main Desktop run')
+  for (const path of [
+    'docs/34-final-repair-audit.md',
+    'docs/35-release-readiness.md',
+    'docs/36-final-engineering-report.md',
+  ]) {
+    assert.ok(RELEASE_ARTEFACTS.includes(path), `${path} must be a required release artefact`)
+  }
+})

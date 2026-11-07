@@ -1,6 +1,6 @@
 # 35 — Release readiness, artifact preparation and rollback
 
-Status on 2026-11-06: **NOT RELEASE READY**. This document prepares the reproducible release procedure but does not publish a release, create credentials, sign artifacts, or claim that installers have been launched on real user machines.
+Status on 2026-11-07: **NOT RELEASE READY**. Verified `main` code commit: `36fef57e51c6b36a1efc6c5e16c3a699ea796665`; final `main` CI/Desktop runs passed, but this document does not publish a release, create credentials, sign artifacts, or claim that installers have been launched on real user machines. See [36 — Final engineering report](36-final-engineering-report.md).
 
 ## Version and changelog
 
@@ -34,10 +34,10 @@ Recommended settings: require branches to be up to date, require linear history 
 
 The Desktop workflow uploads unsigned artifacts named `ragam-${{ matrix.artifact }}` from `apps/desktop/release/*` with `if-no-files-found: error`. One strict retry with `overwrite: true` handles a transient artifact-service DNS failure; a persistent upload failure still fails the platform job. No code-signing credentials were available; treat every produced installer as **unsigned** until a signing identity is configured and verified.
 
-After a successful, uninterrupted Desktop packages run on the exact release commit, an operator may download artifacts into a clean directory and produce checksums with:
+A successful, uninterrupted Desktop packages run on the exact verified code commit now exists: [42352898123](https://github.com/rajaram-2005/ragam/actions/runs/42352898123). An operator may download its artifacts into a clean directory and produce checksums with:
 
 ```bash
-RUN_ID=<successful-desktop-packages-run-id>
+RUN_ID=42352898123
 OUT=release-artifacts
 mkdir -p "$OUT"
 gh run download "$RUN_ID" --dir "$OUT"
@@ -47,7 +47,7 @@ find "$OUT" -type f -not -name SHA256SUMS -print0 \
 (cd "$OUT" && sha256sum -c SHA256SUMS)
 ```
 
-The checksum file must be generated from the exact downloaded bytes, committed to the release assets (not the source tree), and verified with `sha256sum -c`. At audit time no release artifacts were downloaded or published, so **no checksum list is claimed**: **BLOCKED**.
+The checksum file must be generated from the exact downloaded bytes, committed to the release assets (not the source tree), and verified with `sha256sum -c`. No release artifacts have been downloaded or published, so **no checksum list is claimed**: **BLOCKED**.
 
 ## Installation instructions
 
@@ -65,7 +65,7 @@ The checksum file must be generated from the exact downloaded bytes, committed t
 
 ## Required release evidence still outstanding
 
-- Uninterrupted CI and Desktop packages runs on the exact release commit, including macOS: **NOT TESTED** at audit time.
+- Uninterrupted CI and Desktop packages runs on the exact verified code commit, including macOS: **PASS** — [CI 42352898134](https://github.com/rajaram-2005/ragam/actions/runs/42352898134) and [Desktop 42352898123](https://github.com/rajaram-2005/ragam/actions/runs/42352898123). This is build/runtime CI evidence, not a published release.
 - Actual installer execution on supported runners: **NOT TESTED**.
 - Live end-to-end journeys with a real configured provider, attachment processing, media generation, queued/running cancellation, restart persistence, permitted plugin execution, unauthorized-operation refusal, and backup/restore: **NOT TESTED** with genuine third-party credentials; loopback/contract coverage only.
 - Code signing: **BLOCKED** (no signing credentials available).
@@ -74,4 +74,4 @@ The checksum file must be generated from the exact downloaded bytes, committed t
 
 ## Verdict
 
-Do not publish a production release from this branch until the outstanding evidence is complete. The code repair PR may be merged after its required checks pass; that merge is not by itself a production release.
+Do not publish a production release until the outstanding evidence is complete and approval is explicit. PRs #20–#22 are merged; PR #22's merge is not by itself a production release.

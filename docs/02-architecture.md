@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 42,244 source lines, 27,123 test lines
+### `services/core` — 42,247 source lines, 27,156 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -192,7 +192,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `packs/registry.mjs` | 277 | Installed, enabled and disabled packs; readiness measured against the provider fabric (a capability this installation cannot serve is reported by name, never substituted), application that refuses an unavailable pack unless the caller acknowledges it, and no method that grants, authorises or executes |
 | `packs/builtin.mjs` | 131 | Three shipped packs — engineering repo maintenance, legal document review (confidential, human review, "reading support, not legal advice"), grounded tutoring — each narrow, and each capability either evidenced by a file in this repository or marked unimplemented |
 | `benchmark/harness.mjs` | 254 | The measured benchmark of the adaptive core: every entry calls the real module, a failed entry is kept in the table with its error and fails the run, and a benchmark that measures nothing is refused rather than reported as zero |
-| `release/manifest.mjs` | 287 | Release verification: one version across `VERSION` and the three packages, a dated changelog entry, documented totals compared against supplied measurements (not against each other), all 8 Pro/Max multimodal cards and run records verified present, and every shipped pack capability evidenced |
+| `release/manifest.mjs` | 290 | Release verification: one version across `VERSION` and the three packages, a dated changelog entry, documented totals compared against supplied measurements (not against each other), all 8 Pro/Max multimodal cards and run records verified present, and every shipped pack capability evidenced |
 | `providers/catalog.mjs` | 435 | The provider catalogue: wire format, auth kind, documentation URL, support status, and a curated `recommended` descriptor for major hosted APIs and selected Local-only runtimes. The label is not a live quality or price check; local runtimes remain available separately. A `ready` entry may only claim capabilities backed by a test in this repository; `gateway_only` may claim none; `pending` is refused by name. Validation is what keeps a credential field unrepresentable |
 | `providers/select.mjs` | 173 | Capability selection with reasons: strict offline refuses a remote request before candidates are considered, an unrecorded context limit does not satisfy a stated minimum, and every rejected candidate is returned with a code rather than silently dropped |
 | `providers/errors.mjs` | 228 | One failure shape for every provider: status→code mapping, retryability decided by code, bounded `Retry-After`, and messages redacted against six credential patterns before they can reach a log |

@@ -38,6 +38,9 @@ export const RELEASE_ARTEFACTS = Object.freeze([
   'docs/04-setup.md',
   'docs/25-adaptive-intelligence.md',
   'docs/26-release.md',
+  'docs/34-final-repair-audit.md',
+  'docs/35-release-readiness.md',
+  'docs/36-final-engineering-report.md',
   // The benchmark is evidence for a claim in the release note, so its absence is a release
   // problem rather than a missing convenience file.
   'docs/experiments/phase10-benchmark.json',
