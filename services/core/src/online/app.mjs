@@ -24,6 +24,7 @@ import { PluginRegistry } from '../plugins/registry.mjs'
 import { McpRegistry, RISK, SERVER_KINDS } from '../mcp/layer.mjs'
 import { RemoteServerManager } from './remote-servers.mjs'
 import { PROVIDERS, catalogueReport, describeProvider } from '../providers/catalog.mjs'
+import { buildProviderFabricSnapshot } from '../providers/fabric.mjs'
 import { normaliseCredential, wireFor } from '../providers/wires/index.mjs'
 import { KLYVARON_TIERS, KLYVARON_NOTE } from './klyvaron.mjs'
 import { NativeKlyvaronHost } from './native-klyvaron.mjs'
@@ -555,7 +556,16 @@ export class OnlineApp {
         weightsRequired: false,
         networkRequired: false,
       },
-      note: 'Klyvaron tiers use one shared model-independent processing engine. Separate local Pro/Max model artifacts are not loaded; optional provider routes are listed separately.',
+      providerFabric: buildProviderFabricSnapshot({
+        providers: PROVIDERS,
+        connections: state.connections,
+        activeId: state.active,
+        healthChecks: {},
+        measurements: [],
+        liveQualification: { requested: false },
+        routingRequest: null,
+      }),
+      note: 'Klyvaron tiers use one shared model-independent processing engine. Separate local Pro/Max model artifacts are not loaded; optional provider routes are listed separately. Provider fabric metadata is contract-tested, not live-verified.'
     }
   }
 

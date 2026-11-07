@@ -70,6 +70,7 @@ procedure and remaining blockers: [docs/35-release-readiness.md](35-release-read
 | P2 | Duplicate web API skills surface | Dead duplicate removed; source-level duplicate-key regression test passes. |
 | P2 | Final report and audit docs were stale or workspace-only | This tracked report plus updated docs 34/35 and a docs-accuracy regression test guard the final `main` evidence and refuse stale `IN PROGRESS` markers. |
 | Enhancement | Chat transcript tools | Local-only in-transcript search/filter, message pins, Markdown transcript export, keyboard shortcuts, opt-in client-side JSON syntax validation and catalogue context-limit reporting; nine pure helper tests and one render test. Implemented and contract-tested, not live-verified. |
+| Enhancement | Provider fabric Phase 2 | Versioned local-only snapshot with normalized errors, model-discovery metadata, local/cloud state, health/evidence states, cost/latency scaffolding, explainable routing and fail-closed live-qualification gate; eight pure tests, one readiness test and one render test. Implemented and contract-tested, not live-verified. |
 | Informational | PR #13 model-specific weight pins, mandatory weights installer, tier voice presets and 0.1.1 card | Not ported: current architecture is model-independent, no weight payloads exist, and archived cards are metadata. PR #13 was closed with a supersession comment. |
 
 ## 4. Files changed
@@ -96,15 +97,22 @@ Chat-area feature delivery adds `apps/web/src/chat-transcript.js` and
 `services/core/test/release.test.mjs` and the measured documentation counts. All six features are
 local-only, have regression tests, and are explicitly **contract-tested, not live-verified**.
 
+Provider fabric Phase 2 adds `services/core/src/providers/fabric.mjs` and
+`services/core/test/provider-fabric.test.mjs`, and updates `services/core/src/online/app.mjs`,
+`services/core/test/online.test.mjs`, `apps/web/src/areas/ChatArea.jsx`,
+`apps/web/src/styles.css`, `apps/web/test/render.test.mjs`, `docs/27-provider-framework.md`,
+`docs/35-release-readiness.md` and the measured documentation counts. It performs no live provider
+call, credential change, model-weight download or architecture change.
+
 ## 5. Exact test counts and local verification
 
 | Suite / check | Pass | Fail | Skip | Total / notes |
 | --- | ---: | ---: | ---: | --- |
-| Core | 1,050 | 0 | 4 | 1,054; four real-artifact acceptance cases skipped because ignored legacy fixtures are absent locally |
-| Web | 141 | 0 | 0 | 141 |
+| Core | 1,059 | 0 | 4 | 1,063; four real-artifact acceptance cases skipped because ignored legacy fixtures are absent locally |
+| Web | 142 | 0 | 0 | 142 |
 | Fabric | 823 | 0 | 0 | 823; 823 progress dots, exit 0, no skip/failure markers |
 | Desktop local | 4 | 0 | 0 | 4 |
-| `release-check.mjs --core 1054 --web 141 --fabric 823` | **PASS** | 0 | — | 2,018 tests, 31 artefacts, 3 packs |
+| `release-check.mjs --core 1063 --web 142 --fabric 823` | **PASS** | 0 | — | 2,028 tests, 31 artefacts, 3 packs |
 | Production Web build | **PASS** | 0 | — | Vite build |
 | Web production `npm audit` | **PASS** | 0 | — | 0 vulnerabilities |
 | Desktop production `npm audit` | **PASS** | 0 | — | 0 vulnerabilities |
@@ -162,6 +170,7 @@ Cancelled, skipped or unexecuted jobs were not counted as platform verification.
 - **Versioned release artifacts/checksums/signatures:** **NOT TESTED**. `VERSION` remains `0.2.0`; no release, checksum file, signature or published artifact was created.
 - **Backup/restore/rollback:** local synthetic Compose cold-backup/restore **PASS**; production deployment restore/rollback **NOT TESTED**.
 - **Branch protection:** **BLOCKED**. `gh api repos/rajaram-2005/ragam/branches/main/protection` returned HTTP 403 `Resource not accessible by integration`; recommendations are documented, not claimed as configured.
+- **Provider fabric:** **PASS** (contract-tested) for local-only error/model/health/measurement/routing evidence; **BLOCKED** for live provider qualification because no authorized live call, credential, connectivity proof or evidence digest exists.
 - **Release publication:** **BLOCKED** pending explicit approval. No release was published, installers remain unsigned, no credentials were changed, and no destructive cleanup or architecture changes were made.
 
 ## 9. Limitations, risks and next safe repairs
@@ -175,6 +184,7 @@ Cancelled, skipped or unexecuted jobs were not counted as platform verification.
 7. The macOS arm64 hosted runner annotation warns of possible longer queue times; a future capacity failure should produce a fresh successful run rather than counting a cancelled job as evidence.
 8. Node.js 20 action deprecation and Ubuntu-latest migration warnings appear in CI annotations; they are non-blocking today but should be scheduled before the runner image changes.
 9. The new Chat transcript tools are local-only and contract-tested; they are not a live provider, multimodal, research, coding, agent or production-deployment verification.
+10. Provider fabric Phase 2 is contract-tested metadata only; live provider qualification, health probes, quality evaluation and cost measurement require explicit authorization and real evidence.
 
 ## 10. Final acceptance
 

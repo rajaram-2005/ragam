@@ -68,6 +68,7 @@ The checksum file must be generated from the exact downloaded bytes, committed t
 - Uninterrupted CI and Desktop packages runs on the exact verified code commit, including macOS: **PASS** — [CI 42352898134](https://github.com/rajaram-2005/ragam/actions/runs/42352898134) and [Desktop 42352898123](https://github.com/rajaram-2005/ragam/actions/runs/42352898123). This is build/runtime CI evidence, not a published release.
 - Actual installer execution on supported runners: **NOT TESTED**.
 - Live end-to-end journeys with a real configured provider, attachment processing, media generation, queued/running cancellation, restart persistence, permitted plugin execution, unauthorized-operation refusal, and backup/restore: **NOT TESTED** with genuine third-party credentials; loopback/contract coverage only.
+- Live provider qualification: **BLOCKED**. Phase 2 provides a contract-tested fabric snapshot and a fail-closed consent gate, but no authorized live provider call, credential, connectivity proof or evidence digest exists.
 - Code signing: **BLOCKED** (no signing credentials available).
 - Published versioned artifacts and checksums: **BLOCKED** pending acceptance and explicit approval.
 - Verified trained Pro/Max model weights: **NOT PRODUCED**. The active architecture is model-independent; archived model cards are metadata, not release evidence.
