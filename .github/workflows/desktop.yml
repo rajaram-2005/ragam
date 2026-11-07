@@ -27,15 +27,22 @@ jobs:
           - name: Linux x64 and ARM64
             runner: ubuntu-24.04
             target: --linux AppImage deb --x64 --arm64
+            artifact: linux-x64-arm64
           - name: Windows x64 and ARM64
             runner: windows-latest
             target: --win nsis --x64 --arm64
-          # GitHub retired the macOS 14 hosted image on 2026-11-02. The old label
-          # cancelled this job before its first step; macos-15 is the supported
-          # hosted arm64 image and can cross-package both x64 and arm64 DMGs.
-          - name: macOS Intel and Apple Silicon
-            runner: macos-15
-            target: --mac dmg --x64 --arm64
+            artifact: windows-x64-arm64
+          # The retired macOS 14 label schedules no runner. Split Intel and Apple
+          # Silicon onto their own supported standard runners: a single arm64 job
+          # building both architectures spent 15 minutes unassigned on main.
+          - name: macOS Intel (x64)
+            runner: macos-15-intel
+            target: --mac dmg --x64
+            artifact: macos-intel-x64
+          - name: macOS Apple Silicon (arm64)
+            runner: macos-26
+            target: --mac dmg --arm64
+            artifact: macos-arm64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -77,7 +84,7 @@ jobs:
         run: npm run smoke
         working-directory: apps/desktop
 
-      - name: Build native installer packages for both CPU architectures
+      - name: Build native installer packages
         if: runner.os != 'Linux'
         run: npx electron-builder ${{ matrix.target }}
         working-directory: apps/desktop
@@ -107,7 +114,7 @@ jobs:
       - name: Upload unsigned desktop package
         uses: actions/upload-artifact@v4
         with:
-          name: ragam-${{ matrix.name }}
+          name: ragam-${{ matrix.artifact }}
           path: apps/desktop/release/*
           if-no-files-found: error
           retention-days: 14

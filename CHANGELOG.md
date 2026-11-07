@@ -12,7 +12,7 @@ signature or production release is claimed.
 - **Account and plugin security:** password-reset codes for multiple accounts now coexist and consumption removes only the used code; members may invoke only registry-declared read-only plugin capabilities; unknown plugins return a coded 404; the duplicate raw-install route is removed; uncoded internal errors are sanitized.
 - **Consent, workers and Python configuration:** shared consent-freshness rules refuse missing, expired and future-dated timestamps; `AETHERIS_PYTHON` is authoritative on retained Python worker paths; the optional worker process honors pre-abort and running cancellation with SIGTERM→SIGKILL escalation and coded spawn failures.
 - **Retrieval parity and documentation:** JavaScript and Python stemmers emit hyphen-part tokens with a regenerated parity fixture; the archived retriever card and improvement-cycle record carry a dated correction without claiming a replacement model artifact or weight payload.
-- **CI and cleanup:** Desktop packaging no longer cancels an in-flight platform matrix; the retired `macos-14` runner label is replaced by supported `macos-15` and guarded by a test; the web API client has one skills surface; final audit and release-readiness documents record verified results and outstanding blockers.
+- **CI and cleanup:** Desktop packaging no longer cancels an in-flight platform matrix; the retired `macos-14` runner label is replaced by separate supported `macos-15-intel` (Intel x64) and `macos-26` (Apple Silicon arm64) jobs guarded by a test; the web API client has one skills surface; final audit and release-readiness documents record verified results and outstanding blockers.
 
 ## Unreleased — universal provider framework (phases 1–3)
 
