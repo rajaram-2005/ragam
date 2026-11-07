@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api, streamChat } from '../api.js'
 import { Banner, Button, CopyButton, Field, Panel } from '../components/ui.jsx'
 import { KnowledgePanel, MemoryPanel, HistoryPanel, SkillsPanel } from '../components/ContextPanels.jsx'
@@ -6,6 +6,7 @@ import GettingStarted from '../components/GettingStarted.jsx'
 import ChatToolRunner from '../components/ChatToolRunner.jsx'
 import { recommendationsForProfile } from '../profile.js'
 import { CHAT_FILE_LIMITS, messageWithChatFiles, readChatAttachment } from '../chat-files.js'
+import { CHAT_TRANSCRIPT_SEARCH_LIMIT, cleanPinnedIds, contextLimitLabel, downloadMarkdownFile, highlightSegments, isClearSearchKey, isSearchShortcut, isStopShortcut, messageText, normalizeSearchQuery, outputLimitLabel, replaceLastMessage, replaceLastTurn, selectVisibleMessages, transcriptToMarkdown, validateStructuredOutput, withMessageId } from '../chat-transcript.js'
 import { setSetupGuideDismissed, setupGuideDismissed } from '../onboarding.js'
 
 const LOCAL_CHAT_CONNECTIONS = new Set(['ollama', 'llamacpp', 'vllm', 'localai'])
@@ -43,8 +44,13 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
   const modelIndependent = processingMode === 'klyvaron'
   const recommendations = modelIndependent ? BUILT_IN_RECOMMENDATIONS : recommendationsForProfile(profile)
   const [comparisonInput, setComparisonInput] = useState(''), [saveProcessedInput, setSaveProcessedInput] = useState(false)
+  const [searchQuery, setSearchQuery] = useState(''), [pinnedIds, setPinnedIds] = useState(new Set()), [pinnedOnly, setPinnedOnly] = useState(false)
+  const [structuredOutputCheck, setStructuredOutputCheck] = useState(false), [transcriptNotice, setTranscriptNotice] = useState('')
   const [temperature, setTemperature] = useState('0.2'), [maxTokens, setMaxTokens] = useState('512'), [sessionId, setSessionId] = useState(null), [skill, setSkill] = useState(''), [style, setStyle] = useState(''), [styles, setStyles] = useState([])
-  const abort = useRef(null), thread = useRef(null), composerInput = useRef(null)
+  const abort = useRef(null), thread = useRef(null), composerInput = useRef(null), searchInput = useRef(null)
+  const normalizedSearchQuery = normalizeSearchQuery(searchQuery)
+  const visibleMessages = useMemo(() => selectVisibleMessages(messages, { query: normalizedSearchQuery, pinnedOnly, pinnedIds }), [messages, normalizedSearchQuery, pinnedOnly, pinnedIds])
+  const pinnedMessages = useMemo(() => messages.map((message, index) => ({ message, index })).filter(({ message }) => pinnedIds.has(message.id)), [messages, pinnedIds])
 
   useEffect(() => {
     setModel(readiness?.provider?.selectedModel || provider?.selectedModel || '')
@@ -56,10 +62,42 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
   useEffect(() => { api.styles().then((data) => { setStyles(data.styles); setStyle(data.preference?.style ?? '') }).catch(() => {}) }, [])
   useEffect(() => { if (thread.current) thread.current.scrollTop = thread.current.scrollHeight }, [messages])
   useEffect(() => {
+    setPinnedIds((current) => {
+      const next = cleanPinnedIds(current, messages)
+      return next.size === current.size && [...current].every((id) => next.has(id)) ? current : next
+    })
+  }, [messages])
+  useEffect(() => { if (pinnedOnly && pinnedMessages.length === 0) setPinnedOnly(false) }, [pinnedOnly, pinnedMessages.length])
+  useEffect(() => {
     if (!industryPrompt) return
     setPrompt(industryPrompt)
     onIndustryPromptConsumed?.()
   }, [industryPrompt, onIndustryPromptConsumed])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onKeyDown = (event) => {
+      if (isSearchShortcut(event)) {
+        event.preventDefault()
+        searchInput.current?.focus()
+        searchInput.current?.select?.()
+        return
+      }
+      if (isStopShortcut(event) && busy) {
+        event.preventDefault()
+        abort.current?.abort()
+        return
+      }
+      if (isClearSearchKey(event) && (searchQuery || pinnedOnly)) {
+        event.preventDefault()
+        setSearchQuery('')
+        setPinnedOnly(false)
+        setTranscriptNotice('')
+        composerInput.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [busy, searchQuery, pinnedOnly])
 
   const selectedModelEvidence = provider?.modelDetails?.find((entry) => entry.id === model) ?? null
   const industryUnsupported = Boolean(!modelIndependent && industryMode && selectedModelEvidence?.instructionTuned === false)
@@ -111,8 +149,10 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     const controller = new AbortController(); abort.current = controller
     const history = [...messages.filter((m) => !m.failed).map(({ role, content }) => ({ role, content })), { role: 'user', content: providerContent }]
     const attachmentLabels = attachments.map(({ name, kind, size }) => ({ name, kind, size }))
+    const userMessage = withMessageId({ role: 'user', content, draftPrompt: prompt, attachments: attachmentLabels })
+    const assistantMessage = withMessageId({ role: 'assistant', content: '', pending: true })
     setBusy(true); setError(null); setAllowSensitive(false)
-    setMessages((old) => [...old, { role: 'user', content, draftPrompt: prompt, attachments: attachmentLabels }, { role: 'assistant', content: '', pending: true }])
+    setMessages((old) => [...old, userMessage, assistantMessage])
     let text = '', completed = false
     try {
       let id = sessionId
@@ -131,7 +171,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
         }, { signal: controller.signal })
         text = result.text
         completed = true
-        setMessages((old) => [...old.slice(0, -1), { role: 'assistant', content: result.text, meta: result }])
+        setMessages((old) => replaceLastMessage(old, { role: 'assistant', content: result.text, meta: result, pending: false }))
       } else {
         await streamChat({
         messages: history,
@@ -160,8 +200,8 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
         signal: controller.signal,
         onEvent: ({ name, data }) => {
           if (name === 'error') throw Object.assign(new Error(data.message), { code: data.error })
-          if (name === 'delta') { text += data.text; setMessages((old) => [...old.slice(0, -1), { role: 'assistant', content: text, pending: true }]) }
-          if (name === 'done') { completed = true; setMessages((old) => [...old.slice(0, -1), { role: 'assistant', content: data.text, meta: data }]) }
+          if (name === 'delta') { text += data.text; setMessages((old) => replaceLastMessage(old, { role: 'assistant', content: text, pending: true, failed: false })) }
+          if (name === 'done') { completed = true; setMessages((old) => replaceLastMessage(old, { role: 'assistant', content: data.text, meta: data, pending: false, failed: false })) }
         },
       })
       }
@@ -171,7 +211,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
       setAttachmentError('')
     } catch (e) {
       setError(controller.signal.aborted ? Error('Generation stopped. Partial output is not saved to history; your draft is retained.') : e)
-      setMessages((old) => [...old.slice(0, -2), { role: 'user', content, draftPrompt: prompt, attachments: attachmentLabels, failed: true }, { role: 'assistant', content: text, failed: true }])
+      setMessages((old) => replaceLastTurn(old, { failed: true }, { content: text, failed: true, pending: false }))
     } finally { abort.current = null; setBusy(false); setMediaConsent(false); setToolsConsent(false); setNativeSearchConsent(false); setSaveProcessedInput(false); refreshReadiness?.() }
   }
 
@@ -234,6 +274,46 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     }
     setAttachmentError(problems.join(' '))
   }
+  const clearTranscriptState = () => {
+    setSearchQuery('')
+    setPinnedIds(new Set())
+    setPinnedOnly(false)
+    setTranscriptNotice('')
+  }
+  const togglePinned = (id) => {
+    if (!id) return
+    setPinnedIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const exportCurrentTranscript = () => {
+    const markdown = transcriptToMarkdown(visibleMessages.map(({ message }) => message), {
+      query: normalizedSearchQuery,
+      pinnedOnly,
+      pinnedIds,
+    })
+    const exported = downloadMarkdownFile(markdown)
+    setTranscriptNotice(exported
+      ? `Exported ${visibleMessages.length} visible message${visibleMessages.length === 1 ? '' : 's'} as Markdown.`
+      : 'This browser blocked the local Markdown export. No data left the page.')
+  }
+  const renderMessageText = (message) => {
+    const fallback = message.pending
+      ? (modelIndependent ? 'Processing with deterministic Klyvaron workflows…' : 'Waiting for the gateway…')
+      : 'No completed response.'
+    const text = messageText(message) || fallback
+    if (!normalizedSearchQuery) return text
+    return highlightSegments(text, normalizedSearchQuery).map((segment, index) => segment.match
+      ? <mark className="chat-search-hit" key={index}>{segment.text}</mark>
+      : <span key={index}>{segment.text}</span>)
+  }
+  const structuredValidationFor = (message) => structuredOutputCheck && message.role === 'assistant' && !message.pending
+    ? validateStructuredOutput(messageText(message))
+    : null
+
   const openSavedSession = (session) => {
     if (!session?.id || !Array.isArray(session.turns)) {
       setError(Error('This saved conversation could not be opened because its transcript was unavailable.'))
@@ -241,7 +321,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     }
     setMessages(session.turns
       .filter((turn) => ['user', 'assistant'].includes(turn.role))
-      .map((turn) => ({ role: turn.role, content: turn.content, historical: true })))
+      .map((turn) => withMessageId({ role: turn.role, content: turn.content, historical: true })))
     setSessionId(session.id)
     setPrompt('')
     setAttachments([])
@@ -250,6 +330,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     setLoadedSavedSession(true)
     setMediaConsent(false)
     setError(null)
+    clearTranscriptState()
   }
   const handleDeletedSession = (id) => {
     if (id !== sessionId) return
@@ -259,6 +340,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     setLoadedSavedSessionHasMedia(false)
     setPrompt('')
     setError(null)
+    clearTranscriptState()
   }
 
   return <div className="online-chat">
@@ -336,7 +418,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
         <div className="chat-toolbar-actions">
           <span className="chat-online-label"><i aria-hidden="true" />Online</span>
           <Button className="ghost small" type="button" aria-expanded={showSetupGuide} aria-controls="chat-getting-started" onClick={() => setSetupGuideOpen(!showSetupGuide)}>Setup guide</Button>
-          <Button disabled={busy} onClick={() => { setMessages([]); setSessionId(null); setLoadedSavedSession(false); setLoadedSavedSessionHasMedia(false); setMediaConsent(false); setToolsConsent(false); setNativeSearchConsent(false); setError(null); setPrompt(''); setAttachments([]); setAttachmentError('') }}>New conversation</Button>
+          <Button disabled={busy} onClick={() => { setMessages([]); setSessionId(null); setLoadedSavedSession(false); setLoadedSavedSessionHasMedia(false); setMediaConsent(false); setToolsConsent(false); setNativeSearchConsent(false); setError(null); setPrompt(''); setAttachments([]); setAttachmentError(''); clearTranscriptState() }}>New conversation</Button>
           <Button className="chat-settings-button" disabled={busy} onClick={onSettings}>Provider Settings</Button>
         </div>
       </div>
@@ -354,17 +436,51 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
         {selectedModelEvidence.capabilities.provenance?.source ? ` Evidence source: ${selectedModelEvidence.capabilities.provenance.source}.` : ''}
         {' '}Catalogue metadata is not an inference or modality test. This wire accepts function schemas, but the selected model may not support them. Search and function calls are opt-in; any returned function call is a proposal, never automatic execution.
       </p> : model ? <p className="small chat-capability-evidence">This provider has not supplied capability evidence for the selected model. Ragam does not infer image, search, audio or tool support from a model name.</p> : null}
+      <p className="small chat-context-limit" aria-label="Selected engine and context evidence">
+        {modelIndependent
+          ? 'Route: local deterministic Klyvaron · no provider, model context window, weights or network call. Context limits are bounded input/task limits, not a model context window. Evidence state: implemented and contract-tested; live provider verification is not applicable.'
+          : `Route: optional provider with no silent substitution · context limit ${contextLimitLabel(selectedModelEvidence)} · max output ${outputLimitLabel(selectedModelEvidence)}. Evidence state: catalogue metadata, contract-tested only; not live-verified.`}
+      </p>
       {loadedSavedSession ? <p className="small chat-history-disclosure" role="status">Saved conversation opened. The earlier provider/model was not recorded. When you press Send, this visible transcript will be processed by the selected engine.{loadedSavedSessionHasMedia ? ' Earlier binary media is not stored in history; reattach it if you want an optional model provider to inspect it again.' : ''}</p> : null}
-      <div className="thread" ref={thread} aria-live="polite" aria-label="Conversation transcript">
-        {messages.length ? messages.map((m, i) => (
-          <div className={`message ${m.role}`} data-role={m.role} key={i}>
+      <div className="chat-transcript-tools" role="search" aria-label="Transcript tools">
+        <input
+          ref={searchInput}
+          className="input chat-search-input"
+          aria-label="Search transcript"
+          aria-controls="chat-transcript"
+          type="search"
+          value={searchQuery}
+          maxLength={CHAT_TRANSCRIPT_SEARCH_LIMIT}
+          disabled={!messages.length}
+          placeholder="Search transcript"
+          onChange={(event) => { setSearchQuery(normalizeSearchQuery(event.target.value)); setTranscriptNotice('') }}
+        />
+        <span className="chat-transcript-count" role="status">{visibleMessages.length} of {messages.length} visible</span>
+        <label className="checkbox chat-pinned-filter">
+          <input type="checkbox" checked={pinnedOnly} disabled={!pinnedMessages.length} onChange={(event) => { setPinnedOnly(event.target.checked); setTranscriptNotice('') }} />Pinned only
+        </label>
+        <Button type="button" className="ghost small" disabled={!visibleMessages.length} onClick={exportCurrentTranscript}>Export Markdown</Button>
+        {transcriptNotice ? <span className="small chat-transcript-notice" role="status">{transcriptNotice}</span> : null}
+      </div>
+      {pinnedMessages.length ? <div className="chat-pinned-list" aria-label="Pinned messages">
+        <strong>Pinned messages ({pinnedMessages.length})</strong>
+        <ul>{pinnedMessages.map(({ message, index }) => <li key={message.id ?? index}>
+          <span>{message.role === 'user' ? 'You' : 'Assistant'}: {messageText(message).replace(/\s+/g, ' ').slice(0, 120) || '(no text)'}</span>
+          <Button type="button" className="ghost small" aria-label={`Unpin message ${index + 1}`} onClick={() => togglePinned(message.id)}>Unpin</Button>
+        </li>)}</ul>
+      </div> : null}
+      <div className="thread" id="chat-transcript" ref={thread} aria-live="polite" aria-label="Conversation transcript">
+        {visibleMessages.length ? visibleMessages.map(({ message: m, index: i }) => (
+          <div className={`message ${m.role}${pinnedIds.has(m.id) ? ' pinned' : ''}`} data-role={m.role} key={m.id ?? i}>
             <div className="message-head">
               <strong className="message-role">{m.historical && m.role === 'assistant' ? 'Earlier assistant reply' : m.role === 'user' ? 'You' : m.meta?.engine ? 'Klyvaron Processor' : m.meta?.modelId ?? model}</strong>
-              {m.content ? <div className="message-actions" style={{ marginLeft: 'auto' }}>
-                <CopyButton text={m.content} label="Copy" className="ghost small" />
-              </div> : null}
+              <div className="message-actions" style={{ marginLeft: 'auto' }}>
+                {messageText(m) ? <CopyButton text={messageText(m)} label="Copy" className="ghost small" /> : null}
+                <Button type="button" className="ghost small" aria-pressed={pinnedIds.has(m.id)} aria-label={pinnedIds.has(m.id) ? `Unpin message ${i + 1}` : `Pin message ${i + 1}`} onClick={() => togglePinned(m.id)}>{pinnedIds.has(m.id) ? 'Unpin' : 'Pin'}</Button>
+              </div>
             </div>
-            <div className="message-body message-text" style={{ whiteSpace: 'pre-wrap' }}>{m.content || (m.pending ? (modelIndependent ? 'Processing with deterministic Klyvaron workflows…' : 'Waiting for the gateway…') : 'No completed response.')}</div>
+            <div className="message-body message-text" style={{ whiteSpace: 'pre-wrap' }}>{renderMessageText(m)}</div>
+            {(() => { const check = structuredValidationFor(m); return check ? <small className={check.ok ? 'chat-json-ok' : 'chat-json-fail'}>Client-side JSON syntax check: {check.ok ? `PASS (${check.kind})` : `FAIL — ${check.error}`}. No provider schema was enforced; the reply is shown unchanged.</small> : null })()}
             {m.meta?.toolCalls?.length ? <div className="chat-tool-proposals" role="status"><strong>Provider function-call proposals — not executed</strong><p className="small">Review these untrusted model-proposed arguments. No provider or MCP tool runs unless you separately choose it in the manual tool panel.</p>{m.meta.toolCalls.map((call, index) => <details key={`${call.name}-${index}`}><summary>{call.name}</summary><pre className="code">{JSON.stringify(call.arguments, null, 2)}</pre></details>)}</div> : null}
             {(() => { const sources = m.meta?.grounding?.sources ?? m.meta?.grounding?.provider?.sources ?? []; return sources.length ? <div className="chat-grounding-sources"><strong>Provider search sources</strong><ul>{sources.map((source, index) => <li key={`${source.url}-${index}`}><a href={source.url} target="_blank" rel="noreferrer">{source.title || source.url}</a></li>)}</ul><small>Sources were returned by the provider; verify them independently.</small></div> : null })()}
             {m.attachments?.length ? <small>Attached: {m.attachments.map((file) => `${file.kind} ${file.name}`).join(', ')}. Binary content is not stored in this transcript.</small> : null}
@@ -449,6 +565,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
                 <label className="checkbox"><input type="checkbox" checked={useMemory} onChange={(e) => setUseMemory(e.target.checked)} />{modelIndependent ? 'Search my approved local memories' : 'Send matching approved memories to this gateway'}</label>
                 {modelIndependent ? <label className="checkbox"><input type="checkbox" checked={saveProcessedInput} disabled={busy} onChange={(e) => setSaveProcessedInput(e.target.checked)} />Save this supplied text to my local knowledge base after successful processing</label> : null}
                 {!modelIndependent ? <label className="checkbox"><input type="checkbox" checked={allowSensitive} onChange={(e) => setAllowSensitive(e.target.checked)} />I authorize sensitive content in this request and selected context to be sent to this gateway (one request)</label> : null}
+                <label className="checkbox"><input type="checkbox" checked={structuredOutputCheck} onChange={(e) => setStructuredOutputCheck(e.target.checked)} />Validate assistant replies as JSON in this browser (syntax only; no provider schema, no rewriting and no live-verification claim)</label>
                 <Field label="Response style" hint="A preference you set. It changes how an answer is phrased, not the facts or the result; the server checks the reply and never rewrites it.">
                   <select aria-label="Response style" className="select" value={style} disabled={busy} onChange={async (event) => { const next = event.target.value; setStyle(next); try { await api.setStyle(next || null) } catch (err) { setError(err) } }}>
                     <option value="">No style instruction</option>
@@ -460,7 +577,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
             {busy ? <Button variant="danger" onClick={() => abort.current?.abort()}>{modelIndependent ? 'Stop processing' : 'Stop generation'}</Button> : <Button type="submit" variant="primary" disabled={saving || (modelIndependent && processorTaskLimitExceeded) || (!modelIndependent && !model) || industryUnsupported || localOnlyUnsupported || (!prompt.trim() && !attachments.length)}>Send</Button>}
           </div>
         </div>
-        <div className="chat-composer-foot"><span>Enter to send <b>·</b> Shift + Enter for a new line</span><span>{modelIndependent ? `Klyvaron ${processorTier.toUpperCase()} · deterministic local processing · no model, weights or network` : localOnlyMode && LOCAL_CHAT_CONNECTIONS.has(provider?.kind) ? 'Sent only to the configured self-hosted runtime · remote vendor requests blocked' : localOnlyMode ? 'Local-only mode · remote requests blocked' : 'Sent to the selected provider · charges and retention policies may apply'}</span></div>
+        <div className="chat-composer-foot"><span>Enter to send <b>·</b> Shift + Enter for a new line <b>·</b> Ctrl/⌘+K search <b>·</b> Esc clear <b>·</b> Ctrl/⌘+Shift+S stop</span><span>{modelIndependent ? `Klyvaron ${processorTier.toUpperCase()} · deterministic local processing · no model, weights or network` : localOnlyMode && LOCAL_CHAT_CONNECTIONS.has(provider?.kind) ? 'Sent only to the configured self-hosted runtime · remote vendor requests blocked' : localOnlyMode ? 'Local-only mode · remote requests blocked' : 'Sent to the selected provider · charges and retention policies may apply'}</span></div>
       </form>
     </Panel>
     <details className="context-section"><summary>Conversation history</summary><HistoryPanel sessionId={sessionId} onOpen={openSavedSession} onDelete={handleDeletedSession} disabled={busy || saving} /></details>

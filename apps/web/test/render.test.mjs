@@ -546,6 +546,26 @@ test('Chat keeps the saved optional model separate from the built-in processor',
 
 })
 
+test('Chat exposes local transcript tools without claiming live verification', () => {
+  const source = readFileSync(resolve(WEB, 'src', 'areas', 'ChatArea.jsx'), 'utf8')
+  const markup = render('ChatArea (transcript tools)', React.createElement(components.ChatArea))
+  assert.match(markup, /aria-label="Search transcript"/)
+  assert.match(markup, /aria-controls="chat-transcript"/)
+  assert.match(markup, /Export Markdown/)
+  assert.match(markup, /Pinned only/)
+  assert.match(markup, /Validate assistant replies as JSON/)
+  assert.match(markup, /Ctrl\/⌘\+K search/)
+  assert.match(markup, /Route: local deterministic Klyvaron/)
+  assert.match(markup, /Evidence state: implemented and contract-tested/)
+  assert.match(source, /contextLimitLabel\(selectedModelEvidence\)/)
+  assert.match(source, /not live-verified/)
+  assert.match(source, /downloadMarkdownFile\(markdown\)/)
+  assert.match(source, /isSearchShortcut\(event\)/)
+  assert.match(source, /isStopShortcut\(event\)/)
+  assert.match(source, /validateStructuredOutput\(messageText\(message\)\)/)
+  assert.doesNotMatch(source, /dangerouslySetInnerHTML/)
+})
+
 test('Chat home offers original draft starters and keeps sending under the user’s control', () => {
   const markup = render('ChatArea (welcome)', React.createElement(components.ChatArea, {
     provider: { kind: 'openai', name: 'OpenAI', configured: true, models: ['model-a'], selectedModel: 'model-a' },

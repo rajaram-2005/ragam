@@ -162,7 +162,7 @@ internal service promoted to a navigation entry, fails the build.
 
 | Area | What it does | Current boundary |
 |---|---|---|
-| **Chat** | Defaults to model-independent Klyvaron deterministic processing; optional model-backed Chat supports streaming and opt-in account-local memory/knowledge context. | Built-in processing is bounded to documented deterministic tasks; model-backed inference requires an explicitly selected provider and model. |
+| **Chat** | Defaults to model-independent Klyvaron deterministic processing; optional model-backed Chat supports streaming and opt-in account-local memory/knowledge context. The transcript adds local-only search/filter, message pins, Markdown export, keyboard shortcuts, opt-in client-side JSON syntax validation and catalogue context-limit reporting. | Built-in processing is bounded to documented deterministic tasks; model-backed inference requires an explicitly selected provider and model. These transcript tools are contract-tested only, never live-verified. |
 | **Image** | Submits image-generation jobs through the supported provider adapters and shows job state and validated output. | Requires a configured provider. Adapters are contract-tested; live vendor qualification is still pending. |
 | **Video** | Submits video-generation jobs, exposes progress/cancellation, and validates that the result is genuine video rather than a still image. | Requires a configured provider. No video model or inference runtime is bundled locally. |
 | **Plugins** | Reviewed built-ins plus owner-managed Ragam HTTP plugin connections, with manifest/schema validation and permission preflight. | Remote plugin code is never downloaded or executed. The remote endpoint receives arguments only after per-call consent; only `service.external` scope is grantable. |
@@ -219,7 +219,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 2008 tests: core 1054, web 131, fabric 823
+npm test          # 2018 tests: core 1054, web 141, fabric 823
 ```
 
 The old Fabric and from-scratch model-training commands are retained as separate
@@ -241,7 +241,7 @@ component, a Docker Compose build/health/persistence/restore smoke, documentatio
 checks, and suite-count verification plus tests for the separate legacy release-gate code. The latest completed full CI run
 [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all
 1,916 tests (Core 985, Web 109, Fabric 822), plus release verification and the
-loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 2,008 tests (Core 1,054, Web 131, Fabric 823). The full Core suite passed 1,050/1,054 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 131/131 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv. Signing and qualification-capture tests use synthetic fixtures and do not establish a production signature or qualification. Full CI for this current tree is recorded in the pull-request checks and final engineering report. The tracked [36 — Final engineering report](docs/36-final-engineering-report.md) records the passing `main` CI run [42352898134](https://github.com/rajaram-2005/ragam/actions/runs/42352898134) and Desktop run [42352898123](https://github.com/rajaram-2005/ragam/actions/runs/42352898123) on `36fef57`. The added Chat API paths use deterministic contract fixtures;
+loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 2,018 tests (Core 1,054, Web 141, Fabric 823). The full Core suite passed 1,050/1,054 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 141/141 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv. Signing and qualification-capture tests use synthetic fixtures and do not establish a production signature or qualification. Full CI for this current tree is recorded in the pull-request checks and final engineering report. The tracked [36 — Final engineering report](docs/36-final-engineering-report.md) records the passing `main` CI run [42352898134](https://github.com/rajaram-2005/ragam/actions/runs/42352898134) and Desktop run [42352898123](https://github.com/rajaram-2005/ragam/actions/runs/42352898123) on `36fef57`. The added Chat API paths use deterministic contract fixtures;
 neither the tests nor CI made live vendor calls. The
 Fabric job tests the retained retriever experiment's gate in **both** directions. This is
 separate from the active model-independent Klyvaron processor and is not evidence that a
@@ -301,9 +301,9 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 42,247 | 27,156 | **zero npm packages** | 1054 |
+| `services/core` | Node 22 ESM | 42,247 | 27,160 | **zero npm packages** | 1054 |
 | `services/fabric` | Python 3.11 | 17,256 | 10,582 | NumPy only | 823 |
-| `apps/web` | React 18 + Vite | 7,143 | 2,443 | pdfjs-dist, react, react-dom | 131 |
+| `apps/web` | React 18 + Vite | 7,499 | 2,587 | pdfjs-dist, react, react-dom | 141 |
 
 The core service has **no npm dependencies at all** — that is why the root
 `package.json` is a script runner rather than an npm workspace: hoisting the web

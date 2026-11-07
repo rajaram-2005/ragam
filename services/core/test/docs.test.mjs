@@ -761,21 +761,21 @@ test('the status doc reports the real test totals', () => {
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
   assert.equal(count('services/core/test', /\.test\.mjs$/), 75)
-  assert.equal(count('apps/web/test', /\.test\.mjs$/), 9)
+  assert.equal(count('apps/web/test', /\.test\.mjs$/), 10)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
   assert.ok(status.includes('**1054 tests**'), 'current core test inventory must be stated')
   assert.ok(status.includes('**823 tests**'), 'fabric test inventory must be stated')
-  assert.ok(status.includes('**131 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('2008 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('**141 tests**'), 'web test inventory must be stated')
+  assert.ok(status.includes('2018 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('2008 tests: core 1054, web 131, fabric 823'),
+  assert.ok(squash(doc.readme()).includes('2018 tests: core 1054, web 141, fabric 823'),
     'README must state the current inventory as docs/03 does')
   assert.ok(squash(doc.readme()).includes('latest completed full CI run')
     && squash(doc.readme()).includes('41394564087')
     && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
-    && squash(doc.readme()).includes('The current tree has 2,008 tests (Core 1,054, Web 131, Fabric 823). The full Core suite passed 1,050/1,054 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 131/131 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv.')
+    && squash(doc.readme()).includes('The current tree has 2,018 tests (Core 1,054, Web 141, Fabric 823). The full Core suite passed 1,050/1,054 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 141/141 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv.')
     && squash(doc.readme()).includes('Full CI for this current tree is recorded in the pull-request checks and final engineering report')
     && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
   'README must distinguish the last full CI run from the current full local suite')
@@ -786,12 +786,12 @@ test('the status doc reports the real test totals', () => {
   const fromHeadings = perComponent
   assert.ok(fromHeadings.includes(1054), `core heading must say 1054, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(823), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(131), `web heading must say 130, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(141), `web heading must say 141, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    2008,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 2008`,
+    2018,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 2018`,
   )
 })
 
@@ -2383,4 +2383,8 @@ test('the final engineering report and audit docs record the verified main evide
   ]) {
     assert.ok(RELEASE_ARTEFACTS.includes(path), `${path} must be a required release artefact`)
   }
+  assert.match(squash(doc.status()), /in-transcript search\/filter/, 'docs/03 must describe the new Chat tools')
+  assert.match(squash(doc.readme()), /local-only search\/filter/, 'README must describe the new Chat tools')
+  assert.match(report, /Chat transcript tools/, 'docs/36 must record the Chat transcript tools')
+  assert.match(report, /contract-tested, not live-verified/, 'docs/36 must keep the evidence state honest')
 })

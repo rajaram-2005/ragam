@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 42,247 source lines, 27,156 test lines
+### `services/core` — 42,247 source lines, 27,160 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -259,7 +259,7 @@ dual encoder whose **five parameter gradients all match central finite differenc
 and a prototype that trains the two differentiator parts in the same loss as the language objective.
 See its own [`README`](../services/fabric/README.md).
 
-### `apps/web` — 7,143 source lines, 2,443 test lines
+### `apps/web` — 7,499 source lines, 2,587 test lines
 
 Five local-workspace area components, three retained direct-Core account pages, the separate opt-in `HostedByokApp`, a local-first app shell, shared primitives and an API client. The Direct-Core account pages are not used by the standard Docker deployment; the hosted account flow and its security boundary are documented in [30 — Hosted BYOK](30-hosted-byok.md). The Web suite has nine test files. Design tokens and the shell's visual structure come from upstream Aetheris
 (see [`../third-party/NOTICES.md`](../third-party/NOTICES.md) §1.1).

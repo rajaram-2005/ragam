@@ -69,6 +69,7 @@ procedure and remaining blockers: [docs/35-release-readiness.md](35-release-read
 | P2 | Transient artifact-service DNS failure failed an otherwise green Desktop push run | One strict retry with `overwrite: true`; a persistent upload failure still fails the job; guarded by release test. |
 | P2 | Duplicate web API skills surface | Dead duplicate removed; source-level duplicate-key regression test passes. |
 | P2 | Final report and audit docs were stale or workspace-only | This tracked report plus updated docs 34/35 and a docs-accuracy regression test guard the final `main` evidence and refuse stale `IN PROGRESS` markers. |
+| Enhancement | Chat transcript tools | Local-only in-transcript search/filter, message pins, Markdown transcript export, keyboard shortcuts, opt-in client-side JSON syntax validation and catalogue context-limit reporting; nine pure helper tests and one render test. Implemented and contract-tested, not live-verified. |
 | Informational | PR #13 model-specific weight pins, mandatory weights installer, tier voice presets and 0.1.1 card | Not ported: current architecture is model-independent, no weight payloads exist, and archived cards are metadata. PR #13 was closed with a supersession comment. |
 
 ## 4. Files changed
@@ -89,15 +90,21 @@ artefacts and updates `docs/34-final-repair-audit.md`, `docs/35-release-readines
 `docs/04-setup.md`, `README.md`, `CHANGELOG.md`, `docs/02-architecture.md`,
 `services/core/src/release/manifest.mjs` and `services/core/test/docs.test.mjs`.
 
+Chat-area feature delivery adds `apps/web/src/chat-transcript.js` and
+`apps/web/test/chat-transcript.test.mjs`, and updates `apps/web/src/areas/ChatArea.jsx`,
+`apps/web/src/styles.css`, `apps/web/test/render.test.mjs`, `services/core/test/docs.test.mjs`,
+`services/core/test/release.test.mjs` and the measured documentation counts. All six features are
+local-only, have regression tests, and are explicitly **contract-tested, not live-verified**.
+
 ## 5. Exact test counts and local verification
 
 | Suite / check | Pass | Fail | Skip | Total / notes |
 | --- | ---: | ---: | ---: | --- |
 | Core | 1,050 | 0 | 4 | 1,054; four real-artifact acceptance cases skipped because ignored legacy fixtures are absent locally |
-| Web | 131 | 0 | 0 | 131 |
+| Web | 141 | 0 | 0 | 141 |
 | Fabric | 823 | 0 | 0 | 823; 823 progress dots, exit 0, no skip/failure markers |
 | Desktop local | 4 | 0 | 0 | 4 |
-| `release-check.mjs --core 1054 --web 131 --fabric 823` | **PASS** | 0 | — | 2,008 tests, 31 artefacts, 3 packs |
+| `release-check.mjs --core 1054 --web 141 --fabric 823` | **PASS** | 0 | — | 2,018 tests, 31 artefacts, 3 packs |
 | Production Web build | **PASS** | 0 | — | Vite build |
 | Web production `npm audit` | **PASS** | 0 | — | 0 vulnerabilities |
 | Desktop production `npm audit` | **PASS** | 0 | — | 0 vulnerabilities |
@@ -167,6 +174,7 @@ Cancelled, skipped or unexecuted jobs were not counted as platform verification.
 6. Klyvaron must not be marketed as trained Pro/Max models without verified weight files, hashes and runtime qualification.
 7. The macOS arm64 hosted runner annotation warns of possible longer queue times; a future capacity failure should produce a fresh successful run rather than counting a cancelled job as evidence.
 8. Node.js 20 action deprecation and Ubuntu-latest migration warnings appear in CI annotations; they are non-blocking today but should be scheduled before the runner image changes.
+9. The new Chat transcript tools are local-only and contract-tested; they are not a live provider, multimodal, research, coding, agent or production-deployment verification.
 
 ## 10. Final acceptance
 
