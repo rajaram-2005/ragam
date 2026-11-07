@@ -44,12 +44,12 @@ Local suites on the repair branch, with `AETHERIS_PYTHON` pointing at an isolate
 
 | Suite | Result | Classification |
 |---|---|---|
-| Core | 1,050 passed, 0 failed, 4 skipped real-artifact acceptance cases out of 1,054 | **PASS** |
-| Web | 141 passed, 0 failed, 0 skipped | **PASS** |
+| Core | 1,059 passed, 0 failed, 4 skipped real-artifact acceptance cases out of 1,063 | **PASS** |
+| Web | 142 passed, 0 failed, 0 skipped | **PASS** |
 | Fabric | 823 passed, 0 failed, 0 skipped | **PASS** |
 | Desktop loopback server | 4 passed, 0 failed, 0 skipped | **PASS** |
 | Production web build | Vite build succeeded; bundle has no absolute backend URL | **PASS** |
-| `release-check.mjs --core 1054 --web 141 --fabric 823` | Verified 2,018 tests, 31 artefacts, 3 packs | **PASS** |
+| `release-check.mjs --core 1063 --web 142 --fabric 823` | Verified 2,028 tests, 31 artefacts, 3 packs | **PASS** |
 | `npm audit` web + desktop production trees | 0 vulnerabilities | **PASS** |
 | Python advisory audit | 8 packages checked; no installed version covered by a known advisory | **PASS** |
 | Internal-error sanitization | Uncoded thrown error returns 500 `internal_error` with a generic message | **PASS** |
@@ -59,6 +59,7 @@ Local suites on the repair branch, with `AETHERIS_PYTHON` pointing at an isolate
 | Tokenizer parity | JS/Python parity fixture includes hyphen-part cases; both sides pass | **PASS** |
 | Desktop workflow guard | `macos-15-intel`/`macos-26` labels and their x64/arm64 targets pinned, retired `macos-14` refused, no in-progress cancellation | **PASS** |
 | Chat transcript tools | **PASS** | Local-only search/filter, message pins, Markdown export, keyboard shortcuts, opt-in client-side JSON syntax validation and catalogue context-limit reporting are covered by nine pure helper tests and one render test; no provider, credential, weight, backend or navigation change. |
+| Provider fabric Phase 2 | **PASS** | Versioned local-only snapshot with normalized errors, model-discovery metadata, local/cloud state, health/evidence states, cost/latency scaffolding, explainable routing and fail-closed live-qualification gate; eight pure tests, one readiness test and one render test. No live provider call or credential value is claimed. |
 
 ## 5. Security and architecture findings
 
@@ -110,6 +111,7 @@ release certificate.
 | Final `main` Desktop | **PASS** | [Desktop run 42352898123](https://github.com/rajaram-2005/ragam/actions/runs/42352898123) passed all four platform jobs on `36fef57`: Linux x64/ARM64, Windows x64/ARM64, macOS Intel x64 and macOS Apple Silicon arm64. |
 | Final engineering report | **PASS** | [docs/36](36-final-engineering-report.md) is tracked in the repository and included in release verification. |
 | Chat transcript tools | **PASS** (contract-tested) | Six local-only Chat features are implemented with regression tests and explicit `not live-verified` evidence text. No live provider call, credential, model weight or backend change is claimed. |
+| Provider fabric Phase 2 | **PASS** (contract-tested) | `/api/ready` exposes a local-only provider fabric snapshot; live qualification fails closed. Evidence state is implemented and contract-tested, not live-verified. No raw endpoint, credential, model weight or provider call is included. |
 | Genuine third-party E2E | **NOT TESTED** | No live provider credentials or connectivity were available. Mocked adapters and loopback HTTP tests are not genuine third-party verification. |
 | Klyvaron trained production models | **NOT TESTED** | No weight payloads are present in the checkout. Lite/Pro/Max remain resource/workflow profiles of one model-independent deterministic engine; archived model cards are metadata, not trained model evidence. The production evidence gate is skipped by design and fails closed. |
 | Signed installers / versioned release | **NOT TESTED** | No signing credentials, versioned release artifacts, checksums, signatures or published release were created. Unsigned installers remain explicitly labelled. |

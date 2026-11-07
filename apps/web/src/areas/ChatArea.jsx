@@ -436,6 +436,9 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
         {selectedModelEvidence.capabilities.provenance?.source ? ` Evidence source: ${selectedModelEvidence.capabilities.provenance.source}.` : ''}
         {' '}Catalogue metadata is not an inference or modality test. This wire accepts function schemas, but the selected model may not support them. Search and function calls are opt-in; any returned function call is a proposal, never automatic execution.
       </p> : model ? <p className="small chat-capability-evidence">This provider has not supplied capability evidence for the selected model. Ragam does not infer image, search, audio or tool support from a model name.</p> : null}
+      <p className="small chat-provider-fabric" aria-label="Provider fabric evidence">
+        Provider fabric: {readiness?.providerFabric?.counts?.total ?? 'unknown'} catalogued · {readiness?.providerFabric?.counts?.local ?? 0} local · {readiness?.providerFabric?.counts?.cloud ?? 0} cloud · {readiness?.providerFabric?.counts?.unknown ?? 0} unknown · evidence {readiness?.providerFabric?.evidenceState ?? 'unknown'} · live qualification {readiness?.providerFabric?.liveQualification?.state ?? 'not_requested'}.
+      </p>
       <p className="small chat-context-limit" aria-label="Selected engine and context evidence">
         {modelIndependent
           ? 'Route: local deterministic Klyvaron · no provider, model context window, weights or network call. Context limits are bounded input/task limits, not a model context window. Evidence state: implemented and contract-tested; live provider verification is not applicable.'

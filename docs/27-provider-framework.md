@@ -505,7 +505,7 @@ keep their existing routes and semantics.
    unfinished adapters.
 5. Resume of an in-flight video operation after a restart, if the product needs it; until then the
    interruption is recorded rather than hidden.
-6. Provider health checks and usage accounting surfaced in the five areas.
+6. Live provider health checks and usage accounting surfaced in the five areas. Phase 2 adds a contract-tested fabric snapshot and a fail-closed live-qualification gate; it does not perform a live health probe.
 7. Product routes for the adaptive core's measured loop, which remains a library; the style
    estimator is deliberately not one of them.
 
@@ -526,3 +526,18 @@ node --test services/core/test/online-skill-measure.test.mjs # 6 tests, determin
 node --test services/core/test/provider-framework.test.mjs
 npm run test:web                       # includes the catalogue and saved-connection renders
 ```
+
+## 12. Provider fabric Phase 2 — local-only evidence
+
+`services/core/src/providers/fabric.mjs` adds a versioned provider fabric snapshot to `/api/ready`. It
+normalizes provider errors through `providers/errors.mjs`, separates provider, endpoint and model ids in
+model-discovery metadata, records explicit local/cloud state, computes caller-supplied p50/p95 latency
+and cost-per-success without inventing missing values, reuses `selectProvider` for explainable routing,
+and exposes an opt-in live-qualification gate that fails closed without explicit consent, credentials,
+connectivity and an implemented wire.
+
+Evidence state for this phase is **implemented, contract-tested, not live-verified**. The snapshot has
+no credential value, raw endpoint, model weight, weight download, provider call, health probe or
+quality benchmark result. A catalogue row is not implementation proof; a fixture is not live
+verification. `services/core/test/provider-fabric.test.mjs` and the `/api/ready` regression test pin
+these boundaries.
