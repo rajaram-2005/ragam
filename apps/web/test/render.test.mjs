@@ -546,6 +546,24 @@ test('Chat keeps the saved optional model separate from the built-in processor',
 
 })
 
+test('Chat shows provider fabric evidence without claiming live verification', () => {
+  const readiness = {
+    providerFabric: {
+      counts: { total: 46, local: 6, cloud: 40, unknown: 0 },
+      evidenceState: 'contract-tested',
+      liveQualification: { state: 'not_requested' },
+    },
+  }
+  const markup = render('ChatArea (provider fabric)', React.createElement(components.ChatArea, { readiness }))
+  assert.match(markup, /Provider fabric:/)
+  assert.match(markup, /46 catalogued/)
+  assert.match(markup, /6 local/)
+  assert.match(markup, /40 cloud/)
+  assert.match(markup, /contract-tested/)
+  assert.match(markup, /not_requested/)
+  assert.doesNotMatch(markup, /live-verified/)
+})
+
 test('Chat exposes local transcript tools without claiming live verification', () => {
   const source = readFileSync(resolve(WEB, 'src', 'areas', 'ChatArea.jsx'), 'utf8')
   const markup = render('ChatArea (transcript tools)', React.createElement(components.ChatArea))

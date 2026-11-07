@@ -106,6 +106,29 @@ test('the provider catalogue is authenticated, read-only and carries no secrets'
   assert.ok(!/sk-[A-Za-z0-9]|bearer\s+[a-z0-9]/i.test(text), 'the catalogue leaked a credential shape')
 })
 
+test('readiness exposes a contract-tested provider fabric without secrets or a live call', async (t) => {
+  const f = await fixture(t)
+  await f.configure()
+  const callsBefore = f.calls.length
+  const r = await f.request('GET', '/api/ready')
+  assert.equal(r.status, 200)
+  assert.equal(f.calls.length, callsBefore, 'readiness must not probe a provider')
+  const fabric = r.data.providerFabric
+  assert.equal(fabric.schemaVersion, 1)
+  assert.equal(fabric.catalogueValid, true)
+  assert.equal(fabric.evidenceState, 'contract-tested')
+  assert.equal(fabric.liveCallPerformed, false)
+  assert.equal(fabric.activeProviderId, 'openai')
+  assert.equal(fabric.counts.liveVerified, 0)
+  assert.equal(fabric.liveQualification.state, 'not_requested')
+  assert.equal(fabric.liveQualification.liveVerified, false)
+  assert.equal(fabric.measurements.state, 'not_measured')
+  assert.equal(fabric.routing.state, 'not_requested')
+  const text = JSON.stringify(fabric)
+  assert.ok(!text.includes(f.gatewayUrl), 'provider fabric must not expose the raw endpoint')
+  assert.doesNotMatch(text, /synthetic-gateway-secret|"apiKey"|"token"|"secret"|Authorization:/i)
+})
+
 test('owner login uses an HttpOnly secure cookie; wrong passwords and cross-origin mutations fail', async (t) => {
  const f = await fixture(t); assert.equal((await f.request('POST','/api/auth/login',{email:f.account.email,password:'a-long-wrong-password'})).status,401)
  const r = await f.login(); assert.match(r.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/); assert.match(r.headers.get('set-cookie'),/Secure/)
