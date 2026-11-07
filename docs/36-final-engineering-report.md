@@ -155,7 +155,7 @@ Cancelled, skipped or unexecuted jobs were not counted as platform verification.
 - **Versioned release artifacts/checksums/signatures:** **NOT TESTED**. `VERSION` remains `0.2.0`; no release, checksum file, signature or published artifact was created.
 - **Backup/restore/rollback:** local synthetic Compose cold-backup/restore **PASS**; production deployment restore/rollback **NOT TESTED**.
 - **Branch protection:** **BLOCKED**. `gh api repos/rajaram-2005/ragam/branches/main/protection` returned HTTP 403 `Resource not accessible by integration`; recommendations are documented, not claimed as configured.
-- **Release publication:** **BLOCKED** pending explicit approval. Credential changes, destructive cleanup and major architecture changes were not performed.
+- **Release publication:** **BLOCKED** pending explicit approval. No release was published, installers remain unsigned, no credentials were changed, and no destructive cleanup or architecture changes were made.
 
 ## 9. Limitations, risks and next safe repairs
 
@@ -173,5 +173,7 @@ Cancelled, skipped or unexecuted jobs were not counted as platform verification.
 **NOT RELEASE READY.** All code-level critical/high defects identified in this audit are repaired with
 regression tests, and both required workflows passed on the verified `main` code commit with all four
 supported Desktop jobs green. The remaining evidence gaps and approval-gated actions above prevent a
-production-release claim. Continue with the next safe repair only within those bounds; do not publish,
-sign, change credentials or perform destructive cleanup without explicit approval.
+production-release claim. No release was published, installers remain unsigned, and no credentials,
+destructive cleanup, or architecture changes were made. Continue with the next safe repair only within
+those bounds; publication, signing, credential changes, destructive cleanup, and architecture changes
+require explicit approval.
