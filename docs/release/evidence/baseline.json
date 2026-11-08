@@ -1,0 +1,47 @@
+{
+  "schema": "ragam-release-baseline/1",
+  "capturedAt": "2026-10-17",
+  "capturedBeforeAnyModification": true,
+  "branch": "arena/d44183df-ragam",
+  "head": "80ad8458fb039962dcaee6293dd451d1c6932416",
+  "originMain": "80ad8458fb039962dcaee6293dd451d1c6932416",
+  "workingTree": "clean",
+  "version": "0.2.0",
+  "openPullRequests": [],
+  "latestMainRuns": [
+    { "id": "42396395722", "name": "CI", "conclusion": "success", "headSha": "80ad8458fb039962dcaee6293dd451d1c6932416" },
+    { "id": "42396395647", "name": "Desktop packages", "conclusion": "success", "headSha": "80ad8458fb039962dcaee6293dd451d1c6932416" }
+  ],
+  "desktopJobs": ["linux-x64-arm64", "windows-x64-arm64", "macos-intel-x64", "macos-arm64"],
+  "providerCatalogue": { "total": 46, "ready": 23, "gateway_only": 22, "pending": 1 },
+  "testFiles": 130,
+  "trackedWeightFiles": 0,
+  "modelCards": "12 archived cards, all status not_released, metadata only",
+  "deploymentConfigs": ["Dockerfile.core", "Dockerfile.web", "apps/web/vercel.json", "compose.yaml", "compose.lan.yaml", "deploy/Caddyfile", "deploy/Caddyfile.lan", "deploy/Web.Caddyfile"],
+  "mobileOrCliDirectories": [],
+  "githubGovernance": {
+    "defaultBranch": "main",
+    "visibility": "public",
+    "allowMergeCommit": true,
+    "allowSquashMerge": true,
+    "allowRebaseMerge": true,
+    "deleteBranchOnMerge": false,
+    "branchProtectionApi": "HTTP 403 Resource not accessible by integration",
+    "rulesets": [],
+    "environments": { "total_count": 0 },
+    "actionsSecretsApi": "HTTP 403 Resource not accessible by integration"
+  },
+  "credentialFieldsObserved": [
+    "LLAMACPP_API_KEY", "LLAMACPP_API_KEY_FILE", "SUPABASE_URL", "SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY", "AETHERIS_PROVIDER_ENCRYPTION_KEY", "AETHERIS_HOSTED_ORIGINS",
+    "AETHERIS_HOSTED_SITE_URL", "AETHERIS_COOKIE_SECURE",
+    "provider.json connections[].key (AES-256-GCM sealed)", "master.key",
+    "byok_provider_connections.credential"
+  ],
+  "noCredentialValuesWereRead": true,
+  "baselineCoreSuiteWithoutConfiguredPython": { "tests": 1072, "pass": 1063, "fail": 5, "skipped": 4, "log": "docs/release/evidence/baseline-core.tap" },
+  "baselineCoreSuiteWithConfiguredPython": { "tests": 1072, "pass": 1068, "fail": 0, "skipped": 4, "log": "docs/release/evidence/baseline-core-configured.tap" },
+  "baselineWebSuite": { "tests": 143, "pass": 143, "fail": 0, "log": "docs/release/evidence/baseline-web.tap" },
+  "baselineFabricSuite": { "tests": 823, "pass": 823, "fail": 0, "log": "docs/release/evidence/baseline-fabric.log" },
+  "baselineDesktopSuite": { "tests": 4, "pass": 4, "fail": 0, "log": "docs/release/evidence/baseline-desktop.tap" }
+}

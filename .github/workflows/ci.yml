@@ -53,7 +53,7 @@ jobs:
       - name: Provision legacy Pro/Max artifacts for acceptance tests only
         # These artifacts are isolated test inputs, never app startup or desktop dependencies.
         run: |
-          python -m pip install --upgrade pip && pip install numpy jax av Pillow
+          python -m pip install --upgrade pip && pip install -r services/fabric/requirements.lock
           mkdir -p .aetheris-data/online/klyvaron/models
           curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40 \
             | tar -xz --strip-components=1 -C .aetheris-data/online/klyvaron/models
@@ -115,8 +115,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install NumPy, multimodal packages, and pytest (never torch)
-        run: python -m pip install --upgrade pip && pip install numpy jax av Pillow pytest
+      - name: Install pinned NumPy, multimodal packages, and pytest (never torch)
+        run: python -m pip install --upgrade pip && pip install -r services/fabric/requirements.lock
 
       - name: Confirm no GPU is assumed
         run: |
@@ -403,7 +403,7 @@ jobs:
       - name: Provision legacy Pro/Max artifacts for acceptance tests only
         # These artifacts are isolated test inputs, never app startup or desktop dependencies.
         run: |
-          python -m pip install --upgrade pip > /dev/null && pip install numpy jax av Pillow pytest
+          python -m pip install --upgrade pip > /dev/null && pip install -r services/fabric/requirements.lock
           mkdir -p .aetheris-data/online/klyvaron/models
           curl -fsSL https://codeload.github.com/rajaram-2005/ragam/tar.gz/c9f6aa2f5e31ed462caae1f94395ba46ea808a40 \
             | tar -xz --strip-components=1 -C .aetheris-data/online/klyvaron/models

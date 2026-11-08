@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 43,489 source lines, 27,783 test lines
+### `services/core` — 43,655 source lines, 28,036 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -80,7 +80,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `legacy-server.mjs` | 153 | Retained offline-first entry; not the active product |
 | `online/accounts.mjs` | 468 | Local Core accounts, scrypt password hashes, lockouts, throttling, owner bootstrap and host-delivered reset codes |
 | `hosted/byok.mjs` | 386 | Stateless Vercel BYOK API: Supabase Auth sessions, per-user AES-GCM provider secrets, strict origin/endpoint checks, explicit request/Search consent, and provider isolation |
-| `online/app.mjs` | 1,327 | Online application with authenticated deterministic Klyvaron processing profiles, account-scoped memory and knowledge, optional BYOK providers, and exact-model gateway routing; legacy tier-specific model, qualification, media-weight and training routes are retired |
+| `online/app.mjs` | 1,338 | Online application with authenticated deterministic Klyvaron processing profiles, account-scoped memory and knowledge, optional BYOK providers, and exact-model gateway routing; legacy tier-specific model, qualification, media-weight and training routes are retired |
 | `online/native-klyvaron.mjs` | 506 | Legacy Pro/Max artifact verifier retained for isolated compatibility tests; artifact scanning and loading are disabled in the active app |
 | `online/context-routes.mjs` | 357 | Authenticated deterministic processor routes, account-scoped retrieval/session context, request-cancellation handling, reviewed read-only tool routes, and owner-managed remote server routes |
 | `online/gateway.mjs` | 259 | Bounded transport for every saved connection: destination validation, deadline, size bounds, SSE, no redirects. Wire adapters supply the request shape; the resolver admits a catalogue id only when its wire is implemented and its status is not pending |
@@ -101,7 +101,8 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `klyvaron/multimodal-host.mjs` | 651 | Legacy multimodal artifact host retained for isolated compatibility tests; active app disables model-file scanning and loading |
 | `klyvaron/qualification.mjs` | 259 | Persistent runtime qualification registry keyed by hardware signature, backend, runtime version, model version, and SHA-256 digest with automatic staleness invalidation |
 | `klyvaron/consent.mjs` | 23 | Shared explicit-consent freshness bounds: missing, expired and future-dated timestamps are refused; ordinary clock skew is tolerated |
-| `klyvaron/python-executable.mjs` | 21 | One `AETHERIS_PYTHON` configuration surface for retained Python worker paths; an explicit interpreter is authoritative over PATH fallbacks |
+| `klyvaron/python-executable.mjs` | 41 | One `AETHERIS_PYTHON` configuration surface for retained Python worker paths; an explicit interpreter is authoritative, and a clean checkout's repository-local `.venv` is the first fallback |
+| `telemetry/monitor.mjs` | 135 | Privacy-conscious in-memory operational counters: health, API failures, provider availability, model-load failures, inference latency, worker failures, job lifecycle, resources and deployment health; allowlisted fields, no transmission, `AETHERIS_TELEMETRY_ENABLED=false` disables it |
 | `klyvaron/worker-exec.mjs` | 105 | Bounded worker-process execution with pre-abort refusal, SIGTERM then SIGKILL cancellation, timeout escalation and coded spawn failures |
 | `klyvaron/training-worker.mjs` | 708 | Consent-gated local training worker setup and execution manager: hardware/software inspection, stable preflight snapshot with live-resource separation, compute/license/storage/energy pre-consent disclosure, expiry-bound consent, resource re-checks, atomic checkpointing, cancellation, and recovery |
 | `klyvaron/training-controller.mjs` | 1,291 | User-computer-first training & adaptation controller: unpaired fail-closed default, Adaptive planning/evaluation, 5-mode resource-aware planner across all 8 models, non-silent downgrade approval gate, 7-field training specification + disclosure consent, 120s interactive deadline vs operator-budgeted foundation pretraining, and hot rollback |

@@ -1,0 +1,2098 @@
+{
+  "schema": "ragam-provider-qualification/1",
+  "generatedAt": "2026-11-08T07:27:13.003Z",
+  "source": "services/core/src/providers/catalog.mjs (46 entries) and services/core/src/providers/wires/index.mjs",
+  "catalogue": {
+    "valid": true,
+    "problems": [],
+    "total": 46,
+    "counts": {
+      "ready": 23,
+      "gateway_only": 22,
+      "pending": 1
+    },
+    "summary": "23 ready, 22 individually adapted Chat providers (contract tested; live verification pending), 1 pending"
+  },
+  "liveCallsMade": 0,
+  "authorizedTestCredentialsAvailable": false,
+  "statuses": {
+    "PASS": 0,
+    "FAIL": 0,
+    "BLOCKED": 45,
+    "NOT TESTED": 0,
+    "NOT APPLICABLE": 1
+  },
+  "note": "No provider was live-tested. Every supported provider is BLOCKED pending an explicitly authorized test/staging credential and owner approval for a real call. Contract-tested adapters and isolated-service E2E results are not live vendor evidence.",
+  "providers": [
+    {
+      "id": "ollama",
+      "label": "Ollama (OpenAI-compatible)",
+      "catalogueStatus": "ready",
+      "category": "gateway",
+      "wire": "openai_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": false,
+      "officialEndpoint": "https://api.openai.com/v1",
+      "endpointSource": "services/core/src/providers/wires (openai_chat).defaultBaseUrl",
+      "officialDocumentation": "https://github.com/ollama/ollama/blob/main/docs/openai.md",
+      "configField": "PUT /api/providers/ollama body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"ollama\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Ollama (OpenAI-compatible) (never a production key) entered via PUT /api/providers/ollama body fields: baseUrl, apiKey. This connection is a local/self-hosted runtime with no vendor key: start it on an operator-trusted loopback/private origin and configure it via PUT /api/providers/ollama body fields: baseUrl, apiKey. Owner authorization to make one real request to https://api.openai.com/v1 (https://github.com/ollama/ollama/blob/main/docs/openai.md), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "llamacpp",
+      "label": "llama.cpp server",
+      "catalogueStatus": "ready",
+      "category": "gateway",
+      "wire": "openai_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": false,
+      "officialEndpoint": "https://api.openai.com/v1",
+      "endpointSource": "services/core/src/providers/wires (openai_chat).defaultBaseUrl",
+      "officialDocumentation": "https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md",
+      "configField": "PUT /api/providers/llamacpp body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"llamacpp\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for llama.cpp server (never a production key) entered via PUT /api/providers/llamacpp body fields: baseUrl, apiKey. This connection is a local/self-hosted runtime with no vendor key: start it on an operator-trusted loopback/private origin and configure it via PUT /api/providers/llamacpp body fields: baseUrl, apiKey. Owner authorization to make one real request to https://api.openai.com/v1 (https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "anthropic",
+      "label": "Anthropic Claude",
+      "catalogueStatus": "ready",
+      "category": "vendor",
+      "wire": "anthropic_messages",
+      "auth": "x_api_key",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.anthropic.com/v1",
+      "endpointSource": "services/core/src/providers/wires (anthropic_messages).defaultBaseUrl",
+      "officialDocumentation": "https://docs.anthropic.com/en/api/messages",
+      "configField": "PUT /api/providers/anthropic body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"anthropic\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Anthropic Claude (never a production key) entered via PUT /api/providers/anthropic body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"anthropic\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.anthropic.com/v1 (https://docs.anthropic.com/en/api/messages), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "gemini",
+      "label": "Google Gemini",
+      "catalogueStatus": "ready",
+      "category": "vendor",
+      "wire": "gemini_generate",
+      "auth": "x_api_key",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://generativelanguage.googleapis.com/v1beta",
+      "endpointSource": "services/core/src/providers/wires (gemini_generate).defaultBaseUrl",
+      "officialDocumentation": "https://ai.google.dev/api/generate-content",
+      "configField": "PUT /api/providers/gemini body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"gemini\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Google Gemini (never a production key) entered via PUT /api/providers/gemini body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"gemini\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://generativelanguage.googleapis.com/v1beta (https://ai.google.dev/api/generate-content), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "cohere",
+      "label": "Cohere",
+      "catalogueStatus": "ready",
+      "category": "vendor",
+      "wire": "cohere_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.cohere.com",
+      "endpointSource": "services/core/src/providers/wires (cohere_chat).defaultBaseUrl",
+      "officialDocumentation": "https://docs.cohere.com/reference/chat",
+      "configField": "PUT /api/providers/cohere body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"cohere\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Cohere (never a production key) entered via PUT /api/providers/cohere body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"cohere\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.cohere.com (https://docs.cohere.com/reference/chat), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "azure-openai",
+      "label": "Azure OpenAI",
+      "catalogueStatus": "ready",
+      "category": "vendor",
+      "wire": "azure_openai",
+      "auth": "x_api_key",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle",
+      "configField": "PUT /api/providers/azure-openai body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"azure-openai\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Azure OpenAI (never a production key) entered via PUT /api/providers/azure-openai body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"azure-openai\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "vertex",
+      "label": "Google Vertex AI",
+      "catalogueStatus": "ready",
+      "category": "vendor",
+      "wire": "gcp_vertex",
+      "auth": "gcp_adc",
+      "credentialKind": "service_account",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations",
+      "configField": "PUT /api/providers/vertex body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"vertex\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Google Vertex AI (never a production key) entered via PUT /api/providers/vertex body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"vertex\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "bedrock",
+      "label": "Amazon Bedrock",
+      "catalogueStatus": "ready",
+      "category": "vendor",
+      "wire": "aws_bedrock",
+      "auth": "aws_sigv4",
+      "credentialKind": "aws_credentials",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html",
+      "configField": "PUT /api/providers/bedrock body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"bedrock\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Amazon Bedrock (never a production key) entered via PUT /api/providers/bedrock body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"bedrock\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "openai",
+      "label": "OpenAI",
+      "catalogueStatus": "gateway_only",
+      "category": "native-vendor",
+      "wire": "openai_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.openai.com/v1",
+      "endpointSource": "services/core/src/providers/wires (openai_chat).defaultBaseUrl",
+      "officialDocumentation": "https://developers.openai.com/api/reference/chat-completions/overview",
+      "configField": "PUT /api/providers/openai body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"openai\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for OpenAI (never a production key) entered via PUT /api/providers/openai body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"openai\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.openai.com/v1 (https://developers.openai.com/api/reference/chat-completions/overview), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "baidu-qianfan",
+      "label": "Baidu Qianfan",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "baidu_qianfan_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://qianfan.baidubce.com/v2",
+      "endpointSource": "services/core/src/providers/wires (baidu_qianfan_chat).defaultBaseUrl",
+      "officialDocumentation": "https://cloud.baidu.com/doc/qianfan-api/s/3m7of64lb",
+      "configField": "PUT /api/providers/baidu-qianfan body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"baidu-qianfan\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Baidu Qianfan (never a production key) entered via PUT /api/providers/baidu-qianfan body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"baidu-qianfan\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://qianfan.baidubce.com/v2 (https://cloud.baidu.com/doc/qianfan-api/s/3m7of64lb), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "alibaba-model-studio",
+      "label": "Alibaba Cloud Model Studio",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "alibaba_model_studio_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://dashscope-intl.aliyuncs.com",
+      "endpointSource": "services/core/src/providers/wires (alibaba_model_studio_chat).defaultBaseUrl",
+      "officialDocumentation": "https://help.aliyun.com/en/model-studio/compatibility-of-openai-with-dashscope",
+      "configField": "PUT /api/providers/alibaba-model-studio body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"alibaba-model-studio\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Alibaba Cloud Model Studio (never a production key) entered via PUT /api/providers/alibaba-model-studio body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"alibaba-model-studio\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://dashscope-intl.aliyuncs.com (https://help.aliyun.com/en/model-studio/compatibility-of-openai-with-dashscope), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "openrouter",
+      "label": "OpenRouter",
+      "catalogueStatus": "gateway_only",
+      "category": "gateway-routed",
+      "wire": "openrouter_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://openrouter.ai/api/v1",
+      "endpointSource": "services/core/src/providers/wires (openrouter_chat).defaultBaseUrl",
+      "officialDocumentation": "https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request",
+      "configField": "PUT /api/providers/openrouter body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"openrouter\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for OpenRouter (never a production key) entered via PUT /api/providers/openrouter body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"openrouter\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://openrouter.ai/api/v1 (https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "mistral",
+      "label": "Mistral AI",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "mistral_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.mistral.ai/v1",
+      "endpointSource": "services/core/src/providers/wires (mistral_chat).defaultBaseUrl",
+      "officialDocumentation": "https://docs.mistral.ai/api/endpoint/chat/",
+      "configField": "PUT /api/providers/mistral body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"mistral\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Mistral AI (never a production key) entered via PUT /api/providers/mistral body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"mistral\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.mistral.ai/v1 (https://docs.mistral.ai/api/endpoint/chat/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "deepseek",
+      "label": "DeepSeek",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "deepseek_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.deepseek.com",
+      "endpointSource": "services/core/src/providers/wires (deepseek_chat).defaultBaseUrl",
+      "officialDocumentation": "https://api-docs.deepseek.com/api/create-chat-completion/",
+      "configField": "PUT /api/providers/deepseek body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"deepseek\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for DeepSeek (never a production key) entered via PUT /api/providers/deepseek body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"deepseek\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.deepseek.com (https://api-docs.deepseek.com/api/create-chat-completion/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "cerebras",
+      "label": "Cerebras Inference",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "cerebras_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.cerebras.ai/v1",
+      "endpointSource": "services/core/src/providers/wires (cerebras_chat).defaultBaseUrl",
+      "officialDocumentation": "https://inference-docs.cerebras.ai/api-reference/chat-completions",
+      "configField": "PUT /api/providers/cerebras body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"cerebras\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Cerebras Inference (never a production key) entered via PUT /api/providers/cerebras body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"cerebras\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.cerebras.ai/v1 (https://inference-docs.cerebras.ai/api-reference/chat-completions), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "deepinfra",
+      "label": "DeepInfra",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "deepinfra_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.deepinfra.com/v1/openai",
+      "endpointSource": "services/core/src/providers/wires (deepinfra_chat).defaultBaseUrl",
+      "officialDocumentation": "https://docs.deepinfra.com/api-reference/introduction",
+      "configField": "PUT /api/providers/deepinfra body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"deepinfra\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for DeepInfra (never a production key) entered via PUT /api/providers/deepinfra body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"deepinfra\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.deepinfra.com/v1/openai (https://docs.deepinfra.com/api-reference/introduction), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "minimax",
+      "label": "MiniMax",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "minimax_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.minimax.io/v1",
+      "endpointSource": "services/core/src/providers/wires (minimax_chat).defaultBaseUrl",
+      "officialDocumentation": "https://platform.minimax.io/docs/api-reference/text-openai-api",
+      "configField": "PUT /api/providers/minimax body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"minimax\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for MiniMax (never a production key) entered via PUT /api/providers/minimax body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"minimax\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.minimax.io/v1 (https://platform.minimax.io/docs/api-reference/text-openai-api), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "siliconflow",
+      "label": "SiliconFlow",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "siliconflow_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.siliconflow.com/v1",
+      "endpointSource": "services/core/src/providers/wires (siliconflow_chat).defaultBaseUrl",
+      "officialDocumentation": "https://docs.siliconflow.com/en/api-reference/models/get-model-list",
+      "configField": "PUT /api/providers/siliconflow body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"siliconflow\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for SiliconFlow (never a production key) entered via PUT /api/providers/siliconflow body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"siliconflow\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.siliconflow.com/v1 (https://docs.siliconflow.com/en/api-reference/models/get-model-list), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "moonshot",
+      "label": "Moonshot AI (Kimi API)",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "moonshot_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.moonshot.ai/v1",
+      "endpointSource": "services/core/src/providers/wires (moonshot_chat).defaultBaseUrl",
+      "officialDocumentation": "https://platform.kimi.ai/docs/api/chat",
+      "configField": "PUT /api/providers/moonshot body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"moonshot\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Moonshot AI (Kimi API) (never a production key) entered via PUT /api/providers/moonshot body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"moonshot\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.moonshot.ai/v1 (https://platform.kimi.ai/docs/api/chat), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "sarvam",
+      "label": "Sarvam AI Open-Source Models",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "sarvam_chat",
+      "auth": "api_subscription_key",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.sarvam.ai/v2",
+      "endpointSource": "services/core/src/providers/wires (sarvam_chat).defaultBaseUrl",
+      "officialDocumentation": "https://docs.sarvam.ai/api-reference/chat/chat-completions-v2",
+      "configField": "PUT /api/providers/sarvam body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"sarvam\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Sarvam AI Open-Source Models (never a production key) entered via PUT /api/providers/sarvam body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"sarvam\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.sarvam.ai/v2 (https://docs.sarvam.ai/api-reference/chat/chat-completions-v2), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "groq",
+      "label": "Groq",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "groq_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.groq.com/openai/v1",
+      "endpointSource": "services/core/src/providers/wires (groq_chat).defaultBaseUrl",
+      "officialDocumentation": "https://console.groq.com/docs/api-reference",
+      "configField": "PUT /api/providers/groq body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"groq\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Groq (never a production key) entered via PUT /api/providers/groq body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"groq\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.groq.com/openai/v1 (https://console.groq.com/docs/api-reference), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "together",
+      "label": "Together AI",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "together_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.together.xyz/v1",
+      "endpointSource": "services/core/src/providers/wires (together_chat).defaultBaseUrl",
+      "officialDocumentation": "https://docs.together.ai/reference/chat-completions",
+      "configField": "PUT /api/providers/together body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"together\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Together AI (never a production key) entered via PUT /api/providers/together body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"together\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.together.xyz/v1 (https://docs.together.ai/reference/chat-completions), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "fireworks",
+      "label": "Fireworks AI",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "fireworks_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.fireworks.ai",
+      "endpointSource": "services/core/src/providers/wires (fireworks_chat).defaultBaseUrl",
+      "officialDocumentation": "https://docs.fireworks.ai/api-reference/post-chatcompletions",
+      "configField": "PUT /api/providers/fireworks body fields: baseUrl, apiKey, options.accountId",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"fireworks\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Fireworks AI (never a production key) entered via PUT /api/providers/fireworks body fields: baseUrl, apiKey, options.accountId. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"fireworks\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.fireworks.ai (https://docs.fireworks.ai/api-reference/post-chatcompletions), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "xai",
+      "label": "xAI",
+      "catalogueStatus": "gateway_only",
+      "category": "native-vendor",
+      "wire": "xai_responses",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.x.ai/v1",
+      "endpointSource": "services/core/src/providers/wires (xai_responses).defaultBaseUrl",
+      "officialDocumentation": "https://docs.x.ai/developers/rest-api-reference/inference/responses",
+      "configField": "PUT /api/providers/xai body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"xai\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for xAI (never a production key) entered via PUT /api/providers/xai body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"xai\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.x.ai/v1 (https://docs.x.ai/developers/rest-api-reference/inference/responses), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "perplexity",
+      "label": "Perplexity Router",
+      "catalogueStatus": "gateway_only",
+      "category": "gateway-routed",
+      "wire": "perplexity_router",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.perplexity.ai",
+      "endpointSource": "services/core/src/providers/wires (perplexity_router).defaultBaseUrl",
+      "officialDocumentation": "https://docs.perplexity.ai/api-reference/gateway-chat-completions-post",
+      "configField": "PUT /api/providers/perplexity body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"perplexity\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Perplexity Router (never a production key) entered via PUT /api/providers/perplexity body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"perplexity\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.perplexity.ai (https://docs.perplexity.ai/api-reference/gateway-chat-completions-post), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "novita",
+      "label": "Novita AI",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "novita_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.novita.ai/openai/v1",
+      "endpointSource": "services/core/src/providers/wires (novita_chat).defaultBaseUrl",
+      "officialDocumentation": "https://docs.novita.ai/api-reference/model-apis-llm-create-chat-completion",
+      "configField": "PUT /api/providers/novita body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"novita\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Novita AI (never a production key) entered via PUT /api/providers/novita body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"novita\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.novita.ai/openai/v1 (https://docs.novita.ai/api-reference/model-apis-llm-create-chat-completion), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "sambanova",
+      "label": "SambaNova",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "sambanova_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://api.sambanova.ai/v1",
+      "endpointSource": "services/core/src/providers/wires (sambanova_chat).defaultBaseUrl",
+      "officialDocumentation": "https://docs.sambanova.ai/docs/api-reference/chat-completions/create-chat-based-completion",
+      "configField": "PUT /api/providers/sambanova body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"sambanova\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for SambaNova (never a production key) entered via PUT /api/providers/sambanova body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"sambanova\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.sambanova.ai/v1 (https://docs.sambanova.ai/docs/api-reference/chat-completions/create-chat-based-completion), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "huggingface",
+      "label": "Hugging Face Inference Providers",
+      "catalogueStatus": "gateway_only",
+      "category": "gateway-routed",
+      "wire": "huggingface_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": "https://router.huggingface.co/v1",
+      "endpointSource": "services/core/src/providers/wires (huggingface_chat).defaultBaseUrl",
+      "officialDocumentation": "https://huggingface.co/docs/inference-providers/tasks/chat-completion",
+      "configField": "PUT /api/providers/huggingface body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"huggingface\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Hugging Face Inference Providers (never a production key) entered via PUT /api/providers/huggingface body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"huggingface\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://router.huggingface.co/v1 (https://huggingface.co/docs/inference-providers/tasks/chat-completion), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "vllm",
+      "label": "vLLM (OpenAI-compatible server)",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "vllm_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": false,
+      "officialEndpoint": "http://<vllm-host>:8000/v1",
+      "endpointSource": "services/core/src/providers/wires (vllm_chat).defaultBaseUrl",
+      "officialDocumentation": "https://docs.vllm.ai/en/latest/serving/online_serving/",
+      "configField": "PUT /api/providers/vllm body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"vllm\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for vLLM (OpenAI-compatible server) (never a production key) entered via PUT /api/providers/vllm body fields: baseUrl, apiKey. This connection is a local/self-hosted runtime with no vendor key: start it on an operator-trusted loopback/private origin and configure it via PUT /api/providers/vllm body fields: baseUrl, apiKey. Owner authorization to make one real request to http://<vllm-host>:8000/v1 (https://docs.vllm.ai/en/latest/serving/online_serving/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "localai",
+      "label": "LocalAI",
+      "catalogueStatus": "gateway_only",
+      "category": "openai-compatible",
+      "wire": "localai_chat",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": false,
+      "officialEndpoint": "http://<localai-host>:8080/v1",
+      "endpointSource": "services/core/src/providers/wires (localai_chat).defaultBaseUrl",
+      "officialDocumentation": "https://localai.io/docs/features/openai-functions/",
+      "configField": "PUT /api/providers/localai body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"localai\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for LocalAI (never a production key) entered via PUT /api/providers/localai body fields: baseUrl, apiKey. This connection is a local/self-hosted runtime with no vendor key: start it on an operator-trusted loopback/private origin and configure it via PUT /api/providers/localai body fields: baseUrl, apiKey. Owner authorization to make one real request to http://<localai-host>:8080/v1 (https://localai.io/docs/features/openai-functions/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "openai-images",
+      "label": "OpenAI Images",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "openai_images",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://developers.openai.com/api/reference/resources/images/methods/generate",
+      "configField": "PUT /api/providers/openai-images body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"openai-images\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for OpenAI Images (never a production key) entered via PUT /api/providers/openai-images body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"openai-images\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://developers.openai.com/api/reference/resources/images/methods/generate), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "gemini-images",
+      "label": "Google Gemini Images",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "gemini_images",
+      "auth": "x_api_key",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://ai.google.dev/gemini-api/docs/image-generation",
+      "configField": "PUT /api/providers/gemini-images body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"gemini-images\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Google Gemini Images (never a production key) entered via PUT /api/providers/gemini-images body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"gemini-images\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://ai.google.dev/gemini-api/docs/image-generation), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "stability",
+      "label": "Stability AI",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "stability_images",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://platform.stability.ai/docs/api-reference",
+      "configField": "PUT /api/providers/stability body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"stability\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Stability AI (never a production key) entered via PUT /api/providers/stability body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"stability\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://platform.stability.ai/docs/api-reference), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "recraft",
+      "label": "Recraft",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "recraft_images",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://www.recraft.ai/docs/api-reference/endpoints",
+      "configField": "PUT /api/providers/recraft body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"recraft\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Recraft (never a production key) entered via PUT /api/providers/recraft body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"recraft\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://www.recraft.ai/docs/api-reference/endpoints), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "ideogram",
+      "label": "Ideogram",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "ideogram_images",
+      "auth": "x_api_key",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://developer.ideogram.ai/ideogram-api/api-overview",
+      "configField": "PUT /api/providers/ideogram body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"ideogram\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Ideogram (never a production key) entered via PUT /api/providers/ideogram body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"ideogram\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://developer.ideogram.ai/ideogram-api/api-overview), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "black-forest-labs",
+      "label": "Black Forest Labs (FLUX)",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "bfl_images",
+      "auth": "x_api_key",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://docs.bfl.ai/quick_start/generating_images",
+      "configField": "PUT /api/providers/black-forest-labs body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"black-forest-labs\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Black Forest Labs (FLUX) (never a production key) entered via PUT /api/providers/black-forest-labs body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"black-forest-labs\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.bfl.ai/quick_start/generating_images), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "fal",
+      "label": "fal.ai",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "fal_images",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://docs.fal.ai/model-apis/model-endpoints/queue",
+      "configField": "PUT /api/providers/fal body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"fal\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for fal.ai (never a production key) entered via PUT /api/providers/fal body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"fal\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.fal.ai/model-apis/model-endpoints/queue), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "replicate",
+      "label": "Replicate",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "replicate_images",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://replicate.com/docs/reference/http",
+      "configField": "PUT /api/providers/replicate body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"replicate\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Replicate (never a production key) entered via PUT /api/providers/replicate body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"replicate\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://replicate.com/docs/reference/http), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "firefly",
+      "label": "Adobe Firefly",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "firefly_images",
+      "auth": "oauth2",
+      "credentialKind": "client_credentials",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://developer.adobe.com/firefly-services/docs/firefly-api/",
+      "configField": "PUT /api/providers/firefly body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"firefly\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Adobe Firefly (never a production key) entered via PUT /api/providers/firefly body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"firefly\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://developer.adobe.com/firefly-services/docs/firefly-api/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "comfyui",
+      "label": "ComfyUI (local)",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "comfyui_images",
+      "auth": "none",
+      "credentialKind": "none",
+      "keyRequired": false,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://docs.comfy.org/development/comfyui-server/comms_routes",
+      "configField": "PUT /api/providers/comfyui body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"comfyui\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for ComfyUI (local) (never a production key) entered via PUT /api/providers/comfyui body fields: baseUrl, apiKey. This connection is a local/self-hosted runtime with no vendor key: start it on an operator-trusted loopback/private origin and configure it via PUT /api/providers/comfyui body fields: baseUrl, apiKey. Owner authorization to make one real request to the operator-configured endpoint (https://docs.comfy.org/development/comfyui-server/comms_routes), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "veo",
+      "label": "Google Veo (Gemini API)",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "gemini_veo",
+      "auth": "x_api_key",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://ai.google.dev/gemini-api/docs/veo",
+      "configField": "PUT /api/providers/veo body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"veo\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Google Veo (Gemini API) (never a production key) entered via PUT /api/providers/veo body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"veo\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://ai.google.dev/gemini-api/docs/veo), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "runway",
+      "label": "Runway",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "runway_video",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://docs.dev.runwayml.com/",
+      "configField": "PUT /api/providers/runway body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"runway\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Runway (never a production key) entered via PUT /api/providers/runway body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"runway\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.dev.runwayml.com/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "luma",
+      "label": "Luma AI",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "luma_video",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://docs.lumalabs.ai/docs/video-generation",
+      "configField": "PUT /api/providers/luma body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"luma\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Luma AI (never a production key) entered via PUT /api/providers/luma body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"luma\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.lumalabs.ai/docs/video-generation), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "fal-video",
+      "label": "fal.ai video",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "fal_video",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://docs.fal.ai/model-apis/model-endpoints/queue",
+      "configField": "PUT /api/providers/fal-video body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"fal-video\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for fal.ai video (never a production key) entered via PUT /api/providers/fal-video body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"fal-video\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.fal.ai/model-apis/model-endpoints/queue), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "replicate-video",
+      "label": "Replicate video",
+      "catalogueStatus": "ready",
+      "category": "media",
+      "wire": "replicate_video",
+      "auth": "bearer",
+      "credentialKind": "api_key",
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://replicate.com/docs/reference/http",
+      "configField": "PUT /api/providers/replicate-video body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"replicate-video\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "BLOCKED",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": "An explicitly authorized test/staging credential for Replicate video (never a production key) entered via PUT /api/providers/replicate-video body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"replicate-video\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://replicate.com/docs/reference/http), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log."
+    },
+    {
+      "id": "diffusers",
+      "label": "Diffusers (local)",
+      "catalogueStatus": "pending",
+      "category": "media",
+      "wire": null,
+      "auth": "bearer",
+      "credentialKind": null,
+      "keyRequired": true,
+      "officialEndpoint": null,
+      "endpointSource": "operator-supplied baseUrl; no default endpoint is hard-coded",
+      "officialDocumentation": "https://huggingface.co/docs/diffusers/index",
+      "configField": "PUT /api/providers/diffusers body fields: baseUrl, apiKey",
+      "storedField": ".aetheris-data/online/provider.json → connections[\"diffusers\"].key (AES-256-GCM sealed; master.key in the same 0700 directory)",
+      "hostedConfigField": "PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY)",
+      "hostedEnvironmentVariables": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "AETHERIS_PROVIDER_ENCRYPTION_KEY",
+        "AETHERIS_HOSTED_ORIGINS",
+        "AETHERIS_HOSTED_SITE_URL"
+      ],
+      "status": "NOT APPLICABLE",
+      "justification": "Catalogue status 'pending': no wire adapter exists in this build and selectProvider refuses 'diffusers'. It is not a supported provider, so no live qualification applies.",
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      },
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "note": "derived from services/core/src/providers/catalog.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "loopback isolated-service E2E only; no live vendor call"
+        }
+      ],
+      "unblock": null
+    }
+  ]
+}

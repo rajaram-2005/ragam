@@ -77,3 +77,9 @@ The checksum file must be generated from the exact downloaded bytes, committed t
 ## Verdict
 
 Do not publish a production release until the outstanding evidence is complete and approval is explicit. PRs #20–#22 are merged; PR #22's merge is not by itself a production release.
+
+## Release-readiness remediation addendum (current tree)
+
+The header above records the historical PR #22 verification state and is preserved as evidence. The current `main` is `80ad8458fb039962dcaee6293dd451d1c6932416` with CI `42396395722` and Desktop `42396395647` both successful. The new [release remediation and live qualification](release/README.md) work re-ran the full suites, repaired clean-checkout Python reproducibility, pinned the Python dependency set, added privacy-conscious telemetry, produced a reproducible artifact/SBOM/provenance/checksum process with a fail-closed signing workflow, and executed a real local training qualification plus a 17-check five-area backend E2E against an isolated test service.
+
+The verdict is **still NOT RELEASE READY**: live provider qualification, Klyvaron model weights/inference, user-consented training on private data, isolated staging deployment and rollback, signed artifacts and GitHub governance verification remain BLOCKED. See [qualification.json](release/qualification.json) for the machine-readable gate and [12-final-verdict.md](release/12-final-verdict.md) for the exact unblock requirements. No release was published and no verdict was changed by editing a checklist.

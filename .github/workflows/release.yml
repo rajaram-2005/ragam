@@ -1,0 +1,85 @@
+name: Release artifacts (staging only; never publishes)
+
+# This workflow produces a reproducible, versioned artifact bundle and stages it
+# on the workflow run. It NEVER creates a GitHub Release, tag or registry push.
+# Publication requires separate explicit owner authorization after every
+# mandatory gate in docs/release/qualification.json has passed.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semantic version (must equal VERSION and every package.json)'
+        required: true
+        default: '0.2.0'
+        type: string
+      sign:
+        description: 'Sign SHA256SUMS with the authorized key stored in repository secrets'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build, checksum, SBOM, provenance and optional signing
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Refuse a version that disagrees with the source
+        run: |
+          test "${{ inputs.version }}" = "$(cat VERSION)" || {
+            echo "::error::input version does not match VERSION"; exit 1; }
+
+      - name: Build from a clean checkout of this exact commit
+        run: node scripts/release/build-release.mjs --out "build/release/${{ inputs.version }}"
+
+      - name: Verify checksums independently and validate the qualification report
+        run: node scripts/release/verify-release.mjs --dir "build/release/${{ inputs.version }}"
+
+      # Signing is fail-closed. Without an authorized key the workflow reports an
+      # UNSIGNED bundle instead of fabricating a signature.
+      - name: Sign with the authorized key (only when explicitly requested)
+        if: ${{ inputs.sign }}
+        env:
+          RAGAM_RELEASE_SIGNING_KEY_ID: ${{ secrets.RAGAM_RELEASE_SIGNING_KEY_ID }}
+          RAGAM_RELEASE_SIGNING_KEY_FILE: ${{ secrets.RAGAM_RELEASE_SIGNING_KEY_FILE }}
+          RAGAM_RELEASE_SIGNING_AUTHORIZED_BY: ${{ github.actor }}
+          RAGAM_RELEASE_SIGNING_CONFIRM: 'YES'
+        run: |
+          test -n "$RAGAM_RELEASE_SIGNING_KEY_ID" || { echo "::error::authorized signing key id secret is missing"; exit 2; }
+          test -n "$RAGAM_RELEASE_SIGNING_KEY_FILE" || { echo "::error::authorized signing key file secret is missing"; exit 2; }
+          node scripts/release/sign-release.mjs --dir "build/release/${{ inputs.version }}"
+
+      - name: Record the unsigned state explicitly
+        if: ${{ !inputs.sign }}
+        run: |
+          printf '{"status":"UNSIGNED","reason":"no authorized signing key requested","requirement":"RAGAM_RELEASE_SIGNING_KEY_ID, RAGAM_RELEASE_SIGNING_KEY_FILE, RAGAM_RELEASE_SIGNING_AUTHORIZED_BY, RAGAM_RELEASE_SIGNING_CONFIRM=YES"}\n' \
+            > "build/release/${{ inputs.version }}/signature-status.json"
+
+      - name: Stage artifacts on this workflow run (not a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ragam-${{ inputs.version }}-${{ github.sha }}
+          path: build/release/${{ inputs.version }}/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report the release boundary
+        run: |
+          echo "Artifacts staged on this workflow run only."
+          echo "Release publication requires separate explicit owner authorization."
+          echo "See docs/release/qualification.json for the current verdict."

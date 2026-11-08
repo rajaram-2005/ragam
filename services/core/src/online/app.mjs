@@ -30,6 +30,7 @@ import { KLYVARON_TIERS, KLYVARON_NOTE } from './klyvaron.mjs'
 import { NativeKlyvaronHost } from './native-klyvaron.mjs'
 import { NativeMultimodalHost } from '../klyvaron/multimodal-host.mjs'
 import { defaultPythonBinary } from '../klyvaron/python-executable.mjs'
+import { monitorFromEnv } from '../telemetry/monitor.mjs'
 import { KLYVARON_PROCESSOR_PROFILES, KLYVARON_PROCESSOR_TASKS } from '../klyvaron/processor.mjs'
 
 /**
@@ -252,7 +253,7 @@ export function readInstallationDoc(name) {
 
 
 export class OnlineApp {
-  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, ownerEmail = undefined, registrationEnabled = true, onResetCode = null, localSingleUser = false, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null, providerStore = null, auditLedger = null, pythonBinary = defaultPythonBinary() }) {
+  constructor({ dataDir, trustedOrigins = [], trustedWebOrigins = [], secureCookie = true, cookieSameSite = 'strict', timeoutMs = 120_000, maxAccounts = DEFAULT_MAX_ACCOUNTS, ownerEmail = undefined, registrationEnabled = true, onResetCode = null, localSingleUser = false, mediaPoll = null, logger = null, sessionStore = null, accountStore = null, styleStore = null, contextStoreFactory = null, providerStore = null, auditLedger = null, pythonBinary = defaultPythonBinary(), telemetry = null }) {
     // Checked before anything is created on disk: a configuration this service refuses
     // should refuse without leaving a half-written data directory behind.
     const sameSite = String(cookieSameSite ?? 'strict').trim().toLowerCase()
@@ -274,6 +275,9 @@ export class OnlineApp {
     this.contextStoreFactory = contextStoreFactory
     this.cookieSameSite = sameSite
     this.logger = typeof logger === 'function' ? logger : () => {}
+    // In-memory operational counters only: no transmission, no prompts, no keys.
+    // An injected monitor is an explicit test seam, not a different privacy mode.
+    this.telemetry = telemetry ?? monitorFromEnv()
     this.trustedWebOrigins = new Set(trustedWebOrigins)
     this.dir = resolve(dataDir); mkdirSync(this.dir, { recursive: true, mode: 0o700 })
     this.store = providerStore ?? new OnlineStore(this.dir)
@@ -505,6 +509,11 @@ export class OnlineApp {
     return this.store.state.selectedModel || ''
   }
 
+  /** Record one allowlisted operational counter; unknown or sensitive fields are dropped. */
+  recordOperationalEvent(event, detail = {}) {
+    return this.telemetry.record(event, detail)
+  }
+
   readiness() {
     const state = this.store.public()
     let chatWire = null
@@ -550,6 +559,7 @@ export class OnlineApp {
         checkedAt: state.checkedAt,
       },
       accounts: { total: accountTotal },
+      telemetry: this.telemetry.snapshot(),
       klyvaron: {
         engine: 'klyvaron-deterministic-v1',
         modelRequired: false,
@@ -1316,6 +1326,7 @@ export class OnlineApp {
             errorCode,
           })
         } catch { /* logging must not change the API result */ }
+        try { this.recordOperationalEvent('api_failure', { outcome: 'failure', component: status >= 500 ? 'core' : 'client' }) } catch { /* telemetry must not change the API result */ }
         const message = safeApplicationFailure ? error.message : 'The request could not be completed.'
         if (!res.headersSent && !res.destroyed) sendJson(res, status, { error: errorCode, message })
         else if (!res.destroyed) res.end()
