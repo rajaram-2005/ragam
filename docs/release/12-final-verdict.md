@@ -32,3 +32,11 @@ Implementation-level confidence is now independently verifiable: the full Core/W
 No fabricated results, no fake provider calls, no mock-only proof of live operation, no fake model weights, no consent bypass, no hardcoded secrets, no unauthorized paid API usage, no destructive cleanup, no production deployment, no signing with an unauthorized key and no release publication were performed. No third-party model is represented as first-party Klyvaron. No foundation-model training claim is made for the tiny local smoke run. BLOCKED and NOT TESTED statuses were not converted into PASS.
 
 **Release publication requires separate explicit authorization from the repository owner.**
+
+## Gate summary (generated, not hand-written)
+
+`docs/release/qualification.json` currently contains **69 gates**: **38 PASS**, **0 FAIL**, **25 BLOCKED**, **2 NOT TESTED**, **4 NOT APPLICABLE**; **29 mandatory gates are not PASS**. The two NOT TESTED items are SIGTERM cancellation of the real NumPy trainer and a commercial SAST/DAST product scan. No BLOCKED or NOT TESTED gate was converted into PASS.
+
+Measured local verification behind the PASS gates: Core `1081/1085` (4 real-artifact acceptance cases skipped), Web `143/143`, Fabric `823/823`, Desktop `4/4`, `release-check.mjs` `2051` tests / 31 artefacts / 3 packs, production web build (50 modules), web+desktop `npm audit --omit=dev` 0 vulnerabilities, Python advisory audit clean, security scan `9/9`, five-area E2E `17/17`, training evidence `11/11`, and artifact verification `16/16` with byte-identical rebuild.
+
+**Final objective status:** the repository is reproducibly buildable, locally verified and honestly qualified at implementation level. It is **not** staging-qualified, signed or published, and therefore remains **NOT RELEASE READY**.

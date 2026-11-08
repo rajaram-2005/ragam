@@ -253,6 +253,12 @@ add({ id: 'A08', area: 'artifacts', name: 'Artifacts stored in the intended publ
 add({ id: 'A09', area: 'artifacts', name: 'Release publication', mandatory: false, status: 'BLOCKED',
   evidence: [{ artifact: 'docs/release/12-final-verdict.md' }],
   unblock: 'Separate explicit authorization from the repository owner after all mandatory gates pass. No publication was performed.' })
+const repro = text('final-reproducibility.log')
+const reproducible = repro && (repro.match(/identical=True/g) ?? []).length >= 2
+add({ id: 'A10', area: 'artifacts', name: 'Byte-identical rebuild of both artifacts from the same recorded commit', mandatory: true,
+  status: reproducible ? 'PASS' : 'NOT TESTED',
+  evidence: reproducible ? [{ command: 'node scripts/release/build-release.mjs --out build/release/0.2.0-repro --allow-dirty; sha256 comparison', log: 'docs/release/evidence/final-reproducibility.log', artifact: 'docs/release/artifacts/provenance.json' }] : [],
+  unblock: reproducible ? null : 'Rebuild from the recorded commit and capture the two SHA-256 comparisons.' })
 
 // --- 10. Deployment and rollback ------------------------------------------
 const stagingBlock = 'An isolated staging environment (host, DNS, TLS, database, storage volume, monitoring, and a previous known-good version) plus explicit owner approval to deploy and roll back. No staging environment exists in this repository or sandbox.'

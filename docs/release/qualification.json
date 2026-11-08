@@ -1,6 +1,6 @@
 {
   "schema": "ragam-release-qualification/1",
-  "generatedAt": "2026-11-08T07:51:30.874Z",
+  "generatedAt": "2026-11-08T07:56:41.522Z",
   "repository": "rajaram-2005/ragam",
   "branch": "arena/d44183df-ragam",
   "baselineCommit": "80ad8458fb039962dcaee6293dd451d1c6932416",
@@ -10,13 +10,13 @@
   "releasePublished": false,
   "publicationAuthorization": "Release publication requires separate explicit authorization from the repository owner.",
   "summary": {
-    "totalGates": 68,
-    "PASS": 32,
+    "totalGates": 69,
+    "PASS": 38,
     "FAIL": 0,
     "BLOCKED": 25,
-    "NOT TESTED": 7,
+    "NOT TESTED": 2,
     "NOT APPLICABLE": 4,
-    "mandatoryNonPass": 34,
+    "mandatoryNonPass": 29,
     "mandatoryNonPassIds": [
       "L01",
       "L02",
@@ -34,13 +34,8 @@
       "S04",
       "C02",
       "C03",
-      "A01",
-      "A02",
-      "A03",
-      "A04",
       "A05",
       "A06",
-      "A07",
       "A08",
       "D01",
       "D02",
@@ -797,8 +792,17 @@
       "area": "artifacts",
       "name": "Declared semantic version, exact source commit and clean-checkout build",
       "mandatory": true,
-      "status": "NOT TESTED",
-      "evidence": [],
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node scripts/release/build-release.mjs --out build/release/0.2.0",
+          "log": "docs/release/evidence/final-artifact-build.log",
+          "bytes": 316
+        },
+        {
+          "artifact": "build/release/0.2.0/provenance.json"
+        }
+      ],
       "unblock": "Commit all source changes, then run build-release.mjs from a clean checkout and capture its log."
     },
     {
@@ -806,8 +810,15 @@
       "area": "artifacts",
       "name": "Pinned dependencies and generated CycloneDX SBOM",
       "mandatory": true,
-      "status": "NOT TESTED",
-      "evidence": [],
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "build/release/0.2.0/sbom.cdx.json"
+        },
+        {
+          "artifact": "services/fabric/requirements.lock"
+        }
+      ],
       "unblock": "Run build-release.mjs to generate the SBOM from the committed lockfiles."
     },
     {
@@ -815,8 +826,16 @@
       "area": "artifacts",
       "name": "Release artifacts generated and staged (source archive, web bundle, manifest, SBOM, provenance)",
       "mandatory": true,
-      "status": "NOT TESTED",
-      "evidence": [],
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "build/release/0.2.0/manifest.json"
+        },
+        {
+          "log": "docs/release/evidence/final-artifact-build.log",
+          "bytes": 316
+        }
+      ],
       "unblock": "Run build-release.mjs."
     },
     {
@@ -824,8 +843,17 @@
       "area": "artifacts",
       "name": "SHA-256 checksums generated and verified independently with sha256sum -c",
       "mandatory": true,
-      "status": "NOT TESTED",
-      "evidence": [],
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node scripts/release/verify-release.mjs --dir build/release/0.2.0",
+          "log": "docs/release/evidence/final-artifact-verify.log",
+          "bytes": 1112
+        },
+        {
+          "artifact": "build/release/0.2.0/SHA256SUMS"
+        }
+      ],
       "unblock": "Run verify-release.mjs after building; it must exit 0."
     },
     {
@@ -836,7 +864,9 @@
       "status": "BLOCKED",
       "evidence": [
         {
-          "artifact": "scripts/release/sign-release.mjs"
+          "command": "node scripts/release/sign-release.mjs --dir build/release/0.2.0 (without key)",
+          "log": "docs/release/evidence/final-signing-refusal.log",
+          "bytes": 534
         }
       ],
       "unblock": "Provide an authorized signing key outside the repository and set RAGAM_RELEASE_SIGNING_KEY_ID, RAGAM_RELEASE_SIGNING_KEY_FILE, RAGAM_RELEASE_SIGNING_AUTHORIZED_BY and RAGAM_RELEASE_SIGNING_CONFIRM=YES. The implemented workflow refuses without all four and never generates a key."
@@ -859,8 +889,12 @@
       "area": "artifacts",
       "name": "Build provenance recorded (commit, tree, lockfile digests, artifact digests, reproducibility strategy)",
       "mandatory": true,
-      "status": "NOT TESTED",
-      "evidence": [],
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "build/release/0.2.0/provenance.json"
+        }
+      ],
       "unblock": "Run build-release.mjs."
     },
     {
@@ -889,6 +923,21 @@
         }
       ],
       "unblock": "Separate explicit authorization from the repository owner after all mandatory gates pass. No publication was performed."
+    },
+    {
+      "id": "A10",
+      "area": "artifacts",
+      "name": "Byte-identical rebuild of both artifacts from the same recorded commit",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node scripts/release/build-release.mjs --out build/release/0.2.0-repro --allow-dirty; sha256 comparison",
+          "log": "docs/release/evidence/final-reproducibility.log",
+          "artifact": "docs/release/artifacts/provenance.json"
+        }
+      ],
+      "unblock": null
     },
     {
       "id": "D01",
