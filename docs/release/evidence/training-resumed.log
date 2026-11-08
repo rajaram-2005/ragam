@@ -1,0 +1,27 @@
+aetheris-lite: training ragam-resume
+  corpus   /home/user/ragam
+  output   /home/user/ragam/build/training-qualification/segment-r2
+  resumed from ragam-resume-714156ec13dd.ckpt.npz at step 40; 80 steps remain
+  step    49/120  loss  3.6815
+  step    61/120  loss  3.3959
+  step    73/120  loss  3.5795
+  step    85/120  loss  3.5091
+  step    97/120  loss  3.4543
+  step   109/120  loss  3.5613
+  step   120/120  loss  3.3644
+
+  parameters   16,224
+  vocab        181 characters (validation unknown rate 0.000005)
+  corpus       496 train / 55 validation files, no overlap
+  loss         5.1599 -> 3.3644
+  validation   perplexity 34.1122  (5.0922 bits/char over 803,456 tokens)
+     baseline uniform  perplexity  181.0000
+     baseline unigram  perplexity   42.0987
+     baseline bigram   perplexity   27.2280 <-- best baseline
+  verdict      DOES NOT BEAT the best baseline (ratio 1.2528)
+  wall         10.346s, peak memory 239.1 MB
+  artifact     ragam-resume-f3242e259938.npz (68,358 bytes)
+  weights      f3242e259938ab77d6e821278053f5cadbbbcb8b6c17db4348d4ea8957f6799a
+  corpus hash  66cff61fd7ad7358a6ec3cc6eaf9a258905721668e8c70e8b553b7043e09b161
+  snapshot     ragam-resume-f3242e259938.manifest.json
+  revision     80ad8458fb039962dcaee6293dd451d1c6932416-dirty

@@ -1,0 +1,32 @@
+{
+  "cancellation": {
+    "id": "b394665b-8404-436d-a8a7-1124228d4852",
+    "pid": 16504,
+    "state": "cancelled_checkpointed",
+    "cancelRequested": true,
+    "exitCode": 130,
+    "completedAt": "2026-11-08T08:40:18.891Z",
+    "progress": {
+      "step": 1,
+      "totalSteps": 4,
+      "lastLoss": 8.8687,
+      "lastCheckpointSha256": "e6bc5d2a9253583b"
+    },
+    "checkpointPath": "build/training-worker-qualification/manager-root/worker-runs/b394665b-8404-436d-a8a7-1124228d4852/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
+    "checkpointVerified": true,
+    "logLines": 10
+  },
+  "restored": {
+    "state": "cancelled_checkpointed",
+    "checkpointVerified": true
+  },
+  "failure": {
+    "id": "4d04832a-aa93-4d03-b33a-fdd546fcc917",
+    "pid": 16539,
+    "state": "failed",
+    "exitCode": 1,
+    "error": "json.decoder.JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
+    "checkpointVerified": false,
+    "logLines": 18
+  }
+}

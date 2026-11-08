@@ -1,0 +1,116 @@
+{
+  "schema": "ragam-training-worker-preflight/1",
+  "environment": {
+    "inspectedAt": "2026-11-08T08:40:08.493Z",
+    "hardware": {
+      "arch": "x64",
+      "logicalCpus": 2,
+      "simdFlags": [
+        "avx512f",
+        "avx512_vnni",
+        "avx2",
+        "fma"
+      ],
+      "totalRamBytes": 4131278848,
+      "availableRamBytes": 3777638400,
+      "freeDiskBytes": 18539442176,
+      "gpuAvailable": false,
+      "accelerators": []
+    },
+    "software": {
+      "trainScriptExists": true,
+      "pythonAvailable": true,
+      "pythonBinary": "/home/user/ragam/.venv/bin/python",
+      "pythonVersion": "3.11.2",
+      "numpyVersion": "2.4.6",
+      "xlaAvailable": true,
+      "jaxVersion": "0.10.2"
+    },
+    "limits": {
+      "interactiveAdaptationMaxMs": 120000,
+      "foundationTrainingWallClockLimit": "operator_budgeted (not capped at 120s interactive limit)",
+      "minFreeDiskBytes": 1000000000
+    }
+  },
+  "request": {
+    "preset": "pro",
+    "mode": "foundation_training",
+    "corpusDir": "/home/user/ragam/build/training-worker-qualification/corpus",
+    "corpusRecord": "/home/user/ragam/build/training-worker-qualification/corpus-record.json",
+    "pretrainSteps": 2,
+    "jointSteps": 2,
+    "batchSize": 1,
+    "checkpointEvery": 1,
+    "maxCpuThreads": 1,
+    "maxDurationMs": 600000
+  },
+  "stablePlan": {
+    "snapshotId": "preflight-pro-302a4543119d3a380d4de8480a3bd9645a3b1aae4dc19dca82f87967fde98130-2-2-1-/home/user/ragam/build/training-worker-qualification/corpus-/home/user/ragam/build/training-worker-qualification/corpus-record.json-foundation_training",
+    "preset": "pro",
+    "artifactId": "klyvaron-pro-lm",
+    "mode": "foundation_training",
+    "architectureDigest": "302a4543119d3a380d4de8480a3bd9645a3b1aae4dc19dca82f87967fde98130",
+    "parameterCount": 27559946,
+    "pretrainSteps": 2,
+    "jointSteps": 2,
+    "totalSteps": 4,
+    "batchSize": 1,
+    "sequenceLength": 512,
+    "tokensPlanned": 2048,
+    "checkpointEvery": 1,
+    "corpusDir": "/home/user/ragam/build/training-worker-qualification/corpus",
+    "corpusRecord": "/home/user/ragam/build/training-worker-qualification/corpus-record.json",
+    "resourceLimits": {
+      "maxCpuThreads": 1,
+      "niceIncrement": 10,
+      "maxDurationMs": 600000,
+      "minFreeDiskBytes": 1000000000
+    },
+    "disclosures": {
+      "compute": {
+        "estimatedFlops": 338656616448,
+        "estimatedWallSeconds": 39,
+        "backend": "CPU XLA (Python 3.11.2, NumPy 2.4.6, JAX 0.10.2)",
+        "interactiveLimitNote": "Full foundation training run; 2-minute interactive cap does not apply and operator budget governs execution."
+      },
+      "dataAndLicensing": {
+        "corpusPath": "/home/user/ragam/build/training-worker-qualification/corpus",
+        "approvedSpdxLicences": [
+          "MIT",
+          "Apache-2.0",
+          "BSD-2-Clause",
+          "BSD-3-Clause",
+          "PSF-2.0",
+          "ISC",
+          "CC0-1.0"
+        ],
+        "personalMemoryUsed": false,
+        "personalDataPolicy": "Personal user chats and memories carry training_use=\"prohibited\" and are never read by this worker.",
+        "heldOutEvaluationSplit": [
+          "pallets__click",
+          "psf__requests"
+        ]
+      },
+      "storage": {
+        "atomicCheckpointBytes": 330719352,
+        "exportedArtifactsBytes": 140555725,
+        "requiredFreeDiskBytes": 1471275077
+      },
+      "energyAndThermal": {
+        "sustainedPowerWattsEstimate": 28,
+        "estimatedEnergyWattHours": 0.3,
+        "impactNotice": "Sustains 1 CPU threads near 100% utilisation for ~1 min (~0.3 Wh)."
+      }
+    }
+  },
+  "blockers": [],
+  "readyToAuthorize": true,
+  "disclosureDigest": "8d98e9560973be8e541b46bfc7d2bfd891c1821f88e21f7e89766433bcfeaddc",
+  "consent": {
+    "confirmed": true,
+    "disclosureDigest": "8d98e9560973be8e541b46bfc7d2bfd891c1821f88e21f7e89766433bcfeaddc",
+    "createdAt": 1794127209031,
+    "basis": "operator-initiated release qualification on a locally generated synthetic corpus; no user data"
+  },
+  "trainScript": "services/fabric/scripts/train_klyvaron.py"
+}

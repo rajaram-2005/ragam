@@ -86,11 +86,15 @@
       "detail": "replaying --resume-from the retained step-40 checkpoint produced a bit-identical artifact (segment-r2 vs segment-r3)"
     }
   ],
+  "relatedEvidence": {
+    "workerCancellation": "docs/release/evidence/training-worker-qualification.json",
+    "scope": "Real LocalTrainingWorkerManager SIGTERM cancellation and failure handling against the real JAX/NumPy trainer; not a production model qualification."
+  },
   "notTested": [
-    "SIGTERM cancellation of the real NumPy trainer (the Core LocalTrainingWorkerManager cancellation path is contract-tested with a stub trainer in services/core/test/klyvaron-training-worker.test.mjs)",
     "Training on a user-owned private dataset (no such dataset was supplied or authorized)",
     "GPU/accelerator training (no GPU on this host)",
-    "Klyvaron Pro/Max foundation or adapter training (no weights, no architecture installed)"
+    "Klyvaron Pro/Max foundation or adapter training (no weights, no architecture installed)",
+    "Production Klyvaron inference from licensed weights (no weights installed)"
   ],
   "pass": 11,
   "fail": 0

@@ -45,6 +45,7 @@ const baseline = safeJson('baseline.json') ?? {}
 const security = safeJson('security-scan.json')
 const e2e = safeJson('e2e-qualification.json')
 const training = safeJson('training-evidence.json')
+const workerCancellation = safeJson('training-worker-qualification.json')
 const providers = safeJson('../provider-register.json')
 const models = safeJson('../model-register.json')
 const artifactVerify = passLog('final-artifact-verify.log')
@@ -88,7 +89,7 @@ add({ id: 'B04', area: 'baseline', name: 'CI and Desktop packages pass on the pu
 // --- 2. Implementation checks ---------------------------------------------
 measured('I01', 'implementation', 'Core unit, integration and contract suites', parseTap('final-core.tap'), { extra: { command: 'AETHERIS_PYTHON=.venv/bin/python node --test test/*.test.mjs test/klyvaron-release/*.test.mjs', logHint: 'final-core.tap' } })
 measured('I02', 'implementation', 'Web unit and render suites', parseTap('final-web.tap'), { extra: { command: 'node --test test/*.test.mjs (apps/web)', logHint: 'final-web.tap' } })
-measured('I03', 'implementation', 'Fabric Python suite', parseFabric('final-fabric.log'), { extra: { command: '.venv/bin/python -m pytest', logHint: 'final-fabric.log' } })
+measured('I03', 'implementation', 'Fabric Python suite', parseFabric('final-fabric.log'), { extra: { command: ".venv/bin/python -m pytest -o addopts='' -q (services/fabric)", logHint: 'final-fabric.log' } })
 measured('I04', 'implementation', 'Desktop local-server suite', parseTap('final-desktop.tap'), { extra: { command: 'node --test apps/desktop/test/*.test.mjs', logHint: 'final-desktop.tap' } })
 add({ id: 'I05', area: 'implementation', name: 'Measured release-check against documented suite totals', mandatory: true,
   status: passLog('final-release-check.log') ? 'PASS' : 'NOT TESTED',
@@ -105,7 +106,7 @@ add({ id: 'I07', area: 'implementation', name: 'Static analysis (node --check on
 add({ id: 'I08', area: 'implementation', name: 'Dependency advisory scans (web, desktop, Python)', mandatory: true,
   status: (passLog('final-npm-audit-web.log') && passLog('final-npm-audit-desktop.log') && passLog('final-python-advisory.log')) ? 'PASS' : 'NOT TESTED',
   evidence: (passLog('final-npm-audit-web.log') && passLog('final-npm-audit-desktop.log') && passLog('final-python-advisory.log'))
-    ? [{ command: 'npm audit --omit=dev --audit-level=high (web, desktop); .venv/bin/python scripts/audit_python_deps.py', log: 'docs/release/evidence/final-npm-audit-web.log' }, { log: 'docs/release/evidence/final-npm-audit-desktop.log' }, { log: 'docs/release/evidence/final-python-advisory.log' }] : [],
+    ? [{ command: 'npm audit --omit=dev --audit-level=high (web, desktop); .venv/bin/python services/fabric/scripts/audit_python_deps.py', log: 'docs/release/evidence/final-npm-audit-web.log' }, { log: 'docs/release/evidence/final-npm-audit-desktop.log' }, { log: 'docs/release/evidence/final-python-advisory.log' }] : [],
   unblock: 'Run all three advisory checks and capture their logs.' })
 add({ id: 'I09', area: 'implementation', name: 'Authentication, authorization, input validation, injection and artifact-path regression suites', mandatory: true,
   status: parseTap('final-core.tap')?.fail === 0 ? 'PASS' : 'NOT TESTED',
@@ -173,9 +174,19 @@ add({ id: 'T01', area: 'training', name: 'Real local parameter updates, atomic c
 add({ id: 'T02', area: 'training', name: 'User-consented training on a user-owned private dataset with dataset ownership validation', mandatory: true, status: 'BLOCKED',
   evidence: [{ artifact: 'docs/release/evidence/training-evidence.json', note: 'Only an operator-initiated synthetic repository corpus was used; no user dataset was supplied or authorized.' }],
   unblock: 'Explicit user consent, an owned/validated private dataset, its fingerprint and a recorded authorization record. None was provided; no private dataset may be ingested without it.' })
-add({ id: 'T03', area: 'training', name: 'SIGTERM cancellation of the real NumPy trainer and full worker failure handling', mandatory: true, status: 'NOT TESTED',
-  evidence: [{ log: parseTap('final-core.tap')?.log ?? 'docs/release/evidence/final-core.tap', note: 'LocalTrainingWorkerManager cancellation is contract-tested with a stub trainer, not the real NumPy trainer.' }],
-  unblock: 'Run a real trainer job through LocalTrainingWorkerManager and cancel it with SIGTERM, recording the atomic checkpoint and job state.' })
+const t03Measured = workerCancellation && workerCancellation.fail === 0 && workerCancellation.pass >= 12
+  && workerCancellation.foundationTrainingClaim === false && workerCancellation.productionModelQualified === false
+add({ id: 'T03', area: 'training', name: 'SIGTERM cancellation of the real JAX/NumPy trainer and full worker failure handling', mandatory: true,
+  status: t03Measured ? 'PASS' : 'NOT TESTED',
+  evidence: t03Measured ? [{
+    command: 'node scripts/release/verify-training-worker-cancellation.mjs',
+    artifact: 'docs/release/evidence/training-worker-qualification.json',
+    log: 'docs/release/evidence/training-worker-cancellation.log',
+    failureLog: 'docs/release/evidence/training-worker-failure.log',
+    measured: { pass: workerCancellation.pass, fail: workerCancellation.fail, checkpointSha256: workerCancellation.measured?.checkpointSha256, cancellationExitCode: workerCancellation.measured?.cancellationExitCode, failureExitCode: workerCancellation.measured?.failureExitCode },
+    scope: 'real local process; synthetic corpus; cancellation/lifecycle evidence only, NOT a production Klyvaron model or foundation-training claim',
+  }] : [{ log: parseTap('final-core.tap')?.log ?? 'docs/release/evidence/final-core.tap', note: 'Only the worker control-plane contract test is available; the real-trainer qualification evidence is missing or failed.' }],
+  unblock: t03Measured ? null : 'Run a real trainer job through LocalTrainingWorkerManager and cancel it with SIGTERM, recording the atomic checkpoint, job state and failure path.' })
 add({ id: 'T04', area: 'training', name: 'Klyvaron Pro/Max foundation or adapter training', mandatory: true, status: 'BLOCKED',
   evidence: [{ artifact: 'docs/release/model-register.json' }],
   unblock: 'Requires installed licensed weights, a documented architecture, compatible hardware, explicit consent and a reviewed training implementation. No foundation-model training claim is made.' })
@@ -315,7 +326,7 @@ const report = {
   branch: baseline.branch ?? 'arena/d44183df-ragam',
   baselineCommit: baseline.head ?? null,
   version: '0.2.0',
-  verdictBasis: 'PASS requires recorded evidence; BLOCKED requires an exact unblock requirement; NOT TESTED and NOT APPLICABLE are never converted to PASS.',
+  verdictBasis: 'PASS requires recorded evidence; BLOCKED requires an exact unblock requirement; a NOT TESTED gate may become PASS only after the missing verification is actually executed and its evidence is recorded. No status is laundered by editing a verdict or checklist.',
   finalVerdict: mandatoryNonPass.length === 0 ? 'TECHNICALLY QUALIFIED' : 'NOT RELEASE READY',
   releasePublished: false,
   publicationAuthorization: 'Release publication requires separate explicit authorization from the repository owner.',
@@ -335,6 +346,7 @@ const report = {
     providers: 'docs/release/provider-register.json',
     models: 'docs/release/model-register.json',
     training: 'docs/release/evidence/training-evidence.json',
+    trainingWorker: 'docs/release/evidence/training-worker-qualification.json',
     e2e: 'docs/release/evidence/e2e-qualification.json',
     security: 'docs/release/evidence/security-scan.json',
     manifest: 'build/release/0.2.0/manifest.json',

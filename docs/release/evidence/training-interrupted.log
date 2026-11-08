@@ -1,0 +1,7 @@
+aetheris-lite: training ragam-resume
+  corpus   /home/user/ragam
+  output   /home/user/ragam/build/training-qualification/segment-r1
+  step     1/120  loss  5.1599
+  step    13/120  loss  4.0354
+  step    25/120  loss  3.4850
+  step    37/120  loss  3.3527

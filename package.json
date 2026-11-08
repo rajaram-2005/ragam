@@ -33,6 +33,7 @@
     "release:models": "node scripts/release/generate-model-register.mjs",
     "release:security": "node scripts/release/security-scan.mjs",
     "release:e2e": "node scripts/release/e2e-qualification.mjs",
+    "release:training-worker": "node scripts/release/verify-training-worker-cancellation.mjs",
     "release:build": "node scripts/release/build-release.mjs",
     "release:verify": "node scripts/release/verify-release.mjs",
     "release:sign": "node scripts/release/sign-release.mjs",

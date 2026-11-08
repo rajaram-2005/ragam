@@ -1,6 +1,6 @@
 {
   "schema": "ragam-e2e-qualification/1",
-  "executedAt": "2026-11-08T07:50:35.917Z",
+  "executedAt": "2026-11-08T08:41:12.220Z",
   "backend": "services/core/src/online/app.mjs (production module)",
   "serviceMode": "isolated_test_service",
   "liveThirdPartyCalls": 0,
@@ -84,7 +84,7 @@
       "mode": "isolated_test_service",
       "status": "PASS",
       "detail": {
-        "sessionId": "60aefdbc-1b7d-4975-bf2e-5ad4c7d44ae0",
+        "sessionId": "b83c97ff-eadf-4b9a-bfe0-80c96554a53a",
         "userTurnPersisted": true,
         "survivedRestart": true,
         "unauthenticatedAfterRestart": 401
@@ -127,7 +127,7 @@
       "mode": "isolated_test_service",
       "status": "PASS",
       "detail": {
-        "jobId": "36d00e9c-8c17-4b85-9ebe-8760d6eeb490",
+        "jobId": "366dd47c-2972-4092-90e1-1c8cf8264f72",
         "state": "succeeded",
         "bytes": 70,
         "mime": "image/png",
@@ -160,7 +160,7 @@
       "mode": "isolated_test_service",
       "status": "PASS",
       "detail": {
-        "jobId": "26797020-a0c5-48e9-a92a-85af37b762a0",
+        "jobId": "67efa540-73ad-4416-8b83-6cc3d411f80a",
         "state": "failed",
         "historyStates": [
           "queued",
@@ -175,7 +175,7 @@
       "mode": "isolated_test_service",
       "status": "PASS",
       "detail": {
-        "jobId": "932c9ec7-b941-45b9-8785-edef504a5737",
+        "jobId": "8043a677-2ba2-4ccf-b2e3-0ef1d4127abf",
         "cancelState": "cancelled"
       }
     },

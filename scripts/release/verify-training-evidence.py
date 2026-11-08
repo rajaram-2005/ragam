@@ -3,9 +3,11 @@
 
 This is deliberately narrow: it checks the bytes that the pure-NumPy trainer
 actually wrote, the checkpoint it resumed from, and the evaluation numbers in
-the run reports. It does not claim a foundation model was trained. It records
-which parts of the requested training lifecycle were NOT tested with the real
-trainer (SIGTERM cancellation, remote/GPU training, user-owned datasets).
+the run reports. It does not claim a foundation model was trained. SIGTERM
+cancellation through LocalTrainingWorkerManager is verified separately against
+the real JAX/NumPy trainer by verify-training-worker-cancellation.mjs. This
+file records the remaining untested lifecycle areas (remote/GPU training,
+user-owned datasets, production model inference).
 """
 
 from __future__ import annotations
@@ -110,11 +112,15 @@ def main() -> int:
             "docs/release/evidence/training-rollback.log",
         ],
         "results": results,
+        "relatedEvidence": {
+            "workerCancellation": "docs/release/evidence/training-worker-qualification.json",
+            "scope": "Real LocalTrainingWorkerManager SIGTERM cancellation and failure handling against the real JAX/NumPy trainer; not a production model qualification.",
+        },
         "notTested": [
-            "SIGTERM cancellation of the real NumPy trainer (the Core LocalTrainingWorkerManager cancellation path is contract-tested with a stub trainer in services/core/test/klyvaron-training-worker.test.mjs)",
             "Training on a user-owned private dataset (no such dataset was supplied or authorized)",
             "GPU/accelerator training (no GPU on this host)",
             "Klyvaron Pro/Max foundation or adapter training (no weights, no architecture installed)",
+            "Production Klyvaron inference from licensed weights (no weights installed)",
         ],
         "pass": sum(1 for r in results if r["status"] == "PASS"),
         "fail": sum(1 for r in results if r["status"] == "FAIL"),

@@ -1,10 +1,10 @@
 {
   "schema": "ragam-security-scan/1",
   "repository": "rajaram-2005/ragam",
-  "scannedAt": "2026-11-08T07:50:34.958Z",
-  "trackedFiles": 573,
-  "textFilesScanned": 543,
-  "nodeModulesChecked": 280,
+  "scannedAt": "2026-11-08T09:00:29.337Z",
+  "trackedFiles": 658,
+  "textFilesScanned": 558,
+  "nodeModulesChecked": 292,
   "pass": 9,
   "fail": 0,
   "reviewedSynthetic": [
@@ -78,17 +78,17 @@
     {
       "id": "no_tracked_secret_or_weight_files",
       "status": "PASS",
-      "detail": "573 tracked files inspected; no credentials, private keys or weight payloads"
+      "detail": "658 tracked files inspected; no credentials, private keys or weight payloads"
     },
     {
       "id": "no_hardcoded_credential_literals",
       "status": "PASS",
-      "detail": "543 text files scanned for 4 patterns; 12 reviewed synthetic fixture occurrences, 0 unreviewed"
+      "detail": "558 text files scanned for 4 patterns; 12 reviewed synthetic fixture occurrences, 0 unreviewed"
     },
     {
       "id": "node_syntax_all_modules",
       "status": "PASS",
-      "detail": "280 .mjs/.js files pass node --check"
+      "detail": "292 .mjs/.js files pass node --check"
     },
     {
       "id": "compose_defaults_loopback",

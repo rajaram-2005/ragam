@@ -1,22 +1,22 @@
 {
   "schema": "ragam-release-qualification/1",
-  "generatedAt": "2026-11-08T08:14:21.562Z",
+  "generatedAt": "2026-11-08T08:58:46.492Z",
   "repository": "rajaram-2005/ragam",
   "branch": "arena/d44183df-ragam",
   "baselineCommit": "80ad8458fb039962dcaee6293dd451d1c6932416",
   "version": "0.2.0",
-  "verdictBasis": "PASS requires recorded evidence; BLOCKED requires an exact unblock requirement; NOT TESTED and NOT APPLICABLE are never converted to PASS.",
+  "verdictBasis": "PASS requires recorded evidence; BLOCKED requires an exact unblock requirement; a NOT TESTED gate may become PASS only after the missing verification is actually executed and its evidence is recorded. No status is laundered by editing a verdict or checklist.",
   "finalVerdict": "NOT RELEASE READY",
   "releasePublished": false,
   "publicationAuthorization": "Release publication requires separate explicit authorization from the repository owner.",
   "summary": {
     "totalGates": 71,
-    "PASS": 40,
+    "PASS": 41,
     "FAIL": 0,
     "BLOCKED": 25,
-    "NOT TESTED": 2,
+    "NOT TESTED": 1,
     "NOT APPLICABLE": 4,
-    "mandatoryNonPass": 29,
+    "mandatoryNonPass": 28,
     "mandatoryNonPassIds": [
       "L01",
       "L02",
@@ -25,7 +25,6 @@
       "M03",
       "M06",
       "T02",
-      "T03",
       "T04",
       "E02",
       "E03",
@@ -55,6 +54,7 @@
     "providers": "docs/release/provider-register.json",
     "models": "docs/release/model-register.json",
     "training": "docs/release/evidence/training-evidence.json",
+    "trainingWorker": "docs/release/evidence/training-worker-qualification.json",
     "e2e": "docs/release/evidence/e2e-qualification.json",
     "security": "docs/release/evidence/security-scan.json",
     "manifest": "build/release/0.2.0/manifest.json"
@@ -163,7 +163,7 @@
       "status": "PASS",
       "evidence": [
         {
-          "command": ".venv/bin/python -m pytest",
+          "command": ".venv/bin/python -m pytest -o addopts='' -q (services/fabric)",
           "log": "docs/release/evidence/final-fabric.log",
           "measured": {
             "pass": 823,
@@ -249,7 +249,7 @@
       "status": "PASS",
       "evidence": [
         {
-          "command": "npm audit --omit=dev --audit-level=high (web, desktop); .venv/bin/python scripts/audit_python_deps.py",
+          "command": "npm audit --omit=dev --audit-level=high (web, desktop); .venv/bin/python services/fabric/scripts/audit_python_deps.py",
           "log": "docs/release/evidence/final-npm-audit-web.log"
         },
         {
@@ -586,16 +586,26 @@
     {
       "id": "T03",
       "area": "training",
-      "name": "SIGTERM cancellation of the real NumPy trainer and full worker failure handling",
+      "name": "SIGTERM cancellation of the real JAX/NumPy trainer and full worker failure handling",
       "mandatory": true,
-      "status": "NOT TESTED",
+      "status": "PASS",
       "evidence": [
         {
-          "log": "docs/release/evidence/final-core.tap",
-          "note": "LocalTrainingWorkerManager cancellation is contract-tested with a stub trainer, not the real NumPy trainer."
+          "command": "node scripts/release/verify-training-worker-cancellation.mjs",
+          "artifact": "docs/release/evidence/training-worker-qualification.json",
+          "log": "docs/release/evidence/training-worker-cancellation.log",
+          "failureLog": "docs/release/evidence/training-worker-failure.log",
+          "measured": {
+            "pass": 12,
+            "fail": 0,
+            "checkpointSha256": "e6bc5d2a9253583b70f76de15290ff6548888dcc5fb267cf1e31ec71cb9539a0",
+            "cancellationExitCode": 130,
+            "failureExitCode": 1
+          },
+          "scope": "real local process; synthetic corpus; cancellation/lifecycle evidence only, NOT a production Klyvaron model or foundation-training claim"
         }
       ],
-      "unblock": "Run a real trainer job through LocalTrainingWorkerManager and cancel it with SIGTERM, recording the atomic checkpoint and job state."
+      "unblock": null
     },
     {
       "id": "T04",
@@ -673,7 +683,7 @@
           "measured": {
             "pass": 9,
             "fail": 0,
-            "trackedFiles": 573
+            "trackedFiles": 624
           }
         }
       ],

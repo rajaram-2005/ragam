@@ -1,0 +1,11 @@
+PASS  no_tracked_secret_or_weight_files — 658 tracked files inspected; no credentials, private keys or weight payloads
+PASS  no_hardcoded_credential_literals — 558 text files scanned for 4 patterns; 12 reviewed synthetic fixture occurrences, 0 unreviewed
+PASS  node_syntax_all_modules — 292 .mjs/.js files pass node --check
+PASS  compose_defaults_loopback — single-user Docker mode binds 127.0.0.1 by default
+PASS  lan_requires_explicit_bind_and_auth — LAN overlay requires explicit private bind, Basic Auth and internal TLS
+PASS  fabric_defaults_loopback — unauthenticated Fabric service defaults to loopback
+PASS  telemetry_privacy_invariants — no transmission, no prompts/datasets/keys/account ids, allowlisted fields
+PASS  telemetry_disable_switch — AETHERIS_TELEMETRY_ENABLED=false documented and implemented
+PASS  pinned_dependency_inputs — two npm lockfiles and one Python lock
+
+9 PASS, 0 FAIL — /home/user/ragam/docs/release/evidence/security-scan.json

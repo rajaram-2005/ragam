@@ -1,0 +1,13 @@
+PASS  interrupted_run_left_an_atomic_checkpoint — 1 checkpoint(s); writing uses .partial + Path.replace (services/fabric/fabric/lm/train.py:write_checkpoint)
+PASS  checkpoint_integrity — format=aetheris-checkpoint/v1 step=40 losses=40 weight_arrays=14 adam_arrays=28 loaded with allow_pickle=False
+PASS  resume_reports_the_checkpoint_it_used — {"checkpoint": "ragam-resume-714156ec13dd.ckpt.npz", "step": 40}
+PASS  resume_continued_to_the_configured_step — steps=120 loss_curve=120
+PASS  artifact_sha256_matches_report — sha256=be063aabf50c0e37b97d250d6921405195eeb3cdf8ae3354d4c8ce19eaabcc96 fileDigest=be063aabf50c0e37b97d250d6921405195eeb3cdf8ae3354d4c8ce19eaabcc96
+PASS  actual_parameter_updates — 10-step weights=262d80030011f634…, resumed 120-step weights=f3242e259938ab77…, checkpoint bytes differ from final artifact
+PASS  loss_decreased — loss 5.1599 -> 3.3644
+PASS  evaluation_before_and_after — validation perplexity 94.4250 (10 steps) -> 34.1122 (120 steps); best baseline bigram 27.2280 — the tiny smoke model does NOT beat it
+PASS  dataset_fingerprint_stable — manifestDigest=66cff61fd7ad7358a6ec3cc6eaf9a258905721668e8c70e8b553b7043e09b161 trainFiles=496 validationFiles=55 (no overlap)
+PASS  stable_training_configuration — checkpoint configDigest=714156ec13dd matches resumed run; a mismatch is refused by train.py
+PASS  restart_recovery_and_rollback_are_bit_identical — replaying --resume-from the retained step-40 checkpoint produced a bit-identical artifact (segment-r2 vs segment-r3)
+
+11 PASS, 0 FAIL — docs/release/evidence/training-evidence.json

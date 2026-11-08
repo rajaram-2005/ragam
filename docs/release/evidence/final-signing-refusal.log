@@ -1,0 +1,6 @@
+signing refused: no authorized signing key is configured.
+  missing RAGAM_RELEASE_SIGNING_KEY_ID — the authorized signing key id / fingerprint
+  missing RAGAM_RELEASE_SIGNING_KEY_FILE — absolute path to the authorized armored private key, outside this repository
+  missing RAGAM_RELEASE_SIGNING_AUTHORIZED_BY — the identity of the repository owner who authorized this signing
+  missing RAGAM_RELEASE_SIGNING_CONFIRM — must be exactly YES to confirm explicit authorization
+  No signature was created. The release gate remains BLOCKED.

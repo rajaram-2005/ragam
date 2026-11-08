@@ -24,6 +24,10 @@ The root cause was a **clean-checkout reproducibility gap**: `inspectEnvironment
 - No architecture change: Lite/Pro/Max remain profiles of one shared model-independent engine, because no separate trained models exist.
 - No third-party model was represented as first-party Klyvaron.
 
+## Additional measured qualification (not a code repair)
+
+BL-07 was an evidence gap, not a production defect. `scripts/release/verify-training-worker-cancellation.mjs` starts the real `services/fabric/scripts/train_klyvaron.py` through `LocalTrainingWorkerManager`, observes step 1, cancels with SIGTERM, verifies the atomic checkpoint with `sha256sum -c` and an unpickled NPZ inspection, reloads the manager from disk, and records a real trainer failure path. The 12 measured checks and raw logs are in [evidence/training-worker-qualification.json](evidence/training-worker-qualification.json) and the accompanying `training-worker-*` files. This is a cancellation/lifecycle smoke test, not a production-model or foundation-training qualification; the 330 MB checkpoint stays in the ignored `build/` directory.
+
 ## Verification criteria for the repaired defects
 
 All five repairs are guarded by tests that fail if the behaviour regresses; the full Core, Web, Fabric and Desktop suites, the measured `release-check.mjs`, the production web build, the security scan, the E2E harness, the training evidence verifier and the independent artifact verifier are recorded under [evidence/](evidence/) and [09-artifacts-and-signing.md](09-artifacts-and-signing.md).

@@ -84,6 +84,10 @@ Thumbs.db
 npm-debug.log*
 yarn-error.log*
 
+# Release-qualification evidence logs are deliverables, not scratch output.
+# .gitattributes preserves their raw bytes and disables whitespace checks.
+!docs/release/evidence/*.log
+
 # --- test scratch ---------------------------------------------------------
 # apps/web/test/render.test.mjs bundles the JSX components with esbuild (already a
 # Vite dependency) so they can be server-rendered under `node --test`, which cannot

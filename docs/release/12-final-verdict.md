@@ -6,7 +6,7 @@ Machine-readable gate: [qualification.json](qualification.json). It is generated
 
 ### What passes
 
-Implementation-level confidence is now independently verifiable: the full Core/Web/Fabric/Desktop suites, measured `release-check.mjs`, production web build, static syntax and secret scan, dependency advisories, a real 17-check five-area backend E2E against an isolated test service, a real local training run with parameter updates/checkpoint/resume/rollback and before/after evaluation, reproducible clean-checkout artifacts with independently verified SHA-256 checksums, a CycloneDX SBOM, build provenance, a fail-closed signing workflow, privacy-conscious telemetry with a documented disable method, and the model/tier separation and unavailable-model refusals.
+Implementation-level confidence is now independently verifiable: the full Core/Web/Fabric/Desktop suites, measured `release-check.mjs`, production web build, static syntax and secret scan, dependency advisories, a real 17-check five-area backend E2E against an isolated test service, a real local training run with parameter updates/checkpoint/resume/rollback and before/after evaluation, a real 12-check `LocalTrainingWorkerManager` SIGTERM/failure-path run against the 27,559,946-parameter JAX/NumPy trainer, reproducible clean-checkout artifacts with independently verified SHA-256 checksums, a CycloneDX SBOM, build provenance, a fail-closed signing workflow, privacy-conscious telemetry with a documented disable method, and the model/tier separation and unavailable-model refusals.
 
 ### What does not pass
 
@@ -15,7 +15,6 @@ Implementation-level confidence is now independently verifiable: the full Core/W
 | Live third-party provider qualification (45 providers) | **BLOCKED** | Explicitly authorized test/staging credentials via the exact config fields in [provider-register.json](provider-register.json), plus owner authorization for one real call per provider |
 | Klyvaron Lite/Pro/Max weights, load and inference | **BLOCKED** | Licensed weight payloads with trusted SHA-256 manifests, compatible hardware and an install procedure outside Git |
 | User-consented training on a private dataset | **BLOCKED** | Explicit consent, owned/validated dataset and fingerprint |
-| SIGTERM cancellation of the real trainer | **NOT TESTED** | A real trainer job through `LocalTrainingWorkerManager` with a SIGTERM cancellation log |
 | Foundation/adapter training | **BLOCKED** | Weights, architecture, hardware, consent and a reviewed implementation |
 | Live five-area E2E / real video artifacts / remote MCP | **BLOCKED** | Authorized live providers and a remote MCP test server |
 | Commercial SAST/DAST | **NOT TESTED** | A licensed tool run against the exact commit |
@@ -29,18 +28,18 @@ Implementation-level confidence is now independently verifiable: the full Core/W
 
 ### Non-negotiable compliance statement
 
-No fabricated results, no fake provider calls, no mock-only proof of live operation, no fake model weights, no consent bypass, no hardcoded secrets, no unauthorized paid API usage, no destructive cleanup, no production deployment, no signing with an unauthorized key and no release publication were performed. No third-party model is represented as first-party Klyvaron. No foundation-model training claim is made for the tiny local smoke run. BLOCKED and NOT TESTED statuses were not converted into PASS.
+No fabricated results, no fake provider calls, no mock-only proof of live operation, no fake model weights, no consent bypass, no hardcoded secrets, no unauthorized paid API usage, no destructive cleanup, no production deployment, no signing with an unauthorized key and no release publication were performed. No third-party model is represented as first-party Klyvaron. No foundation-model training claim is made for the tiny local smoke run or the bounded real-trainer cancellation run. No BLOCKED gate was converted into PASS, and T03 became PASS only after the missing real-trainer verification was executed with 12 recorded checks, raw logs, an independently verified checkpoint digest and a regression guard.
 
 **Release publication requires separate explicit authorization from the repository owner.**
 
 ## Gate summary (generated, not hand-written)
 
-`docs/release/qualification.json` currently contains **71 gates**: **40 PASS**, **0 FAIL**, **25 BLOCKED**, **2 NOT TESTED**, **4 NOT APPLICABLE**; **29 mandatory gates are not PASS**. The two NOT TESTED items are SIGTERM cancellation of the real NumPy trainer and a commercial SAST/DAST product scan. No BLOCKED or NOT TESTED gate was converted into PASS.
+`docs/release/qualification.json` currently contains **71 gates**: **41 PASS**, **0 FAIL**, **25 BLOCKED**, **1 NOT TESTED**, **4 NOT APPLICABLE**; **28 mandatory gates are not PASS**. The remaining NOT TESTED item is a commercial SAST/DAST product scan. T03 is PASS because the real-trainer SIGTERM/failure-path run was actually executed and its evidence was recorded; no BLOCKED gate was converted into PASS.
 
-Measured local verification behind the PASS gates: Core `1081/1085` (4 real-artifact acceptance cases skipped), Web `143/143`, Fabric `823/823`, Desktop `4/4`, `release-check.mjs` `2051` tests / 31 artefacts / 3 packs, production web build (50 modules), web+desktop `npm audit --omit=dev` 0 vulnerabilities, Python advisory audit clean, security scan `9/9`, five-area E2E `17/17`, training evidence `11/11`, and artifact verification `16/16` with byte-identical rebuild.
+Measured local verification behind the PASS gates: Core `1081/1085` (4 real-artifact acceptance cases skipped), Web `143/143`, Fabric `823/823`, Desktop `4/4`, `release-check.mjs` `2051` tests / 31 artefacts / 3 packs, production web build (50 modules), web+desktop `npm audit --omit=dev` 0 vulnerabilities, Python advisory audit clean, security scan `9/9`, five-area E2E `17/17`, training evidence `11/11`, real-trainer worker cancellation/failure evidence `12/12`, and artifact verification `16/16` with byte-identical rebuild.
 
 **Final objective status:** the repository is reproducibly buildable, locally verified and honestly qualified at implementation level. It is **not** staging-qualified, signed or published, and therefore remains **NOT RELEASE READY**.
 
 ## Post-remediation CI
 
-Pushed branch `arena/d44183df-ragam` at `744d29c29b4770c2036f511ebb6e976ed7a3ec3e`: CI `42460843714` **PASS** (six jobs; one intentional fail-closed skip) and Desktop packages `42460843680` **PASS** (four platforms). Recorded in [evidence/ci-runs.json](evidence/ci-runs.json). CI success is build/test evidence, not live qualification.
+Pushed branch `arena/d44183df-ragam` at `f00de867358d16a576dbf1cb576e71a51a07c94f`: final PR #28 CI `42462118916` **PASS** (six jobs; one intentional fail-closed skip) and Desktop packages `42462118898` **PASS** (four platforms); `gh pr checks 28` reported 13 PASS / 0 FAIL / 2 skips plus Vercel preview passes. Earlier successful runs are recorded in [evidence/ci-runs.json](evidence/ci-runs.json). CI success is build/test evidence, not live qualification.
