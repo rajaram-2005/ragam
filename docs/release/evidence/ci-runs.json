@@ -1,13 +1,14 @@
 {
   "schema": "ragam-ci-verification/1",
   "branch": "arena/d44183df-ragam",
-  "headSha": "744d29c29b4770c2036f511ebb6e976ed7a3ec3e",
-  "observedWith": "gh run list / gh run view on the pushed branch",
+  "headSha": "60182490bd3b45f199cd8057ddf4b4a41f32c2dd",
+  "observedWith": "gh pr checks 28 --watch; gh run list / gh run view on the pushed branch",
+  "prChecks": { "pass": 13, "fail": 0, "skipping": 2, "vercelPreviews": "pass" },
   "runs": [
     {
-      "id": "42460843714",
+      "id": "42467789374",
       "name": "CI",
-      "event": "push",
+      "event": "pull_request",
       "status": "completed",
       "conclusion": "success",
       "jobs": [
@@ -21,9 +22,9 @@
       ]
     },
     {
-      "id": "42460843680",
+      "id": "42467789381",
       "name": "Desktop packages",
-      "event": "push",
+      "event": "pull_request",
       "status": "completed",
       "conclusion": "success",
       "jobs": [
@@ -34,5 +35,5 @@
       ]
     }
   ],
-  "note": "No release was published. The Klyvaron production evidence gate is intentionally skipped and is never counted as model or release evidence. These runs verify build/test/runtime CI only; they do not qualify live providers, models, staging, signing or publication."
+  "note": "No release was published. The Klyvaron production evidence gate is intentionally skipped and is never counted as model or release evidence. These runs verify build/test/runtime CI and desktop packaging only; they do not qualify live providers, models, staging, signing or publication. An earlier transient Electron/toolset 504 was fixed with the documented mirror variables and a bounded retry, then re-verified on all four platforms."
 }

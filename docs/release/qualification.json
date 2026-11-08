@@ -1,6 +1,6 @@
 {
   "schema": "ragam-release-qualification/1",
-  "generatedAt": "2026-11-08T09:34:26.613Z",
+  "generatedAt": "2026-11-08T09:42:57.089Z",
   "repository": "rajaram-2005/ragam",
   "branch": "arena/d44183df-ragam",
   "baselineCommit": "80ad8458fb039962dcaee6293dd451d1c6932416",
@@ -111,7 +111,7 @@
         {
           "command": "gh run list --branch arena/d44183df-ragam; gh run view <run>",
           "artifact": "docs/release/evidence/ci-runs.json",
-          "runId": "42460843714, 42460843680"
+          "runId": "42467789374, 42467789381"
         }
       ],
       "notes": "Build/test/runtime CI only. The skipped Klyvaron production evidence gate is fail-closed and is never counted as model evidence.",

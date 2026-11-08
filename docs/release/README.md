@@ -1,6 +1,6 @@
 # RAGAM / Klyvaron — Release Readiness Remediation and Live Qualification
 
-**Verdict: NOT RELEASE READY.** Baseline branch `arena/d44183df-ragam` at `80ad8458fb039962dcaee6293dd451d1c6932416` (`main` CI `42396395722`, Desktop `42396395647`, both successful). PR #28 remains open against `main`; its final checks at `f00de867358d16a576dbf1cb576e71a51a07c94f` were green (CI `42462118916`, Desktop `42462118898`).
+**Verdict: NOT RELEASE READY.** Baseline branch `arena/d44183df-ragam` at `80ad8458fb039962dcaee6293dd451d1c6932416` (`main` CI `42396395722`, Desktop `42396395647`, both successful). PR #28 remains open against `main`; its checks at `60182490bd3b45f199cd8057ddf4b4a41f32c2dd` are green (CI `42467789374`, Desktop `42467789381`, 13 PASS / 0 FAIL / 2 intentional skips).
 
 This directory contains the evidence for the remediation work. It is deliberately explicit about what was actually executed and what remains externally blocked. No live third-party provider call, no model weight download, no production deployment, no signing with an unauthorized key and no release publication was performed.
 

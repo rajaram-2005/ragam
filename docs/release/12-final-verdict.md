@@ -42,4 +42,4 @@ Measured local verification behind the PASS gates: Core `1081/1085` (4 real-arti
 
 ## Post-remediation CI
 
-Pushed branch `arena/d44183df-ragam` at `f00de867358d16a576dbf1cb576e71a51a07c94f`: final PR #28 CI `42462118916` **PASS** (six jobs; one intentional fail-closed skip) and Desktop packages `42462118898` **PASS** (four platforms); `gh pr checks 28` reported 13 PASS / 0 FAIL / 2 skips plus Vercel preview passes. Earlier successful runs are recorded in [evidence/ci-runs.json](evidence/ci-runs.json). CI success is build/test evidence, not live qualification.
+Pushed branch `arena/d44183df-ragam` at `60182490bd3b45f199cd8057ddf4b4a41f32c2dd`: final PR #28 CI `42467789374` **PASS** (six jobs; one intentional fail-closed skip) and Desktop packages `42467789381` **PASS** (four platforms); `gh pr checks 28` reported 13 PASS / 0 FAIL / 2 skips plus Vercel preview passes. Earlier transient Electron/toolset 504s were fixed by the documented mirror overrides and a bounded retry, then all four packaging jobs passed. Recorded in [evidence/ci-runs.json](evidence/ci-runs.json). CI success is build/test evidence, not live qualification.
