@@ -269,6 +269,9 @@ test('the machine-readable release gate is valid, honest and still refuses publi
   assert.ok(report.gates.find((g) => g.id === 'T03').evidence.some((e) => /verify-training-worker-cancellation\.mjs/.test(e.command ?? '')))
   assert.equal(report.gates.find((g) => g.id === 'S02').status, 'NOT TESTED')
   assert.equal(report.artifacts.trainingWorker, 'docs/release/evidence/training-worker-qualification.json')
+  const desktopWorkflow = read('.github/workflows/desktop.yml')
+  assert.match(desktopWorkflow, /for attempt in 1 2 3/, 'Desktop packaging must retry transient electron-builder download failures')
+  assert.match(desktopWorkflow, /npx electron-builder --dir/, 'Desktop retry must still execute the real unpacked-app build')
   for (const gate of report.gates) {
     if (gate.requiresLiveCredential) assert.notEqual(gate.status, 'PASS', `${gate.id} cannot be PASS without a live call`)
     if (gate.status === 'BLOCKED') assert.ok(gate.unblock && gate.unblock.length > 20, `${gate.id} needs an exact unblock requirement`)

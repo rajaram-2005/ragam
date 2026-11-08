@@ -65,10 +65,25 @@ jobs:
         run: npm test
         working-directory: apps/desktop
 
+      # electron-builder fetches Electron and platform helper binaries from an
+      # external release host. A transient 504/500 there must not fail an
+      # unrelated source change. Three attempts with backoff still fail a real
+      # packaging error, and the downloaded artifacts are not cached as a pass.
       - name: Build the React app and unpacked desktop app
+        shell: bash
         run: |
           npm run build:web
-          npx electron-builder --dir
+          for attempt in 1 2 3; do
+            echo "electron-builder unpacked-app attempt ${attempt} of 3"
+            if npx electron-builder --dir; then
+              exit 0
+            fi
+            rm -rf release
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 30))
+            fi
+          done
+          exit 1
         working-directory: apps/desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
