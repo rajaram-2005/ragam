@@ -20,6 +20,13 @@ jobs:
   package:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
+    # Electron's GitHub release host intermittently returns 504 while
+    # electron-builder fetches Electron and its platform toolsets. These are the
+    # officially documented mirror variables; checksums are still enforced.
+    # The unpacked-build retry below remains a second, independent safeguard.
+    env:
+      ELECTRON_MIRROR: 'https://npmmirror.com/mirrors/electron/'
+      ELECTRON_BUILDER_BINARIES_MIRROR: 'https://npmmirror.com/mirrors/electron-builder-binaries/'
     strategy:
       fail-fast: false
       matrix:
