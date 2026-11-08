@@ -1,5 +1,5 @@
 {
-  "path": "build/training-worker-qualification/manager-root/worker-runs/b394665b-8404-436d-a8a7-1124228d4852/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
+  "path": "build/training-worker-qualification/manager-root/worker-runs/e7e0e4d4-a241-4bf4-9f7f-1ea478ab39f6/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
   "bytes": 330788264,
   "sha256": "e6bc5d2a9253583b70f76de15290ff6548888dcc5fb267cf1e31ec71cb9539a0",
   "npz": {
@@ -13,11 +13,11 @@
   "independentVerification": {
     "command": "sha256sum -c build/training-worker-qualification/training-worker-checksums.txt",
     "status": 0,
-    "stdout": "build/training-worker-qualification/manager-root/worker-runs/b394665b-8404-436d-a8a7-1124228d4852/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz: OK",
+    "stdout": "build/training-worker-qualification/manager-root/worker-runs/e7e0e4d4-a241-4bf4-9f7f-1ea478ab39f6/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz: OK",
     "stderr": ""
   },
   "inspector": {
-    "command": ".venv/bin/python scripts/release/inspect-training-checkpoint.py build/training-worker-qualification/manager-root/worker-runs/b394665b-8404-436d-a8a7-1124228d4852/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
+    "command": ".venv/bin/python scripts/release/inspect-training-checkpoint.py build/training-worker-qualification/manager-root/worker-runs/e7e0e4d4-a241-4bf4-9f7f-1ea478ab39f6/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
     "status": 0,
     "stdout": "{\"arrays\": 272, \"configDigest\": \"302a4543119d3a380d4de8480a3bd9645a3b1aae4dc19dca82f87967fde98130\", \"firstWeightFinite\": true, \"optimizerArrays\": 180, \"step\": 1, \"weightArrays\": 90}",
     "stderr": ""
