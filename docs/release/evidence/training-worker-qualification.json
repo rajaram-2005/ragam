@@ -1,7 +1,7 @@
 {
   "schema": "ragam-training-worker-qualification/1",
-  "generatedAt": "2026-11-08T10:02:11.924Z",
-  "commit": "b1e1f6256d1c241c96b018b7bdc35ad700fb477c",
+  "generatedAt": "2026-11-08T10:06:21.887Z",
+  "commit": "38e3739d0dd534967c488bd410900958658a9b16",
   "sourceCommitNote": "HEAD at generation time; later commits are descendants and contain no changes to the trainer or worker runtime.",
   "branch": "arena/d44183df-ragam",
   "command": "node scripts/release/verify-training-worker-cancellation.mjs",
@@ -17,8 +17,8 @@
       "fma"
     ],
     "totalRamBytes": 4131278848,
-    "availableRamBytes": 3820408832,
-    "freeDiskBytes": 18435571712,
+    "availableRamBytes": 3801325568,
+    "freeDiskBytes": 18434572288,
     "gpuAvailable": false,
     "accelerators": []
   },
@@ -38,18 +38,18 @@
     "purpose": "verify real worker cancellation, atomic checkpointing, checkpoint resume, job-state persistence and failure handling",
     "limitations": "This is not consent to train on user data, publish a model, or claim a production Klyvaron model.",
     "disclosureDigest": "8d98e9560973be8e541b46bfc7d2bfd891c1821f88e21f7e89766433bcfeaddc",
-    "authorizedAt": "2026-11-08T10:01:41.157Z"
+    "authorizedAt": "2026-11-08T10:05:49.920Z"
   },
   "commands": [
     "node scripts/release/verify-training-worker-cancellation.mjs",
-    ".venv/bin/python services/fabric/scripts/train_klyvaron.py --preset pro --corpus-dir build/training-worker-qualification/corpus --corpus-record build/training-worker-qualification/corpus-record.json --work-dir build/training-worker-qualification/manager-root/worker-runs/295fd827-0ac3-412e-b49e-e0df27e1f736 --install-root build/training-worker-qualification/manager-root --pretrain-steps 2 --joint-steps 2 --batch-size 1 --checkpoint-every 1 --keep-checkpoint --skip-cards",
-    "LocalTrainingWorkerManager.cancelJob(295fd827-0ac3-412e-b49e-e0df27e1f736) → child.kill('SIGTERM')",
-    ".venv/bin/python services/fabric/scripts/train_klyvaron.py --preset pro --corpus-dir build/training-worker-qualification/corpus --corpus-record build/training-worker-qualification/corpus-record.json --work-dir build/training-worker-qualification/manager-root/worker-runs/295fd827-0ac3-412e-b49e-e0df27e1f736 --install-root build/training-worker-qualification/manager-root --pretrain-steps 2 --joint-steps 2 --batch-size 1 --checkpoint-every 1 --keep-checkpoint --skip-cards --resume",
-    "LocalTrainingWorkerManager.cancelJob(295fd827-0ac3-412e-b49e-e0df27e1f736) → child.kill('SIGTERM') before completion",
+    ".venv/bin/python services/fabric/scripts/train_klyvaron.py --preset pro --corpus-dir build/training-worker-qualification/corpus --corpus-record build/training-worker-qualification/corpus-record.json --work-dir build/training-worker-qualification/manager-root/worker-runs/4671226d-bbad-40c4-aa2b-8ae7dab9d5ea --install-root build/training-worker-qualification/manager-root --pretrain-steps 2 --joint-steps 2 --batch-size 1 --checkpoint-every 1 --keep-checkpoint --skip-cards",
+    "LocalTrainingWorkerManager.cancelJob(4671226d-bbad-40c4-aa2b-8ae7dab9d5ea) → child.kill('SIGTERM')",
+    ".venv/bin/python services/fabric/scripts/train_klyvaron.py --preset pro --corpus-dir build/training-worker-qualification/corpus --corpus-record build/training-worker-qualification/corpus-record.json --work-dir build/training-worker-qualification/manager-root/worker-runs/4671226d-bbad-40c4-aa2b-8ae7dab9d5ea --install-root build/training-worker-qualification/manager-root --pretrain-steps 2 --joint-steps 2 --batch-size 1 --checkpoint-every 1 --keep-checkpoint --skip-cards --resume",
+    "LocalTrainingWorkerManager.cancelJob(4671226d-bbad-40c4-aa2b-8ae7dab9d5ea) → child.kill('SIGTERM') before completion",
     "sha256sum -c build/training-worker-qualification/training-worker-checksums.txt (two checkpoint snapshots)",
     ".venv/bin/python scripts/release/inspect-training-checkpoint.py build/training-worker-qualification/phase1-checkpoint.npz",
-    ".venv/bin/python scripts/release/inspect-training-checkpoint.py build/training-worker-qualification/manager-root/worker-runs/295fd827-0ac3-412e-b49e-e0df27e1f736/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
-    ".venv/bin/python services/fabric/scripts/train_klyvaron.py --preset pro --corpus-dir build/training-worker-qualification/corpus --corpus-record build/training-worker-qualification/invalid-corpus-record.json --work-dir build/training-worker-qualification/manager-root/worker-runs/06cd1935-c8fd-48fe-a2f7-a255ea975ffe --install-root build/training-worker-qualification/manager-root --pretrain-steps 2 --joint-steps 2 --batch-size 1 --checkpoint-every 1 --keep-checkpoint --skip-cards (real failure path)"
+    ".venv/bin/python scripts/release/inspect-training-checkpoint.py build/training-worker-qualification/manager-root/worker-runs/4671226d-bbad-40c4-aa2b-8ae7dab9d5ea/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
+    ".venv/bin/python services/fabric/scripts/train_klyvaron.py --preset pro --corpus-dir build/training-worker-qualification/corpus --corpus-record build/training-worker-qualification/invalid-corpus-record.json --work-dir build/training-worker-qualification/manager-root/worker-runs/b1f9eb86-e1e8-411f-889d-2b33e59801ca --install-root build/training-worker-qualification/manager-root --pretrain-steps 2 --joint-steps 2 --batch-size 1 --checkpoint-every 1 --keep-checkpoint --skip-cards (real failure path)"
   ],
   "logs": [
     "docs/release/evidence/training-worker-cancellation.log",
@@ -83,13 +83,13 @@
       "id": "real_trainer_process_started",
       "status": "PASS",
       "mode": "real_local_process",
-      "detail": "pid=36135; /home/user/ragam/.venv/bin/python; Python 3.11.2; NumPy 2.4.6; JAX 0.10.2; 27,559,946 parameters"
+      "detail": "pid=39522; /home/user/ragam/.venv/bin/python; Python 3.11.2; NumPy 2.4.6; JAX 0.10.2; 27,559,946 parameters"
     },
     {
       "id": "real_training_progress_observed",
       "status": "PASS",
       "mode": "real_local_process",
-      "detail": "step 1/4; loss=8.8687; trainer log records rss=1058MB"
+      "detail": "step 1/4; loss=8.8687; trainer log records rss=1040MB"
     },
     {
       "id": "sigterm_delivered_and_handled",
@@ -119,13 +119,13 @@
       "id": "independent_sha256sum_verification",
       "status": "PASS",
       "mode": "real_local_process",
-      "detail": "sha256sum -c build/training-worker-qualification/training-worker-checksums.txt → build/training-worker-qualification/phase1-checkpoint.npz: OK\nbuild/training-worker-qualification/manager-root/worker-runs/295fd827-0ac3-412e-b49e-e0df27e1f736/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz: OK"
+      "detail": "sha256sum -c build/training-worker-qualification/training-worker-checksums.txt → build/training-worker-qualification/phase1-checkpoint.npz: OK\nbuild/training-worker-qualification/manager-root/worker-runs/4671226d-bbad-40c4-aa2b-8ae7dab9d5ea/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz: OK"
     },
     {
       "id": "cancelled_job_state_persisted",
       "status": "PASS",
       "mode": "real_local_process",
-      "detail": "state=cancelled_checkpointed; exitCode=130; completedAt=2026-11-08T10:01:50.013Z"
+      "detail": "state=cancelled_checkpointed; exitCode=130; completedAt=2026-11-08T10:05:59.059Z"
     },
     {
       "id": "no_orphan_worker_process",
@@ -143,7 +143,7 @@
       "id": "checkpoint_resume_started",
       "status": "PASS",
       "mode": "real_local_process",
-      "detail": "same job id 295fd827-0ac3-412e-b49e-e0df27e1f736; workDir reused; trainer logged resume from step 1/4"
+      "detail": "same job id 4671226d-bbad-40c4-aa2b-8ae7dab9d5ea; workDir reused; trainer logged resume from step 1/4"
     },
     {
       "id": "parameter_state_advanced_after_resume",

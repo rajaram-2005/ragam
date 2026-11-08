@@ -1,18 +1,18 @@
 {
   "cancellation": {
-    "id": "295fd827-0ac3-412e-b49e-e0df27e1f736",
-    "pid": 36135,
+    "id": "4671226d-bbad-40c4-aa2b-8ae7dab9d5ea",
+    "pid": 39522,
     "state": "cancelled_checkpointed",
     "cancelRequested": true,
     "exitCode": 130,
-    "completedAt": "2026-11-08T10:01:50.013Z",
+    "completedAt": "2026-11-08T10:05:59.059Z",
     "progress": {
       "step": 1,
       "totalSteps": 4,
       "lastLoss": 8.8687,
       "lastCheckpointSha256": "e6bc5d2a9253583b"
     },
-    "checkpointPath": "build/training-worker-qualification/manager-root/worker-runs/295fd827-0ac3-412e-b49e-e0df27e1f736/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
+    "checkpointPath": "build/training-worker-qualification/manager-root/worker-runs/4671226d-bbad-40c4-aa2b-8ae7dab9d5ea/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
     "checkpointVerified": true,
     "logLines": 10
   },
@@ -21,26 +21,26 @@
     "checkpointVerified": true
   },
   "resume": {
-    "id": "295fd827-0ac3-412e-b49e-e0df27e1f736",
-    "pid": 36169,
+    "id": "4671226d-bbad-40c4-aa2b-8ae7dab9d5ea",
+    "pid": 39556,
     "resumed": true,
     "state": "cancelled_checkpointed",
     "cancelRequested": true,
     "exitCode": 130,
-    "completedAt": "2026-11-08T10:02:06.268Z",
+    "completedAt": "2026-11-08T10:06:15.320Z",
     "progress": {
       "step": 3,
       "totalSteps": 4,
       "lastLoss": null,
       "lastCheckpointSha256": "02bf5c4a0317f6b4"
     },
-    "checkpointPath": "build/training-worker-qualification/manager-root/worker-runs/295fd827-0ac3-412e-b49e-e0df27e1f736/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
+    "checkpointPath": "build/training-worker-qualification/manager-root/worker-runs/4671226d-bbad-40c4-aa2b-8ae7dab9d5ea/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
     "checkpointVerified": true,
     "logLines": 7
   },
   "failure": {
-    "id": "06cd1935-c8fd-48fe-a2f7-a255ea975ffe",
-    "pid": 36200,
+    "id": "b1f9eb86-e1e8-411f-889d-2b33e59801ca",
+    "pid": 39588,
     "state": "failed",
     "exitCode": 1,
     "error": "json.decoder.JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
