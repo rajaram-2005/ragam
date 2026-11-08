@@ -35,7 +35,7 @@ No fabricated results, no fake provider calls, no mock-only proof of live operat
 
 ## Gate summary (generated, not hand-written)
 
-`docs/release/qualification.json` currently contains **70 gates**: **39 PASS**, **0 FAIL**, **25 BLOCKED**, **2 NOT TESTED**, **4 NOT APPLICABLE**; **29 mandatory gates are not PASS**. The two NOT TESTED items are SIGTERM cancellation of the real NumPy trainer and a commercial SAST/DAST product scan. No BLOCKED or NOT TESTED gate was converted into PASS.
+`docs/release/qualification.json` currently contains **71 gates**: **40 PASS**, **0 FAIL**, **25 BLOCKED**, **2 NOT TESTED**, **4 NOT APPLICABLE**; **29 mandatory gates are not PASS**. The two NOT TESTED items are SIGTERM cancellation of the real NumPy trainer and a commercial SAST/DAST product scan. No BLOCKED or NOT TESTED gate was converted into PASS.
 
 Measured local verification behind the PASS gates: Core `1081/1085` (4 real-artifact acceptance cases skipped), Web `143/143`, Fabric `823/823`, Desktop `4/4`, `release-check.mjs` `2051` tests / 31 artefacts / 3 packs, production web build (50 modules), web+desktop `npm audit --omit=dev` 0 vulnerabilities, Python advisory audit clean, security scan `9/9`, five-area E2E `17/17`, training evidence `11/11`, and artifact verification `16/16` with byte-identical rebuild.
 

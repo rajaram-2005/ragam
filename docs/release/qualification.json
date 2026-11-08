@@ -1,6 +1,6 @@
 {
   "schema": "ragam-release-qualification/1",
-  "generatedAt": "2026-11-08T08:05:08.790Z",
+  "generatedAt": "2026-11-08T08:14:21.562Z",
   "repository": "rajaram-2005/ragam",
   "branch": "arena/d44183df-ragam",
   "baselineCommit": "80ad8458fb039962dcaee6293dd451d1c6932416",
@@ -10,8 +10,8 @@
   "releasePublished": false,
   "publicationAuthorization": "Release publication requires separate explicit authorization from the repository owner.",
   "summary": {
-    "totalGates": 70,
-    "PASS": 39,
+    "totalGates": 71,
+    "PASS": 40,
     "FAIL": 0,
     "BLOCKED": 25,
     "NOT TESTED": 2,
@@ -951,6 +951,21 @@
           "command": "node scripts/release/build-release.mjs --out build/release/0.2.0-repro --allow-dirty; sha256 comparison",
           "log": "docs/release/evidence/final-reproducibility.log",
           "artifact": "docs/release/artifacts/provenance.json"
+        }
+      ],
+      "unblock": null
+    },
+    {
+      "id": "A11",
+      "area": "artifacts",
+      "name": "Committed artifact set verifies in place with sha256sum -c",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "cd docs/release/artifacts && sha256sum -c SHA256SUMS",
+          "log": "docs/release/evidence/final-committed-artifacts-check.log",
+          "artifact": "docs/release/artifacts/manifest.json"
         }
       ],
       "unblock": null

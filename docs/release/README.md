@@ -21,6 +21,6 @@ This directory contains the evidence for the remediation work. It is deliberatel
 | 13 | Final verdict | [12-final-verdict.md](12-final-verdict.md) |
 | — | **Machine-readable release gate** | [qualification.json](qualification.json) |
 
-Raw logs and TAP output are under [evidence/](evidence/). `build/release/0.2.0/` is the ignored local artifact staging directory; reuse `node scripts/release/build-release.mjs` from a clean checkout of the recorded commit to reproduce its bytes.
+Raw logs and TAP output are under [evidence/](evidence/). `build/release/0.2.0/` is the ignored local artifact staging directory; the committed, independently verifiable copy of the manifest, checksums, SBOM, provenance and both reproducible archives is in [artifacts/](artifacts/) (`cd docs/release/artifacts && sha256sum -c SHA256SUMS`). Reuse `node scripts/release/build-release.mjs` from a clean checkout of the recorded commit to reproduce the bytes.
 
 Status vocabulary: **PASS** (tested with recorded evidence), **FAIL** (tested and failed), **BLOCKED** (needs an unavailable credential, service, hardware, permission or external approval), **NOT TESTED** (no verification performed), **NOT APPLICABLE** (outside supported scope with justification). BLOCKED/NOT TESTED are never converted into PASS.

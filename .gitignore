@@ -58,6 +58,10 @@ coverage/
 *.lora
 checkpoints/
 artifacts/
+# The reproducible release bundle below is deliberately committed evidence
+# (metadata plus the two reproducible archives), not model weights.
+!docs/release/artifacts/
+!docs/release/artifacts/**
 /aetheris-smoke/
 
 # --- generated media -------------------------------------------------------

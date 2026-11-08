@@ -57,3 +57,11 @@ Built from clean checkout of commit `b53c8748a82946ac57b4471be177677258bcf4f5` (
 `verify-release.mjs` ran **16 independent checks** including `sha256sum -c SHA256SUMS`, manifest digests, provenance commit/tree resolution, VERSION identity and qualification-report integrity: all PASS ([evidence/final-artifact-verify.log](evidence/final-artifact-verify.log)). A second build into `build/release/0.2.0-repro` produced **byte-identical** source and web artifacts ([evidence/final-reproducibility.log](evidence/final-reproducibility.log)). The signing workflow refused with exit code 2 and created no signature ([evidence/final-signing-refusal.log](evidence/final-signing-refusal.log)).
 
 Committed copies of `manifest.json`, `SHA256SUMS`, `sbom.cdx.json` and `provenance.json` are in [artifacts/](artifacts/); the (larger) `.tar.gz` payloads remain in the ignored `build/release/0.2.0/` staging directory and are reproducible from the recorded commit. No artifact was uploaded to a release destination.
+
+The committed copy in [artifacts/](artifacts/) contains **both reproducible archives** as well as the metadata, so a reader can verify the bundle in place:
+
+```bash
+cd docs/release/artifacts && sha256sum -c SHA256SUMS
+```
+
+Result: all four entries `OK` ([evidence/final-committed-artifacts-check.log](evidence/final-committed-artifacts-check.log)). `.gitignore` has an explicit exception for this directory: these archives are reproducible build outputs, not model weights. No signature file (`SHA256SUMS.asc`) exists.

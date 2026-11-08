@@ -266,6 +266,12 @@ add({ id: 'A10', area: 'artifacts', name: 'Byte-identical rebuild of both artifa
   status: reproducible ? 'PASS' : 'NOT TESTED',
   evidence: reproducible ? [{ command: 'node scripts/release/build-release.mjs --out build/release/0.2.0-repro --allow-dirty; sha256 comparison', log: 'docs/release/evidence/final-reproducibility.log', artifact: 'docs/release/artifacts/provenance.json' }] : [],
   unblock: reproducible ? null : 'Rebuild from the recorded commit and capture the two SHA-256 comparisons.' })
+const committedCheck = text('final-committed-artifacts-check.log')
+const committedOk = committedCheck && (committedCheck.match(/: OK$/gm) ?? []).length >= 4
+add({ id: 'A11', area: 'artifacts', name: 'Committed artifact set verifies in place with sha256sum -c', mandatory: true,
+  status: committedOk ? 'PASS' : 'NOT TESTED',
+  evidence: committedOk ? [{ command: 'cd docs/release/artifacts && sha256sum -c SHA256SUMS', log: 'docs/release/evidence/final-committed-artifacts-check.log', artifact: 'docs/release/artifacts/manifest.json' }] : [],
+  unblock: committedOk ? null : 'Copy the reproducible archives beside SHA256SUMS and run sha256sum -c.' })
 
 // --- 10. Deployment and rollback ------------------------------------------
 const stagingBlock = 'An isolated staging environment (host, DNS, TLS, database, storage volume, monitoring, and a previous known-good version) plus explicit owner approval to deploy and roll back. No staging environment exists in this repository or sandbox.'
