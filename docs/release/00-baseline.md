@@ -42,3 +42,7 @@ Captured **before any file was modified** on `arena/d44183df-ragam` at `80ad8458
 - Web 143/143, Fabric 823/823, Desktop 4/4 at baseline.
 
 The five failures were an environment prerequisite rather than a product defect, but they exposed a real clean-checkout reproducibility gap (the repository's own `.venv` was not a fallback). That was repaired at root cause; see [02-root-cause-repair.md](02-root-cause-repair.md).
+
+## Post-remediation CI verification on the pushed branch
+
+After the remediation commits, `arena/d44183df-ragam` at `744d29c29b4770c2036f511ebb6e976ed7a3ec3e` produced CI `42460843714` and Desktop packages `42460843680`, both `success` ([evidence/ci-runs.json](evidence/ci-runs.json)). All six CI jobs passed (Core, Web, Fabric, Docker Compose smoke, Documentation, Release verification); the Klyvaron production evidence gate was intentionally skipped and is never counted as model evidence. All four Desktop jobs passed. These runs confirm the pinned Python lock and the clean-checkout fallback work on a clean GitHub runner; they do not qualify live providers, models, staging, signing or publication.

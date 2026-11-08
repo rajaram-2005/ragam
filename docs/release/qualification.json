@@ -1,6 +1,6 @@
 {
   "schema": "ragam-release-qualification/1",
-  "generatedAt": "2026-11-08T07:56:41.522Z",
+  "generatedAt": "2026-11-08T08:05:08.790Z",
   "repository": "rajaram-2005/ragam",
   "branch": "arena/d44183df-ragam",
   "baselineCommit": "80ad8458fb039962dcaee6293dd451d1c6932416",
@@ -10,8 +10,8 @@
   "releasePublished": false,
   "publicationAuthorization": "Release publication requires separate explicit authorization from the repository owner.",
   "summary": {
-    "totalGates": 69,
-    "PASS": 38,
+    "totalGates": 70,
+    "PASS": 39,
     "FAIL": 0,
     "BLOCKED": 25,
     "NOT TESTED": 2,
@@ -100,6 +100,22 @@
         }
       ],
       "unblock": "Publish docs/release/00-baseline.md."
+    },
+    {
+      "id": "B04",
+      "area": "baseline",
+      "name": "CI and Desktop packages pass on the pushed remediation branch",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "gh run list --branch arena/d44183df-ragam; gh run view <run>",
+          "artifact": "docs/release/evidence/ci-runs.json",
+          "runId": "42460843714, 42460843680"
+        }
+      ],
+      "notes": "Build/test/runtime CI only. The skipped Klyvaron production evidence gate is fail-closed and is never counted as model evidence.",
+      "unblock": null
     },
     {
       "id": "I01",

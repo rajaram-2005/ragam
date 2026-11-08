@@ -77,6 +77,13 @@ add({ id: 'B03', area: 'baseline', name: 'Capability inventory classified real /
   status: existsSync(atRoot('docs/release/00-baseline.md')) ? 'PASS' : 'NOT TESTED',
   evidence: existsSync(atRoot('docs/release/00-baseline.md')) ? [{ artifact: 'docs/release/00-baseline.md' }] : [],
   unblock: 'Publish docs/release/00-baseline.md.' })
+const ciRuns = safeJson('ci-runs.json')
+const ciPass = ciRuns?.runs?.length === 2 && ciRuns.runs.every((run) => run.conclusion === 'success')
+add({ id: 'B04', area: 'baseline', name: 'CI and Desktop packages pass on the pushed remediation branch', mandatory: true,
+  status: ciPass ? 'PASS' : 'NOT TESTED',
+  evidence: ciPass ? [{ command: 'gh run list --branch arena/d44183df-ragam; gh run view <run>', artifact: 'docs/release/evidence/ci-runs.json', runId: ciRuns.runs.map((r) => r.id).join(', ') }] : [],
+  notes: ciPass ? 'Build/test/runtime CI only. The skipped Klyvaron production evidence gate is fail-closed and is never counted as model evidence.' : null,
+  unblock: ciPass ? null : 'Push the remediation branch and capture both successful GitHub Actions runs.' })
 
 // --- 2. Implementation checks ---------------------------------------------
 measured('I01', 'implementation', 'Core unit, integration and contract suites', parseTap('final-core.tap'), { extra: { command: 'AETHERIS_PYTHON=.venv/bin/python node --test test/*.test.mjs test/klyvaron-release/*.test.mjs', logHint: 'final-core.tap' } })

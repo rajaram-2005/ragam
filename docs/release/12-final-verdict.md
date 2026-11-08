@@ -35,8 +35,12 @@ No fabricated results, no fake provider calls, no mock-only proof of live operat
 
 ## Gate summary (generated, not hand-written)
 
-`docs/release/qualification.json` currently contains **69 gates**: **38 PASS**, **0 FAIL**, **25 BLOCKED**, **2 NOT TESTED**, **4 NOT APPLICABLE**; **29 mandatory gates are not PASS**. The two NOT TESTED items are SIGTERM cancellation of the real NumPy trainer and a commercial SAST/DAST product scan. No BLOCKED or NOT TESTED gate was converted into PASS.
+`docs/release/qualification.json` currently contains **70 gates**: **39 PASS**, **0 FAIL**, **25 BLOCKED**, **2 NOT TESTED**, **4 NOT APPLICABLE**; **29 mandatory gates are not PASS**. The two NOT TESTED items are SIGTERM cancellation of the real NumPy trainer and a commercial SAST/DAST product scan. No BLOCKED or NOT TESTED gate was converted into PASS.
 
 Measured local verification behind the PASS gates: Core `1081/1085` (4 real-artifact acceptance cases skipped), Web `143/143`, Fabric `823/823`, Desktop `4/4`, `release-check.mjs` `2051` tests / 31 artefacts / 3 packs, production web build (50 modules), web+desktop `npm audit --omit=dev` 0 vulnerabilities, Python advisory audit clean, security scan `9/9`, five-area E2E `17/17`, training evidence `11/11`, and artifact verification `16/16` with byte-identical rebuild.
 
 **Final objective status:** the repository is reproducibly buildable, locally verified and honestly qualified at implementation level. It is **not** staging-qualified, signed or published, and therefore remains **NOT RELEASE READY**.
+
+## Post-remediation CI
+
+Pushed branch `arena/d44183df-ragam` at `744d29c29b4770c2036f511ebb6e976ed7a3ec3e`: CI `42460843714` **PASS** (six jobs; one intentional fail-closed skip) and Desktop packages `42460843680` **PASS** (four platforms). Recorded in [evidence/ci-runs.json](evidence/ci-runs.json). CI success is build/test evidence, not live qualification.

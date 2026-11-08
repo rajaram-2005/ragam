@@ -1,0 +1,38 @@
+{
+  "schema": "ragam-ci-verification/1",
+  "branch": "arena/d44183df-ragam",
+  "headSha": "744d29c29b4770c2036f511ebb6e976ed7a3ec3e",
+  "observedWith": "gh run list / gh run view on the pushed branch",
+  "runs": [
+    {
+      "id": "42460843714",
+      "name": "CI",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        { "name": "Core service (Node, zero dependencies)", "conclusion": "success" },
+        { "name": "Web app (React + Vite)", "conclusion": "success" },
+        { "name": "Fabric training service (Python + NumPy)", "conclusion": "success" },
+        { "name": "Docker Compose build, health, persistence and restore smoke", "conclusion": "success" },
+        { "name": "Documentation matches implementation", "conclusion": "success" },
+        { "name": "Release verification (measured, not remembered)", "conclusion": "success" },
+        { "name": "Klyvaron production evidence gate (fail closed)", "conclusion": "skipped", "note": "intentional fail-closed posture; never counted as model evidence" }
+      ]
+    },
+    {
+      "id": "42460843680",
+      "name": "Desktop packages",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        { "name": "Linux x64 and ARM64", "conclusion": "success" },
+        { "name": "Windows x64 and ARM64", "conclusion": "success" },
+        { "name": "macOS Intel (x64)", "conclusion": "success" },
+        { "name": "macOS Apple Silicon (arm64)", "conclusion": "success" }
+      ]
+    }
+  ],
+  "note": "No release was published. The Klyvaron production evidence gate is intentionally skipped and is never counted as model or release evidence. These runs verify build/test/runtime CI only; they do not qualify live providers, models, staging, signing or publication."
+}
