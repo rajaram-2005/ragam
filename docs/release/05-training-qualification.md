@@ -17,19 +17,21 @@ Verification: `scripts/release/verify-training-evidence.py` → **11 PASS, 0 FAI
 
 ## Worker control-plane qualification against the real trainer
 
-`npm run release:training-worker` → **12 PASS, 0 FAIL** ([evidence/training-worker-qualification.json](evidence/training-worker-qualification.json)). The harness generates a deterministic synthetic corpus, obtains a consent-bound preflight, starts the production trainer through `LocalTrainingWorkerManager`, and records:
+`npm run release:training-worker` → **16 PASS, 0 FAIL** ([evidence/training-worker-qualification.json](evidence/training-worker-qualification.json)). The harness generates a deterministic synthetic corpus, obtains a consent-bound preflight, starts the production trainer through `LocalTrainingWorkerManager`, resumes from its atomic checkpoint, and records:
 
 | Event | Measured result | Evidence |
 |---|---|---|
 | Real trainer start | Python 3.11.2 / NumPy 2.4.6 / JAX 0.10.2; `27,559,946` parameters; 4 planned steps | [preflight](evidence/training-worker-preflight.json), [cancellation log](evidence/training-worker-cancellation.log) |
 | Real progress | Step `1/4`, finite loss (`8.8687`), `rss=1066MB` | [cancellation log](evidence/training-worker-cancellation.log) |
 | SIGTERM cancellation | `cancelJob` → `child.kill('SIGTERM')`; trainer logged `received signal 15` and exited `130` | [jobs](evidence/training-worker-jobs.json) |
-| Atomic checkpoint | `330,788,264` bytes; SHA-256 `e6bc5d2a…`; worker-log prefix matches independently computed digest | [checkpoint](evidence/training-worker-checkpoint.json), [checksums](evidence/training-worker-checksums.txt) |
-| Independent integrity | `sha256sum -c` → `OK`; NPZ loaded with `allow_pickle=False`: 90 weight arrays, 180 optimizer arrays, expected architecture digest, finite weights | [checkpoint](evidence/training-worker-checkpoint.json) |
+| Phase-1 atomic checkpoint | `330,788,264` bytes; SHA-256 `e6bc5d2a…`; worker-log prefix matches independently computed digest | [checkpoint](evidence/training-worker-checkpoint.json), [checksums](evidence/training-worker-checksums.txt) |
 | Restart persistence | Fresh manager restored `cancelled_checkpointed` with `checkpointVerified=true`; no orphan process | [jobs](evidence/training-worker-jobs.json) |
-| Real failure path | A second real trainer process with an invalid corpus record exited `1`, was recorded as `failed` with no checkpoint, and left no active process | [failure log](evidence/training-worker-failure.log), [jobs](evidence/training-worker-jobs.json) |
+| Real checkpoint resume | Same job id and work directory; `--resume` loaded the verified step-1 checkpoint; trainer logged `steps=1->4`; parameter state advanced to step `3` with a different checkpoint SHA-256 `02bf5c4a…` | [resume log](evidence/training-worker-resume.log), [jobs](evidence/training-worker-jobs.json) |
+| Independent integrity of both snapshots | `sha256sum -c` → two `OK` lines; both NPZs loaded with `allow_pickle=False`: 90 weight arrays, 180 optimizer arrays, expected architecture digest, finite weights; step 1 → step 3 | [checkpoint](evidence/training-worker-checkpoint.json), [checksums](evidence/training-worker-checksums.txt) |
+| Second cancellation before completion | Resumed job cancelled with SIGTERM, exited `130`, state `cancelled_checkpointed`; no final raw artifact, report or model card was produced; no orphan process | [resume log](evidence/training-worker-resume.log), [jobs](evidence/training-worker-jobs.json) |
+| Real failure path | A separate real trainer process with an invalid corpus record exited `1`, was recorded as `failed` with no checkpoint, and left no active process | [failure log](evidence/training-worker-failure.log), [jobs](evidence/training-worker-jobs.json) |
 
-The large checkpoint is deliberately kept in the ignored `build/training-worker-qualification/` directory; its digest and metadata are committed. This run proves cancellation/lifecycle behavior only. It does **not** qualify a production Klyvaron model, does not claim foundation training, and does not use licensed weights.
+Both large checkpoints are deliberately kept in the ignored `build/training-worker-qualification/` directory; their digests and metadata are committed. This run proves cancellation/resume/lifecycle behavior only. It does **not** qualify a production Klyvaron model, does not claim foundation training, and does not use licensed weights.
 
 ## Requested lifecycle checklist
 
@@ -47,11 +49,11 @@ The large checkpoint is deliberately kept in the ignored `build/training-worker-
 | Evaluation before / after | **PASS** | perplexity 94.4250 → 34.1122 |
 | Checkpoint integrity | **PASS** | Format/step/losses/Adam state verified with `allow_pickle=False` |
 | Rollback | **PASS** | Replaying from the retained step-40 checkpoint reproduced a bit-identical artifact |
-| SIGTERM cancellation of the **real** trainer | **PASS** | Real `LocalTrainingWorkerManager` → `train_klyvaron.py` run: signal 15, exit 130, `cancelled_checkpointed`, atomic checkpoint verified by `sha256sum -c` and unpickled NPZ inspection; see [evidence/training-worker-qualification.json](evidence/training-worker-qualification.json) |
+| SIGTERM cancellation and checkpoint resume of the **real** trainer | **PASS** | Real `LocalTrainingWorkerManager` → `train_klyvaron.py` runs: signal 15, exit 130, `cancelled_checkpointed`, atomic checkpoint verified by `sha256sum -c` and unpickled NPZ inspection; `--resume` advanced step 1 → step 3 and was cancelled before completion; see [evidence/training-worker-qualification.json](evidence/training-worker-qualification.json) |
 | Training on a user-owned private dataset | **BLOCKED** | No consent, dataset or ownership validation was supplied |
 | GPU/accelerator training | **NOT APPLICABLE / BLOCKED** | No GPU on this host |
 | Foundation or adapter training | **BLOCKED** | No installed licensed architecture/weights; see [04-model-qualification.md](04-model-qualification.md) |
 
 ## Honest limitations
 
-The 120-step smoke model **does not beat** the bigram baseline (validation perplexity 34.1122 vs 27.2280; ratio 1.2528). It is evidence of real parameter updates, checkpointing, resume and evaluation mechanics on a tiny model — **not** evidence of a capable production model, and no foundation-model training claim is made. A completed job alone would not prove learning; the changed weights digest, decreased loss and before/after perplexity are the evidence. The separate 27,559,946-parameter worker run is a bounded cancellation/lifecycle smoke test; it does not supply licensed weights, production inference, or a released model artifact.
+The 120-step smoke model **does not beat** the bigram baseline (validation perplexity 34.1122 vs 27.2280; ratio 1.2528). It is evidence of real parameter updates, checkpointing, resume and evaluation mechanics on a tiny model — **not** evidence of a capable production model, and no foundation-model training claim is made. A completed job alone would not prove learning; the changed weights digest, decreased loss and before/after perplexity are the evidence. The separate 27,559,946-parameter worker runs are bounded cancellation/resume/lifecycle smoke tests; they do not supply licensed weights, production inference, or a released model artifact.

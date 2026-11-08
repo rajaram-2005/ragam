@@ -1,1 +1,2 @@
-e6bc5d2a9253583b70f76de15290ff6548888dcc5fb267cf1e31ec71cb9539a0  build/training-worker-qualification/manager-root/worker-runs/e7e0e4d4-a241-4bf4-9f7f-1ea478ab39f6/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz
+e6bc5d2a9253583b70f76de15290ff6548888dcc5fb267cf1e31ec71cb9539a0  build/training-worker-qualification/phase1-checkpoint.npz
+02bf5c4a0317f6b4695758b11f3957cb637c5b55f54e1eca0c8ee01b1b653a41  build/training-worker-qualification/manager-root/worker-runs/295fd827-0ac3-412e-b49e-e0df27e1f736/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz

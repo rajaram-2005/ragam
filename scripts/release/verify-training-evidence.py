@@ -4,10 +4,11 @@
 This is deliberately narrow: it checks the bytes that the pure-NumPy trainer
 actually wrote, the checkpoint it resumed from, and the evaluation numbers in
 the run reports. It does not claim a foundation model was trained. SIGTERM
-cancellation through LocalTrainingWorkerManager is verified separately against
-the real JAX/NumPy trainer by verify-training-worker-cancellation.mjs. This
-file records the remaining untested lifecycle areas (remote/GPU training,
-user-owned datasets, production model inference).
+cancellation, atomic checkpoint resume and worker failure handling through
+LocalTrainingWorkerManager are verified separately against the real JAX/NumPy
+trainer by verify-training-worker-cancellation.mjs. This file records the
+remaining untested lifecycle areas (remote/GPU training, user-owned datasets,
+production model inference).
 """
 
 from __future__ import annotations
@@ -114,7 +115,7 @@ def main() -> int:
         "results": results,
         "relatedEvidence": {
             "workerCancellation": "docs/release/evidence/training-worker-qualification.json",
-            "scope": "Real LocalTrainingWorkerManager SIGTERM cancellation and failure handling against the real JAX/NumPy trainer; not a production model qualification.",
+            "scope": "Real LocalTrainingWorkerManager SIGTERM cancellation, atomic checkpoint resume, advanced parameter state, second cancellation before completion and failure handling against the real JAX/NumPy trainer; not a production model qualification.",
         },
         "notTested": [
             "Training on a user-owned private dataset (no such dataset was supplied or authorized)",

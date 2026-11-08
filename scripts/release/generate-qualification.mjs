@@ -174,19 +174,20 @@ add({ id: 'T01', area: 'training', name: 'Real local parameter updates, atomic c
 add({ id: 'T02', area: 'training', name: 'User-consented training on a user-owned private dataset with dataset ownership validation', mandatory: true, status: 'BLOCKED',
   evidence: [{ artifact: 'docs/release/evidence/training-evidence.json', note: 'Only an operator-initiated synthetic repository corpus was used; no user dataset was supplied or authorized.' }],
   unblock: 'Explicit user consent, an owned/validated private dataset, its fingerprint and a recorded authorization record. None was provided; no private dataset may be ingested without it.' })
-const t03Measured = workerCancellation && workerCancellation.fail === 0 && workerCancellation.pass >= 12
+const t03Measured = workerCancellation && workerCancellation.fail === 0 && workerCancellation.pass >= 16
   && workerCancellation.foundationTrainingClaim === false && workerCancellation.productionModelQualified === false
-add({ id: 'T03', area: 'training', name: 'SIGTERM cancellation of the real JAX/NumPy trainer and full worker failure handling', mandatory: true,
+add({ id: 'T03', area: 'training', name: 'SIGTERM cancellation, atomic checkpoint resume and full worker failure handling with the real JAX/NumPy trainer', mandatory: true,
   status: t03Measured ? 'PASS' : 'NOT TESTED',
   evidence: t03Measured ? [{
     command: 'node scripts/release/verify-training-worker-cancellation.mjs',
     artifact: 'docs/release/evidence/training-worker-qualification.json',
     log: 'docs/release/evidence/training-worker-cancellation.log',
+    resumeLog: 'docs/release/evidence/training-worker-resume.log',
     failureLog: 'docs/release/evidence/training-worker-failure.log',
-    measured: { pass: workerCancellation.pass, fail: workerCancellation.fail, checkpointSha256: workerCancellation.measured?.checkpointSha256, cancellationExitCode: workerCancellation.measured?.cancellationExitCode, failureExitCode: workerCancellation.measured?.failureExitCode },
-    scope: 'real local process; synthetic corpus; cancellation/lifecycle evidence only, NOT a production Klyvaron model or foundation-training claim',
-  }] : [{ log: parseTap('final-core.tap')?.log ?? 'docs/release/evidence/final-core.tap', note: 'Only the worker control-plane contract test is available; the real-trainer qualification evidence is missing or failed.' }],
-  unblock: t03Measured ? null : 'Run a real trainer job through LocalTrainingWorkerManager and cancel it with SIGTERM, recording the atomic checkpoint, job state and failure path.' })
+    measured: { pass: workerCancellation.pass, fail: workerCancellation.fail, checkpointSha256: workerCancellation.measured?.checkpointSha256, resumeStartStep: workerCancellation.measured?.resumeStartStep, resumeObservedStep: workerCancellation.measured?.resumeObservedStep, resumeCheckpointSha256: workerCancellation.measured?.resumeCheckpointSha256, cancellationExitCode: workerCancellation.measured?.cancellationExitCode, resumeExitCode: workerCancellation.measured?.resumeExitCode, failureExitCode: workerCancellation.measured?.failureExitCode },
+    scope: 'real local process; synthetic corpus; cancellation/resume/lifecycle evidence only, NOT a production Klyvaron model or foundation-training claim',
+  }] : [{ log: parseTap('final-core.tap')?.log ?? 'docs/release/evidence/final-core.tap', note: 'Only the worker control-plane contract test is available; the real-trainer cancellation/resume qualification evidence is missing or failed.' }],
+  unblock: t03Measured ? null : 'Run a real trainer job through LocalTrainingWorkerManager, cancel it with SIGTERM, resume from its atomic checkpoint, cancel before completion, and record the checkpoints, job states and failure path.' })
 add({ id: 'T04', area: 'training', name: 'Klyvaron Pro/Max foundation or adapter training', mandatory: true, status: 'BLOCKED',
   evidence: [{ artifact: 'docs/release/model-register.json' }],
   unblock: 'Requires installed licensed weights, a documented architecture, compatible hardware, explicit consent and a reviewed training implementation. No foundation-model training claim is made.' })

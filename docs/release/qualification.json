@@ -1,6 +1,6 @@
 {
   "schema": "ragam-release-qualification/1",
-  "generatedAt": "2026-11-08T09:42:57.089Z",
+  "generatedAt": "2026-11-08T10:02:12.004Z",
   "repository": "rajaram-2005/ragam",
   "branch": "arena/d44183df-ragam",
   "baselineCommit": "80ad8458fb039962dcaee6293dd451d1c6932416",
@@ -586,7 +586,7 @@
     {
       "id": "T03",
       "area": "training",
-      "name": "SIGTERM cancellation of the real JAX/NumPy trainer and full worker failure handling",
+      "name": "SIGTERM cancellation, atomic checkpoint resume and full worker failure handling with the real JAX/NumPy trainer",
       "mandatory": true,
       "status": "PASS",
       "evidence": [
@@ -594,15 +594,20 @@
           "command": "node scripts/release/verify-training-worker-cancellation.mjs",
           "artifact": "docs/release/evidence/training-worker-qualification.json",
           "log": "docs/release/evidence/training-worker-cancellation.log",
+          "resumeLog": "docs/release/evidence/training-worker-resume.log",
           "failureLog": "docs/release/evidence/training-worker-failure.log",
           "measured": {
-            "pass": 12,
+            "pass": 16,
             "fail": 0,
             "checkpointSha256": "e6bc5d2a9253583b70f76de15290ff6548888dcc5fb267cf1e31ec71cb9539a0",
+            "resumeStartStep": 1,
+            "resumeObservedStep": 3,
+            "resumeCheckpointSha256": "02bf5c4a0317f6b4695758b11f3957cb637c5b55f54e1eca0c8ee01b1b653a41",
             "cancellationExitCode": 130,
+            "resumeExitCode": 130,
             "failureExitCode": 1
           },
-          "scope": "real local process; synthetic corpus; cancellation/lifecycle evidence only, NOT a production Klyvaron model or foundation-training claim"
+          "scope": "real local process; synthetic corpus; cancellation/resume/lifecycle evidence only, NOT a production Klyvaron model or foundation-training claim"
         }
       ],
       "unblock": null
