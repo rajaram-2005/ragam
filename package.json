@@ -29,6 +29,7 @@
     "lm:train": "cd services/fabric && ${AETHERIS_PYTHON:-python3} scripts/train_lm.py",
     "verify": "npm run test && npm run web:build",
     "release:qualification": "node scripts/release/generate-qualification.mjs",
+    "release:clean-gate": "node --test --test-name-pattern='regenerates identically in a clean checkout' services/core/test/release-qualification.test.mjs",
     "release:providers": "node scripts/release/generate-provider-register.mjs",
     "release:models": "node scripts/release/generate-model-register.mjs",
     "release:security": "node scripts/release/security-scan.mjs",

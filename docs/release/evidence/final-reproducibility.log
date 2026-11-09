@@ -1,8 +1,2 @@
-release 0.2.0 staged from clean checkout of b53c8748a82946ac57b4471be177677258bcf4f5
-  out                /home/user/ragam/build/release/0.2.0-repro
-  artifacts           ragam-source-0.2.0.tar.gz, ragam-web-0.2.0.tar.gz
-  checksum entries    4
-  SBOM components     340
-  signature           UNSIGNED (no authorized key)
-ragam-source-0.2.0.tar.gz: 94bb24e07a5ab20db7407d7cf49cd9ad9079103196009e1ad4dd020e2ff4710e | rebuild 94bb24e07a5ab20db7407d7cf49cd9ad9079103196009e1ad4dd020e2ff4710e | identical=True
-ragam-web-0.2.0.tar.gz: 03affb534da321b861c545b65bda2864b12add98fc50dbd285d9a5bd740342d9 | rebuild 03affb534da321b861c545b65bda2864b12add98fc50dbd285d9a5bd740342d9 | identical=True
+ragam-source-0.2.0.tar.gz committed=94bb24e07a5ab20db7407d7cf49cd9ad9079103196009e1ad4dd020e2ff4710e rebuilt=94bb24e07a5ab20db7407d7cf49cd9ad9079103196009e1ad4dd020e2ff4710e identical=True
+ragam-web-0.2.0.tar.gz committed=03affb534da321b861c545b65bda2864b12add98fc50dbd285d9a5bd740342d9 rebuilt=03affb534da321b861c545b65bda2864b12add98fc50dbd285d9a5bd740342d9 identical=True

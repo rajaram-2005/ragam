@@ -2,7 +2,7 @@
 
 ## Security scan
 
-`node scripts/release/security-scan.mjs` → [evidence/security-scan.json](evidence/security-scan.json): **9 PASS, 0 FAIL**, 573 tracked files inspected, 543 text files scanned, 280 Node modules syntax-checked with `node --check`.
+`node scripts/release/security-scan.mjs` → [evidence/security-scan.json](evidence/security-scan.json): **9 PASS, 0 FAIL**. The exact tracked-file, text-file and Node-module counts are recorded in that generated JSON rather than copied here, so documentation cannot drift from the measured scan.
 
 | Check | Result | Detail |
 |---|---|---|

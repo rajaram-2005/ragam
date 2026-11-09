@@ -13,6 +13,6 @@ PASS  provenance tree matches commit — 17b9fd48c3a87190ba60179b1acf5771df2b1d7
 PASS  provenance clean checkout — git archive <commit> extracted into an empty temporary directory; no working-tree files are used
 PASS  VERSION matches manifest — 0.2.0
 PASS  qualification report schema and statuses
-PASS  no mandatory gate laundered to PASS — 29 non-PASS mandatory gates
+PASS  no mandatory gate laundered to PASS — 28 non-PASS mandatory gates
 
-verified 16 independent checks for 0.2.0
+verified 16 independent checks for artifacts

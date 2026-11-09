@@ -4,13 +4,15 @@
 //   node scripts/release/generate-qualification.mjs
 //
 // A gate can only become PASS when the evidence file exists and says so. A
-// missing log becomes NOT TESTED, never PASS. External gates are declared with
+// missing log becomes NOT TESTED, never PASS. Artifact gates use the committed
+// docs/release/artifacts/ set so a clean checkout with no ignored build/
+// directory regenerates the same report. External gates are declared with
 // their exact unblock requirement. The final verdict is computed from the
 // mandatory gates by the same validator that the regression suite uses.
 
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { REPO_ROOT, atRoot, readJson, writeJson, validateQualificationReport, QUALIFICATION_SCHEMA } from './lib.mjs'
+import { REPO_ROOT, atRoot, readJson, writeJson, sha256OfFile, validateQualificationReport, QUALIFICATION_SCHEMA } from './lib.mjs'
 
 const ev = (name) => atRoot(`docs/release/evidence/${name}`)
 const safeJson = (name) => {
@@ -40,6 +42,35 @@ const passLog = (name) => {
   const content = text(name)
   return content ? { log: `docs/release/evidence/${name}`, bytes: content.length } : null
 }
+
+// A clean checkout has no ignored build/ directory. Artifact gates therefore
+// read the committed, independently verifiable artifact set under
+// docs/release/artifacts/, not a developer's local staging directory.
+const committedArtifact = (name) => {
+  const path = atRoot(`docs/release/artifacts/${name}`)
+  return existsSync(path) ? { artifact: `docs/release/artifacts/${name}`, path } : null
+}
+const manifestInfo = committedArtifact('manifest.json')
+const committedManifest = manifestInfo ? readJson(manifestInfo.path) : null
+const checksumInfo = committedArtifact('SHA256SUMS')
+const checksumEntries = checksumInfo
+  ? readFileSync(checksumInfo.path, 'utf8').trim().split(/\r?\n/).filter(Boolean).map((line) => {
+    const [sha256, ...rest] = line.trim().split(/\s+/)
+    return { sha256, name: rest.join(' ') }
+  })
+  : []
+const committedArtifactChecks = (committedManifest?.artifacts ?? []).map((entry) => {
+  const info = committedArtifact(entry.name)
+  const actualSha256 = info ? sha256OfFile(info.path) : null
+  return {
+    name: entry.name,
+    present: Boolean(info),
+    manifestMatches: actualSha256 === entry.sha256,
+    checksumMatches: checksumEntries.some((candidate) => candidate.name === entry.name && candidate.sha256 === actualSha256),
+  }
+})
+const allCommittedArtifactsVerified = committedArtifactChecks.length === 4
+  && committedArtifactChecks.every((entry) => entry.present && entry.manifestMatches && entry.checksumMatches)
 
 const baseline = safeJson('baseline.json') ?? {}
 const security = safeJson('security-scan.json')
@@ -79,12 +110,14 @@ add({ id: 'B03', area: 'baseline', name: 'Capability inventory classified real /
   evidence: existsSync(atRoot('docs/release/00-baseline.md')) ? [{ artifact: 'docs/release/00-baseline.md' }] : [],
   unblock: 'Publish docs/release/00-baseline.md.' })
 const ciRuns = safeJson('ci-runs.json')
-const ciPass = ciRuns?.runs?.length === 2 && ciRuns.runs.every((run) => run.conclusion === 'success')
+const ciPass = Boolean(ciRuns?.runs?.length >= 2)
+  && ciRuns.runs.every((run) => run.conclusion === 'success')
+  && ['CI', 'Desktop packages'].every((name) => ciRuns.runs.some((run) => run.name === name))
 add({ id: 'B04', area: 'baseline', name: 'CI and Desktop packages pass on the pushed remediation branch', mandatory: true,
   status: ciPass ? 'PASS' : 'NOT TESTED',
-  evidence: ciPass ? [{ command: 'gh run list --branch arena/d44183df-ragam; gh run view <run>', artifact: 'docs/release/evidence/ci-runs.json', runId: ciRuns.runs.map((r) => r.id).join(', ') }] : [],
-  notes: ciPass ? 'Build/test/runtime CI only. The skipped Klyvaron production evidence gate is fail-closed and is never counted as model evidence.' : null,
-  unblock: ciPass ? null : 'Push the remediation branch and capture both successful GitHub Actions runs.' })
+  evidence: ciPass ? [{ command: 'gh run list --branch arena/d44183df-ragam; gh run view <run>', artifact: 'docs/release/evidence/ci-runs.json', runId: ciRuns.runs.map((r) => r.id).join(', '), runCount: ciRuns.runs.length }] : [],
+  notes: ciPass ? `Build/test/runtime CI only; ${ciRuns.runs.length} successful push/pull_request runs recorded. The skipped Klyvaron production evidence gate is fail-closed and is never counted as model evidence.` : null,
+  unblock: ciPass ? null : 'Push the remediation branch and capture successful CI and Desktop runs.' })
 
 // --- 2. Implementation checks ---------------------------------------------
 measured('I01', 'implementation', 'Core unit, integration and contract suites', parseTap('final-core.tap'), { extra: { command: 'AETHERIS_PYTHON=.venv/bin/python node --test test/*.test.mjs test/klyvaron-release/*.test.mjs', logHint: 'final-core.tap' } })
@@ -240,49 +273,79 @@ add({ id: 'C03', area: 'clients', name: 'CLI client installation, auth, connecti
   evidence: [{ artifact: 'docs/release/08-mobile-cli.md' }] })
 
 // --- 9. Release artifacts and signing -------------------------------------
+const committedCheck = text('final-committed-artifacts-check.log')
+const committedOk = committedCheck && (committedCheck.match(/: OK$/gm) ?? []).length >= 4
+const exactCommitRecorded = /^[0-9a-f]{40}$/.test(committedManifest?.commit ?? '')
 add({ id: 'A01', area: 'artifacts', name: 'Declared semantic version, exact source commit and clean-checkout build', mandatory: true,
-  status: artifactBuild ? 'PASS' : 'NOT TESTED',
-  evidence: artifactBuild ? [{ command: 'node scripts/release/build-release.mjs --out build/release/0.2.0', ...artifactBuild }, { artifact: 'build/release/0.2.0/provenance.json' }] : [],
-  unblock: 'Commit all source changes, then run build-release.mjs from a clean checkout and capture its log.' })
+  status: artifactBuild && committedManifest?.version === '0.2.0' && exactCommitRecorded && allCommittedArtifactsVerified ? 'PASS' : 'NOT TESTED',
+  evidence: artifactBuild && allCommittedArtifactsVerified ? [
+    { command: 'node scripts/release/build-release.mjs --out build/release/0.2.0', ...artifactBuild },
+    { artifact: 'docs/release/artifacts/manifest.json', measured: { version: committedManifest.version, commit: committedManifest.commit, artifactsVerified: 4 } },
+    { artifact: 'docs/release/artifacts/provenance.json' },
+  ] : [],
+  unblock: 'Commit all source changes, build from a clean checkout, and retain the verified committed artifact set.' })
 add({ id: 'A02', area: 'artifacts', name: 'Pinned dependencies and generated CycloneDX SBOM', mandatory: true,
-  status: existsSync(atRoot('build/release/0.2.0/sbom.cdx.json')) ? 'PASS' : 'NOT TESTED',
-  evidence: existsSync(atRoot('build/release/0.2.0/sbom.cdx.json')) ? [{ artifact: 'build/release/0.2.0/sbom.cdx.json' }, { artifact: 'services/fabric/requirements.lock' }] : [],
-  unblock: 'Run build-release.mjs to generate the SBOM from the committed lockfiles.' })
+  status: committedArtifact('sbom.cdx.json') && allCommittedArtifactsVerified && existsSync(atRoot('services/fabric/requirements.lock')) ? 'PASS' : 'NOT TESTED',
+  evidence: committedArtifact('sbom.cdx.json') && allCommittedArtifactsVerified ? [
+    { artifact: 'docs/release/artifacts/sbom.cdx.json' },
+    { artifact: 'services/fabric/requirements.lock' },
+    { artifact: 'docs/release/artifacts/SHA256SUMS', note: 'SBOM digest independently matched the manifest and checksum file' },
+  ] : [],
+  unblock: 'Generate the SBOM from the committed lockfiles and retain its verified committed copy.' })
 add({ id: 'A03', area: 'artifacts', name: 'Release artifacts generated and staged (source archive, web bundle, manifest, SBOM, provenance)', mandatory: true,
-  status: artifactBuild && existsSync(atRoot('build/release/0.2.0/manifest.json')) ? 'PASS' : 'NOT TESTED',
-  evidence: existsSync(atRoot('build/release/0.2.0/manifest.json')) ? [{ artifact: 'build/release/0.2.0/manifest.json' }, { ...artifactBuild }] : [],
-  unblock: 'Run build-release.mjs.' })
+  status: artifactBuild && allCommittedArtifactsVerified && committedManifest?.artifacts?.length === 4 ? 'PASS' : 'NOT TESTED',
+  evidence: artifactBuild && allCommittedArtifactsVerified ? [
+    { artifact: 'docs/release/artifacts/manifest.json' },
+    { artifact: 'docs/release/artifacts/ragam-source-0.2.0.tar.gz' },
+    { artifact: 'docs/release/artifacts/ragam-web-0.2.0.tar.gz' },
+    { artifact: 'docs/release/artifacts/sbom.cdx.json' },
+    { artifact: 'docs/release/artifacts/provenance.json' },
+    { ...artifactBuild },
+  ] : [],
+  unblock: 'Run build-release.mjs and retain the four verified artifact files in docs/release/artifacts/.' })
 add({ id: 'A04', area: 'artifacts', name: 'SHA-256 checksums generated and verified independently with sha256sum -c', mandatory: true,
-  status: artifactVerify ? 'PASS' : 'NOT TESTED',
-  evidence: artifactVerify ? [{ command: 'node scripts/release/verify-release.mjs --dir build/release/0.2.0', ...artifactVerify }, { artifact: 'build/release/0.2.0/SHA256SUMS' }] : [],
-  unblock: 'Run verify-release.mjs after building; it must exit 0.' })
+  status: artifactVerify && committedOk && allCommittedArtifactsVerified ? 'PASS' : 'NOT TESTED',
+  evidence: artifactVerify && committedOk && allCommittedArtifactsVerified ? [
+    { command: 'cd docs/release/artifacts && sha256sum -c SHA256SUMS', ...passLog('final-committed-artifacts-check.log') },
+    { command: 'node scripts/release/verify-release.mjs --dir docs/release/artifacts', ...artifactVerify },
+    { artifact: 'docs/release/artifacts/SHA256SUMS', measured: { okLines: 4, manifestMatches: 4, checksumMatches: 4 } },
+  ] : [],
+  unblock: 'Run sha256sum -c against the committed SHA256SUMS and retain the measured log.' })
 add({ id: 'A05', area: 'artifacts', name: 'Cryptographic signature produced with an authorized signing key', mandatory: true, status: 'BLOCKED',
-  evidence: signingRefusal ? [{ command: 'node scripts/release/sign-release.mjs --dir build/release/0.2.0 (without key)', ...signingRefusal }] : [{ artifact: 'scripts/release/sign-release.mjs' }],
+  evidence: signingRefusal ? [{ command: 'node scripts/release/sign-release.mjs --dir build/release/0.2.0 (without authorized key)', ...signingRefusal }, { artifact: 'docs/release/artifacts/manifest.json' }] : [{ artifact: 'scripts/release/sign-release.mjs' }],
   unblock: 'Provide an authorized signing key outside the repository and set RAGAM_RELEASE_SIGNING_KEY_ID, RAGAM_RELEASE_SIGNING_KEY_FILE, RAGAM_RELEASE_SIGNING_AUTHORIZED_BY and RAGAM_RELEASE_SIGNING_CONFIRM=YES. The implemented workflow refuses without all four and never generates a key.' })
 add({ id: 'A06', area: 'artifacts', name: 'Independent signature verification (gpg --verify)', mandatory: true, status: 'BLOCKED',
-  evidence: [{ artifact: 'scripts/release/sign-release.mjs' }],
+  evidence: [{ artifact: 'scripts/release/sign-release.mjs' }, { artifact: 'docs/release/artifacts/manifest.json' }],
   unblock: 'Requires A05. No signature and no private key were generated or committed; verification cannot be performed.' })
 add({ id: 'A07', area: 'artifacts', name: 'Build provenance recorded (commit, tree, lockfile digests, artifact digests, reproducibility strategy)', mandatory: true,
-  status: existsSync(atRoot('build/release/0.2.0/provenance.json')) ? 'PASS' : 'NOT TESTED',
-  evidence: existsSync(atRoot('build/release/0.2.0/provenance.json')) ? [{ artifact: 'build/release/0.2.0/provenance.json' }] : [],
-  unblock: 'Run build-release.mjs.' })
+  status: committedArtifact('provenance.json') && allCommittedArtifactsVerified ? 'PASS' : 'NOT TESTED',
+  evidence: committedArtifact('provenance.json') && allCommittedArtifactsVerified ? [
+    { artifact: 'docs/release/artifacts/provenance.json' },
+    { artifact: 'docs/release/artifacts/manifest.json', measured: { artifactsVerified: 4 } },
+  ] : [],
+  unblock: 'Generate provenance from the clean checkout and retain its verified committed copy.' })
 add({ id: 'A08', area: 'artifacts', name: 'Artifacts stored in the intended published release location', mandatory: true, status: 'BLOCKED',
-  evidence: [{ artifact: 'build/release/0.2.0/manifest.json', note: 'Staged locally only; no GitHub Release, registry or distribution channel was used.' }],
-  unblock: 'An owner-authorized release destination (GitHub Release / registry) and explicit publication approval. Artifacts are deliberately kept in the ignored local staging directory until then.' })
+  evidence: [{ artifact: 'docs/release/artifacts/manifest.json', note: 'Committed as qualification evidence only; no GitHub Release, registry or distribution channel was used.' }],
+  unblock: 'An owner-authorized release destination (GitHub Release / registry) and explicit publication approval. The committed files are evidence, not a publication.' })
 add({ id: 'A09', area: 'artifacts', name: 'Release publication', mandatory: false, status: 'BLOCKED',
   evidence: [{ artifact: 'docs/release/12-final-verdict.md' }],
   unblock: 'Separate explicit authorization from the repository owner after all mandatory gates pass. No publication was performed.' })
 const repro = text('final-reproducibility.log')
 const reproducible = repro && (repro.match(/identical=True/g) ?? []).length >= 2
 add({ id: 'A10', area: 'artifacts', name: 'Byte-identical rebuild of both artifacts from the same recorded commit', mandatory: true,
-  status: reproducible ? 'PASS' : 'NOT TESTED',
-  evidence: reproducible ? [{ command: 'node scripts/release/build-release.mjs --out build/release/0.2.0-repro --allow-dirty; sha256 comparison', log: 'docs/release/evidence/final-reproducibility.log', artifact: 'docs/release/artifacts/provenance.json' }] : [],
+  status: reproducible && allCommittedArtifactsVerified ? 'PASS' : 'NOT TESTED',
+  evidence: reproducible && allCommittedArtifactsVerified ? [
+    { command: 'node scripts/release/build-release.mjs --out build/release/0.2.0-repro --allow-dirty; sha256 comparison', log: 'docs/release/evidence/final-reproducibility.log', artifact: 'docs/release/artifacts/provenance.json' },
+    { artifact: 'docs/release/artifacts/SHA256SUMS' },
+  ] : [],
   unblock: reproducible ? null : 'Rebuild from the recorded commit and capture the two SHA-256 comparisons.' })
-const committedCheck = text('final-committed-artifacts-check.log')
-const committedOk = committedCheck && (committedCheck.match(/: OK$/gm) ?? []).length >= 4
 add({ id: 'A11', area: 'artifacts', name: 'Committed artifact set verifies in place with sha256sum -c', mandatory: true,
-  status: committedOk ? 'PASS' : 'NOT TESTED',
-  evidence: committedOk ? [{ command: 'cd docs/release/artifacts && sha256sum -c SHA256SUMS', log: 'docs/release/evidence/final-committed-artifacts-check.log', artifact: 'docs/release/artifacts/manifest.json' }] : [],
+  status: committedOk && allCommittedArtifactsVerified ? 'PASS' : 'NOT TESTED',
+  evidence: committedOk && allCommittedArtifactsVerified ? [
+    { command: 'cd docs/release/artifacts && sha256sum -c SHA256SUMS', ...passLog('final-committed-artifacts-check.log') },
+    { artifact: 'docs/release/artifacts/SHA256SUMS', measured: { okLines: 4, manifestMatches: 4, checksumMatches: 4 } },
+    { artifact: 'docs/release/artifacts/manifest.json' },
+  ] : [],
   unblock: committedOk ? null : 'Copy the reproducible archives beside SHA256SUMS and run sha256sum -c.' })
 
 // --- 10. Deployment and rollback ------------------------------------------
@@ -317,7 +380,7 @@ add({ id: 'TM02', area: 'telemetry', name: 'Clear method for disabling optional 
 add({ id: 'RG01', area: 'release_gate', name: 'Machine-readable qualification report with PASS/FAIL/BLOCKED/NOT TESTED/NOT APPLICABLE and no laundered statuses', mandatory: true,
   status: 'PASS',
   evidence: [{ command: 'node scripts/release/generate-qualification.mjs; node --test test/release-qualification.test.mjs', artifact: 'docs/release/qualification.json' }],
-  notes: 'Generated from evidence files; validated by services/core/test/release-qualification.test.mjs.' })
+  notes: 'Generated from committed evidence files; a clean-checkout regression test regenerates the report without any ignored build/ directory and requires identical gate statuses. Validated by services/core/test/release-qualification.test.mjs.' })
 
 const mandatoryNonPass = gates.filter((g) => g.mandatory && g.status !== 'PASS')
 const report = {
@@ -350,7 +413,13 @@ const report = {
     trainingWorker: 'docs/release/evidence/training-worker-qualification.json',
     e2e: 'docs/release/evidence/e2e-qualification.json',
     security: 'docs/release/evidence/security-scan.json',
-    manifest: 'build/release/0.2.0/manifest.json',
+    manifest: 'docs/release/artifacts/manifest.json',
+    committedArtifacts: 'docs/release/artifacts/',
+    committedArtifactVerification: {
+      checked: committedArtifactChecks.length,
+      pass: committedArtifactChecks.filter((entry) => entry.present && entry.manifestMatches && entry.checksumMatches).length,
+      fail: committedArtifactChecks.filter((entry) => !entry.present || !entry.manifestMatches || !entry.checksumMatches).length,
+    },
   },
   gates,
   providers: providers?.providers?.map((p) => ({ id: p.id, status: p.status, configField: p.configField, unblock: p.unblock, justification: p.justification, liveCredentialEvidence: p.liveCredentialEvidence })) ?? [],

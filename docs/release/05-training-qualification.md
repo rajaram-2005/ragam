@@ -13,7 +13,7 @@ Two distinct real local runs were executed. First, a **real, local, pure-NumPy, 
 | R2 (resume) | `--steps 120 --resume-from <step-40 checkpoint>` | "resumed from … at step 40; 80 steps remain". Completed 120 steps, loss **5.1599 → 3.3644**, validation perplexity **34.1122**, weights digest `f3242e25…`, artifact SHA-256 `be063aab…`. Log [evidence/training-resumed.log](evidence/training-resumed.log) |
 | R3 (rollback / replay) | Same resume command into a fresh output directory | **Bit-identical** weights digest and artifact SHA-256 to R2. Log [evidence/training-rollback.log](evidence/training-rollback.log) |
 
-Verification: `scripts/release/verify-training-evidence.py` → **11 PASS, 0 FAIL** ([evidence/training-evidence.json](evidence/training-evidence.json)). It independently loads the checkpoint with `allow_pickle=False`, checks its format/step/config digest, recomputes the artifact SHA-256 against the report, and compares the evaluations.
+Verification: `scripts/release/verify-training-evidence.py` → **11 PASS, 0 FAIL** ([evidence/training-evidence.json](evidence/training-evidence.json)). It independently loads the checkpoint with `allow_pickle=False`, checks its format/step/config digest, recomputes the artifact SHA-256 against the report, and compares the evaluations. The verifier reads the ignored `build/training-qualification/` run artifacts from that measured run; a clean checkout keeps the committed JSON, segment logs and successful verification log rather than claiming the four segments were re-executed without their local artifacts. The separate real-trainer worker harness below regenerates its own evidence from scratch.
 
 ## Worker control-plane qualification against the real trainer
 

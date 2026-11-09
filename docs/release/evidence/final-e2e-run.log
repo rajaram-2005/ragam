@@ -1,18 +1,18 @@
-(node:18825) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:2293) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
 PASS  chat.auth [isolated_test_service] — {"register":201,"role":"owner","unauthenticated":401}
 PASS  chat.model_selection_no_substitution [isolated_test_service] — {"selectedModel":"isolated-model-a","unlistedModelStatus":409,"error":"model_unavailable"}
 PASS  chat.real_inference_and_intended_routing [isolated_test_service] — {"status":200,"providerModel":"isolated-model-a","provider":"openai (isolated service)"}
 PASS  chat.streaming [isolated_test_service] — {"status":200,"deltaEvents":2,"doneEvent":true}
-PASS  chat.history_persistence_across_restart [isolated_test_service] — {"sessionId":"b83c97ff-eadf-4b9a-bfe0-80c96554a53a","userTurnPersisted":true,"survivedRestart":true,"unauthenticatedAfterRestart":401}
+PASS  chat.history_persistence_across_restart [isolated_test_service] — {"sessionId":"4415f879-6a66-429e-83ef-fa9cf875d139","userTurnPersisted":true,"survivedRestart":true,"unauthenticatedAfterRestart":401}
 PASS  chat.cancellation [isolated_test_service] — {"aborted":true,"healthAfterCancellation":200}
 PASS  chat.error_handling_and_credential_non_exposure [isolated_test_service] — {"status":502,"error":"provider_auth_failed","keyExposed":false}
 PASS  image.no_fake_success_without_provider [isolated_test_service] — {"status":503,"error":"provider_not_configured"}
-PASS  image.generation_storage_gallery_provenance [isolated_test_service] — {"jobId":"366dd47c-2972-4092-90e1-1c8cf8264f72","state":"succeeded","bytes":70,"mime":"image/png","galleryListed":true}
+PASS  image.generation_storage_gallery_provenance [isolated_test_service] — {"jobId":"59ace833-4133-4fd4-a9f3-a905290b1069","state":"succeeded","bytes":70,"mime":"image/png","galleryListed":true}
 PASS  image.failure_handling_no_artifact [isolated_test_service] — {"state":"failed","artifact":null}
 PASS  video.no_fake_success_without_provider [isolated_test_service] — {"status":503,"error":"provider_not_configured"}
-PASS  video.job_lifecycle_and_provider_failure [isolated_test_service] — {"jobId":"67efa540-73ad-4416-8b83-6cc3d411f80a","state":"failed","historyStates":["queued","running","failed"]}
-PASS  video.cancellation [isolated_test_service] — {"jobId":"8043a677-2ba2-4ccf-b2e3-0ef1d4127abf","cancelState":"cancelled"}
+PASS  video.job_lifecycle_and_provider_failure [isolated_test_service] — {"jobId":"c52208a6-0e8e-4261-bcf9-a42d57ec805b","state":"failed","historyStates":["queued","running","failed"]}
+PASS  video.cancellation [isolated_test_service] — {"jobId":"01d409c8-2a85-49c9-b2a8-85bf25fbcdbf","cancelState":"cancelled"}
 PASS  plugins.discovery_and_preflight [in_process] — {"plugins":2,"readOnly":true}
 PASS  plugins.execution_errors_and_permission_boundary [in_process] — {"invoke":200,"unknown":404,"install":403,"memberOwnerOnly":403}
 PASS  mcp.startup_discovery [in_process] — {"servers":3,"tools":4,"resources":0,"prompts":0}

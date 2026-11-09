@@ -1,6 +1,6 @@
 {
   "schema": "ragam-release-qualification/1",
-  "generatedAt": "2026-11-08T10:06:21.971Z",
+  "generatedAt": "2026-11-09T05:17:37.387Z",
   "repository": "rajaram-2005/ragam",
   "branch": "arena/d44183df-ragam",
   "baselineCommit": "80ad8458fb039962dcaee6293dd451d1c6932416",
@@ -57,7 +57,13 @@
     "trainingWorker": "docs/release/evidence/training-worker-qualification.json",
     "e2e": "docs/release/evidence/e2e-qualification.json",
     "security": "docs/release/evidence/security-scan.json",
-    "manifest": "build/release/0.2.0/manifest.json"
+    "manifest": "docs/release/artifacts/manifest.json",
+    "committedArtifacts": "docs/release/artifacts/",
+    "committedArtifactVerification": {
+      "checked": 4,
+      "pass": 4,
+      "fail": 0
+    }
   },
   "gates": [
     {
@@ -111,10 +117,11 @@
         {
           "command": "gh run list --branch arena/d44183df-ragam; gh run view <run>",
           "artifact": "docs/release/evidence/ci-runs.json",
-          "runId": "42467789374, 42467789381"
+          "runId": "42470160571, 42470160572, 42470163191, 42470163200",
+          "runCount": 4
         }
       ],
-      "notes": "Build/test/runtime CI only. The skipped Klyvaron production evidence gate is fail-closed and is never counted as model evidence.",
+      "notes": "Build/test/runtime CI only; 4 successful push/pull_request runs recorded. The skipped Klyvaron production evidence gate is fail-closed and is never counted as model evidence.",
       "unblock": null
     },
     {
@@ -128,9 +135,9 @@
           "command": "AETHERIS_PYTHON=.venv/bin/python node --test test/*.test.mjs test/klyvaron-release/*.test.mjs",
           "log": "docs/release/evidence/final-core.tap",
           "measured": {
-            "pass": 1081,
+            "pass": 1082,
             "fail": 0,
-            "tests": 1085
+            "tests": 1086
           }
         }
       ],
@@ -688,7 +695,7 @@
           "measured": {
             "pass": 9,
             "fail": 0,
-            "trackedFiles": 658
+            "trackedFiles": 660
           }
         }
       ],
@@ -831,10 +838,18 @@
           "bytes": 316
         },
         {
-          "artifact": "build/release/0.2.0/provenance.json"
+          "artifact": "docs/release/artifacts/manifest.json",
+          "measured": {
+            "version": "0.2.0",
+            "commit": "b53c8748a82946ac57b4471be177677258bcf4f5",
+            "artifactsVerified": 4
+          }
+        },
+        {
+          "artifact": "docs/release/artifacts/provenance.json"
         }
       ],
-      "unblock": "Commit all source changes, then run build-release.mjs from a clean checkout and capture its log."
+      "unblock": "Commit all source changes, build from a clean checkout, and retain the verified committed artifact set."
     },
     {
       "id": "A02",
@@ -844,13 +859,17 @@
       "status": "PASS",
       "evidence": [
         {
-          "artifact": "build/release/0.2.0/sbom.cdx.json"
+          "artifact": "docs/release/artifacts/sbom.cdx.json"
         },
         {
           "artifact": "services/fabric/requirements.lock"
+        },
+        {
+          "artifact": "docs/release/artifacts/SHA256SUMS",
+          "note": "SBOM digest independently matched the manifest and checksum file"
         }
       ],
-      "unblock": "Run build-release.mjs to generate the SBOM from the committed lockfiles."
+      "unblock": "Generate the SBOM from the committed lockfiles and retain its verified committed copy."
     },
     {
       "id": "A03",
@@ -860,14 +879,26 @@
       "status": "PASS",
       "evidence": [
         {
-          "artifact": "build/release/0.2.0/manifest.json"
+          "artifact": "docs/release/artifacts/manifest.json"
+        },
+        {
+          "artifact": "docs/release/artifacts/ragam-source-0.2.0.tar.gz"
+        },
+        {
+          "artifact": "docs/release/artifacts/ragam-web-0.2.0.tar.gz"
+        },
+        {
+          "artifact": "docs/release/artifacts/sbom.cdx.json"
+        },
+        {
+          "artifact": "docs/release/artifacts/provenance.json"
         },
         {
           "log": "docs/release/evidence/final-artifact-build.log",
           "bytes": 316
         }
       ],
-      "unblock": "Run build-release.mjs."
+      "unblock": "Run build-release.mjs and retain the four verified artifact files in docs/release/artifacts/."
     },
     {
       "id": "A04",
@@ -877,15 +908,25 @@
       "status": "PASS",
       "evidence": [
         {
-          "command": "node scripts/release/verify-release.mjs --dir build/release/0.2.0",
-          "log": "docs/release/evidence/final-artifact-verify.log",
-          "bytes": 1112
+          "command": "cd docs/release/artifacts && sha256sum -c SHA256SUMS",
+          "log": "docs/release/evidence/final-committed-artifacts-check.log",
+          "bytes": 95
         },
         {
-          "artifact": "build/release/0.2.0/SHA256SUMS"
+          "command": "node scripts/release/verify-release.mjs --dir docs/release/artifacts",
+          "log": "docs/release/evidence/final-artifact-verify.log",
+          "bytes": 1116
+        },
+        {
+          "artifact": "docs/release/artifacts/SHA256SUMS",
+          "measured": {
+            "okLines": 4,
+            "manifestMatches": 4,
+            "checksumMatches": 4
+          }
         }
       ],
-      "unblock": "Run verify-release.mjs after building; it must exit 0."
+      "unblock": "Run sha256sum -c against the committed SHA256SUMS and retain the measured log."
     },
     {
       "id": "A05",
@@ -895,9 +936,12 @@
       "status": "BLOCKED",
       "evidence": [
         {
-          "command": "node scripts/release/sign-release.mjs --dir build/release/0.2.0 (without key)",
+          "command": "node scripts/release/sign-release.mjs --dir build/release/0.2.0 (without authorized key)",
           "log": "docs/release/evidence/final-signing-refusal.log",
           "bytes": 534
+        },
+        {
+          "artifact": "docs/release/artifacts/manifest.json"
         }
       ],
       "unblock": "Provide an authorized signing key outside the repository and set RAGAM_RELEASE_SIGNING_KEY_ID, RAGAM_RELEASE_SIGNING_KEY_FILE, RAGAM_RELEASE_SIGNING_AUTHORIZED_BY and RAGAM_RELEASE_SIGNING_CONFIRM=YES. The implemented workflow refuses without all four and never generates a key."
@@ -911,6 +955,9 @@
       "evidence": [
         {
           "artifact": "scripts/release/sign-release.mjs"
+        },
+        {
+          "artifact": "docs/release/artifacts/manifest.json"
         }
       ],
       "unblock": "Requires A05. No signature and no private key were generated or committed; verification cannot be performed."
@@ -923,10 +970,16 @@
       "status": "PASS",
       "evidence": [
         {
-          "artifact": "build/release/0.2.0/provenance.json"
+          "artifact": "docs/release/artifacts/provenance.json"
+        },
+        {
+          "artifact": "docs/release/artifacts/manifest.json",
+          "measured": {
+            "artifactsVerified": 4
+          }
         }
       ],
-      "unblock": "Run build-release.mjs."
+      "unblock": "Generate provenance from the clean checkout and retain its verified committed copy."
     },
     {
       "id": "A08",
@@ -936,11 +989,11 @@
       "status": "BLOCKED",
       "evidence": [
         {
-          "artifact": "build/release/0.2.0/manifest.json",
-          "note": "Staged locally only; no GitHub Release, registry or distribution channel was used."
+          "artifact": "docs/release/artifacts/manifest.json",
+          "note": "Committed as qualification evidence only; no GitHub Release, registry or distribution channel was used."
         }
       ],
-      "unblock": "An owner-authorized release destination (GitHub Release / registry) and explicit publication approval. Artifacts are deliberately kept in the ignored local staging directory until then."
+      "unblock": "An owner-authorized release destination (GitHub Release / registry) and explicit publication approval. The committed files are evidence, not a publication."
     },
     {
       "id": "A09",
@@ -966,6 +1019,9 @@
           "command": "node scripts/release/build-release.mjs --out build/release/0.2.0-repro --allow-dirty; sha256 comparison",
           "log": "docs/release/evidence/final-reproducibility.log",
           "artifact": "docs/release/artifacts/provenance.json"
+        },
+        {
+          "artifact": "docs/release/artifacts/SHA256SUMS"
         }
       ],
       "unblock": null
@@ -980,6 +1036,17 @@
         {
           "command": "cd docs/release/artifacts && sha256sum -c SHA256SUMS",
           "log": "docs/release/evidence/final-committed-artifacts-check.log",
+          "bytes": 95
+        },
+        {
+          "artifact": "docs/release/artifacts/SHA256SUMS",
+          "measured": {
+            "okLines": 4,
+            "manifestMatches": 4,
+            "checksumMatches": 4
+          }
+        },
+        {
           "artifact": "docs/release/artifacts/manifest.json"
         }
       ],
@@ -1195,7 +1262,7 @@
           "artifact": "docs/release/qualification.json"
         }
       ],
-      "notes": "Generated from evidence files; validated by services/core/test/release-qualification.test.mjs."
+      "notes": "Generated from committed evidence files; a clean-checkout regression test regenerates the report without any ignored build/ directory and requires identical gate statuses. Validated by services/core/test/release-qualification.test.mjs."
     }
   ],
   "providers": [

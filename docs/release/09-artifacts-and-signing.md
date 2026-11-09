@@ -15,7 +15,7 @@
 | Build provenance | `provenance.json`: version, commit, tree, lockfile digests, artifact digests, builder, reproducibility strategy, explicit unsigned state | **PASS** |
 | Cryptographic signature with an authorized key | `sign-release.mjs` + `.github/workflows/release.yml`; **no authorized key exists** | **BLOCKED** |
 | Independent signature verification | `gpg --verify SHA256SUMS.asc SHA256SUMS` implemented in `sign-release.mjs`; cannot run without a signature | **BLOCKED** |
-| Intended release location | Artifacts staged locally in `build/release/0.2.0/` (ignored) and copied to `docs/release/artifacts/` as committed evidence; no GitHub Release/registry used | **BLOCKED** |
+| Intended release location | Verified artifact copies are committed as qualification evidence in `docs/release/artifacts/`; the local `build/release/0.2.0/` staging directory is ignored. No GitHub Release/registry or other publication destination was used | **BLOCKED** |
 | Release publication | No publication step exists; `workflow_dispatch` only stages on the workflow run | **BLOCKED** (separate owner authorization) |
 
 Commands:
@@ -23,6 +23,7 @@ Commands:
 ```bash
 node scripts/release/build-release.mjs --out build/release/0.2.0
 node scripts/release/verify-release.mjs --dir build/release/0.2.0
+node scripts/release/verify-release.mjs --dir docs/release/artifacts  # committed evidence copy
 ```
 
 Logs: [evidence/final-artifact-build.log](evidence/final-artifact-build.log), [evidence/final-artifact-verify.log](evidence/final-artifact-verify.log), [evidence/final-signing-refusal.log](evidence/final-signing-refusal.log). Committed copies of the manifest, checksums, SBOM and provenance are in [artifacts/](artifacts/).
@@ -54,9 +55,9 @@ Built from clean checkout of commit `b53c8748a82946ac57b4471be177677258bcf4f5` (
 | `sbom.cdx.json` | 114,784 | `e5abd964d954626035e71fe554eed3f4a821b3fdcfbef8f21e3dc12a7eddfe7f` (340 components) |
 | `provenance.json` | 1,886 | `008386ffa8640d87d6a0757aee241e090e644c38ed955079d478990681cccbfc` |
 
-`verify-release.mjs` ran **16 independent checks** including `sha256sum -c SHA256SUMS`, manifest digests, provenance commit/tree resolution, VERSION identity and qualification-report integrity: all PASS ([evidence/final-artifact-verify.log](evidence/final-artifact-verify.log)). A second build into `build/release/0.2.0-repro` produced **byte-identical** source and web artifacts ([evidence/final-reproducibility.log](evidence/final-reproducibility.log)). The signing workflow refused with exit code 2 and created no signature ([evidence/final-signing-refusal.log](evidence/final-signing-refusal.log)).
+`verify-release.mjs --dir docs/release/artifacts` ran **16 independent checks** including `sha256sum -c SHA256SUMS`, manifest digests, provenance commit/tree resolution, VERSION identity and qualification-report integrity: all PASS ([evidence/final-artifact-verify.log](evidence/final-artifact-verify.log)). A second build into `build/release/0.2.0-repro` produced **byte-identical** source and web artifacts ([evidence/final-reproducibility.log](evidence/final-reproducibility.log)). The signing workflow refused with exit code 2 and created no signature ([evidence/final-signing-refusal.log](evidence/final-signing-refusal.log)).
 
-Committed copies of `manifest.json`, `SHA256SUMS`, `sbom.cdx.json` and `provenance.json` are in [artifacts/](artifacts/); the (larger) `.tar.gz` payloads remain in the ignored `build/release/0.2.0/` staging directory and are reproducible from the recorded commit. No artifact was uploaded to a release destination.
+Committed copies of `manifest.json`, `SHA256SUMS`, `sbom.cdx.json`, `provenance.json` and both `.tar.gz` payloads are in [artifacts/](artifacts/); their digests are independently checked against the manifest and checksum file. `node scripts/release/generate-qualification.mjs` now reads that committed set instead of the ignored `build/release/0.2.0/` staging directory, so a clean checkout with no `build/` directory regenerates the same artifact-gate statuses. The clean-checkout regression test in `services/core/test/release-qualification.test.mjs` copies the tracked tree to a temporary directory, runs the generator there, and requires identical gate statuses and a 4/4 committed-artifact verification; run it directly with `npm run release:clean-gate` and see [evidence/final-clean-gate.log](evidence/final-clean-gate.log). No artifact was uploaded to a release destination.
 
 The committed copy in [artifacts/](artifacts/) contains **both reproducible archives** as well as the metadata, so a reader can verify the bundle in place:
 

@@ -2,6 +2,7 @@
 // Independently verify a staged release bundle.
 //
 //   node scripts/release/verify-release.mjs --dir build/release/0.2.0
+//   node scripts/release/verify-release.mjs --dir docs/release/artifacts
 //
 // Checksums are checked with the system `sha256sum -c` (a different
 // implementation from the writer), then every manifest digest is recomputed,

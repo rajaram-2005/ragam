@@ -219,7 +219,7 @@ applies — and, for Fabric, **Python ≥ 3.11 + NumPy**. No GPU. No model weigh
 downloaded.
 
 ```bash
-npm test          # 2051 tests: core 1085, web 143, fabric 823
+npm test          # 2052 tests: core 1086, web 143, fabric 823
 ```
 
 The old Fabric and from-scratch model-training commands are retained as separate
@@ -241,7 +241,7 @@ component, a Docker Compose build/health/persistence/restore smoke, documentatio
 checks, and suite-count verification plus tests for the separate legacy release-gate code. The latest completed full CI run
 [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all
 1,916 tests (Core 985, Web 109, Fabric 822), plus release verification and the
-loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 2,051 tests (Core 1,085, Web 143, Fabric 823). The full Core suite passed 1,081/1,085 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 143/143 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv. Signing and qualification-capture tests use synthetic fixtures and do not establish a production signature or qualification. Full CI for this current tree is recorded in the pull-request checks and final engineering report. The tracked [36 — Final engineering report](docs/36-final-engineering-report.md) records the passing `main` CI run [42352898134](https://github.com/rajaram-2005/ragam/actions/runs/42352898134) and Desktop run [42352898123](https://github.com/rajaram-2005/ragam/actions/runs/42352898123) on `36fef57`. The added Chat API paths use deterministic contract fixtures;
+loopback-only Compose persistence/restore smoke. Since then, follow-on onboarding, history, project organization and Chat parity work have expanded the test suites. The current tree has 2,052 tests (Core 1,086, Web 143, Fabric 823). The full Core suite passed 1,082/1,086 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 143/143 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv. Signing and qualification-capture tests use synthetic fixtures and do not establish a production signature or qualification. Full CI for this current tree is recorded in the pull-request checks and final engineering report. The tracked [36 — Final engineering report](docs/36-final-engineering-report.md) records the passing `main` CI run [42352898134](https://github.com/rajaram-2005/ragam/actions/runs/42352898134) and Desktop run [42352898123](https://github.com/rajaram-2005/ragam/actions/runs/42352898123) on `36fef57`. The added Chat API paths use deterministic contract fixtures;
 neither the tests nor CI made live vendor calls. The
 Fabric job tests the retained retriever experiment's gate in **both** directions. This is
 separate from the active model-independent Klyvaron processor and is not evidence that a
@@ -301,7 +301,7 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 43,655 | 28,076 | **zero npm packages** | 1085 |
+| `services/core` | Node 22 ESM | 43,655 | 28,125 | **zero npm packages** | 1086 |
 | `services/fabric` | Python 3.11 | 17,256 | 10,582 | NumPy only | 823 |
 | `apps/web` | React 18 + Vite | 7,631 | 2,616 | pdfjs-dist, react, react-dom | 143 |
 

@@ -1,7 +1,7 @@
 {
   "schema": "ragam-training-worker-preflight/1",
   "environment": {
-    "inspectedAt": "2026-11-08T10:05:49.374Z",
+    "inspectedAt": "2026-11-09T05:07:22.320Z",
     "hardware": {
       "arch": "x64",
       "logicalCpus": 2,
@@ -12,8 +12,8 @@
         "fma"
       ],
       "totalRamBytes": 4131278848,
-      "availableRamBytes": 3801325568,
-      "freeDiskBytes": 18434572288,
+      "availableRamBytes": 3778199552,
+      "freeDiskBytes": 19310858240,
       "gpuAvailable": false,
       "accelerators": []
     },
@@ -109,7 +109,7 @@
   "consent": {
     "confirmed": true,
     "disclosureDigest": "8d98e9560973be8e541b46bfc7d2bfd891c1821f88e21f7e89766433bcfeaddc",
-    "createdAt": 1794132349919,
+    "createdAt": 1794200843022,
     "basis": "operator-initiated release qualification on a locally generated synthetic corpus; no user data"
   },
   "trainScript": "services/fabric/scripts/train_klyvaron.py"

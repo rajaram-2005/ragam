@@ -10,7 +10,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readdirSync, copyFileSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -289,5 +289,54 @@ test('the machine-readable release gate is valid, honest and still refuses publi
     if (gate.requiresLiveCredential) assert.notEqual(gate.status, 'PASS', `${gate.id} cannot be PASS without a live call`)
     if (gate.status === 'BLOCKED') assert.ok(gate.unblock && gate.unblock.length > 20, `${gate.id} needs an exact unblock requirement`)
     if (gate.status === 'PASS') assert.ok(gate.evidence?.length > 0, `${gate.id} needs recorded evidence`)
+  }
+})
+
+// --- R7: clean-checkout gate regeneration ----------------------------------
+
+test('the release gate regenerates identically in a clean checkout with no ignored build directory', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ragam-clean-gate-'))
+  const ignored = new Set(['.git', 'node_modules', '.venv', 'build'])
+  const copyTree = (source, destination) => {
+    mkdirSync(destination, { recursive: true })
+    for (const entry of readdirSync(source, { withFileTypes: true })) {
+      if (ignored.has(entry.name) || entry.isSymbolicLink()) continue
+      const from = join(source, entry.name)
+      const to = join(destination, entry.name)
+      if (entry.isDirectory()) copyTree(from, to)
+      else if (entry.isFile()) copyFileSync(from, to)
+    }
+  }
+  try {
+    copyTree(REPO, root)
+    assert.equal(existsSync(join(root, 'build', 'release', '0.2.0')), false,
+      'the clean checkout must not contain the ignored local artifact staging directory')
+    // The full Core suite streams its own TAP into this evidence file while this
+    // test runs. Use the committed TAP blob, not a partially written local file.
+    const committedTap = spawnSync('git', ['show', 'HEAD:docs/release/evidence/final-core.tap'], {
+      cwd: REPO, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
+    })
+    assert.equal(committedTap.status, 0, `could not read committed Core TAP: ${committedTap.stderr}`)
+    writeFileSync(join(root, 'docs', 'release', 'evidence', 'final-core.tap'), committedTap.stdout)
+    const generated = spawnSync(process.execPath, ['scripts/release/generate-qualification.mjs'], {
+      cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
+    })
+    assert.equal(generated.status, 0, `generator failed: ${generated.stderr || generated.stdout}`)
+    const committed = json('docs/release/qualification.json')
+    const regenerated = readJson(join(root, 'docs/release/qualification.json'))
+    const statuses = (report) => Object.fromEntries(report.gates.map((gate) => [gate.id, gate.status]))
+    assert.deepEqual(statuses(regenerated), statuses(committed),
+      'a clean checkout must not silently lose PASS gates')
+    assert.equal(regenerated.summary.PASS, committed.summary.PASS)
+    assert.equal(regenerated.summary.mandatoryNonPass, committed.summary.mandatoryNonPass)
+    assert.equal(regenerated.finalVerdict, 'NOT RELEASE READY')
+    assert.equal(regenerated.artifacts.manifest, 'docs/release/artifacts/manifest.json')
+    assert.deepEqual(regenerated.artifacts.committedArtifactVerification, { checked: 4, pass: 4, fail: 0 })
+    assert.equal(regenerated.gates.find((gate) => gate.id === 'B04').status, 'PASS',
+      'B04 must accept both push and pull_request CI/Desktop runs')
+    assert.ok(!read('scripts/release/generate-qualification.mjs').includes("existsSync(atRoot('build/release/0.2.0/"),
+      'no artifact gate may depend on the ignored build directory')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
   }
 })

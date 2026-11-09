@@ -1,4 +1,4 @@
-PASS  no_tracked_secret_or_weight_files — 659 tracked files inspected; no credentials, private keys or weight payloads
+PASS  no_tracked_secret_or_weight_files — 660 tracked files inspected; no credentials, private keys or weight payloads
 PASS  no_hardcoded_credential_literals — 558 text files scanned for 4 patterns; 12 reviewed synthetic fixture occurrences, 0 unreviewed
 PASS  node_syntax_all_modules — 292 .mjs/.js files pass node --check
 PASS  compose_defaults_loopback — single-user Docker mode binds 127.0.0.1 by default
