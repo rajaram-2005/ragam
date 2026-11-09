@@ -1,10 +1,18 @@
 {
   "schema": "ragam-ci-verification/1",
   "branch": "arena/d44183df-ragam",
-  "headSha": "5e97ae95beeaa12caeb7f71b34b7b7456359bf8e",
-  "sourceEvidenceCommit": "38e3739d0dd534967c488bd410900958658a9b16",
-  "observedWith": "gh pr checks 28 --watch; gh pr checks 28; gh run list / gh run view on the pushed branch",
+  "headSha": "110f73e7fcb8878fc5ede9dc6fc9c4aab8d7f874",
+  "sourceEvidenceCommit": "16db404f4085819c8cececb714a5aa6816f4609c",
+  "observedWith": "gh pr view 28; gh pr checks 28; gh run list --branch arena/d44183df-ragam; gh run watch <run id> --exit-status",
   "prChecks": { "pass": 13, "fail": 0, "skipping": 2, "vercelPreviews": "pass" },
+  "commercialSastDast": {
+    "status": "NOT TESTED",
+    "command": "node scripts/release/commercial-sast-dast.mjs --out \"$TMP_OUT\"",
+    "log": "docs/release/evidence/final-commercial-sast-dast-refusal.log",
+    "exit": 2,
+    "evidence": null,
+    "note": "All eight owner-authorized inputs were unset; no licensed tool ran, no report was read and no commercial-sast-dast.json PASS evidence was written."
+  },
   "cleanCheckoutGate": {
     "command": "npm run release:clean-gate",
     "log": "docs/release/evidence/final-clean-gate.log",
@@ -14,7 +22,7 @@
   },
   "runs": [
     {
-      "id": "42566504024",
+      "id": "42572046568",
       "name": "CI",
       "event": "push",
       "status": "completed",
@@ -30,7 +38,7 @@
       ]
     },
     {
-      "id": "42566504049",
+      "id": "42572046553",
       "name": "Desktop packages",
       "event": "push",
       "status": "completed",
@@ -43,7 +51,7 @@
       ]
     },
     {
-      "id": "42566510022",
+      "id": "42572053423",
       "name": "CI",
       "event": "pull_request",
       "status": "completed",
@@ -59,7 +67,7 @@
       ]
     },
     {
-      "id": "42566510108",
+      "id": "42572053368",
       "name": "Desktop packages",
       "event": "pull_request",
       "status": "completed",
@@ -73,6 +81,24 @@
     }
   ],
   "previousVerification": [
+    {
+      "headSha": "16db404f4085819c8cececb714a5aa6816f4609c",
+      "runs": [
+        { "id": "42567474257", "name": "CI", "event": "push", "conclusion": "success" },
+        { "id": "42567474261", "name": "Desktop packages", "event": "push", "conclusion": "success" },
+        { "id": "42567478809", "name": "CI", "event": "pull_request", "conclusion": "success" },
+        { "id": "42567478873", "name": "Desktop packages", "event": "pull_request", "conclusion": "success" }
+      ]
+    },
+    {
+      "headSha": "5e97ae95beeaa12caeb7f71b34b7b7456359bf8e",
+      "runs": [
+        { "id": "42566504024", "name": "CI", "event": "push", "conclusion": "success" },
+        { "id": "42566504049", "name": "Desktop packages", "event": "push", "conclusion": "success" },
+        { "id": "42566510022", "name": "CI", "event": "pull_request", "conclusion": "success" },
+        { "id": "42566510108", "name": "Desktop packages", "event": "pull_request", "conclusion": "success" }
+      ]
+    },
     {
       "headSha": "7176f63cdb06120a8a57c2ccb36561ed5ffab7ce",
       "runs": [
@@ -101,5 +127,5 @@
       ]
     }
   ],
-  "note": "No release was published. The Klyvaron production evidence gate is intentionally skipped and is never counted as model or release evidence. These runs verify build/test/runtime CI and desktop packaging only; they do not qualify live providers, models, staging, signing or publication. The 16-check real-trainer cancellation/resume evidence was generated from source commit 38e3739d0dd534967c488bd410900958658a9b16; later evidence-only and documentation commits contain no changes to the trainer or worker runtime. The clean-checkout qualification repair at 5e97ae9 removed the generator's dependency on the ignored build/ directory and added a regression test. An earlier transient Electron/toolset 504 was fixed with the documented mirror variables and a bounded retry, then re-verified on all four platforms."
+  "note": "No release was published. The Klyvaron production evidence gate is intentionally skipped and is never counted as model or release evidence. These runs verify build/test/runtime CI and desktop packaging only; they do not qualify live providers, models, staging, signing or publication. The 16-check real-trainer cancellation/resume evidence was regenerated at parent commit 16db404f4085819c8cececb714a5aa6816f4609c; the R8 workflow commit contains no changes to the trainer or worker runtime. The clean-checkout qualification repair at 5e97ae9 removed the generator's dependency on the ignored build/ directory and added a regression test. The fail-closed commercial SAST/DAST workflow at 110f73e has no owner-authorized product, license, command, external report or PASS evidence, so S02 remains NOT TESTED. An earlier transient Electron/toolset 504 was fixed with the documented mirror variables and a bounded retry, then re-verified on all four platforms."
 }
