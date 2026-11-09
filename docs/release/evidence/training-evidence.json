@@ -1,0 +1,101 @@
+{
+  "schema": "ragam-training-qualification-evidence/1",
+  "scope": "local, pure-NumPy, from-scratch tiny language-model smoke training; NOT a Klyvaron Pro/Max foundation model, NOT adapter/LoRA training, NOT retrieval personalization",
+  "worker": "services/fabric/scripts/train_lm.py -> fabric/lm/train.py (real parameter updates on CPU)",
+  "hardware": {
+    "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+    "machine": "x86_64",
+    "numpy": "2.4.6",
+    "python": "3.11.2",
+    "accelerator": "none (CPU)"
+  },
+  "consent": {
+    "confirmed": true,
+    "basis": "Operator-initiated release qualification on the repository's own tracked text corpus; no user data, no private dataset, no external service, no paid API.",
+    "datasetOwnership": "repository-owned tracked text files only",
+    "datasetFingerprint": "66cff61fd7ad7358a6ec3cc6eaf9a258905721668e8c70e8b553b7043e09b161",
+    "purpose": "demonstrate real parameter updates, checkpointing, resume and evaluation mechanics",
+    "limitations": "This does not constitute consent to train on user data or to publish a model. No user-owned dataset was ingested."
+  },
+  "commands": [
+    "AETHERIS_PYTHON=.venv/bin/python services/fabric/scripts/train_lm.py --corpus-root /home/user/ragam --run-name ragam-qualification --steps 10 ... --checkpoint-every 10 --keep-checkpoint --snapshot-text manifest",
+    "timeout 1.5 .venv/bin/python services/fabric/scripts/train_lm.py --steps 120 --checkpoint-every 10 --keep-checkpoint  # interrupted at step 40 (exit 124)",
+    ".venv/bin/python services/fabric/scripts/train_lm.py --steps 120 --resume-from <step-40 checkpoint>  # resumed and completed",
+    ".venv/bin/python services/fabric/scripts/train_lm.py --steps 120 --resume-from <step-40 checkpoint>  # replay / rollback, bit-identical"
+  ],
+  "logs": [
+    "docs/release/evidence/training-segment-a.log",
+    "docs/release/evidence/training-interrupted.log",
+    "docs/release/evidence/training-resumed.log",
+    "docs/release/evidence/training-rollback.log"
+  ],
+  "results": [
+    {
+      "id": "interrupted_run_left_an_atomic_checkpoint",
+      "status": "PASS",
+      "detail": "1 checkpoint(s); writing uses .partial + Path.replace (services/fabric/fabric/lm/train.py:write_checkpoint)"
+    },
+    {
+      "id": "checkpoint_integrity",
+      "status": "PASS",
+      "detail": "format=aetheris-checkpoint/v1 step=40 losses=40 weight_arrays=14 adam_arrays=28 loaded with allow_pickle=False"
+    },
+    {
+      "id": "resume_reports_the_checkpoint_it_used",
+      "status": "PASS",
+      "detail": "{\"checkpoint\": \"ragam-resume-714156ec13dd.ckpt.npz\", \"step\": 40}"
+    },
+    {
+      "id": "resume_continued_to_the_configured_step",
+      "status": "PASS",
+      "detail": "steps=120 loss_curve=120"
+    },
+    {
+      "id": "artifact_sha256_matches_report",
+      "status": "PASS",
+      "detail": "sha256=be063aabf50c0e37b97d250d6921405195eeb3cdf8ae3354d4c8ce19eaabcc96 fileDigest=be063aabf50c0e37b97d250d6921405195eeb3cdf8ae3354d4c8ce19eaabcc96"
+    },
+    {
+      "id": "actual_parameter_updates",
+      "status": "PASS",
+      "detail": "10-step weights=262d80030011f634\u2026, resumed 120-step weights=f3242e259938ab77\u2026, checkpoint bytes differ from final artifact"
+    },
+    {
+      "id": "loss_decreased",
+      "status": "PASS",
+      "detail": "loss 5.1599 -> 3.3644"
+    },
+    {
+      "id": "evaluation_before_and_after",
+      "status": "PASS",
+      "detail": "validation perplexity 94.4250 (10 steps) -> 34.1122 (120 steps); best baseline bigram 27.2280 \u2014 the tiny smoke model does NOT beat it"
+    },
+    {
+      "id": "dataset_fingerprint_stable",
+      "status": "PASS",
+      "detail": "manifestDigest=66cff61fd7ad7358a6ec3cc6eaf9a258905721668e8c70e8b553b7043e09b161 trainFiles=496 validationFiles=55 (no overlap)"
+    },
+    {
+      "id": "stable_training_configuration",
+      "status": "PASS",
+      "detail": "checkpoint configDigest=714156ec13dd matches resumed run; a mismatch is refused by train.py"
+    },
+    {
+      "id": "restart_recovery_and_rollback_are_bit_identical",
+      "status": "PASS",
+      "detail": "replaying --resume-from the retained step-40 checkpoint produced a bit-identical artifact (segment-r2 vs segment-r3)"
+    }
+  ],
+  "relatedEvidence": {
+    "workerCancellation": "docs/release/evidence/training-worker-qualification.json",
+    "scope": "Real LocalTrainingWorkerManager SIGTERM cancellation, atomic checkpoint resume, advanced parameter state, second cancellation before completion and failure handling against the real JAX/NumPy trainer; not a production model qualification."
+  },
+  "notTested": [
+    "Training on a user-owned private dataset (no such dataset was supplied or authorized)",
+    "GPU/accelerator training (no GPU on this host)",
+    "Klyvaron Pro/Max foundation or adapter training (no weights, no architecture installed)",
+    "Production Klyvaron inference from licensed weights (no weights installed)"
+  ],
+  "pass": 11,
+  "fail": 0
+}

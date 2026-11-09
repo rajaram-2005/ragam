@@ -1,0 +1,18 @@
+PASS  sha256sum -c SHA256SUMS — ragam-source-0.2.0.tar.gz: OK | ragam-web-0.2.0.tar.gz: OK | sbom.cdx.json: OK
+PASS  manifest declares UNSIGNED — signed=false
+PASS  manifest declares no publication — published=false
+PASS  artifact ragam-source-0.2.0.tar.gz — 2718279 bytes
+PASS  artifact ragam-web-0.2.0.tar.gz — 646873 bytes
+PASS  artifact sbom.cdx.json — 114784 bytes
+PASS  artifact provenance.json — 1886 bytes
+PASS  SHA256SUMS digest — fc9f8e5c4b19f982bda50623afa52e93ecdf8d62f260293e5b94c944cc01425a
+PASS  SBOM digest — sbom.cdx.json
+PASS  provenance digest — provenance.json
+PASS  provenance commit resolves — b53c8748a82946ac57b4471be177677258bcf4f5
+PASS  provenance tree matches commit — 17b9fd48c3a87190ba60179b1acf5771df2b1d72 vs 17b9fd48c3a87190ba60179b1acf5771df2b1d72
+PASS  provenance clean checkout — git archive <commit> extracted into an empty temporary directory; no working-tree files are used
+PASS  VERSION matches manifest — 0.2.0
+PASS  qualification report schema and statuses
+PASS  no mandatory gate laundered to PASS — 28 non-PASS mandatory gates
+
+verified 16 independent checks for artifacts

@@ -1,0 +1,131 @@
+{
+  "schema": "ragam-ci-verification/1",
+  "branch": "arena/d44183df-ragam",
+  "headSha": "110f73e7fcb8878fc5ede9dc6fc9c4aab8d7f874",
+  "sourceEvidenceCommit": "16db404f4085819c8cececb714a5aa6816f4609c",
+  "observedWith": "gh pr view 28; gh pr checks 28; gh run list --branch arena/d44183df-ragam; gh run watch <run id> --exit-status",
+  "prChecks": { "pass": 13, "fail": 0, "skipping": 2, "vercelPreviews": "pass" },
+  "commercialSastDast": {
+    "status": "NOT TESTED",
+    "command": "node scripts/release/commercial-sast-dast.mjs --out \"$TMP_OUT\"",
+    "log": "docs/release/evidence/final-commercial-sast-dast-refusal.log",
+    "exit": 2,
+    "evidence": null,
+    "note": "All eight owner-authorized inputs were unset; no licensed tool ran, no report was read and no commercial-sast-dast.json PASS evidence was written."
+  },
+  "cleanCheckoutGate": {
+    "command": "npm run release:clean-gate",
+    "log": "docs/release/evidence/final-clean-gate.log",
+    "pass": 1,
+    "fail": 0,
+    "note": "Regenerates the qualification report in a temporary tracked-tree copy with no .git, node_modules, .venv or build/ directory and requires identical gate statuses."
+  },
+  "runs": [
+    {
+      "id": "42572046568",
+      "name": "CI",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        { "name": "Core service (Node, zero dependencies)", "conclusion": "success" },
+        { "name": "Web app (React + Vite)", "conclusion": "success" },
+        { "name": "Fabric training service (Python + NumPy)", "conclusion": "success" },
+        { "name": "Docker Compose build, health, persistence and restore smoke", "conclusion": "success" },
+        { "name": "Documentation matches implementation", "conclusion": "success" },
+        { "name": "Release verification (measured, not remembered)", "conclusion": "success" },
+        { "name": "Klyvaron production evidence gate (fail closed)", "conclusion": "skipped", "note": "intentional fail-closed posture; never counted as model evidence" }
+      ]
+    },
+    {
+      "id": "42572046553",
+      "name": "Desktop packages",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        { "name": "Linux x64 and ARM64", "conclusion": "success" },
+        { "name": "Windows x64 and ARM64", "conclusion": "success" },
+        { "name": "macOS Intel (x64)", "conclusion": "success" },
+        { "name": "macOS Apple Silicon (arm64)", "conclusion": "success" }
+      ]
+    },
+    {
+      "id": "42572053423",
+      "name": "CI",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        { "name": "Core service (Node, zero dependencies)", "conclusion": "success" },
+        { "name": "Web app (React + Vite)", "conclusion": "success" },
+        { "name": "Fabric training service (Python + NumPy)", "conclusion": "success" },
+        { "name": "Docker Compose build, health, persistence and restore smoke", "conclusion": "success" },
+        { "name": "Documentation matches implementation", "conclusion": "success" },
+        { "name": "Release verification (measured, not remembered)", "conclusion": "success" },
+        { "name": "Klyvaron production evidence gate (fail closed)", "conclusion": "skipped", "note": "intentional fail-closed posture; never counted as model evidence" }
+      ]
+    },
+    {
+      "id": "42572053368",
+      "name": "Desktop packages",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        { "name": "Linux x64 and ARM64", "conclusion": "success" },
+        { "name": "Windows x64 and ARM64", "conclusion": "success" },
+        { "name": "macOS Intel (x64)", "conclusion": "success" },
+        { "name": "macOS Apple Silicon (arm64)", "conclusion": "success" }
+      ]
+    }
+  ],
+  "previousVerification": [
+    {
+      "headSha": "16db404f4085819c8cececb714a5aa6816f4609c",
+      "runs": [
+        { "id": "42567474257", "name": "CI", "event": "push", "conclusion": "success" },
+        { "id": "42567474261", "name": "Desktop packages", "event": "push", "conclusion": "success" },
+        { "id": "42567478809", "name": "CI", "event": "pull_request", "conclusion": "success" },
+        { "id": "42567478873", "name": "Desktop packages", "event": "pull_request", "conclusion": "success" }
+      ]
+    },
+    {
+      "headSha": "5e97ae95beeaa12caeb7f71b34b7b7456359bf8e",
+      "runs": [
+        { "id": "42566504024", "name": "CI", "event": "push", "conclusion": "success" },
+        { "id": "42566504049", "name": "Desktop packages", "event": "push", "conclusion": "success" },
+        { "id": "42566510022", "name": "CI", "event": "pull_request", "conclusion": "success" },
+        { "id": "42566510108", "name": "Desktop packages", "event": "pull_request", "conclusion": "success" }
+      ]
+    },
+    {
+      "headSha": "7176f63cdb06120a8a57c2ccb36561ed5ffab7ce",
+      "runs": [
+        { "id": "42470897704", "name": "CI", "event": "push", "conclusion": "success" },
+        { "id": "42470897766", "name": "Desktop packages", "event": "push", "conclusion": "success" },
+        { "id": "42470900792", "name": "CI", "event": "pull_request", "conclusion": "success" },
+        { "id": "42470900787", "name": "Desktop packages", "event": "pull_request", "conclusion": "success" }
+      ]
+    },
+    {
+      "headSha": "2dbe5f23e75a2cf55c6dd5daada4daf3eda8df9b",
+      "runs": [
+        { "id": "42470160571", "name": "CI", "event": "push", "conclusion": "success" },
+        { "id": "42470160572", "name": "Desktop packages", "event": "push", "conclusion": "success" },
+        { "id": "42470163191", "name": "CI", "event": "pull_request", "conclusion": "success" },
+        { "id": "42470163200", "name": "Desktop packages", "event": "pull_request", "conclusion": "success" }
+      ]
+    },
+    {
+      "headSha": "60182490bd3b45f199cd8057ddf4b4a41f32c2dd",
+      "runs": [
+        { "id": "42467789374", "name": "CI", "event": "pull_request", "conclusion": "success" },
+        { "id": "42467789381", "name": "Desktop packages", "event": "pull_request", "conclusion": "success" },
+        { "id": "42468363716", "name": "CI", "event": "pull_request", "conclusion": "success" },
+        { "id": "42468363692", "name": "Desktop packages", "event": "pull_request", "conclusion": "success" }
+      ]
+    }
+  ],
+  "note": "No release was published. The Klyvaron production evidence gate is intentionally skipped and is never counted as model or release evidence. These runs verify build/test/runtime CI and desktop packaging only; they do not qualify live providers, models, staging, signing or publication. The 16-check real-trainer cancellation/resume evidence was regenerated at parent commit 16db404f4085819c8cececb714a5aa6816f4609c; the R8 workflow commit contains no changes to the trainer or worker runtime. The clean-checkout qualification repair at 5e97ae9 removed the generator's dependency on the ignored build/ directory and added a regression test. The fail-closed commercial SAST/DAST workflow at 110f73e has no owner-authorized product, license, command, external report or PASS evidence, so S02 remains NOT TESTED. An earlier transient Electron/toolset 504 was fixed with the documented mirror variables and a bounded retry, then re-verified on all four platforms."
+}

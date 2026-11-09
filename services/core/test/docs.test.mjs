@@ -156,7 +156,16 @@ test('.env.example documents active deployment variables without exposing accoun
     'AETHERIS_ALLOW_ACCOUNT_REGISTRATION', 'AETHERIS_COOKIE_SECURE',
     'AETHERIS_COOKIE_SAMESITE', 'AETHERIS_PRINT_RESET_CODES',
   ])
-  const deployment = new Set([...real].filter((name) => !directAccountMode.has(name)))
+  // The owner-authorized commercial SAST/DAST workflow lives in scripts/release,
+  // outside the runtime src tree. Its eight intentionally commented inputs are a
+  // real release-qualification configuration surface, never active app settings.
+  const releaseQualificationInputs = new Set([
+    'RAGAM_SAST_DAST_AUTHORIZED_BY', 'RAGAM_SAST_DAST_PRODUCT',
+    'RAGAM_SAST_DAST_LICENSE_CONFIRM', 'RAGAM_SAST_DAST_COMMAND',
+    'RAGAM_SAST_DAST_REPORT', 'RAGAM_SAST_DAST_REPORT_SHA256',
+    'RAGAM_SAST_DAST_COMMIT', 'RAGAM_SAST_DAST_CONFIRM',
+  ])
+  const deployment = new Set([...real, ...releaseQualificationInputs].filter((name) => !directAccountMode.has(name)))
 
   const invented = [...documented].filter((name) => !deployment.has(name))
   assert.deepEqual(invented, [], `.env.example documents variables not used by the active deployment: ${invented.join(', ')}`)
@@ -760,38 +769,38 @@ test('the status doc reports the real test totals', () => {
   // media workflow, the industry packs, the benchmark harness and the release verifier.
   // If a suite file is added or removed, the counts in docs/03-status.md and README.md have
   // to move with it.
-  assert.equal(count('services/core/test', /\.test\.mjs$/), 77)
+  assert.equal(count('services/core/test', /\.test\.mjs$/), 78)
   assert.equal(count('apps/web/test', /\.test\.mjs$/), 10)
   assert.equal(count('services/fabric/tests', /^test_.*\.py$/), 42)
 
   const status = squash(doc.status())
-  assert.ok(status.includes('**1072 tests**'), 'current core test inventory must be stated')
+  assert.ok(status.includes('**1086 tests**'), 'current core test inventory must be stated')
   assert.ok(status.includes('**823 tests**'), 'fabric test inventory must be stated')
   assert.ok(status.includes('**143 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('2038 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('2052 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('2038 tests: core 1072, web 143, fabric 823'),
+  assert.ok(squash(doc.readme()).includes('2052 tests: core 1086, web 143, fabric 823'),
     'README must state the current inventory as docs/03 does')
   assert.ok(squash(doc.readme()).includes('latest completed full CI run')
     && squash(doc.readme()).includes('41394564087')
     && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
-    && squash(doc.readme()).includes('The current tree has 2,038 tests (Core 1,072, Web 143, Fabric 823). The full Core suite passed 1,068/1,072 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 143/143 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv.')
+    && squash(doc.readme()).includes('The current tree has 2,052 tests (Core 1,086, Web 143, Fabric 823). The full Core suite passed 1,082/1,086 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 143/143 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv.')
     && squash(doc.readme()).includes('Full CI for this current tree is recorded in the pull-request checks and final engineering report')
     && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
   'README must distinguish the last full CI run from the current full local suite')
-  assert.ok(status.includes('(77 files'), 'the file count must move with the suite')
+  assert.ok(status.includes('(78 files'), 'the file count must move with the suite')
 
   const perComponent = [...doc.status().matchAll(/^### `[^`]+` [^(]*\((\d+) tests?\)/gm)].map((m) => Number(m[1]))
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
-  assert.ok(fromHeadings.includes(1072), `core heading must say 1072, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(1086), `core heading must say 1086, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(823), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(143), `web heading must say 143, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    2038,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 2038`,
+    2052,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 2052`,
   )
 })
 

@@ -1,0 +1,55 @@
+{
+  "schema": "ragam-release-manifest/1",
+  "version": "0.2.0",
+  "commit": "b53c8748a82946ac57b4471be177677258bcf4f5",
+  "producedAt": "2026-11-08T07:53:16.093Z",
+  "unsigned": true,
+  "signed": false,
+  "signingRequirement": {
+    "status": "BLOCKED",
+    "env": [
+      "RAGAM_RELEASE_SIGNING_KEY_ID",
+      "RAGAM_RELEASE_SIGNING_KEY_FILE"
+    ],
+    "workflow": "node scripts/release/sign-release.mjs --dir <out>",
+    "note": "An authorized signing key and independent gpg --verify are required. No key was generated or used."
+  },
+  "artifacts": [
+    {
+      "name": "ragam-source-0.2.0.tar.gz",
+      "bytes": 2718279,
+      "sha256": "94bb24e07a5ab20db7407d7cf49cd9ad9079103196009e1ad4dd020e2ff4710e"
+    },
+    {
+      "name": "ragam-web-0.2.0.tar.gz",
+      "bytes": 646873,
+      "sha256": "03affb534da321b861c545b65bda2864b12add98fc50dbd285d9a5bd740342d9"
+    },
+    {
+      "name": "sbom.cdx.json",
+      "bytes": 114784,
+      "sha256": "e5abd964d954626035e71fe554eed3f4a821b3fdcfbef8f21e3dc12a7eddfe7f"
+    },
+    {
+      "name": "provenance.json",
+      "bytes": 1886,
+      "sha256": "008386ffa8640d87d6a0757aee241e090e644c38ed955079d478990681cccbfc"
+    }
+  ],
+  "checksumFile": {
+    "name": "SHA256SUMS",
+    "entries": 4,
+    "sha256": "fc9f8e5c4b19f982bda50623afa52e93ecdf8d62f260293e5b94c944cc01425a"
+  },
+  "sbom": {
+    "name": "sbom.cdx.json",
+    "components": 340,
+    "sha256": "e5abd964d954626035e71fe554eed3f4a821b3fdcfbef8f21e3dc12a7eddfe7f"
+  },
+  "provenance": {
+    "name": "provenance.json",
+    "sha256": "008386ffa8640d87d6a0757aee241e090e644c38ed955079d478990681cccbfc"
+  },
+  "cleanCheckout": "git archive <commit> extracted into an empty temporary directory; no working-tree files are used",
+  "published": false
+}

@@ -1,0 +1,34 @@
+TAP version 13
+# Subtest: desktop web server is loopback-only and serves the SPA with safe asset headers
+ok 1 - desktop web server is loopback-only and serves the SPA with safe asset headers
+  ---
+  duration_ms: 65.073278
+  type: 'test'
+  ...
+# Subtest: desktop /api proxy preserves same-origin and CSRF headers for the loopback Core
+ok 2 - desktop /api proxy preserves same-origin and CSRF headers for the loopback Core
+  ---
+  duration_ms: 58.324578
+  type: 'test'
+  ...
+# Subtest: a stopped Core becomes a clear retryable 503, not a generic proxy 502
+ok 3 - a stopped Core becomes a clear retryable 503, not a generic proxy 502
+  ---
+  duration_ms: 19.841709
+  type: 'test'
+  ...
+# Subtest: desktop web server refuses encoded path traversal instead of serving outside its web root
+ok 4 - desktop web server refuses encoded path traversal instead of serving outside its web root
+  ---
+  duration_ms: 11.913302
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 278.475873

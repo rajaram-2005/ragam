@@ -298,8 +298,8 @@ PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs services/c
 The pinned archive includes the model manifests and checksum list. The full CI run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all 985 Core tests with the pinned Pro/Max artifacts and Python prerequisites. The Baidu Qianfan contract fixtures make no vendor calls. Without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-PATH="$PWD/.venv/bin:$PATH" npm test  # all three suites (2038 tests)
-npm run test:core                  # 1072
+PATH="$PWD/.venv/bin:$PATH" npm test  # all three suites (2052 tests)
+npm run test:core                  # 1086
 npm run test:web                   # 143
 npm run test:fabric                # 823 — needs numpy + pytest on the interpreter
 ```
@@ -359,7 +359,7 @@ when something else changes would not notice.
 
 | Job | What it proves |
 |---|---|
-| **Core service** | Current suite: 1072 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) is a historical CI result and does not establish a Klyvaron model release; Baidu Qianfan is covered by local contract fixtures. |
+| **Core service** | Current suite: 1086 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) is a historical CI result and does not establish a Klyvaron model release; Baidu Qianfan is covered by local contract fixtures. |
 | **Fabric** | 823 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 143 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docker Compose** | Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed: builds both images, starts Core/web/Caddy on loopback, checks local-workspace health and the provider catalogue with account creation disabled, then cold-backs up and restores the named volume and verifies workspace identity plus a SQLite history marker. Synthetic CI only: no live provider inference or persistent-deployment guarantee. |

@@ -1,0 +1,1969 @@
+{
+  "schema": "ragam-release-qualification/1",
+  "generatedAt": "2026-11-09T06:26:45.860Z",
+  "repository": "rajaram-2005/ragam",
+  "branch": "arena/d44183df-ragam",
+  "baselineCommit": "80ad8458fb039962dcaee6293dd451d1c6932416",
+  "version": "0.2.0",
+  "verdictBasis": "PASS requires recorded evidence; BLOCKED requires an exact unblock requirement; a NOT TESTED gate may become PASS only after the missing verification is actually executed and its evidence is recorded. No status is laundered by editing a verdict or checklist.",
+  "finalVerdict": "NOT RELEASE READY",
+  "releasePublished": false,
+  "publicationAuthorization": "Release publication requires separate explicit authorization from the repository owner.",
+  "summary": {
+    "totalGates": 71,
+    "PASS": 41,
+    "FAIL": 0,
+    "BLOCKED": 25,
+    "NOT TESTED": 1,
+    "NOT APPLICABLE": 4,
+    "mandatoryNonPass": 28,
+    "mandatoryNonPassIds": [
+      "L01",
+      "L02",
+      "M01",
+      "M02",
+      "M03",
+      "M06",
+      "T02",
+      "T04",
+      "E02",
+      "E03",
+      "S02",
+      "S03",
+      "S04",
+      "C02",
+      "C03",
+      "A05",
+      "A06",
+      "A08",
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "G02",
+      "G03",
+      "G04",
+      "G05",
+      "G06"
+    ]
+  },
+  "artifacts": {
+    "blockerRegister": "docs/release/01-blocker-register.md",
+    "repairReport": "docs/release/02-root-cause-repair.md",
+    "providers": "docs/release/provider-register.json",
+    "models": "docs/release/model-register.json",
+    "training": "docs/release/evidence/training-evidence.json",
+    "trainingWorker": "docs/release/evidence/training-worker-qualification.json",
+    "e2e": "docs/release/evidence/e2e-qualification.json",
+    "security": "docs/release/evidence/security-scan.json",
+    "manifest": "docs/release/artifacts/manifest.json",
+    "committedArtifacts": "docs/release/artifacts/",
+    "committedArtifactVerification": {
+      "checked": 4,
+      "pass": 4,
+      "fail": 0
+    }
+  },
+  "gates": [
+    {
+      "id": "B01",
+      "area": "baseline",
+      "name": "Latest repository state, commit, PRs and CI results inspected before modification",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "git status --short --branch; git rev-parse HEAD; gh pr list --state open; gh run list --branch main",
+          "artifact": "docs/release/evidence/baseline.json",
+          "runId": "42396395722"
+        }
+      ],
+      "notes": "Clean branch arena/d44183df-ragam at 80ad8458fb039962dcaee6293dd451d1c6932416; main CI 42396395722 and Desktop 42396395647 both success; open PRs: none."
+    },
+    {
+      "id": "B02",
+      "area": "baseline",
+      "name": "Initial release-blocker register with severity, root cause, dependencies and verification criteria",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/01-blocker-register.md"
+        }
+      ],
+      "unblock": "Publish docs/release/01-blocker-register.md."
+    },
+    {
+      "id": "B03",
+      "area": "baseline",
+      "name": "Capability inventory classified real / mocked / simulated / unavailable / incomplete",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/00-baseline.md"
+        }
+      ],
+      "unblock": "Publish docs/release/00-baseline.md."
+    },
+    {
+      "id": "B04",
+      "area": "baseline",
+      "name": "CI and Desktop packages pass on the pushed remediation branch",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "gh run list --branch arena/d44183df-ragam; gh run view <run>",
+          "artifact": "docs/release/evidence/ci-runs.json",
+          "runId": "42572046568, 42572046553, 42572053423, 42572053368",
+          "runCount": 4
+        }
+      ],
+      "notes": "Build/test/runtime CI only; 4 successful push/pull_request runs recorded. The skipped Klyvaron production evidence gate is fail-closed and is never counted as model evidence.",
+      "unblock": null
+    },
+    {
+      "id": "I01",
+      "area": "implementation",
+      "name": "Core unit, integration and contract suites",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "AETHERIS_PYTHON=.venv/bin/python node --test test/*.test.mjs test/klyvaron-release/*.test.mjs",
+          "log": "docs/release/evidence/final-core.tap",
+          "measured": {
+            "pass": 1082,
+            "fail": 0,
+            "tests": 1086
+          }
+        }
+      ],
+      "unblock": null
+    },
+    {
+      "id": "I02",
+      "area": "implementation",
+      "name": "Web unit and render suites",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node --test test/*.test.mjs (apps/web)",
+          "log": "docs/release/evidence/final-web.tap",
+          "measured": {
+            "pass": 143,
+            "fail": 0,
+            "tests": 143
+          }
+        }
+      ],
+      "unblock": null
+    },
+    {
+      "id": "I03",
+      "area": "implementation",
+      "name": "Fabric Python suite",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": ".venv/bin/python -m pytest -o addopts='' -q (services/fabric)",
+          "log": "docs/release/evidence/final-fabric.log",
+          "measured": {
+            "pass": 823,
+            "fail": 0,
+            "tests": 823
+          }
+        }
+      ],
+      "unblock": null
+    },
+    {
+      "id": "I04",
+      "area": "implementation",
+      "name": "Desktop local-server suite",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node --test apps/desktop/test/*.test.mjs",
+          "log": "docs/release/evidence/final-desktop.tap",
+          "measured": {
+            "pass": 4,
+            "fail": 0,
+            "tests": 4
+          }
+        }
+      ],
+      "unblock": null
+    },
+    {
+      "id": "I05",
+      "area": "implementation",
+      "name": "Measured release-check against documented suite totals",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node services/core/scripts/release-check.mjs --core N --web N --fabric N",
+          "log": "docs/release/evidence/final-release-check.log",
+          "bytes": 3856
+        }
+      ],
+      "unblock": "Run release-check.mjs with the measured totals and capture its output."
+    },
+    {
+      "id": "I06",
+      "area": "implementation",
+      "name": "Production web build",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "npm run web:build",
+          "log": "docs/release/evidence/final-web-build.log",
+          "bytes": 606
+        }
+      ],
+      "unblock": "Run npm run web:build and capture its output."
+    },
+    {
+      "id": "I07",
+      "area": "implementation",
+      "name": "Static analysis (node --check on every module) and security scan",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node scripts/release/security-scan.mjs --out docs/release/evidence/security-scan.json",
+          "artifact": "docs/release/evidence/security-scan.json",
+          "measured": {
+            "pass": 9,
+            "fail": 0
+          }
+        }
+      ],
+      "unblock": "Run scripts/release/security-scan.mjs and keep its JSON output."
+    },
+    {
+      "id": "I08",
+      "area": "implementation",
+      "name": "Dependency advisory scans (web, desktop, Python)",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "npm audit --omit=dev --audit-level=high (web, desktop); .venv/bin/python services/fabric/scripts/audit_python_deps.py",
+          "log": "docs/release/evidence/final-npm-audit-web.log"
+        },
+        {
+          "log": "docs/release/evidence/final-npm-audit-desktop.log"
+        },
+        {
+          "log": "docs/release/evidence/final-python-advisory.log"
+        }
+      ],
+      "unblock": "Run all three advisory checks and capture their logs."
+    },
+    {
+      "id": "I09",
+      "area": "implementation",
+      "name": "Authentication, authorization, input validation, injection and artifact-path regression suites",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node --test test/*.test.mjs (services/core)",
+          "log": "docs/release/evidence/final-core.tap",
+          "testId": "accounts/online/plugins/mcp/media/http-body suites"
+        }
+      ],
+      "unblock": "Run the core suite; its authz, CSRF, path traversal and input validation tests are the evidence."
+    },
+    {
+      "id": "I10",
+      "area": "implementation",
+      "name": "Streaming, job lifecycle, error handling and resource management (local/isolated scope)",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "measured": {
+            "pass": 17,
+            "fail": 0
+          },
+          "scope": "isolated test service and in-process registries; not live vendor inference"
+        }
+      ],
+      "unblock": "Run scripts/release/e2e-qualification.mjs."
+    },
+    {
+      "id": "I11",
+      "area": "implementation",
+      "name": "Clean-checkout Python runtime reproducibility (pinned lock + repo venv fallback)",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "services/fabric/requirements.lock"
+        },
+        {
+          "command": "node --test test/release-qualification.test.mjs",
+          "log": "docs/release/evidence/final-core.tap"
+        }
+      ],
+      "unblock": "Keep the pinned lock and run the regression suite."
+    },
+    {
+      "id": "I12",
+      "area": "implementation",
+      "name": "Privacy-conscious telemetry with a documented disable method",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "services/core/src/telemetry/monitor.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/security-scan.json"
+        },
+        {
+          "log": "docs/release/evidence/final-core.tap"
+        }
+      ],
+      "unblock": "Implement telemetry with allowlisted fields and AETHERIS_TELEMETRY_ENABLED=false, and run its regression tests."
+    },
+    {
+      "id": "I13",
+      "area": "implementation",
+      "name": "Misleading capability indicators removed (\"ready\" no longer implies live qualification)",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "apps/web/src/components/ProviderCatalogue.jsx"
+        },
+        {
+          "log": "docs/release/evidence/final-web.tap"
+        }
+      ],
+      "unblock": "Restore the explicit \"contract-tested; live vendor qualification pending\" wording."
+    },
+    {
+      "id": "I14",
+      "area": "implementation",
+      "name": "Backup and restore verification (CI Docker Compose cold backup/restore smoke)",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "runId": "42396395722",
+          "command": "CI job \"Docker Compose build, health, persistence and restore smoke\"",
+          "artifact": ".github/workflows/ci.yml",
+          "scope": "synthetic local single-user workspace; no production data"
+        }
+      ],
+      "unblock": null,
+      "notes": "No production backup/restore was performed; production restore remains BLOCKED under D05."
+    },
+    {
+      "id": "L01",
+      "area": "providers",
+      "name": "Live call to every supported provider with an authorized test/staging credential",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "requiresLiveCredential": true,
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "measured": {
+            "providers": 46,
+            "liveCalls": 0
+          }
+        }
+      ],
+      "liveCredentialEvidence": {
+        "callLog": null
+      },
+      "unblock": "For each of the 45 supported providers, supply an explicitly authorized test/staging credential via the exact config field in docs/release/provider-register.json (self-hosted: PUT /api/providers/{id} apiKey; hosted BYOK: PUT /hosted/provider apiKey plus SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL), plus owner authorization for one real request per provider. No production key may be used."
+    },
+    {
+      "id": "L02",
+      "area": "providers",
+      "name": "Live success schemas, invalid credentials, rate limits, timeouts, network failure, malformed responses, unavailability and retry behaviour",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "requiresLiveCredential": true,
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json"
+        }
+      ],
+      "liveCredentialEvidence": {
+        "callLog": null
+      },
+      "unblock": "Requires the same authorized test/staging credentials as L01 and a recorded per-provider call log including each error case. Isolated-service E2E covers only 401 and malformed-response refusal locally."
+    },
+    {
+      "id": "L03",
+      "area": "providers",
+      "name": "Credentials never exposed in frontend bundles or logs",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "npm run web:build; CI step \"Verify the bundle carries no backend URL or credential\"",
+          "log": "docs/release/evidence/final-web-build.log",
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "testId": "chat.error_handling_and_credential_non_exposure"
+        }
+      ],
+      "notes": "Static bundle check plus isolated 401 error-path check. Live credential handling is still covered by L01/L02."
+    },
+    {
+      "id": "L04",
+      "area": "providers",
+      "name": "Intended-provider routing and no silent model substitution",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "testId": "chat.real_inference_and_intended_routing, chat.model_selection_no_substitution",
+          "scope": "isolated test service"
+        }
+      ],
+      "unblock": "Run the E2E harness. Live-vendor routing still requires L01."
+    },
+    {
+      "id": "L05",
+      "area": "providers",
+      "name": "Official endpoint and documented API-contract inventory derived from the running code",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json",
+          "command": "node scripts/release/generate-provider-register.mjs",
+          "measured": {
+            "providers": 46
+          }
+        }
+      ],
+      "notes": "Each row records the official docs URL and the default endpoint exported by its wire adapter, or states that the endpoint is operator-supplied. Live endpoint verification is L01."
+    },
+    {
+      "id": "M01",
+      "area": "models",
+      "name": "Klyvaron lite: architecture, tokenizer, licensed weights, SHA-256, runtime load, real inference, latency/resources/errors",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/model-register.json",
+          "measured": {
+            "weightFiles": 0,
+            "operationalModels": 0
+          }
+        }
+      ],
+      "unblock": "Supply an authorized, licensed weight payload for Klyvaron lite (expected filenames/digests in docs/release/model-register.json), a trusted download source with a SHA-256 manifest, compatible CPU/GPU hardware and an installation procedure outside Git; then record real load, inference, latency, resource and error logs. No metadata-only model may be classified operational."
+    },
+    {
+      "id": "M02",
+      "area": "models",
+      "name": "Klyvaron pro: architecture, tokenizer, licensed weights, SHA-256, runtime load, real inference, latency/resources/errors",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/model-register.json",
+          "measured": {
+            "weightFiles": 0,
+            "operationalModels": 0
+          }
+        }
+      ],
+      "unblock": "Supply an authorized, licensed weight payload for Klyvaron pro (expected filenames/digests in docs/release/model-register.json), a trusted download source with a SHA-256 manifest, compatible CPU/GPU hardware and an installation procedure outside Git; then record real load, inference, latency, resource and error logs. No metadata-only model may be classified operational."
+    },
+    {
+      "id": "M03",
+      "area": "models",
+      "name": "Klyvaron max: architecture, tokenizer, licensed weights, SHA-256, runtime load, real inference, latency/resources/errors",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/model-register.json",
+          "measured": {
+            "weightFiles": 0,
+            "operationalModels": 0
+          }
+        }
+      ],
+      "unblock": "Supply an authorized, licensed weight payload for Klyvaron max (expected filenames/digests in docs/release/model-register.json), a trusted download source with a SHA-256 manifest, compatible CPU/GPU hardware and an installation procedure outside Git; then record real load, inference, latency, resource and error logs. No metadata-only model may be classified operational."
+    },
+    {
+      "id": "M04",
+      "area": "models",
+      "name": "Model identity and commercial subscription tier are not confused; Chat selection is provider-model based",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/model-register.json"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "testId": "chat.model_selection_no_substitution"
+        },
+        {
+          "log": "docs/release/evidence/final-core.tap",
+          "testId": "services/core/test/online.test.mjs tier routes refused with 410"
+        }
+      ],
+      "notes": "Lite/Pro/Max are processing/resource profiles of one shared model-independent engine; no first-party weights are loaded."
+    },
+    {
+      "id": "M05",
+      "area": "models",
+      "name": "Unavailable models and unconfigured providers are reported as unavailable, never substituted",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "testId": "chat.model_selection_no_substitution (409 model_unavailable), image/video no_fake_success (503 provider_not_configured)"
+        }
+      ],
+      "unblock": "Run the E2E harness."
+    },
+    {
+      "id": "M06",
+      "area": "models",
+      "name": "First-party multimodal (image/audio/video) model workflows",
+      "mandatory": true,
+      "status": "NOT APPLICABLE",
+      "justification": "This release ships no first-party multimodal weights. Native multimodal model requests are explicitly refused with 410 model_independent_architecture; third-party image/video wires are provider integrations, not first-party Klyvaron models.",
+      "evidence": [
+        {
+          "artifact": "docs/release/model-register.json"
+        },
+        {
+          "log": "docs/release/evidence/final-core.tap"
+        }
+      ]
+    },
+    {
+      "id": "T01",
+      "area": "training",
+      "name": "Real local parameter updates, atomic checkpoint, interruption recovery, resume, before/after evaluation and bit-identical rollback",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/training-evidence.json",
+          "measured": {
+            "pass": 11,
+            "fail": 0
+          },
+          "scope": "tiny pure-NumPy from-scratch smoke model on repository-owned text; NOT a Klyvaron foundation model"
+        }
+      ],
+      "unblock": "Run scripts/release/verify-training-evidence.py with the recorded training segments."
+    },
+    {
+      "id": "T02",
+      "area": "training",
+      "name": "User-consented training on a user-owned private dataset with dataset ownership validation",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/training-evidence.json",
+          "note": "Only an operator-initiated synthetic repository corpus was used; no user dataset was supplied or authorized."
+        }
+      ],
+      "unblock": "Explicit user consent, an owned/validated private dataset, its fingerprint and a recorded authorization record. None was provided; no private dataset may be ingested without it."
+    },
+    {
+      "id": "T03",
+      "area": "training",
+      "name": "SIGTERM cancellation, atomic checkpoint resume and full worker failure handling with the real JAX/NumPy trainer",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node scripts/release/verify-training-worker-cancellation.mjs",
+          "artifact": "docs/release/evidence/training-worker-qualification.json",
+          "log": "docs/release/evidence/training-worker-cancellation.log",
+          "resumeLog": "docs/release/evidence/training-worker-resume.log",
+          "failureLog": "docs/release/evidence/training-worker-failure.log",
+          "measured": {
+            "pass": 16,
+            "fail": 0,
+            "checkpointSha256": "e6bc5d2a9253583b70f76de15290ff6548888dcc5fb267cf1e31ec71cb9539a0",
+            "resumeStartStep": 1,
+            "resumeObservedStep": 3,
+            "resumeCheckpointSha256": "02bf5c4a0317f6b4695758b11f3957cb637c5b55f54e1eca0c8ee01b1b653a41",
+            "cancellationExitCode": 130,
+            "resumeExitCode": 130,
+            "failureExitCode": 1
+          },
+          "scope": "real local process; synthetic corpus; cancellation/resume/lifecycle evidence only, NOT a production Klyvaron model or foundation-training claim"
+        }
+      ],
+      "unblock": null
+    },
+    {
+      "id": "T04",
+      "area": "training",
+      "name": "Klyvaron Pro/Max foundation or adapter training",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/model-register.json"
+        }
+      ],
+      "unblock": "Requires installed licensed weights, a documented architecture, compatible hardware, explicit consent and a reviewed training implementation. No foundation-model training claim is made."
+    },
+    {
+      "id": "E01",
+      "area": "e2e",
+      "name": "Five-area E2E through the real Core server and in-process registries (labelled isolated test service)",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node scripts/release/e2e-qualification.mjs",
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "measured": {
+            "pass": 17,
+            "fail": 0,
+            "liveThirdPartyCalls": 0
+          }
+        }
+      ],
+      "notes": "Chat, Image, Video, Plugins and MCP; each result records its mode. Live vendor calls: 0."
+    },
+    {
+      "id": "E02",
+      "area": "e2e",
+      "name": "Five-area E2E with genuine live third-party providers and real generated video artifacts",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "requiresLiveCredential": true,
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json"
+        }
+      ],
+      "liveCredentialEvidence": {
+        "callLog": null
+      },
+      "unblock": "Authorized live/staging provider credentials for Chat, Image and Video plus owner approval; then rerun the five-area journeys against the real services and capture artifacts and provenance."
+    },
+    {
+      "id": "E03",
+      "area": "e2e",
+      "name": "Remote MCP server startup, timeouts and remote error recovery",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json",
+          "note": "In-process MCP registry returned 0 resources and 0 prompts; no remote server configured."
+        }
+      ],
+      "unblock": "An authorized remote MCP test server with tools, resources and prompts, plus a recorded timeout/reconnect run."
+    },
+    {
+      "id": "S01",
+      "area": "security",
+      "name": "Secret scan, static syntax, deployment config and telemetry privacy checks",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node scripts/release/security-scan.mjs --out docs/release/evidence/security-scan.json",
+          "artifact": "docs/release/evidence/security-scan.json",
+          "measured": {
+            "pass": 9,
+            "fail": 0,
+            "trackedFiles": 663
+          }
+        }
+      ],
+      "unblock": "Run the security scan."
+    },
+    {
+      "id": "S02",
+      "area": "security",
+      "name": "Commercial SAST/DAST product scan",
+      "mandatory": true,
+      "status": "NOT TESTED",
+      "evidence": [
+        {
+          "command": "npm run release:sast-dast (without owner authorization/license)",
+          "log": "docs/release/evidence/final-commercial-sast-dast-refusal.log",
+          "note": "exit 2; no scan was run and no evidence was fabricated"
+        },
+        {
+          "artifact": "scripts/release/commercial-sast-dast.mjs",
+          "note": "fail-closed owner-authorized workflow; no tool or license configured"
+        },
+        {
+          "artifact": "docs/release/evidence/security-scan.json",
+          "note": "outOfScope records this explicitly"
+        }
+      ],
+      "unblock": "Provide an owner-authorized commercial SAST/DAST product/license and set RAGAM_SAST_DAST_AUTHORIZED_BY, RAGAM_SAST_DAST_PRODUCT, RAGAM_SAST_DAST_LICENSE_CONFIRM=YES, RAGAM_SAST_DAST_COMMAND, RAGAM_SAST_DAST_REPORT (outside the repository), RAGAM_SAST_DAST_REPORT_SHA256, RAGAM_SAST_DAST_COMMIT=<exact HEAD> and RAGAM_SAST_DAST_CONFIRM=YES. Run the licensed tool against the exact commit, then npm run release:sast-dast; the normalized report must record 0 critical/high findings. No tool or license is configured in this repository."
+    },
+    {
+      "id": "S03",
+      "area": "security",
+      "name": "Live third-party penetration testing and provider-side attack cases",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "requiresLiveCredential": true,
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json"
+        }
+      ],
+      "liveCredentialEvidence": {
+        "callLog": null
+      },
+      "unblock": "Authorized test/staging credentials plus explicit owner permission to probe each provider endpoint."
+    },
+    {
+      "id": "S04",
+      "area": "security",
+      "name": "Production database permissions and RLS verification",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/baseline.json",
+          "note": "No staging Supabase project or credentials were provided."
+        }
+      ],
+      "unblock": "An isolated staging Supabase project with the migration applied and a read-only verification of RLS policies."
+    },
+    {
+      "id": "S05",
+      "area": "security",
+      "name": "API rate-limit, request-capacity and CSRF/origin enforcement",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "log": "docs/release/evidence/final-core.tap",
+          "testId": "online.test.mjs request_capacity / csrf_rejected / origin_rejected"
+        },
+        {
+          "artifact": "docs/release/evidence/e2e-qualification.json"
+        }
+      ],
+      "unblock": "Run the core suite and E2E harness."
+    },
+    {
+      "id": "S06",
+      "area": "security",
+      "name": "Logging and privacy review",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "services/core/src/telemetry/monitor.mjs"
+        },
+        {
+          "artifact": "docs/release/evidence/security-scan.json"
+        }
+      ],
+      "unblock": "Keep the allowlisted-field telemetry module and rerun the scan."
+    },
+    {
+      "id": "C01",
+      "area": "clients",
+      "name": "Officially supported mobile/CLI interfaces established from the repository",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/08-mobile-cli.md"
+        },
+        {
+          "command": "find apps -maxdepth 1 -type d; git ls-files | grep -E \"(mobile|cli)\" || true",
+          "artifact": "docs/release/evidence/baseline.json"
+        }
+      ],
+      "unblock": "Publish the supported-interface inventory."
+    },
+    {
+      "id": "C02",
+      "area": "clients",
+      "name": "Mobile client installation, auth, connectivity, core workflows, interruption and error reporting",
+      "mandatory": true,
+      "status": "NOT APPLICABLE",
+      "justification": "No mobile application exists in this repository (no apps/mobile, Android, iOS or React Native source). Marking a nonexistent client qualified would be a fabricated result.",
+      "evidence": [
+        {
+          "artifact": "docs/release/08-mobile-cli.md"
+        },
+        {
+          "artifact": "docs/release/evidence/baseline.json"
+        }
+      ]
+    },
+    {
+      "id": "C03",
+      "area": "clients",
+      "name": "CLI client installation, auth, connectivity, core workflows, interruption and error reporting",
+      "mandatory": true,
+      "status": "NOT APPLICABLE",
+      "justification": "No CLI product exists. services/core/bin and scripts/ are operator/worker entrypoints and PowerShell launchers, not a supported end-user CLI client; they are not marked as such.",
+      "evidence": [
+        {
+          "artifact": "docs/release/08-mobile-cli.md"
+        }
+      ]
+    },
+    {
+      "id": "A01",
+      "area": "artifacts",
+      "name": "Declared semantic version, exact source commit and clean-checkout build",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node scripts/release/build-release.mjs --out build/release/0.2.0",
+          "log": "docs/release/evidence/final-artifact-build.log",
+          "bytes": 316
+        },
+        {
+          "artifact": "docs/release/artifacts/manifest.json",
+          "measured": {
+            "version": "0.2.0",
+            "commit": "b53c8748a82946ac57b4471be177677258bcf4f5",
+            "artifactsVerified": 4
+          }
+        },
+        {
+          "artifact": "docs/release/artifacts/provenance.json"
+        }
+      ],
+      "unblock": "Commit all source changes, build from a clean checkout, and retain the verified committed artifact set."
+    },
+    {
+      "id": "A02",
+      "area": "artifacts",
+      "name": "Pinned dependencies and generated CycloneDX SBOM",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/artifacts/sbom.cdx.json"
+        },
+        {
+          "artifact": "services/fabric/requirements.lock"
+        },
+        {
+          "artifact": "docs/release/artifacts/SHA256SUMS",
+          "note": "SBOM digest independently matched the manifest and checksum file"
+        }
+      ],
+      "unblock": "Generate the SBOM from the committed lockfiles and retain its verified committed copy."
+    },
+    {
+      "id": "A03",
+      "area": "artifacts",
+      "name": "Release artifacts generated and staged (source archive, web bundle, manifest, SBOM, provenance)",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/artifacts/manifest.json"
+        },
+        {
+          "artifact": "docs/release/artifacts/ragam-source-0.2.0.tar.gz"
+        },
+        {
+          "artifact": "docs/release/artifacts/ragam-web-0.2.0.tar.gz"
+        },
+        {
+          "artifact": "docs/release/artifacts/sbom.cdx.json"
+        },
+        {
+          "artifact": "docs/release/artifacts/provenance.json"
+        },
+        {
+          "log": "docs/release/evidence/final-artifact-build.log",
+          "bytes": 316
+        }
+      ],
+      "unblock": "Run build-release.mjs and retain the four verified artifact files in docs/release/artifacts/."
+    },
+    {
+      "id": "A04",
+      "area": "artifacts",
+      "name": "SHA-256 checksums generated and verified independently with sha256sum -c",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "cd docs/release/artifacts && sha256sum -c SHA256SUMS",
+          "log": "docs/release/evidence/final-committed-artifacts-check.log",
+          "bytes": 95
+        },
+        {
+          "command": "node scripts/release/verify-release.mjs --dir docs/release/artifacts",
+          "log": "docs/release/evidence/final-artifact-verify.log",
+          "bytes": 1116
+        },
+        {
+          "artifact": "docs/release/artifacts/SHA256SUMS",
+          "measured": {
+            "okLines": 4,
+            "manifestMatches": 4,
+            "checksumMatches": 4
+          }
+        }
+      ],
+      "unblock": "Run sha256sum -c against the committed SHA256SUMS and retain the measured log."
+    },
+    {
+      "id": "A05",
+      "area": "artifacts",
+      "name": "Cryptographic signature produced with an authorized signing key",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "command": "node scripts/release/sign-release.mjs --dir build/release/0.2.0 (without authorized key)",
+          "log": "docs/release/evidence/final-signing-refusal.log",
+          "bytes": 534
+        },
+        {
+          "artifact": "docs/release/artifacts/manifest.json"
+        }
+      ],
+      "unblock": "Provide an authorized signing key outside the repository and set RAGAM_RELEASE_SIGNING_KEY_ID, RAGAM_RELEASE_SIGNING_KEY_FILE, RAGAM_RELEASE_SIGNING_AUTHORIZED_BY and RAGAM_RELEASE_SIGNING_CONFIRM=YES. The implemented workflow refuses without all four and never generates a key."
+    },
+    {
+      "id": "A06",
+      "area": "artifacts",
+      "name": "Independent signature verification (gpg --verify)",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "scripts/release/sign-release.mjs"
+        },
+        {
+          "artifact": "docs/release/artifacts/manifest.json"
+        }
+      ],
+      "unblock": "Requires A05. No signature and no private key were generated or committed; verification cannot be performed."
+    },
+    {
+      "id": "A07",
+      "area": "artifacts",
+      "name": "Build provenance recorded (commit, tree, lockfile digests, artifact digests, reproducibility strategy)",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "docs/release/artifacts/provenance.json"
+        },
+        {
+          "artifact": "docs/release/artifacts/manifest.json",
+          "measured": {
+            "artifactsVerified": 4
+          }
+        }
+      ],
+      "unblock": "Generate provenance from the clean checkout and retain its verified committed copy."
+    },
+    {
+      "id": "A08",
+      "area": "artifacts",
+      "name": "Artifacts stored in the intended published release location",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/artifacts/manifest.json",
+          "note": "Committed as qualification evidence only; no GitHub Release, registry or distribution channel was used."
+        }
+      ],
+      "unblock": "An owner-authorized release destination (GitHub Release / registry) and explicit publication approval. The committed files are evidence, not a publication."
+    },
+    {
+      "id": "A09",
+      "area": "artifacts",
+      "name": "Release publication",
+      "mandatory": false,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/12-final-verdict.md"
+        }
+      ],
+      "unblock": "Separate explicit authorization from the repository owner after all mandatory gates pass. No publication was performed."
+    },
+    {
+      "id": "A10",
+      "area": "artifacts",
+      "name": "Byte-identical rebuild of both artifacts from the same recorded commit",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node scripts/release/build-release.mjs --out build/release/0.2.0-repro --allow-dirty; sha256 comparison",
+          "log": "docs/release/evidence/final-reproducibility.log",
+          "artifact": "docs/release/artifacts/provenance.json"
+        },
+        {
+          "artifact": "docs/release/artifacts/SHA256SUMS"
+        }
+      ],
+      "unblock": null
+    },
+    {
+      "id": "A11",
+      "area": "artifacts",
+      "name": "Committed artifact set verifies in place with sha256sum -c",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "cd docs/release/artifacts && sha256sum -c SHA256SUMS",
+          "log": "docs/release/evidence/final-committed-artifacts-check.log",
+          "bytes": 95
+        },
+        {
+          "artifact": "docs/release/artifacts/SHA256SUMS",
+          "measured": {
+            "okLines": 4,
+            "manifestMatches": 4,
+            "checksumMatches": 4
+          }
+        },
+        {
+          "artifact": "docs/release/artifacts/manifest.json"
+        }
+      ],
+      "unblock": null
+    },
+    {
+      "id": "D01",
+      "area": "deployment",
+      "name": "Clean isolated staging deployment, environment configuration, migrations and health checks",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/10-staging-deployment.md"
+        }
+      ],
+      "unblock": "An isolated staging environment (host, DNS, TLS, database, storage volume, monitoring, and a previous known-good version) plus explicit owner approval to deploy and roll back. No staging environment exists in this repository or sandbox."
+    },
+    {
+      "id": "D02",
+      "area": "deployment",
+      "name": "Staging authentication and real provider connectivity",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "requiresLiveCredential": true,
+      "evidence": [
+        {
+          "artifact": "docs/release/provider-register.json"
+        }
+      ],
+      "liveCredentialEvidence": {
+        "callLog": null
+      },
+      "unblock": "An isolated staging environment (host, DNS, TLS, database, storage volume, monitoring, and a previous known-good version) plus explicit owner approval to deploy and roll back. No staging environment exists in this repository or sandbox. Also requires the authorized test/staging provider credentials from L01."
+    },
+    {
+      "id": "D03",
+      "area": "deployment",
+      "name": "Staging model availability and persistent storage",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/model-register.json"
+        }
+      ],
+      "unblock": "An isolated staging environment (host, DNS, TLS, database, storage volume, monitoring, and a previous known-good version) plus explicit owner approval to deploy and roll back. No staging environment exists in this repository or sandbox. Also requires installed licensed weights (M01–M03)."
+    },
+    {
+      "id": "D04",
+      "area": "deployment",
+      "name": "Staging monitoring and deployment health",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/10-staging-deployment.md"
+        }
+      ],
+      "unblock": "An isolated staging environment (host, DNS, TLS, database, storage volume, monitoring, and a previous known-good version) plus explicit owner approval to deploy and roll back. No staging environment exists in this repository or sandbox."
+    },
+    {
+      "id": "D05",
+      "area": "deployment",
+      "name": "Staging backup/restore, failure recovery and tested rollback to the previous known-good version",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/10-staging-deployment.md"
+        }
+      ],
+      "unblock": "An isolated staging environment (host, DNS, TLS, database, storage volume, monitoring, and a previous known-good version) plus explicit owner approval to deploy and roll back. No staging environment exists in this repository or sandbox. A rollback test must actually deploy the previous version and verify health; documentation alone is not evidence."
+    },
+    {
+      "id": "D06",
+      "area": "deployment",
+      "name": "Production deployment",
+      "mandatory": false,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/10-staging-deployment.md"
+        }
+      ],
+      "unblock": "Separate explicit owner approval after staging qualification. No production deployment or destructive cleanup was performed."
+    },
+    {
+      "id": "G01",
+      "area": "governance",
+      "name": "Actual repository settings inspected and inaccessible settings reported",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "gh api repos/rajaram-2005/ragam; gh api repos/rajaram-2005/ragam/rulesets; gh api repos/rajaram-2005/ragam/environments",
+          "artifact": "docs/release/evidence/baseline.json",
+          "runId": "42396395722"
+        }
+      ],
+      "notes": "Default branch main, public, merge/squash/rebase allowed, delete_branch_on_merge=false, rulesets [], environments 0. Branch protection and Actions secrets returned HTTP 403."
+    },
+    {
+      "id": "G02",
+      "area": "governance",
+      "name": "Required CI checks and protected release branches verified",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/baseline.json",
+          "note": "GET /branches/main/protection returned HTTP 403"
+        }
+      ],
+      "unblock": "A token with administration:read (or repo owner access) to read branch protection; alternatively a signed statement from the repository owner. Branch protection must not be weakened to obtain a result."
+    },
+    {
+      "id": "G03",
+      "area": "governance",
+      "name": "Required reviews and merge restrictions verified",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/baseline.json"
+        }
+      ],
+      "unblock": "Same elevated permission as G02; rulesets API returned [] but that does not prove no protection is configured."
+    },
+    {
+      "id": "G04",
+      "area": "governance",
+      "name": "Secret protection and release permissions verified",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/baseline.json",
+          "note": "GET /actions/secrets returned HTTP 403"
+        }
+      ],
+      "unblock": "Elevated permission to list Actions secrets and release permissions; no secret values may be read."
+    },
+    {
+      "id": "G05",
+      "area": "governance",
+      "name": "Signed commit/tag requirements verified",
+      "mandatory": true,
+      "status": "BLOCKED",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/baseline.json"
+        }
+      ],
+      "unblock": "Elevated permission or an owner statement about signed-commit/tag requirements."
+    },
+    {
+      "id": "G06",
+      "area": "governance",
+      "name": "Deployment approval controls",
+      "mandatory": true,
+      "status": "NOT APPLICABLE",
+      "justification": "GET /environments returned total_count 0, so there are no GitHub Environments and therefore no environment-level approval control to verify. This is an observed absence, not an assumed protection.",
+      "evidence": [
+        {
+          "artifact": "docs/release/evidence/baseline.json"
+        }
+      ]
+    },
+    {
+      "id": "TM01",
+      "area": "telemetry",
+      "name": "Privacy-conscious health, API failure, provider, model-load, inference latency, worker, job and deployment counters",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "artifact": "services/core/src/telemetry/monitor.mjs"
+        },
+        {
+          "log": "docs/release/evidence/final-core.tap",
+          "testId": "release-qualification.test.mjs telemetry tests"
+        }
+      ],
+      "notes": "In-memory counters only; no transmission. Live provider-availability and production deployment-health feeds remain BLOCKED under L01/D04."
+    },
+    {
+      "id": "TM02",
+      "area": "telemetry",
+      "name": "Clear method for disabling optional telemetry",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "AETHERIS_TELEMETRY_ENABLED=false",
+          "artifact": ".env.example"
+        },
+        {
+          "artifact": "docs/release/07-security-and-telemetry.md"
+        }
+      ],
+      "unblock": null
+    },
+    {
+      "id": "RG01",
+      "area": "release_gate",
+      "name": "Machine-readable qualification report with PASS/FAIL/BLOCKED/NOT TESTED/NOT APPLICABLE and no laundered statuses",
+      "mandatory": true,
+      "status": "PASS",
+      "evidence": [
+        {
+          "command": "node scripts/release/generate-qualification.mjs; node --test test/release-qualification.test.mjs",
+          "artifact": "docs/release/qualification.json"
+        }
+      ],
+      "notes": "Generated from committed evidence files; a clean-checkout regression test regenerates the report without any ignored build/ directory and requires identical gate statuses. Validated by services/core/test/release-qualification.test.mjs."
+    }
+  ],
+  "providers": [
+    {
+      "id": "ollama",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/ollama body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Ollama (OpenAI-compatible) (never a production key) entered via PUT /api/providers/ollama body fields: baseUrl, apiKey. This connection is a local/self-hosted runtime with no vendor key: start it on an operator-trusted loopback/private origin and configure it via PUT /api/providers/ollama body fields: baseUrl, apiKey. Owner authorization to make one real request to https://api.openai.com/v1 (https://github.com/ollama/ollama/blob/main/docs/openai.md), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "llamacpp",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/llamacpp body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for llama.cpp server (never a production key) entered via PUT /api/providers/llamacpp body fields: baseUrl, apiKey. This connection is a local/self-hosted runtime with no vendor key: start it on an operator-trusted loopback/private origin and configure it via PUT /api/providers/llamacpp body fields: baseUrl, apiKey. Owner authorization to make one real request to https://api.openai.com/v1 (https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "anthropic",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/anthropic body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Anthropic Claude (never a production key) entered via PUT /api/providers/anthropic body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"anthropic\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.anthropic.com/v1 (https://docs.anthropic.com/en/api/messages), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "gemini",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/gemini body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Google Gemini (never a production key) entered via PUT /api/providers/gemini body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"gemini\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://generativelanguage.googleapis.com/v1beta (https://ai.google.dev/api/generate-content), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "cohere",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/cohere body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Cohere (never a production key) entered via PUT /api/providers/cohere body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"cohere\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.cohere.com (https://docs.cohere.com/reference/chat), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "azure-openai",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/azure-openai body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Azure OpenAI (never a production key) entered via PUT /api/providers/azure-openai body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"azure-openai\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "vertex",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/vertex body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Google Vertex AI (never a production key) entered via PUT /api/providers/vertex body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"vertex\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "bedrock",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/bedrock body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Amazon Bedrock (never a production key) entered via PUT /api/providers/bedrock body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"bedrock\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "openai",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/openai body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for OpenAI (never a production key) entered via PUT /api/providers/openai body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"openai\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.openai.com/v1 (https://developers.openai.com/api/reference/chat-completions/overview), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "baidu-qianfan",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/baidu-qianfan body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Baidu Qianfan (never a production key) entered via PUT /api/providers/baidu-qianfan body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"baidu-qianfan\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://qianfan.baidubce.com/v2 (https://cloud.baidu.com/doc/qianfan-api/s/3m7of64lb), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "alibaba-model-studio",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/alibaba-model-studio body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Alibaba Cloud Model Studio (never a production key) entered via PUT /api/providers/alibaba-model-studio body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"alibaba-model-studio\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://dashscope-intl.aliyuncs.com (https://help.aliyun.com/en/model-studio/compatibility-of-openai-with-dashscope), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "openrouter",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/openrouter body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for OpenRouter (never a production key) entered via PUT /api/providers/openrouter body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"openrouter\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://openrouter.ai/api/v1 (https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "mistral",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/mistral body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Mistral AI (never a production key) entered via PUT /api/providers/mistral body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"mistral\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.mistral.ai/v1 (https://docs.mistral.ai/api/endpoint/chat/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "deepseek",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/deepseek body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for DeepSeek (never a production key) entered via PUT /api/providers/deepseek body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"deepseek\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.deepseek.com (https://api-docs.deepseek.com/api/create-chat-completion/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "cerebras",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/cerebras body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Cerebras Inference (never a production key) entered via PUT /api/providers/cerebras body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"cerebras\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.cerebras.ai/v1 (https://inference-docs.cerebras.ai/api-reference/chat-completions), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "deepinfra",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/deepinfra body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for DeepInfra (never a production key) entered via PUT /api/providers/deepinfra body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"deepinfra\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.deepinfra.com/v1/openai (https://docs.deepinfra.com/api-reference/introduction), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "minimax",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/minimax body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for MiniMax (never a production key) entered via PUT /api/providers/minimax body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"minimax\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.minimax.io/v1 (https://platform.minimax.io/docs/api-reference/text-openai-api), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "siliconflow",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/siliconflow body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for SiliconFlow (never a production key) entered via PUT /api/providers/siliconflow body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"siliconflow\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.siliconflow.com/v1 (https://docs.siliconflow.com/en/api-reference/models/get-model-list), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "moonshot",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/moonshot body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Moonshot AI (Kimi API) (never a production key) entered via PUT /api/providers/moonshot body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"moonshot\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.moonshot.ai/v1 (https://platform.kimi.ai/docs/api/chat), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "sarvam",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/sarvam body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Sarvam AI Open-Source Models (never a production key) entered via PUT /api/providers/sarvam body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"sarvam\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.sarvam.ai/v2 (https://docs.sarvam.ai/api-reference/chat/chat-completions-v2), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "groq",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/groq body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Groq (never a production key) entered via PUT /api/providers/groq body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"groq\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.groq.com/openai/v1 (https://console.groq.com/docs/api-reference), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "together",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/together body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Together AI (never a production key) entered via PUT /api/providers/together body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"together\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.together.xyz/v1 (https://docs.together.ai/reference/chat-completions), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "fireworks",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/fireworks body fields: baseUrl, apiKey, options.accountId",
+      "unblock": "An explicitly authorized test/staging credential for Fireworks AI (never a production key) entered via PUT /api/providers/fireworks body fields: baseUrl, apiKey, options.accountId. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"fireworks\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.fireworks.ai (https://docs.fireworks.ai/api-reference/post-chatcompletions), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "xai",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/xai body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for xAI (never a production key) entered via PUT /api/providers/xai body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"xai\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.x.ai/v1 (https://docs.x.ai/developers/rest-api-reference/inference/responses), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "perplexity",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/perplexity body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Perplexity Router (never a production key) entered via PUT /api/providers/perplexity body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"perplexity\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.perplexity.ai (https://docs.perplexity.ai/api-reference/gateway-chat-completions-post), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "novita",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/novita body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Novita AI (never a production key) entered via PUT /api/providers/novita body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"novita\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.novita.ai/openai/v1 (https://docs.novita.ai/api-reference/model-apis-llm-create-chat-completion), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "sambanova",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/sambanova body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for SambaNova (never a production key) entered via PUT /api/providers/sambanova body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"sambanova\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://api.sambanova.ai/v1 (https://docs.sambanova.ai/docs/api-reference/chat-completions/create-chat-based-completion), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "huggingface",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/huggingface body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Hugging Face Inference Providers (never a production key) entered via PUT /api/providers/huggingface body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"huggingface\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to https://router.huggingface.co/v1 (https://huggingface.co/docs/inference-providers/tasks/chat-completion), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "vllm",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/vllm body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for vLLM (OpenAI-compatible server) (never a production key) entered via PUT /api/providers/vllm body fields: baseUrl, apiKey. This connection is a local/self-hosted runtime with no vendor key: start it on an operator-trusted loopback/private origin and configure it via PUT /api/providers/vllm body fields: baseUrl, apiKey. Owner authorization to make one real request to http://<vllm-host>:8000/v1 (https://docs.vllm.ai/en/latest/serving/online_serving/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "localai",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/localai body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for LocalAI (never a production key) entered via PUT /api/providers/localai body fields: baseUrl, apiKey. This connection is a local/self-hosted runtime with no vendor key: start it on an operator-trusted loopback/private origin and configure it via PUT /api/providers/localai body fields: baseUrl, apiKey. Owner authorization to make one real request to http://<localai-host>:8080/v1 (https://localai.io/docs/features/openai-functions/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "openai-images",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/openai-images body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for OpenAI Images (never a production key) entered via PUT /api/providers/openai-images body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"openai-images\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://developers.openai.com/api/reference/resources/images/methods/generate), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "gemini-images",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/gemini-images body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Google Gemini Images (never a production key) entered via PUT /api/providers/gemini-images body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"gemini-images\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://ai.google.dev/gemini-api/docs/image-generation), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "stability",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/stability body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Stability AI (never a production key) entered via PUT /api/providers/stability body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"stability\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://platform.stability.ai/docs/api-reference), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "recraft",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/recraft body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Recraft (never a production key) entered via PUT /api/providers/recraft body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"recraft\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://www.recraft.ai/docs/api-reference/endpoints), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "ideogram",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/ideogram body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Ideogram (never a production key) entered via PUT /api/providers/ideogram body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"ideogram\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://developer.ideogram.ai/ideogram-api/api-overview), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "black-forest-labs",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/black-forest-labs body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Black Forest Labs (FLUX) (never a production key) entered via PUT /api/providers/black-forest-labs body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"black-forest-labs\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.bfl.ai/quick_start/generating_images), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "fal",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/fal body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for fal.ai (never a production key) entered via PUT /api/providers/fal body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"fal\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.fal.ai/model-apis/model-endpoints/queue), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "replicate",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/replicate body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Replicate (never a production key) entered via PUT /api/providers/replicate body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"replicate\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://replicate.com/docs/reference/http), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "firefly",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/firefly body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Adobe Firefly (never a production key) entered via PUT /api/providers/firefly body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"firefly\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://developer.adobe.com/firefly-services/docs/firefly-api/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "comfyui",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/comfyui body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for ComfyUI (local) (never a production key) entered via PUT /api/providers/comfyui body fields: baseUrl, apiKey. This connection is a local/self-hosted runtime with no vendor key: start it on an operator-trusted loopback/private origin and configure it via PUT /api/providers/comfyui body fields: baseUrl, apiKey. Owner authorization to make one real request to the operator-configured endpoint (https://docs.comfy.org/development/comfyui-server/comms_routes), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "veo",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/veo body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Google Veo (Gemini API) (never a production key) entered via PUT /api/providers/veo body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"veo\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://ai.google.dev/gemini-api/docs/veo), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "runway",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/runway body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Runway (never a production key) entered via PUT /api/providers/runway body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"runway\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.dev.runwayml.com/), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "luma",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/luma body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Luma AI (never a production key) entered via PUT /api/providers/luma body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"luma\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.lumalabs.ai/docs/video-generation), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "fal-video",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/fal-video body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for fal.ai video (never a production key) entered via PUT /api/providers/fal-video body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"fal-video\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://docs.fal.ai/model-apis/model-endpoints/queue), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "replicate-video",
+      "status": "BLOCKED",
+      "configField": "PUT /api/providers/replicate-video body fields: baseUrl, apiKey",
+      "unblock": "An explicitly authorized test/staging credential for Replicate video (never a production key) entered via PUT /api/providers/replicate-video body fields: baseUrl, apiKey. For self-hosted Core: .aetheris-data/online/provider.json → connections[\"replicate-video\"].key (AES-256-GCM sealed; master.key in the same 0700 directory). For hosted BYOK: PUT /hosted/provider body fields: provider, apiKey, baseUrl → Supabase byok_provider_connections.credential (sealed with AETHERIS_PROVIDER_ENCRYPTION_KEY); required env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, AETHERIS_PROVIDER_ENCRYPTION_KEY, AETHERIS_HOSTED_ORIGINS, AETHERIS_HOSTED_SITE_URL. Owner authorization to make one real request to the operator-configured endpoint (https://replicate.com/docs/reference/http), then run the recorded success/error/retry/timeout/network-failure/malformed-response cases and capture the call log.",
+      "justification": null,
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    },
+    {
+      "id": "diffusers",
+      "status": "NOT APPLICABLE",
+      "configField": "PUT /api/providers/diffusers body fields: baseUrl, apiKey",
+      "unblock": null,
+      "justification": "Catalogue status 'pending': no wire adapter exists in this build and selectProvider refuses 'diffusers'. It is not a supported provider, so no live qualification applies.",
+      "liveCredentialEvidence": {
+        "callLog": null,
+        "successSchemaVerified": false,
+        "errorCasesVerified": false,
+        "routingVerified": false,
+        "credentialNonExposureVerified": false,
+        "noSilentSubstitutionVerified": false
+      }
+    }
+  ]
+}

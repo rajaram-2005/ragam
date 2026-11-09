@@ -1,0 +1,5 @@
+
+> aetheris-omni@0.2.0 release:training-worker
+> node scripts/release/verify-training-worker-cancellation.mjs
+
+training worker qualification: 16 PASS, 0 FAIL — docs/release/evidence/training-worker-qualification.json

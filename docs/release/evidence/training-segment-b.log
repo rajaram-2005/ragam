@@ -1,0 +1,6 @@
+
+aetheris-lite: refusing to train
+  the checkpoint at build/training-qualification/segment-a/ragam-qualification-b4ed1f77bf72.ckpt.npz was written for a different configuration (b4ed1f77bf72 against cde128a0a707). Resuming it would train the model this command describes with the state of another one.
+aetheris-lite: training ragam-qualification
+  corpus   /home/user/ragam
+  output   /home/user/ragam/build/training-qualification/segment-b

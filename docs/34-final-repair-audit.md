@@ -44,12 +44,12 @@ Local suites on the repair branch, with `AETHERIS_PYTHON` pointing at an isolate
 
 | Suite | Result | Classification |
 |---|---|---|
-| Core | 1,068 passed, 0 failed, 4 skipped real-artifact acceptance cases out of 1,072 | **PASS** |
+| Core | 1,081 passed, 0 failed, 4 skipped real-artifact acceptance cases out of 1,085 | **PASS** |
 | Web | 143 passed, 0 failed, 0 skipped | **PASS** |
 | Fabric | 823 passed, 0 failed, 0 skipped | **PASS** |
 | Desktop loopback server | 4 passed, 0 failed, 0 skipped | **PASS** |
 | Production web build | Vite build succeeded; bundle has no absolute backend URL | **PASS** |
-| `release-check.mjs --core 1072 --web 143 --fabric 823` | Verified 2,038 tests, 31 artefacts, 3 packs | **PASS** |
+| `release-check.mjs --core 1085 --web 143 --fabric 823` | Verified 2,051 tests, 31 artefacts, 3 packs | **PASS** |
 | `npm audit` web + desktop production trees | 0 vulnerabilities | **PASS** |
 | Python advisory audit | 8 packages checked; no installed version covered by a known advisory | **PASS** |
 | Internal-error sanitization | Uncoded thrown error returns 500 `internal_error` with a generic message | **PASS** |

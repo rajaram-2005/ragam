@@ -116,11 +116,11 @@ Phase 3–9 delivery adds `services/core/src/orchestration/full.mjs`,
 
 | Suite / check | Pass | Fail | Skip | Total / notes |
 | --- | ---: | ---: | ---: | --- |
-| Core | 1,068 | 0 | 4 | 1,072; four real-artifact acceptance cases skipped because ignored legacy fixtures are absent locally |
+| Core | 1,081 | 0 | 4 | 1,085; four real-artifact acceptance cases skipped because ignored legacy fixtures are absent locally |
 | Web | 143 | 0 | 0 | 143 |
 | Fabric | 823 | 0 | 0 | 823; 823 progress dots, exit 0, no skip/failure markers |
 | Desktop local | 4 | 0 | 0 | 4 |
-| `release-check.mjs --core 1072 --web 143 --fabric 823` | **PASS** | 0 | — | 2,038 tests, 31 artefacts, 3 packs |
+| `release-check.mjs --core 1085 --web 143 --fabric 823` | **PASS** | 0 | — | 2,051 tests, 31 artefacts, 3 packs |
 | Production Web build | **PASS** | 0 | — | Vite build |
 | Web production `npm audit` | **PASS** | 0 | — | 0 vulnerabilities |
 | Desktop production `npm audit` | **PASS** | 0 | — | 0 vulnerabilities |
@@ -205,3 +205,11 @@ production-release claim. No release was published, installers remain unsigned, 
 destructive cleanup, or architecture changes were made. Continue with the next safe repair only within
 those bounds; publication, signing, credential changes, destructive cleanup, and architecture changes
 require explicit approval.
+
+## 10. Release-readiness remediation addendum
+
+This report's verified code commit `36fef57e51c6b36a1efc6c5e16c3a699ea796665` and its PR #20–#22 evidence are historical and are preserved unchanged. The current `main` tree is `80ad8458fb039962dcaee6293dd451d1c6932416` with CI `42396395722` and Desktop `42396395647` successful.
+
+A subsequent [release readiness remediation and live qualification](release/README.md) added the pinned Python dependency lock, the clean-checkout `.venv` fallback, privacy-conscious disableable telemetry, reproducible release tooling (checksums, independent verification, SBOM, provenance, fail-closed signing), a real local training qualification (parameter updates, atomic checkpoint, resume, rollback, before/after evaluation), a 17-check five-area backend E2E against an isolated test service, and a machine-readable release gate. It also corrected the measured suite totals above.
+
+**The verdict remains NOT RELEASE READY.** The additional work closes implementation-level gaps but does not supply live provider credentials, Klyvaron weights, an isolated staging environment, an authorized signing key, elevated GitHub governance permission or owner authorization to publish. Every remaining blocker and its exact unblock requirement is recorded in [release/01-blocker-register.md](release/01-blocker-register.md) and [release/qualification.json](release/qualification.json).

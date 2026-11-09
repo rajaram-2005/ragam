@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 import { detectHardware, memorySnapshot } from '../hardware/detect.mjs'
 import { SIZE_PRESETS, configDigest, parameterCount } from './architecture.mjs'
 import { CONSENT_CLOCK_SKEW_MS, CONSENT_EXPIRY_MS, consentFreshness } from './consent.mjs'
-import { pythonCandidates } from './python-executable.mjs'
+import { DEFAULT_PYTHON_FALLBACKS, pythonCandidates } from './python-executable.mjs'
 
 export const INTERACTIVE_ADAPTATION_LIMIT_MS = 120_000
 export const DEFAULT_MIN_FREE_DISK_BYTES = 1_000_000_000 // 1 GB safety floor
@@ -137,7 +137,7 @@ export class LocalTrainingWorkerManager {
     // An explicit AETHERIS_PYTHON wins; otherwise keep the historical venv and
     // PATH fallbacks. Probing a different interpreter than the configured one
     // could execute a Python environment the operator did not authorize.
-    const candidates = pythonCandidates(['/tmp/accel-venv/bin/python', '/tmp/fabric-venv/bin/python', 'python3'])
+    const candidates = pythonCandidates(DEFAULT_PYTHON_FALLBACKS)
     let runtime = null
     for (const candidate of candidates) {
       if (candidate.startsWith('/') && !existsSync(candidate)) continue

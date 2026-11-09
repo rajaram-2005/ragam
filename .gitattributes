@@ -1,0 +1,5 @@
+# Raw test logs and TAP output are evidence, not source. Preserve their bytes
+# verbatim (including trailing spaces inside TAP diagnostics) and do not apply
+# whitespace checks or text normalisation to them.
+docs/release/evidence/*.tap -text whitespace=-trailing-space,-space-before-tab,-blank-at-eof
+docs/release/evidence/*.log -text whitespace=-trailing-space,-space-before-tab,-blank-at-eof

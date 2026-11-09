@@ -1,0 +1,12 @@
+checked 8 package(s) against the GitHub Advisory Database
+
+  clean      Pillow 13.0.0: 100 advisory(ies) recorded, none covers this version
+  clean      av (none recorded) 18.1.0: 0 advisory(ies) recorded, none covers this version
+  clean      iniconfig (none recorded) 2.3.1: 0 advisory(ies) recorded, none covers this version
+  clean      jax (none recorded) 0.10.2: 0 advisory(ies) recorded, none covers this version
+  clean      numpy 2.4.6: 8 advisory(ies) recorded, none covers this version
+  clean      packaging (none recorded) 26.3: 0 advisory(ies) recorded, none covers this version
+  clean      pluggy (none recorded) 1.7.0: 0 advisory(ies) recorded, none covers this version
+  clean      pytest 9.2.0: 1 advisory(ies) recorded, none covers this version
+
+no installed version is covered by a known advisory

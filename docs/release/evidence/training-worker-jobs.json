@@ -1,0 +1,50 @@
+{
+  "cancellation": {
+    "id": "b3e17026-ad9e-4a1b-832e-b0533e9bf9ff",
+    "pid": 17861,
+    "state": "cancelled_checkpointed",
+    "cancelRequested": true,
+    "exitCode": 130,
+    "completedAt": "2026-11-09T06:09:50.968Z",
+    "progress": {
+      "step": 1,
+      "totalSteps": 4,
+      "lastLoss": 8.8687,
+      "lastCheckpointSha256": "e6bc5d2a9253583b"
+    },
+    "checkpointPath": "build/training-worker-qualification/manager-root/worker-runs/b3e17026-ad9e-4a1b-832e-b0533e9bf9ff/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
+    "checkpointVerified": true,
+    "logLines": 10
+  },
+  "restored": {
+    "state": "cancelled_checkpointed",
+    "checkpointVerified": true
+  },
+  "resume": {
+    "id": "b3e17026-ad9e-4a1b-832e-b0533e9bf9ff",
+    "pid": 17895,
+    "resumed": true,
+    "state": "cancelled_checkpointed",
+    "cancelRequested": true,
+    "exitCode": 130,
+    "completedAt": "2026-11-09T06:10:06.268Z",
+    "progress": {
+      "step": 3,
+      "totalSteps": 4,
+      "lastLoss": null,
+      "lastCheckpointSha256": "02bf5c4a0317f6b4"
+    },
+    "checkpointPath": "build/training-worker-qualification/manager-root/worker-runs/b3e17026-ad9e-4a1b-832e-b0533e9bf9ff/klyvaron-pro-lm-run/klyvaron-pro-lm.checkpoint.npz",
+    "checkpointVerified": true,
+    "logLines": 7
+  },
+  "failure": {
+    "id": "fdc78f30-291d-412d-b8d0-8b7b6430389e",
+    "pid": 17926,
+    "state": "failed",
+    "exitCode": 1,
+    "error": "json.decoder.JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
+    "checkpointVerified": false,
+    "logLines": 18
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "schema": "ragam-security-scan/1",
+  "repository": "rajaram-2005/ragam",
+  "scannedAt": "2026-11-09T06:26:45.771Z",
+  "trackedFiles": 663,
+  "textFilesScanned": 559,
+  "nodeModulesChecked": 293,
+  "pass": 9,
+  "fail": 0,
+  "reviewedSynthetic": [
+    {
+      "file": "services/core/src/providers/wires/vertex.mjs",
+      "pattern": "private_key_block",
+      "why": "PEM marker used to validate a service-account document; no key material"
+    },
+    {
+      "file": "services/core/test/online-wires.test.mjs",
+      "pattern": "openai_style_key",
+      "why": "deterministic redaction/auth test fixture"
+    },
+    {
+      "file": "services/core/test/policy.test.mjs",
+      "pattern": "private_key_block",
+      "why": "deterministic redaction/auth test fixture"
+    },
+    {
+      "file": "services/core/test/policy.test.mjs",
+      "pattern": "aws_access_key_id",
+      "why": "deterministic redaction/auth test fixture"
+    },
+    {
+      "file": "services/core/test/provider-framework.test.mjs",
+      "pattern": "aws_access_key_id",
+      "why": "deterministic redaction/auth test fixture"
+    },
+    {
+      "file": "services/fabric/scripts/generate-redaction-parity-fixture.mjs",
+      "pattern": "private_key_block",
+      "why": "generator for synthetic redaction fixtures"
+    },
+    {
+      "file": "services/fabric/scripts/generate-redaction-parity-fixture.mjs",
+      "pattern": "aws_access_key_id",
+      "why": "generator for synthetic redaction fixtures"
+    },
+    {
+      "file": "services/fabric/tests/fixtures/redaction-parity.json",
+      "pattern": "private_key_block",
+      "why": "redaction parity fixture or Python test"
+    },
+    {
+      "file": "services/fabric/tests/fixtures/redaction-parity.json",
+      "pattern": "aws_access_key_id",
+      "why": "redaction parity fixture or Python test"
+    },
+    {
+      "file": "services/fabric/tests/test_dataforge.py",
+      "pattern": "private_key_block",
+      "why": "redaction parity fixture or Python test"
+    },
+    {
+      "file": "services/fabric/tests/test_dataforge.py",
+      "pattern": "aws_access_key_id",
+      "why": "redaction parity fixture or Python test"
+    },
+    {
+      "file": "services/fabric/tests/test_failure_memory.py",
+      "pattern": "private_key_block",
+      "why": "redaction parity fixture or Python test"
+    }
+  ],
+  "outOfScope": [
+    "Commercial SAST/DAST product scan: NOT TESTED (fail-closed owner-authorized workflow implemented in scripts/release/commercial-sast-dast.mjs; no tool or license configured)",
+    "Live third-party penetration testing: BLOCKED (no authorized test/staging credentials)",
+    "Production database RLS verification: BLOCKED (no staging environment)"
+  ],
+  "checks": [
+    {
+      "id": "no_tracked_secret_or_weight_files",
+      "status": "PASS",
+      "detail": "663 tracked files inspected; no credentials, private keys or weight payloads"
+    },
+    {
+      "id": "no_hardcoded_credential_literals",
+      "status": "PASS",
+      "detail": "559 text files scanned for 4 patterns; 12 reviewed synthetic fixture occurrences, 0 unreviewed"
+    },
+    {
+      "id": "node_syntax_all_modules",
+      "status": "PASS",
+      "detail": "293 .mjs/.js files pass node --check"
+    },
+    {
+      "id": "compose_defaults_loopback",
+      "status": "PASS",
+      "detail": "single-user Docker mode binds 127.0.0.1 by default"
+    },
+    {
+      "id": "lan_requires_explicit_bind_and_auth",
+      "status": "PASS",
+      "detail": "LAN overlay requires explicit private bind, Basic Auth and internal TLS"
+    },
+    {
+      "id": "fabric_defaults_loopback",
+      "status": "PASS",
+      "detail": "unauthenticated Fabric service defaults to loopback"
+    },
+    {
+      "id": "telemetry_privacy_invariants",
+      "status": "PASS",
+      "detail": "no transmission, no prompts/datasets/keys/account ids, allowlisted fields"
+    },
+    {
+      "id": "telemetry_disable_switch",
+      "status": "PASS",
+      "detail": "AETHERIS_TELEMETRY_ENABLED=false documented and implemented"
+    },
+    {
+      "id": "pinned_dependency_inputs",
+      "status": "PASS",
+      "detail": "two npm lockfiles and one Python lock"
+    }
+  ]
+}

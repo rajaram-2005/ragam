@@ -1,0 +1,55 @@
+release 0.2.0 verified against 1086 + 143 + 823 = 2052 tests
+  changelog entry: ## [0.2.0] — 2026-10-17
+  artefacts checked: 31
+  packs verified: 3
+{
+  "schema": "aetheris-release-manifest/1",
+  "version": "0.2.0",
+  "totals": {
+    "core": 1086,
+    "web": 143,
+    "fabric": 823,
+    "total": 2052
+  },
+  "changelog": {
+    "present": true,
+    "dated": true,
+    "bullets": 9,
+    "heading": "## [0.2.0] — 2026-10-17"
+  },
+  "artefacts": {
+    "VERSION": "1f930dd1f133c1f97a94fe3acb8db34372cf4c01ffdb2b3ff4ca72f9494121e9",
+    "CHANGELOG.md": "af6730e20b5fc1c5196d71922548ea08194a97bb65fc4f8d1ceea494d075981b",
+    "README.md": "f81cb5aa9ded85e82fe06fdf2c68b86bf111a8556aaf8e7ddb9320c070b2cf9b",
+    "LICENSE": "17be47093fb30034bcd0d5cfa2bcb21c27121da885c6266322147d1932ba9b95",
+    "package.json": "f625ad6c7f1b68da7b0372aa97742f4c855622a97edc3871dacb4c381b3e3647",
+    "docs/02-architecture.md": "73ba1679b5c06348126f6f63bc38781732bf665bd5362f20f291212538709d81",
+    "docs/03-status.md": "a09c4f1c31f08d36d202d021fee00600e4b7ededb5c3bd2069a9662c717036a2",
+    "docs/04-setup.md": "24824aedda70217ab5da4437b2bc7ae788c073055718fa99955cc36b6f7e260d",
+    "docs/25-adaptive-intelligence.md": "cca0591d5e9eb246cfffccd474236afc08cd99d6069b2ff847f37acf61c144a7",
+    "docs/26-release.md": "93e5f301eb50dced041c250715329bf2bec46c376f77192112a857755e7a5811",
+    "docs/34-final-repair-audit.md": "a459e56946ab87e8e48d4519affd0a98a20e03bf5f394393bd2f19df8ddc954e",
+    "docs/35-release-readiness.md": "7c4ff5f66136726212bea96a712aad6505e9b1c1b2d96ab075f286ddae4f8f77",
+    "docs/36-final-engineering-report.md": "e2a641bb55b6a3a107146412a4d094f5fde0aefbf4f6fda4605fc7dc57c7c904",
+    "docs/experiments/phase10-benchmark.json": "54cdce8668d6ac496994f1e58825a3e54d5b05be5cd8775d0292e342436b8ef7",
+    "docs/model-cards/klyvaron-pro-lm-0.1.0.json": "83bb08355afe50e83f4e5907b0ffac9dec8461250653c46d45bfd25b87c8428c",
+    "docs/model-cards/klyvaron-max-lm-0.1.0.json": "67542bc7fb8742cbf9f4aaddd4ea72f16dff2768cca465b0d11f334e1cfed973",
+    "docs/model-cards/klyvaron-pro-image-0.1.0.json": "322c12fc9e711aa9218e2d18ee94a5a73e1baa9f1e2fa958398acdcdd18c2622",
+    "docs/model-cards/klyvaron-max-image-0.1.0.json": "dfd7eba30c3479470d54d7c3d9cbab9ef339970d29e4e3dce4e1da9144a77377",
+    "docs/model-cards/klyvaron-pro-video-0.1.0.json": "d2a58ffde32bd607f296d10b55ead3eb2b8a696edc3cd5e7ad0de5deac3af339",
+    "docs/model-cards/klyvaron-max-video-0.1.0.json": "53c45b779ce474b83a3dad06fef69269a9a911155dc6a81557aac605bba774b4",
+    "docs/model-cards/klyvaron-pro-voice-0.1.0.json": "a8606ff30a975b4c813747b81634ddb0eb824812884383fa0fd0e14d32ae921b",
+    "docs/model-cards/klyvaron-max-voice-0.1.0.json": "f12f2d6b5696e44390bfed16a12912641fd325175516c5961f3360d21fa6ad3e",
+    "docs/experiments/klyvaron-pro-lm-run.json": "14287708f71b728e2fcb33736b1b48267de2618c62c0ce3a802988d7d20c8e59",
+    "docs/experiments/klyvaron-max-lm-run.json": "e880807fef7e16dd0d0e23419add20bc4c215bc7ae9ca046dacdf635b9505ee1",
+    "docs/experiments/klyvaron-pro-image-run.json": "835d222fa54ea5bb5eb2e6000123d5b6b4f7f5aa11c08c2a8c0c970d519432ca",
+    "docs/experiments/klyvaron-max-image-run.json": "950413e16bcaac5604c75e895165a52558f312986d690f9b3b62181877f35fb9",
+    "docs/experiments/klyvaron-pro-video-run.json": "55e4d0103704f428fbe2c8b451f018c0bc261e5fcad6409f53f1423cb5727fcd",
+    "docs/experiments/klyvaron-max-video-run.json": "4837809e7dddfaeb2b51484dd67b45000c698096d9c5533306f178ecc69cc579",
+    "docs/experiments/klyvaron-pro-voice-run.json": "d3ebe80ddc640344d95b83dd46c39231b2194b2f0a1f694e8edc0b83b487be33",
+    "docs/experiments/klyvaron-max-voice-run.json": "a21b8a9a2411b14c4b02626408cc02a275f15efe78753edaf253a1f7acb8ae57",
+    "third-party/NOTICES.md": "c916248fae1229fb20d9058f7009be982554a97a62519e52c442bcf28e7303d1"
+  },
+  "verified": true,
+  "problems": []
+}

@@ -1,0 +1,29 @@
+aetheris-lite: training ragam-qualification
+  corpus   /home/user/ragam
+  output   /home/user/ragam/build/training-qualification/segment-a
+  step     1/10  loss  5.1599
+  step     2/10  loss  5.1506
+  step     3/10  loss  5.0895
+  step     4/10  loss  4.9772
+  step     5/10  loss  4.8103
+  step     6/10  loss  4.7009
+  step     7/10  loss  4.7143
+  step     8/10  loss  4.6054
+  step     9/10  loss  4.5320
+  step    10/10  loss  4.5114
+
+  parameters   16,224
+  vocab        181 characters (validation unknown rate 0.000005)
+  corpus       496 train / 55 validation files, no overlap
+  loss         5.1599 -> 4.5114
+  validation   perplexity 94.4250  (6.5610 bits/char over 803,456 tokens)
+     baseline uniform  perplexity  181.0000
+     baseline unigram  perplexity   42.0987
+     baseline bigram   perplexity   27.2280 <-- best baseline
+  verdict      DOES NOT BEAT the best baseline (ratio 3.4679)
+  wall         6.697s, peak memory 242.3 MB
+  artifact     ragam-qualification-262d80030011.npz (68,358 bytes)
+  weights      262d80030011f634a3a1d84618375d8deddd0cea4db8ef00f9aacbd700a13180
+  corpus hash  66cff61fd7ad7358a6ec3cc6eaf9a258905721668e8c70e8b553b7043e09b161
+  snapshot     ragam-qualification-262d80030011.manifest.json
+  revision     80ad8458fb039962dcaee6293dd451d1c6932416-dirty

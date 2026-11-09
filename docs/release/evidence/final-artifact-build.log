@@ -1,0 +1,6 @@
+release 0.2.0 staged from clean checkout of b53c8748a82946ac57b4471be177677258bcf4f5
+  out                /home/user/ragam/build/release/0.2.0
+  artifacts           ragam-source-0.2.0.tar.gz, ragam-web-0.2.0.tar.gz
+  checksum entries    4
+  SBOM components     340
+  signature           UNSIGNED (no authorized key)

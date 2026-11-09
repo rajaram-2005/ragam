@@ -1,0 +1,884 @@
+
+> aetheris-omni@0.2.0 test:web
+> cd apps/web && node --test test/*.test.mjs
+
+TAP version 13
+# Subtest: every API call uses a relative path, never an absolute host
+ok 1 - every API call uses a relative path, never an absolute host
+  ---
+  duration_ms: 4.518733
+  type: 'test'
+  ...
+# Subtest: the artifact URL is relative so an <img>/<video> tag resolves through the proxy
+ok 2 - the artifact URL is relative so an <img>/<video> tag resolves through the proxy
+  ---
+  duration_ms: 0.163477
+  type: 'test'
+  ...
+# Subtest: path parameters are percent-encoded
+ok 3 - path parameters are percent-encoded
+  ---
+  duration_ms: 0.198532
+  type: 'test'
+  ...
+# Subtest: a server error envelope becomes an ApiError carrying code, limitation and route
+ok 4 - a server error envelope becomes an ApiError carrying code, limitation and route
+  ---
+  duration_ms: 0.607088
+  type: 'test'
+  ...
+# Subtest: a non-JSON error body still produces a usable ApiError
+ok 5 - a non-JSON error body still produces a usable ApiError
+  ---
+  duration_ms: 0.547229
+  type: 'test'
+  ...
+# Subtest: an unreachable backend is reported as network_error, not as a server fault
+ok 6 - an unreachable backend is reported as network_error, not as a server fault
+  ---
+  duration_ms: 0.272537
+  type: 'test'
+  ...
+# Subtest: an aborted request propagates the AbortError unchanged
+ok 7 - an aborted request propagates the AbortError unchanged
+  ---
+  duration_ms: 0.278849
+  type: 'test'
+  ...
+# Subtest: unavailable codes are exactly the ones the UI treats as capability gaps
+ok 8 - unavailable codes are exactly the ones the UI treats as capability gaps
+  ---
+  duration_ms: 0.18372
+  type: 'test'
+  ...
+# Subtest: POST bodies are JSON-serialised and GET requests send no body
+ok 9 - POST bodies are JSON-serialised and GET requests send no body
+  ---
+  duration_ms: 0.936585
+  type: 'test'
+  ...
+# Subtest: streamChat parses frames split across network chunks
+ok 10 - streamChat parses frames split across network chunks
+  ---
+  duration_ms: 4.518058
+  type: 'test'
+  ...
+# Subtest: streamChat surfaces an in-stream error frame
+ok 11 - streamChat surfaces an in-stream error frame
+  ---
+  duration_ms: 0.594355
+  type: 'test'
+  ...
+# Subtest: a stream that fails before it starts becomes an ApiError with the server code
+ok 12 - a stream that fails before it starts becomes an ApiError with the server code
+  ---
+  duration_ms: 0.302376
+  type: 'test'
+  ...
+# Subtest: a malformed data payload degrades to raw text instead of throwing
+ok 13 - a malformed data payload degrades to raw text instead of throwing
+  ---
+  duration_ms: 0.401767
+  type: 'test'
+  ...
+# Subtest: every route the client calls still exists in the core router
+ok 14 - every route the client calls still exists in the core router
+  ---
+  duration_ms: 1.315277
+  type: 'test'
+  ...
+# Subtest: parameterised routes are handled by the core router
+ok 15 - parameterised routes are handled by the core router
+  ---
+  duration_ms: 0.634558
+  type: 'test'
+  ...
+# Subtest: no client path escapes the documented route table
+ok 16 - no client path escapes the documented route table
+  ---
+  duration_ms: 2.085672
+  type: 'test'
+  ...
+# Subtest: a truncated SSE body is not success and releases its reader
+ok 17 - a truncated SSE body is not success and releases its reader
+  ---
+  duration_ms: 0.63241
+  type: 'test'
+  ...
+# Subtest: an abandoned SSE consumer cancels the body and releases its reader
+ok 18 - an abandoned SSE consumer cancels the body and releases its reader
+  ---
+  duration_ms: 0.448339
+  type: 'test'
+  ...
+# Subtest: AbortSignal reaches streaming reads; cancellation releases the reader without a done event
+ok 19 - AbortSignal reaches streaming reads; cancellation releases the reader without a done event
+  ---
+  duration_ms: 0.611237
+  type: 'test'
+  ...
+# Subtest: ordinary chat and lazy session creation accept the same cancellation signal
+ok 20 - ordinary chat and lazy session creation accept the same cancellation signal
+  ---
+  duration_ms: 0.243934
+  type: 'test'
+  ...
+# Subtest: catalog search stays on Core and metadata refresh consent is explicit
+ok 21 - catalog search stays on Core and metadata refresh consent is explicit
+  ---
+  duration_ms: 0.312493
+  type: 'test'
+  ...
+# Subtest: every endpoint the online UI calls is served by the active online router
+ok 22 - every endpoint the online UI calls is served by the active online router
+  ---
+  duration_ms: 7.927127
+  type: 'test'
+  ...
+# Subtest: the sign-in payloads the client sends are the fields the online router reads
+ok 23 - the sign-in payloads the client sends are the fields the online router reads
+  ---
+  duration_ms: 1.597282
+  type: 'test'
+  ...
+# Subtest: plain text files are read locally and return only a safe name, byte size and text
+ok 24 - plain text files are read locally and return only a safe name, byte size and text
+  ---
+  duration_ms: 1.456547
+  type: 'test'
+  ...
+# Subtest: unsupported, oversized and binary files are refused before they can enter a chat draft
+ok 25 - unsupported, oversized and binary files are refused before they can enter a chat draft
+  ---
+  duration_ms: 1.612212
+  type: 'test'
+  ...
+# Subtest: image bytes are validated and remain local until the caller builds the Send payload
+ok 26 - image bytes are validated and remain local until the caller builds the Send payload
+  ---
+  duration_ms: 0.846852
+  type: 'test'
+  ...
+# Subtest: PDF files are signature-checked and size-bounded before local extraction
+ok 27 - PDF files are signature-checked and size-bounded before local extraction
+  ---
+  duration_ms: 0.364943
+  type: 'test'
+  ...
+# Subtest: attachment text is included in the message only when the caller builds the Send payload
+ok 28 - attachment text is included in the message only when the caller builds the Send payload
+  ---
+  duration_ms: 0.224606
+  type: 'test'
+  ...
+# Subtest: file names lose control characters and are bounded
+ok 29 - file names lose control characters and are bounded
+  ---
+  duration_ms: 0.122298
+  type: 'test'
+  ...
+# Subtest: chat organization stores only bounded local titles, project names and pin state
+ok 30 - chat organization stores only bounded local titles, project names and pin state
+  ---
+  duration_ms: 1.849841
+  type: 'test'
+  ...
+# Subtest: projects reject duplicates and session metadata cannot reference unknown projects
+ok 31 - projects reject duplicates and session metadata cannot reference unknown projects
+  ---
+  duration_ms: 0.277113
+  type: 'test'
+  ...
+# Subtest: invalid saved organization data degrades to empty and browser-storage errors are harmless
+ok 32 - invalid saved organization data degrades to empty and browser-storage errors are harmless
+  ---
+  duration_ms: 0.271887
+  type: 'test'
+  ...
+# Subtest: search queries are bounded and whitespace-normalized
+ok 33 - search queries are bounded and whitespace-normalized
+  ---
+  duration_ms: 0.998257
+  type: 'test'
+  ...
+# Subtest: transcript search is case-insensitive and preserves original indices
+ok 34 - transcript search is case-insensitive and preserves original indices
+  ---
+  duration_ms: 1.108211
+  type: 'test'
+  ...
+# Subtest: pinned-only filtering combines with search without mutating transcript state
+ok 35 - pinned-only filtering combines with search without mutating transcript state
+  ---
+  duration_ms: 0.338435
+  type: 'test'
+  ...
+# Subtest: highlighting preserves original text and treats regex metacharacters literally
+ok 36 - highlighting preserves original text and treats regex metacharacters literally
+  ---
+  duration_ms: 0.286493
+  type: 'test'
+  ...
+# Subtest: Markdown export includes visible metadata but never binary attachment bytes
+ok 37 - Markdown export includes visible metadata but never binary attachment bytes
+  ---
+  duration_ms: 0.550099
+  type: 'test'
+  ...
+# Subtest: structured-output validation is opt-in client syntax checking, not a provider claim
+ok 38 - structured-output validation is opt-in client syntax checking, not a provider claim
+  ---
+  duration_ms: 0.24272
+  type: 'test'
+  ...
+# Subtest: context and output labels keep unknown metadata unknown
+ok 39 - context and output labels keep unknown metadata unknown
+  ---
+  duration_ms: 13.376558
+  type: 'test'
+  ...
+# Subtest: keyboard shortcuts require explicit modifiers and do not hijack plain keys
+ok 40 - keyboard shortcuts require explicit modifiers and do not hijack plain keys
+  ---
+  duration_ms: 0.195655
+  type: 'test'
+  ...
+# Subtest: message ids stay stable across replacement and stale pins are removed
+ok 41 - message ids stay stable across replacement and stale pins are removed
+  ---
+  duration_ms: 2.174656
+  type: 'test'
+  ...
+# Subtest: backend statuses map to the tone they actually deserve
+ok 42 - backend statuses map to the tone they actually deserve
+  ---
+  duration_ms: 0.99881
+  type: 'test'
+  ...
+# Subtest: the status vocabulary the core actually emits is fully covered
+ok 43 - the status vocabulary the core actually emits is fully covered
+  ---
+  duration_ms: 0.288323
+  type: 'test'
+  ...
+# Subtest: an unknown status stays neutral instead of defaulting to green
+ok 44 - an unknown status stays neutral instead of defaulting to green
+  ---
+  duration_ms: 0.959694
+  type: 'test'
+  ...
+# Subtest: tone matching is case-insensitive but not substring-loose
+ok 45 - tone matching is case-insensitive but not substring-loose
+  ---
+  duration_ms: 0.133614
+  type: 'test'
+  ...
+# Subtest: formatValue renders every backend value type without inventing data
+ok 46 - formatValue renders every backend value type without inventing data
+  ---
+  duration_ms: 0.810315
+  type: 'test'
+  ...
+# Subtest: clip truncates visibly and leaves short values alone
+ok 47 - clip truncates visibly and leaves short values alone
+  ---
+  duration_ms: 0.159379
+  type: 'test'
+  ...
+# Subtest: shortId prefixes identifiers without claiming uniqueness
+ok 48 - shortId prefixes identifiers without claiming uniqueness
+  ---
+  duration_ms: 0.175733
+  type: 'test'
+  ...
+# Subtest: hosted BYOK uses same-origin API calls and never saves provider keys in browser storage
+ok 49 - hosted BYOK uses same-origin API calls and never saves provider keys in browser storage
+  ---
+  duration_ms: 0.958805
+  type: 'test'
+  ...
+# Subtest: hosted chat asks for explicit per-turn provider and Search approval
+ok 50 - hosted chat asks for explicit per-turn provider and Search approval
+  ---
+  duration_ms: 0.166057
+  type: 'test'
+  ...
+# Subtest: hosted BYOK is opt-in at build time and its API rewrite has a fixed backend origin
+ok 51 - hosted BYOK is opt-in at build time and its API rewrite has a fixed backend origin
+  ---
+  duration_ms: 0.668021
+  type: 'test'
+  ...
+# Subtest: profile fields are trimmed, whitespace-normalized and bounded
+ok 52 - profile fields are trimmed, whitespace-normalized and bounded
+  ---
+  duration_ms: 0.975741
+  type: 'test'
+  ...
+# Subtest: an optional name and profession persist only in the provided browser storage
+ok 53 - an optional name and profession persist only in the provided browser storage
+  ---
+  duration_ms: 1.603886
+  type: 'test'
+  ...
+# Subtest: clearing the profile removes the stored value
+ok 54 - clearing the profile removes the stored value
+  ---
+  duration_ms: 0.201925
+  type: 'test'
+  ...
+# Subtest: malformed saved profile data degrades to an empty profile
+ok 55 - malformed saved profile data degrades to an empty profile
+  ---
+  duration_ms: 0.223516
+  type: 'test'
+  ...
+# Subtest: teacher recommendations are relevant prompt drafts, not automatic requests
+ok 56 - teacher recommendations are relevant prompt drafts, not automatic requests
+  ---
+  duration_ms: 0.448429
+  type: 'test'
+  ...
+# Subtest: regulated-profession suggestions avoid diagnosis, treatment or legal conclusions
+ok 57 - regulated-profession suggestions avoid diagnosis, treatment or legal conclusions
+  ---
+  duration_ms: 0.373049
+  type: 'test'
+  ...
+# Subtest: an unfamiliar profession gets general suggestions with user-controlled context
+ok 58 - an unfamiliar profession gets general suggestions with user-controlled context
+  ---
+  duration_ms: 0.22831
+  type: 'test'
+  ...
+# Subtest: setup guide dismissal is a reversible browser-only preference
+ok 59 - setup guide dismissal is a reversible browser-only preference
+  ---
+  duration_ms: 0.197646
+  type: 'test'
+  ...
+# Warning: Invalid DOM property `stroke-width`. Did you mean `strokeWidth`?
+#     at path
+#     at svg
+#     at button
+#     at div
+#     at Shell (file:///home/user/ragam/apps/web/test/.render-build/components.mjs:9418:18)
+# Warning: Invalid DOM property `stroke-linecap`. Did you mean `strokeLinecap`?
+#     at path
+#     at svg
+#     at button
+#     at div
+#     at Shell (file:///home/user/ragam/apps/web/test/.render-build/components.mjs:9418:18)
+# Subtest: all five product areas render in the degraded state
+ok 60 - all five product areas render in the degraded state
+  ---
+  duration_ms: 28.883048
+  type: 'test'
+  ...
+# Subtest: all five product areas render in the ready state
+ok 61 - all five product areas render in the ready state
+  ---
+  duration_ms: 10.13358
+  type: 'test'
+  ...
+# Subtest: the areas render with no readiness at all, as on first paint
+ok 62 - the areas render with no readiness at all, as on first paint
+  ---
+  duration_ms: 8.239861
+  type: 'test'
+  ...
+# Subtest: authenticated shell keeps five areas and provides settings outside navigation
+ok 63 - authenticated shell keeps five areas and provides settings outside navigation
+  ---
+  duration_ms: 12.758033
+  type: 'test'
+  ...
+# Subtest: App waits for the local authentication mode before rendering account forms or workspace data
+ok 64 - App waits for the local authentication mode before rendering account forms or workspace data
+  ---
+  duration_ms: 1.151151
+  type: 'test'
+  ...
+# Subtest: the sign-in page is a traditional address-and-password form
+ok 65 - the sign-in page is a traditional address-and-password form
+  ---
+  duration_ms: 2.112408
+  type: 'test'
+  ...
+# Subtest: a session the server no longer recognises is reported, not swallowed
+ok 66 - a session the server no longer recognises is reported, not swallowed
+  ---
+  duration_ms: 2.418499
+  type: 'test'
+  ...
+# Subtest: the create-account page states the rules before the form is submitted
+ok 67 - the create-account page states the rules before the form is submitted
+  ---
+  duration_ms: 1.983678
+  type: 'test'
+  ...
+# Subtest: the reset page promises a host-delivered code and never an email
+ok 68 - the reset page promises a host-delivered code and never an email
+  ---
+  duration_ms: 5.592771
+  type: 'test'
+  ...
+# Subtest: both steps of the reset page render, not only the first one
+ok 69 - both steps of the reset page render, not only the first one
+  ---
+  duration_ms: 2.27761
+  type: 'test'
+  ...
+# Subtest: the sidebar names the signed-in account without becoming a sixth area
+ok 70 - the sidebar names the signed-in account without becoming a sixth area
+  ---
+  duration_ms: 21.937821
+  type: 'test'
+  ...
+# Subtest: the change-password dialog asks for the current password and warns about other sessions
+ok 71 - the change-password dialog asks for the current password and warns about other sessions
+  ---
+  duration_ms: 2.091876
+  type: 'test'
+  ...
+# Subtest: provider settings are read-only for a member account
+ok 72 - provider settings are read-only for a member account
+  ---
+  duration_ms: 2.87494
+  type: 'test'
+  ...
+# Subtest: StatusCard distinguishes loading, errors, listings and observed inference
+ok 73 - StatusCard distinguishes loading, errors, listings and observed inference
+  ---
+  duration_ms: 0.524429
+  type: 'test'
+  ...
+# Subtest: online status removes device tiers and shows zero models honestly
+ok 74 - online status removes device tiers and shows zero models honestly
+  ---
+  duration_ms: 0.320647
+  type: 'test'
+  ...
+# Subtest: the Klyvaron panel names the provider behind each tier and offers no model it cannot serve
+ok 75 - the Klyvaron panel names the provider behind each tier and offers no model it cannot serve
+  ---
+  duration_ms: 0.257541
+  type: 'test'
+  ...
+# Subtest: Plugins offers the bounded remote contract without executable code installation
+ok 76 - Plugins offers the bounded remote contract without executable code installation
+  ---
+  duration_ms: 0.77016
+  type: 'test'
+  ...
+# Subtest: the policy is displayed but never rendered as a control
+ok 77 - the policy is displayed but never rendered as a control
+  ---
+  duration_ms: 6.036113
+  type: 'test'
+  ...
+# Subtest: MCP describes remote calls as external and results as untrusted
+ok 78 - MCP describes remote calls as external and results as untrusted
+  ---
+  duration_ms: 0.483758
+  type: 'test'
+  ...
+# Subtest: the media areas render their validation surface
+ok 79 - the media areas render their validation surface
+  ---
+  duration_ms: 0.584315
+  type: 'test'
+  ...
+# Subtest: the shared UI primitives all render
+ok 80 - the shared UI primitives all render
+  ---
+  duration_ms: 2.626263
+  type: 'test'
+  ...
+# Subtest: FixtureTag marks non-real content by default
+ok 81 - FixtureTag marks non-real content by default
+  ---
+  duration_ms: 0.203563
+  type: 'test'
+  ...
+# Subtest: the render bundle is generated, never committed, and cleaned up
+ok 82 - the render bundle is generated, never committed, and cleaned up
+  ---
+  duration_ms: 0.833016
+  type: 'test'
+  ...
+# Subtest: the memory panel renders its empty state honestly, before anything is loaded
+ok 83 - the memory panel renders its empty state honestly, before anything is loaded
+  ---
+  duration_ms: 3.27771
+  type: 'test'
+  ...
+# Subtest: Chat removes research panels but retains optional user context
+ok 84 - Chat removes research panels but retains optional user context
+  ---
+  duration_ms: 8.812539
+  type: 'test'
+  ...
+# Subtest: the button variant reaches the stylesheet as a class
+ok 85 - the button variant reaches the stylesheet as a class
+  ---
+  duration_ms: 0.540963
+  type: 'test'
+  ...
+# Subtest: every button variant used in the app has a rule in the stylesheet
+ok 86 - every button variant used in the app has a rule in the stylesheet
+  ---
+  duration_ms: 1.661884
+  type: 'test'
+  ...
+# Subtest: Chat keeps the saved optional model separate from the built-in processor
+ok 87 - Chat keeps the saved optional model separate from the built-in processor
+  ---
+  duration_ms: 3.52776
+  type: 'test'
+  ...
+# Subtest: Chat exposes Phase 3–9 local orchestration without claiming live verification
+ok 88 - Chat exposes Phase 3–9 local orchestration without claiming live verification
+  ---
+  duration_ms: 3.84414
+  type: 'test'
+  ...
+# Subtest: Chat shows provider fabric evidence without claiming live verification
+ok 89 - Chat shows provider fabric evidence without claiming live verification
+  ---
+  duration_ms: 4.375884
+  type: 'test'
+  ...
+# Subtest: Chat exposes local transcript tools without claiming live verification
+ok 90 - Chat exposes local transcript tools without claiming live verification
+  ---
+  duration_ms: 3.214431
+  type: 'test'
+  ...
+# Subtest: Chat home offers original draft starters and keeps sending under the user’s control
+ok 91 - Chat home offers original draft starters and keeps sending under the user’s control
+  ---
+  duration_ms: 4.442339
+  type: 'test'
+  ...
+# Subtest: built-in profiles expose bounded independent multi-task processing
+ok 92 - built-in profiles expose bounded independent multi-task processing
+  ---
+  duration_ms: 3.011396
+  type: 'test'
+  ...
+# Subtest: built-in task suggestions remain within supported operations even when a profile is set
+ok 93 - built-in task suggestions remain within supported operations even when a profile is set
+  ---
+  duration_ms: 2.559205
+  type: 'test'
+  ...
+# Subtest: the profile dialog explains browser-only storage and offers editable name and profession fields
+ok 94 - the profile dialog explains browser-only storage and offers editable name and profession fields
+  ---
+  duration_ms: 0.734129
+  type: 'test'
+  ...
+# Subtest: the provider catalogue shows status, never a control, and nothing when unloaded
+ok 95 - the provider catalogue shows status, never a control, and nothing when unloaded
+  ---
+  duration_ms: 0.478582
+  type: 'test'
+  ...
+# Subtest: a saved catalogue connection keeps its own label rather than using a fallback
+ok 96 - a saved catalogue connection keeps its own label rather than using a fallback
+  ---
+  duration_ms: 0.833045
+  type: 'test'
+  ...
+# Subtest: saved connections are listed with a switch, and adding one offers no pending adapter
+ok 97 - saved connections are listed with a switch, and adding one offers no pending adapter
+  ---
+  duration_ms: 0.720049
+  type: 'test'
+  ...
+# Subtest: Provider Settings uses a password input and separates save from connection testing
+ok 98 - Provider Settings uses a password input and separates save from connection testing
+  ---
+  duration_ms: 0.477524
+  type: 'test'
+  ...
+# Subtest: Provider Settings offers supported local runtimes and no LiteLLM connection
+ok 99 - Provider Settings offers supported local runtimes and no LiteLLM connection
+  ---
+  duration_ms: 2.959012
+  type: 'test'
+  ...
+# Subtest: archived Pro/Max artifacts are not selectable; provider models stay separate from the built-in processor
+ok 100 - archived Pro/Max artifacts are not selectable; provider models stay separate from the built-in processor
+  ---
+  duration_ms: 2.824828
+  type: 'test'
+  ...
+# Subtest: KlyvaronTiers presents only shared model-independent capability profiles
+ok 101 - KlyvaronTiers presents only shared model-independent capability profiles
+  ---
+  duration_ms: 0.31957
+  type: 'test'
+  ...
+# Subtest: the retired training panel communicates that profiles need no weights or training
+ok 102 - the retired training panel communicates that profiles need no weights or training
+  ---
+  duration_ms: 0.223195
+  type: 'test'
+  ...
+# Subtest: there are exactly five product areas, with the required ids
+ok 103 - there are exactly five product areas, with the required ids
+  ---
+  duration_ms: 2.8096
+  type: 'test'
+  ...
+# Subtest: no internal service is exposed as a navigation entry
+ok 104 - no internal service is exposed as a navigation entry
+  ---
+  duration_ms: 0.265598
+  type: 'test'
+  ...
+# Subtest: area hints advertise the internal services that live inside each area
+ok 105 - area hints advertise the internal services that live inside each area
+  ---
+  duration_ms: 0.325778
+  type: 'test'
+  ...
+# Subtest: the navigation renders AREAS and nothing else
+ok 106 - the navigation renders AREAS and nothing else
+  ---
+  duration_ms: 0.434034
+  type: 'test'
+  ...
+# Subtest: the area list is frozen so it cannot grow at runtime
+ok 107 - the area list is frozen so it cannot grow at runtime
+  ---
+  duration_ms: 0.528084
+  type: 'test'
+  ...
+# Subtest: exactly one area component exists per product area
+ok 108 - exactly one area component exists per product area
+  ---
+  duration_ms: 0.199178
+  type: 'test'
+  ...
+# Subtest: App renders the five areas and imports no sixth
+ok 109 - App renders the five areas and imports no sixth
+  ---
+  duration_ms: 0.470622
+  type: 'test'
+  ...
+# Subtest: the sign-in surface is exactly three pages, each with its own file
+ok 110 - the sign-in surface is exactly three pages, each with its own file
+  ---
+  duration_ms: 0.531683
+  type: 'test'
+  ...
+# Subtest: one way in: the token sign-in and every third-party method are gone from the client
+ok 111 - one way in: the token sign-in and every third-party method are gone from the client
+  ---
+  duration_ms: 10.123574
+  type: 'test'
+  ...
+# Subtest: a 401 while using the app ends the session out loud, and names a variable the Core reads
+ok 112 - a 401 while using the app ends the session out loud, and names a variable the Core reads
+  ---
+  duration_ms: 0.920309
+  type: 'test'
+  ...
+# Subtest: the two forms that set a password refuse to submit a pair that does not match
+ok 113 - the two forms that set a password refuse to submit a pair that does not match
+  ---
+  duration_ms: 0.442889
+  type: 'test'
+  ...
+# Subtest: the password rules the pages state are the rules the server enforces
+ok 114 - the password rules the pages state are the rules the server enforces
+  ---
+  duration_ms: 0.371881
+  type: 'test'
+  ...
+# Subtest: online areas remove offline and research surfaces without removing optional context
+ok 115 - online areas remove offline and research surfaces without removing optional context
+  ---
+  duration_ms: 0.700229
+  type: 'test'
+  ...
+# Subtest: the runtime policy is displayed, never toggled from the browser
+ok 116 - the runtime policy is displayed, never toggled from the browser
+  ---
+  duration_ms: 0.357785
+  type: 'test'
+  ...
+# Subtest: no browser-facing source contains an absolute host
+ok 117 - no browser-facing source contains an absolute host
+  ---
+  duration_ms: 4.486572
+  type: 'test'
+  ...
+# Subtest: the dev-server proxy target is the only place a loopback host appears
+ok 118 - the dev-server proxy target is the only place a loopback host appears
+  ---
+  duration_ms: 0.20845
+  type: 'test'
+  ...
+# Subtest: the upstream design tokens are carried over unchanged
+ok 119 - the upstream design tokens are carried over unchanged
+  ---
+  duration_ms: 0.711522
+  type: 'test'
+  ...
+# Subtest: the upstream shell structure survives the restructuring
+ok 120 - the upstream shell structure survives the restructuring
+  ---
+  duration_ms: 0.59367
+  type: 'test'
+  ...
+# Subtest: development fixtures are labelled in the interface itself
+ok 121 - development fixtures are labelled in the interface itself
+  ---
+  duration_ms: 0.592652
+  type: 'test'
+  ...
+# Subtest: the app has only the local PDF parser as an additional runtime dependency
+ok 122 - the app has only the local PDF parser as an additional runtime dependency
+  ---
+  duration_ms: 0.338105
+  type: 'test'
+  ...
+# Subtest: the PDF parser is split into a lazy chunk and the initial bundle remains bounded
+ok 123 - the PDF parser is split into a lazy chunk and the initial bundle remains bounded
+  ---
+  duration_ms: 1.442847
+  type: 'test'
+  ...
+# Subtest: no module re-exports a name it also uses locally
+ok 124 - no module re-exports a name it also uses locally
+  ---
+  duration_ms: 1.815343
+  type: 'test'
+  ...
+# Subtest: Shell.jsx imports the area list, not only re-exports it
+ok 125 - Shell.jsx imports the area list, not only re-exports it
+  ---
+  duration_ms: 0.188082
+  type: 'test'
+  ...
+# Subtest: Chat surfaces memory and history as internal services inside the area
+ok 126 - Chat surfaces memory and history as internal services inside the area
+  ---
+  duration_ms: 0.478233
+  type: 'test'
+  ...
+# Subtest: memory is offered as a switch, off by default, and described in ordinary words
+ok 127 - memory is offered as a switch, off by default, and described in ordinary words
+  ---
+  duration_ms: 0.295661
+  type: 'test'
+  ...
+# Subtest: the history panel reports an empty search rather than filling it in
+ok 128 - the history panel reports an empty search rather than filling it in
+  ---
+  duration_ms: 0.28087
+  type: 'test'
+  ...
+# Subtest: saved conversations reopen on request and disclose which provider receives a continuation
+ok 129 - saved conversations reopen on request and disclose which provider receives a continuation
+  ---
+  duration_ms: 1.061587
+  type: 'test'
+  ...
+# Subtest: conversation projects, renames and pins use browser-local metadata only
+ok 130 - conversation projects, renames and pins use browser-local metadata only
+  ---
+  duration_ms: 0.308944
+  type: 'test'
+  ...
+# Subtest: Chat attachments, capability evidence and manual MCP calls keep user consent explicit
+ok 131 - Chat attachments, capability evidence and manual MCP calls keep user consent explicit
+  ---
+  duration_ms: 0.751962
+  type: 'test'
+  ...
+# Subtest: a session is created lazily, so a visit with no question stores nothing
+ok 132 - a session is created lazily, so a visit with no question stores nothing
+  ---
+  duration_ms: 0.298766
+  type: 'test'
+  ...
+# Subtest: the memory panel confirms what the server actually reported
+ok 133 - the memory panel confirms what the server actually reported
+  ---
+  duration_ms: 0.256217
+  type: 'test'
+  ...
+# Subtest: memory can be exported, not only deleted
+ok 134 - memory can be exported, not only deleted
+  ---
+  duration_ms: 0.23462
+  type: 'test'
+  ...
+# Subtest: the security controls the product added are visible in their areas
+ok 135 - the security controls the product added are visible in their areas
+  ---
+  duration_ms: 0.434365
+  type: 'test'
+  ...
+# Subtest: ordinary generation has a Stop control, unmount cleanup, and preserves partial text and drafts
+ok 136 - ordinary generation has a Stop control, unmount cleanup, and preserves partial text and drafts
+  ---
+  duration_ms: 0.376841
+  type: 'test'
+  ...
+# Subtest: manufacturing operations mode is shared by every dashboard and keeps its launch tasks local
+ok 137 - manufacturing operations mode is shared by every dashboard and keeps its launch tasks local
+  ---
+  duration_ms: 0.688309
+  type: 'test'
+  ...
+# Subtest: Local-only defaults on, persists, is threaded to inference, and blocks hosted BYOK
+ok 138 - Local-only defaults on, persists, is threaded to inference, and blocks hosted BYOK
+  ---
+  duration_ms: 0.625456
+  type: 'test'
+  ...
+# Subtest: gateway models are selected explicitly and remote refresh requires an action
+ok 139 - gateway models are selected explicitly and remote refresh requires an action
+  ---
+  duration_ms: 0.848984
+  type: 'test'
+  ...
+# Subtest: the API client has one skills surface and no duplicate method names
+ok 140 - the API client has one skills surface and no duplicate method names
+  ---
+  duration_ms: 0.604401
+  type: 'test'
+  ...
+# Subtest: microphone channels are mixed to mono and resampled to 16 kHz
+ok 141 - microphone channels are mixed to mono and resampled to 16 kHz
+  ---
+  duration_ms: 1.000002
+  type: 'test'
+  ...
+# Subtest: PCM16 WAV has correct RIFF, mono, sample-rate and data headers
+ok 142 - PCM16 WAV has correct RIFF, mono, sample-rate and data headers
+  ---
+  duration_ms: 0.569253
+  type: 'test'
+  ...
+# Subtest: invalid channel buffers and oversized recordings are refused
+ok 143 - invalid channel buffers and oversized recordings are refused
+  ---
+  duration_ms: 0.443707
+  type: 'test'
+  ...
+1..143
+# tests 143
+# suites 0
+# pass 143
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1176.209181

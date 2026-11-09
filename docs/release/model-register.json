@@ -1,0 +1,405 @@
+{
+  "schema": "ragam-model-qualification/1",
+  "generatedAt": "2026-11-08T07:27:52.825Z",
+  "stance": "Klyvaron Lite/Pro/Max are processing/resource/context profiles of one shared model-independent engine. Separate trained Pro/Max models are not part of this release. Third-party provider models are never represented as first-party Klyvaron.",
+  "weightFilesFoundInWorkspace": [],
+  "weightFilesTrackedInGit": 0,
+  "models": [
+    {
+      "id": "lite",
+      "label": "Klyvaron Lite",
+      "architecture": "Model-independent deterministic Klyvaron processor (no separate trained model per tier)",
+      "tokenizer": "Deterministic text tokenizer in services/core/src/knowledge/text.mjs; no model tokenizer is loaded",
+      "tierSemantics": "processing/resource/context/orchestration profile of one shared engine, not a distinct model",
+      "archivedCards": [
+        {
+          "card": "aetheris-lite-lm-0.1.0.json",
+          "identifier": "aetheris-lite-lm@0.1.0",
+          "status": "not_released",
+          "licence": "MIT",
+          "architecture": "from-scratch pure-NumPy TransformerLM (archived experiment)",
+          "parameterCount": 359136,
+          "generateCommand": "npm run lm:train   # writes artifacts/<run>.report.json beside the weights, then\ncd services/fabric && python scripts/lm_release.py --report artifacts/aetheris-lite-lm-82392ef89074.report.json --version 0.1.0",
+          "note": "Archived, unverified model-card metadata. The corresponding weight payload is absent from this checkout; this record is not release evidence or a currently supported model. The active Klyvaron processor is model-independent.",
+          "artifacts": [
+            {
+              "label": "int8",
+              "filename": "aetheris-lite-lm-82392ef89074.npz",
+              "expectedSha256": "bf723f1c3e35061e3209082f607fdcee40c87f5ff4e7adad9fe6b1af54573506",
+              "expectedBytes": 1444942,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            }
+          ]
+        },
+        {
+          "card": "aetheris-lite-lm-0.1.1.json",
+          "identifier": "aetheris-lite-lm@0.1.1",
+          "status": "not_released",
+          "licence": "MIT",
+          "architecture": "from-scratch pure-NumPy TransformerLM (archived experiment)",
+          "parameterCount": 359616,
+          "generateCommand": "npm run lm:train   # release configuration; writes artifacts/<run>.report.json\ncd services/fabric && python scripts/lm_release.py --report artifacts/aetheris-lite-lm-53ae59b2a777.report.json --version 0.1.1\n# The corpus is this repository's own text, so re-running reproduces this artifact only\n# at the revision recorded below: pass --expect-manifest-digest to make drift a refusal.\n#   --expect-manifest-digest 70c5b78c77bce0e122df93fe43504b6b780acf10b865baaa5076307b0883aa02",
+          "note": "Archived, unverified model-card metadata. The corresponding weight payload is absent from this checkout; this record is not release evidence or a currently supported model. The active Klyvaron processor is model-independent.",
+          "artifacts": [
+            {
+              "label": "int8",
+              "filename": "aetheris-lite-lm-53ae59b2a777.npz",
+              "expectedSha256": "165e150f6e290fe3a8162673f743037dcf15a3b63199ecd7661bdbc83652b6f7",
+              "expectedBytes": 1446862,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            }
+          ]
+        },
+        {
+          "card": "aetheris-lite-retriever-0.1.0.json",
+          "identifier": "aetheris-lite-retriever@0.1.0",
+          "status": "not_released",
+          "licence": "MIT",
+          "architecture": "from-scratch pure-NumPy TransformerLM (archived experiment)",
+          "parameterCount": 18784,
+          "generateCommand": "cd services/fabric && python -c \"from fabric.pipeline import Pipeline, PipelineConfig; import json; p=Pipeline(PipelineConfig(epochs=25)); p.run(); print(json.dumps(p.registry.current().to_dict(), indent=2, default=str))\"",
+          "note": "Archived, unverified model-card metadata. The corresponding weight payload is absent from this checkout; this record is not release evidence or a currently supported model. The active Klyvaron processor is model-independent.",
+          "artifacts": []
+        }
+      ],
+      "trackedWeightFiles": [],
+      "actualWeightsPresent": false,
+      "artifactSourceAndLicensing": "Archived model cards claim MIT and a from-scratch first-party pure-NumPy TransformerLM, but every card is status not_released and states that the weight payload is absent. No licence can be verified against bytes that do not exist.",
+      "qualification": {
+        "architectureAndTokenizer": {
+          "status": "NOT TESTED",
+          "reason": "The active processor is model-independent; no trained architecture/tokenizer artifact is installed to inspect."
+        },
+        "weightsPresent": {
+          "status": "FAIL",
+          "reason": "No weight payload is tracked or installed in this checkout."
+        },
+        "sha256Verified": {
+          "status": "BLOCKED",
+          "reason": "Expected digests exist only in archived metadata; there are no bytes to hash and no trusted download source."
+        },
+        "runtimeLoad": {
+          "status": "BLOCKED",
+          "reason": "No weights to load."
+        },
+        "realInference": {
+          "status": "BLOCKED",
+          "reason": "No loaded model; provider inference requires an authorized credential."
+        },
+        "outputLatencyResourceErrorHandling": {
+          "status": "BLOCKED",
+          "reason": "Requires a loaded model and a runtime run."
+        },
+        "chatSelection": {
+          "status": "PASS",
+          "evidence": "docs/release/evidence/e2e-qualification.json → chat.model_selection_no_substitution (isolated test service); explicit provider model selection and refusal of unlisted models"
+        },
+        "tierModelSeparation": {
+          "status": "PASS",
+          "evidence": "services/core/test/online.test.mjs and docs/33-model-independent-klyvaron.md; /api/klyvaron/{lite,pro,max} and tier→model mappings are refused with 410"
+        },
+        "unavailableReporting": {
+          "status": "PASS",
+          "evidence": "docs/release/evidence/e2e-qualification.json → chat.model_selection_no_substitution returns coded 409 model_unavailable; unconfigured image/video providers return 503 provider_not_configured"
+        },
+        "multimodal": {
+          "status": "NOT APPLICABLE",
+          "justification": "No first-party image/audio/video weights exist in this release; native multimodal model requests are explicitly refused with 410 model_independent_architecture."
+        }
+      },
+      "unblock": "Provide an authorized, licensed weight payload for the archived Klyvaron Lite architecture (expected filenames and digests listed under archivedCards). Publish a trusted download source with a SHA-256 manifest, then independently verify the downloaded bytes. Provide compatible hardware/runtime (CPU memory for the fp32/int8 NumPy artifacts) and an installation procedure that does not place weights in Git. Record real load, inference, latency, resource and error-handling logs for the exact verified bytes; do not classify metadata as an operational model.",
+      "notFirstPartyClaim": false
+    },
+    {
+      "id": "pro",
+      "label": "Klyvaron Pro",
+      "architecture": "Model-independent deterministic Klyvaron processor (no separate trained model per tier)",
+      "tokenizer": "Deterministic text tokenizer in services/core/src/knowledge/text.mjs; no model tokenizer is loaded",
+      "tierSemantics": "processing/resource/context/orchestration profile of one shared engine, not a distinct model",
+      "archivedCards": [
+        {
+          "card": "klyvaron-pro-image-0.1.0.json",
+          "identifier": "klyvaron-pro-image@0.1.0",
+          "status": "not_released",
+          "licence": "MIT",
+          "architecture": "from-scratch pure-NumPy TransformerLM (archived experiment)",
+          "parameterCount": 3728352,
+          "generateCommand": "python3 services/fabric/scripts/train_multimodal.py --modality image --preset pro",
+          "note": null,
+          "artifacts": [
+            {
+              "label": "int8",
+              "filename": "weights.npz",
+              "expectedSha256": "be4f4d8c4d6aece3d2f9768f2464a41e70f7203d0ef282cff95228e6db7a50fa",
+              "expectedBytes": 6904693,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            }
+          ]
+        },
+        {
+          "card": "klyvaron-pro-lm-0.1.0.json",
+          "identifier": "klyvaron-pro-lm@0.1.0",
+          "status": "not_released",
+          "licence": "MIT",
+          "architecture": "from-scratch pure-NumPy TransformerLM (archived experiment)",
+          "parameterCount": 27559946,
+          "generateCommand": "python3 services/fabric/scripts/train_klyvaron.py --preset pro",
+          "note": "Archived, unverified experiment metadata. The corresponding weight payload is absent from the current checkout; this record is not release evidence or a supported model. The active Klyvaron processor is model-independent.",
+          "artifacts": [
+            {
+              "label": "int8",
+              "filename": "klyvaron-pro-lm-0.1.0.npz",
+              "expectedSha256": "23260d34ab8a939c84f9a48175fa4481d785bfce6b9a2895944ad34e6df2f97d",
+              "expectedBytes": 22761831,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            },
+            {
+              "label": "fp32",
+              "filename": "klyvaron-pro-lm-fp32-0.1.0.npz",
+              "expectedSha256": "06b4170baea6b86d933d85dcfea56be6ad043a53b75cda55b684d80faa21e5f2",
+              "expectedBytes": 110262030,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            }
+          ]
+        },
+        {
+          "card": "klyvaron-pro-video-0.1.0.json",
+          "identifier": "klyvaron-pro-video@0.1.0",
+          "status": "not_released",
+          "licence": "MIT",
+          "architecture": "from-scratch pure-NumPy TransformerLM (archived experiment)",
+          "parameterCount": 2221482,
+          "generateCommand": "python3 services/fabric/scripts/train_multimodal.py --modality video --preset pro",
+          "note": null,
+          "artifacts": [
+            {
+              "label": "int8",
+              "filename": "weights.npz",
+              "expectedSha256": "e96666360581a832a39e2ea9101177365bde3e22747afa9f0d3151bb44962e45",
+              "expectedBytes": 4122280,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            }
+          ]
+        },
+        {
+          "card": "klyvaron-pro-voice-0.1.0.json",
+          "identifier": "klyvaron-pro-voice@0.1.0",
+          "status": "not_released",
+          "licence": "MIT",
+          "architecture": "from-scratch pure-NumPy TransformerLM (archived experiment)",
+          "parameterCount": 3076311,
+          "generateCommand": "python3 services/fabric/scripts/train_multimodal.py --modality voice --preset pro",
+          "note": null,
+          "artifacts": [
+            {
+              "label": "int8",
+              "filename": "weights.npz",
+              "expectedSha256": "d50a346cce8c48f32d03bca0567a83c8654bf3f305082e073ef156381abee7db",
+              "expectedBytes": 5699324,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            }
+          ]
+        }
+      ],
+      "trackedWeightFiles": [],
+      "actualWeightsPresent": false,
+      "artifactSourceAndLicensing": "Archived model cards claim MIT and a from-scratch first-party pure-NumPy TransformerLM, but every card is status not_released and states that the weight payload is absent. No licence can be verified against bytes that do not exist.",
+      "qualification": {
+        "architectureAndTokenizer": {
+          "status": "NOT TESTED",
+          "reason": "The active processor is model-independent; no trained architecture/tokenizer artifact is installed to inspect."
+        },
+        "weightsPresent": {
+          "status": "FAIL",
+          "reason": "No weight payload is tracked or installed in this checkout."
+        },
+        "sha256Verified": {
+          "status": "BLOCKED",
+          "reason": "Expected digests exist only in archived metadata; there are no bytes to hash and no trusted download source."
+        },
+        "runtimeLoad": {
+          "status": "BLOCKED",
+          "reason": "No weights to load."
+        },
+        "realInference": {
+          "status": "BLOCKED",
+          "reason": "No loaded model; provider inference requires an authorized credential."
+        },
+        "outputLatencyResourceErrorHandling": {
+          "status": "BLOCKED",
+          "reason": "Requires a loaded model and a runtime run."
+        },
+        "chatSelection": {
+          "status": "PASS",
+          "evidence": "docs/release/evidence/e2e-qualification.json → chat.model_selection_no_substitution (isolated test service); explicit provider model selection and refusal of unlisted models"
+        },
+        "tierModelSeparation": {
+          "status": "PASS",
+          "evidence": "services/core/test/online.test.mjs and docs/33-model-independent-klyvaron.md; /api/klyvaron/{lite,pro,max} and tier→model mappings are refused with 410"
+        },
+        "unavailableReporting": {
+          "status": "PASS",
+          "evidence": "docs/release/evidence/e2e-qualification.json → chat.model_selection_no_substitution returns coded 409 model_unavailable; unconfigured image/video providers return 503 provider_not_configured"
+        },
+        "multimodal": {
+          "status": "NOT APPLICABLE",
+          "justification": "No first-party image/audio/video weights exist in this release; native multimodal model requests are explicitly refused with 410 model_independent_architecture."
+        }
+      },
+      "unblock": "Provide an authorized, licensed weight payload for the archived Klyvaron Pro architecture (expected filenames and digests listed under archivedCards). Publish a trusted download source with a SHA-256 manifest, then independently verify the downloaded bytes. Provide compatible hardware/runtime (CPU memory for the fp32/int8 NumPy artifacts) and an installation procedure that does not place weights in Git. Record real load, inference, latency, resource and error-handling logs for the exact verified bytes; do not classify metadata as an operational model.",
+      "notFirstPartyClaim": false
+    },
+    {
+      "id": "max",
+      "label": "Klyvaron Max",
+      "architecture": "Model-independent deterministic Klyvaron processor (no separate trained model per tier)",
+      "tokenizer": "Deterministic text tokenizer in services/core/src/knowledge/text.mjs; no model tokenizer is loaded",
+      "tierSemantics": "processing/resource/context/orchestration profile of one shared engine, not a distinct model",
+      "archivedCards": [
+        {
+          "card": "klyvaron-max-image-0.1.0.json",
+          "identifier": "klyvaron-max-image@0.1.0",
+          "status": "not_released",
+          "licence": "MIT",
+          "architecture": "from-scratch pure-NumPy TransformerLM (archived experiment)",
+          "parameterCount": 13662960,
+          "generateCommand": "python3 services/fabric/scripts/train_multimodal.py --modality image --preset max",
+          "note": null,
+          "artifacts": [
+            {
+              "label": "int8",
+              "filename": "weights.npz",
+              "expectedSha256": "ce5e12c6ac7bb897c34248191ee149d2e3ae31cc8c856688ace6827f46c4781b",
+              "expectedBytes": 25238266,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            }
+          ]
+        },
+        {
+          "card": "klyvaron-max-lm-0.1.0.json",
+          "identifier": "klyvaron-max-lm@0.1.0",
+          "status": "not_released",
+          "licence": "MIT",
+          "architecture": "from-scratch pure-NumPy TransformerLM (archived experiment)",
+          "parameterCount": 92077066,
+          "generateCommand": "python3 services/fabric/scripts/train_klyvaron.py --preset max",
+          "note": "Archived, unverified experiment metadata. The corresponding weight payload is absent from the current checkout; this record is not release evidence or a supported model. The active Klyvaron processor is model-independent.",
+          "artifacts": [
+            {
+              "label": "int8",
+              "filename": "klyvaron-max-lm-0.1.0.npz",
+              "expectedSha256": "5baf7223006eb9cc1927cd32e16f2d1542a823959c820e7ce9fa919d5d7c6150",
+              "expectedBytes": 76765951,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            },
+            {
+              "label": "fp32",
+              "filename": "klyvaron-max-lm-fp32-0.1.0.npz",
+              "expectedSha256": "f677b1a49235c415e8e629335e52f4d615205a72dc72929f8c09a2950954a560",
+              "expectedBytes": 368340422,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            }
+          ]
+        },
+        {
+          "card": "klyvaron-max-video-0.1.0.json",
+          "identifier": "klyvaron-max-video@0.1.0",
+          "status": "not_released",
+          "licence": "MIT",
+          "architecture": "from-scratch pure-NumPy TransformerLM (archived experiment)",
+          "parameterCount": 8134602,
+          "generateCommand": "python3 services/fabric/scripts/train_multimodal.py --modality video --preset max",
+          "note": null,
+          "artifacts": [
+            {
+              "label": "int8",
+              "filename": "weights.npz",
+              "expectedSha256": "17c4c51f0db941d7c70b465da6e941049e6e3939b36303eb0f9ba9e6bb861dd3",
+              "expectedBytes": 15035795,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            }
+          ]
+        },
+        {
+          "card": "klyvaron-max-voice-0.1.0.json",
+          "identifier": "klyvaron-max-voice@0.1.0",
+          "status": "not_released",
+          "licence": "MIT",
+          "architecture": "from-scratch pure-NumPy TransformerLM (archived experiment)",
+          "parameterCount": 11257231,
+          "generateCommand": "python3 services/fabric/scripts/train_multimodal.py --modality voice --preset max",
+          "note": null,
+          "artifacts": [
+            {
+              "label": "int8",
+              "filename": "weights.npz",
+              "expectedSha256": "0ca20f985f4466d180dcf3a13b89658ffa6eb5b81cd4184e53d714efff27ee1d",
+              "expectedBytes": 20795409,
+              "presentInCheckout": false,
+              "verifiedSha256": null
+            }
+          ]
+        }
+      ],
+      "trackedWeightFiles": [],
+      "actualWeightsPresent": false,
+      "artifactSourceAndLicensing": "Archived model cards claim MIT and a from-scratch first-party pure-NumPy TransformerLM, but every card is status not_released and states that the weight payload is absent. No licence can be verified against bytes that do not exist.",
+      "qualification": {
+        "architectureAndTokenizer": {
+          "status": "NOT TESTED",
+          "reason": "The active processor is model-independent; no trained architecture/tokenizer artifact is installed to inspect."
+        },
+        "weightsPresent": {
+          "status": "FAIL",
+          "reason": "No weight payload is tracked or installed in this checkout."
+        },
+        "sha256Verified": {
+          "status": "BLOCKED",
+          "reason": "Expected digests exist only in archived metadata; there are no bytes to hash and no trusted download source."
+        },
+        "runtimeLoad": {
+          "status": "BLOCKED",
+          "reason": "No weights to load."
+        },
+        "realInference": {
+          "status": "BLOCKED",
+          "reason": "No loaded model; provider inference requires an authorized credential."
+        },
+        "outputLatencyResourceErrorHandling": {
+          "status": "BLOCKED",
+          "reason": "Requires a loaded model and a runtime run."
+        },
+        "chatSelection": {
+          "status": "PASS",
+          "evidence": "docs/release/evidence/e2e-qualification.json → chat.model_selection_no_substitution (isolated test service); explicit provider model selection and refusal of unlisted models"
+        },
+        "tierModelSeparation": {
+          "status": "PASS",
+          "evidence": "services/core/test/online.test.mjs and docs/33-model-independent-klyvaron.md; /api/klyvaron/{lite,pro,max} and tier→model mappings are refused with 410"
+        },
+        "unavailableReporting": {
+          "status": "PASS",
+          "evidence": "docs/release/evidence/e2e-qualification.json → chat.model_selection_no_substitution returns coded 409 model_unavailable; unconfigured image/video providers return 503 provider_not_configured"
+        },
+        "multimodal": {
+          "status": "NOT APPLICABLE",
+          "justification": "No first-party image/audio/video weights exist in this release; native multimodal model requests are explicitly refused with 410 model_independent_architecture."
+        }
+      },
+      "unblock": "Provide an authorized, licensed weight payload for the archived Klyvaron Max architecture (expected filenames and digests listed under archivedCards). Publish a trusted download source with a SHA-256 manifest, then independently verify the downloaded bytes. Provide compatible hardware/runtime (CPU memory for the fp32/int8 NumPy artifacts) and an installation procedure that does not place weights in Git. Record real load, inference, latency, resource and error-handling logs for the exact verified bytes; do not classify metadata as an operational model.",
+      "notFirstPartyClaim": false
+    }
+  ],
+  "operationalModelsVerified": 0
+}

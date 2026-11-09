@@ -1,0 +1,18 @@
+[klyvaron-pro-lm] loading SHA-pinned corpus from /home/user/ragam/build/training-worker-qualification/corpus...
+Traceback (most recent call last):
+  File "/home/user/ragam/services/fabric/scripts/train_klyvaron.py", line 1343, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/user/ragam/services/fabric/scripts/train_klyvaron.py", line 531, in main
+    corpus_record = json.loads(Path(args.corpus_record).read_text(encoding="utf-8"))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/json/decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/json/decoder.py", line 353, in raw_decode
+    obj, end = self.scan_once(s, idx)
+               ^^^^^^^^^^^^^^^^^^^^^^
+json.decoder.JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)

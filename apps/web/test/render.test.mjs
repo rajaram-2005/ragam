@@ -365,7 +365,7 @@ test('provider settings are read-only for a member account', () => {
   }))
   assert.match(catalogue, /2 recommended/)
   assert.match(catalogue, /OpenAI<\/strong> · <span>Recommended<\/span>/)
-  assert.match(catalogue, /Ollama<\/strong> · <span>Recommended<\/span> — ready in this build/)
+  assert.match(catalogue, /Ollama<\/strong> · <span>Recommended<\/span> — wire contract-tested in this build; live vendor qualification pending/)
   assert.match(catalogue, /not a live check or a guarantee of quality/)
 })
 
@@ -669,7 +669,7 @@ test('the provider catalogue shows status, never a control, and nothing when unl
     ],
   }
   const markup = render('ProviderCatalogue', React.createElement(components.ProviderCatalogue, { catalog }))
-  assert.match(markup, /ready in this build/)
+  assert.match(markup, /wire contract-tested in this build; live vendor qualification pending/)
   assert.match(markup, /tested: streaming/)
   assert.match(markup, /adapter contract-tested; live vendor verification pending/)
   assert.match(markup, /1 pending adapters/)

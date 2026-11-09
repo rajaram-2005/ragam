@@ -12,7 +12,7 @@ import React from 'react'
 //               honest about the rest of the market rather than implying it does not exist.
 
 const STATUS_TEXT = {
-  ready: 'ready in this build',
+  ready: 'wire contract-tested in this build; live vendor qualification pending',
   gateway_only: 'adapter contract-tested; live vendor verification pending',
   pending: 'adapter pending; not selectable',
 }

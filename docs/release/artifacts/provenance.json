@@ -1,0 +1,55 @@
+{
+  "schema": "ragam-build-provenance/1",
+  "version": "0.2.0",
+  "commit": "b53c8748a82946ac57b4471be177677258bcf4f5",
+  "tree": "17b9fd48c3a87190ba60179b1acf5771df2b1d72",
+  "cleanCheckout": true,
+  "cleanCheckoutMethod": "git archive <commit> extracted into an empty temporary directory; no working-tree files are used",
+  "producedAt": "2026-11-08T07:53:16.093Z",
+  "builder": {
+    "id": "ragam-local-release-builder",
+    "node": "v22.22.3",
+    "platform": "linux",
+    "arch": "x64",
+    "npm": null
+  },
+  "inputs": [
+    {
+      "path": "apps/web/package-lock.json",
+      "sha256": "0f94a04e5eaa8b7bea7186ad192a0241737bb91395f8583c5f75e49b501f4704"
+    },
+    {
+      "path": "apps/desktop/package-lock.json",
+      "sha256": "a41e68b2f812f376d47c8a83bb141c2bd355c8868b6f110aab03c5fcbe364cb2"
+    },
+    {
+      "path": "services/fabric/requirements.lock",
+      "sha256": "db9d4641c1e8c4a7603ccafcc7d898cd208161451397551fd106cdb31c2d9587"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "ragam-source-0.2.0.tar.gz",
+      "bytes": 2718279,
+      "sha256": "94bb24e07a5ab20db7407d7cf49cd9ad9079103196009e1ad4dd020e2ff4710e"
+    },
+    {
+      "name": "ragam-web-0.2.0.tar.gz",
+      "bytes": 646873,
+      "sha256": "03affb534da321b861c545b65bda2864b12add98fc50dbd285d9a5bd740342d9"
+    }
+  ],
+  "sbom": {
+    "path": "sbom.cdx.json",
+    "sha256": "e5abd964d954626035e71fe554eed3f4a821b3fdcfbef8f21e3dc12a7eddfe7f"
+  },
+  "signature": {
+    "status": "UNSIGNED",
+    "reason": "no authorized signing key configured",
+    "requirement": "RAGAM_RELEASE_SIGNING_KEY_ID and RAGAM_RELEASE_SIGNING_KEY_FILE"
+  },
+  "reproducibility": {
+    "strategy": "git archive | gzip -n for the source artifact; sorted tar with fixed owner/mode/mtime | gzip -n for the web bundle",
+    "note": "Rebuild from the recorded commit with the recorded lockfiles and compare SHA-256 digests."
+  }
+}

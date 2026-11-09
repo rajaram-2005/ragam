@@ -1,0 +1,10 @@
+[klyvaron-pro-lm] loading SHA-pinned corpus from /home/user/ragam/build/training-worker-qualification/corpus...
+[klyvaron-pro-lm]   tokenizer: 6,135 distinct words in the sample
+[klyvaron-pro-lm]   tokenizer: 1024 merges, 19,448 live pairs
+[klyvaron-pro-lm]   tokenizer: 2048 merges, 23,105 live pairs
+[klyvaron-pro-lm]   tokenizer: 3072 merges, 24,021 live pairs
+[klyvaron-pro-lm] encoding held-out & training corpora with 4096-token Byte-BPE...
+[klyvaron-pro-lm] training 27,559,946 params | seq_len=512 | batch=1x1 (512 tok/step) | steps=0->4 (2 corpus-led + 2 balanced joint)
+[klyvaron-pro-lm] step   1/4 (pretrain ) | loss=8.8687 (lm=8.8687 v=0.0000 s=0.0000) | gnorm=14.367 | 135 tok/s | rss=1086MB
+[klyvaron-pro-lm] received signal 15; finishing atomic checkpoint and exiting cleanly
+[klyvaron-pro-lm] atomic checkpoint saved at step 1 (sha256=e6bc5d2a9253583b...)

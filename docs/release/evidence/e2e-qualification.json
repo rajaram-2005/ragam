@@ -1,0 +1,229 @@
+{
+  "schema": "ragam-e2e-qualification/1",
+  "executedAt": "2026-11-09T06:09:37.712Z",
+  "backend": "services/core/src/online/app.mjs (production module)",
+  "serviceMode": "isolated_test_service",
+  "liveThirdPartyCalls": 0,
+  "notes": [
+    "All HTTP requests went to the real Core server over loopback sockets; the provider is an isolated OpenAI-compatible test service with a synthetic key.",
+    "No live third-party provider, no real model inference and no real generated video were exercised. Those gates remain BLOCKED.",
+    "MCP and Plugins checks used the real in-process registries, not substitutes."
+  ],
+  "modesUsed": [
+    "isolated_test_service",
+    "in_process"
+  ],
+  "pass": 17,
+  "fail": 0,
+  "notTested": [
+    {
+      "id": "mcp.timeouts_and_remote_error_recovery",
+      "reason": "No remote MCP server or authorized test endpoint configured; only in-process registry checks ran."
+    },
+    {
+      "id": "chat.live_provider_inference",
+      "reason": "No authorized live/staging provider credential."
+    },
+    {
+      "id": "image.live_provider_generation",
+      "reason": "No authorized live/staging provider credential."
+    },
+    {
+      "id": "video.real_artifact",
+      "reason": "No authorized live/staging video provider; no real MP4 artifact was produced."
+    }
+  ],
+  "results": [
+    {
+      "id": "chat.auth",
+      "area": "Chat",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "register": 201,
+        "role": "owner",
+        "unauthenticated": 401
+      }
+    },
+    {
+      "id": "chat.model_selection_no_substitution",
+      "area": "Chat",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "selectedModel": "isolated-model-a",
+        "unlistedModelStatus": 409,
+        "error": "model_unavailable"
+      }
+    },
+    {
+      "id": "chat.real_inference_and_intended_routing",
+      "area": "Chat",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "providerModel": "isolated-model-a",
+        "provider": "openai (isolated service)"
+      }
+    },
+    {
+      "id": "chat.streaming",
+      "area": "Chat",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "deltaEvents": 2,
+        "doneEvent": true
+      }
+    },
+    {
+      "id": "chat.history_persistence_across_restart",
+      "area": "Chat",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "sessionId": "298c737a-ac63-4d9d-b8c5-ad36940595cb",
+        "userTurnPersisted": true,
+        "survivedRestart": true,
+        "unauthenticatedAfterRestart": 401
+      }
+    },
+    {
+      "id": "chat.cancellation",
+      "area": "Chat",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "aborted": true,
+        "healthAfterCancellation": 200
+      }
+    },
+    {
+      "id": "chat.error_handling_and_credential_non_exposure",
+      "area": "Chat",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "status": 502,
+        "error": "provider_auth_failed",
+        "keyExposed": false
+      }
+    },
+    {
+      "id": "image.no_fake_success_without_provider",
+      "area": "Image",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "status": 503,
+        "error": "provider_not_configured"
+      }
+    },
+    {
+      "id": "image.generation_storage_gallery_provenance",
+      "area": "Image",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "jobId": "f1fe05d8-b7a1-4601-8b90-b6c193e83c1f",
+        "state": "succeeded",
+        "bytes": 70,
+        "mime": "image/png",
+        "galleryListed": true
+      }
+    },
+    {
+      "id": "image.failure_handling_no_artifact",
+      "area": "Image",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "state": "failed",
+        "artifact": null
+      }
+    },
+    {
+      "id": "video.no_fake_success_without_provider",
+      "area": "Video",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "status": 503,
+        "error": "provider_not_configured"
+      }
+    },
+    {
+      "id": "video.job_lifecycle_and_provider_failure",
+      "area": "Video",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "jobId": "1d486533-d1a4-4ec3-a7fd-34f3a38d135f",
+        "state": "failed",
+        "historyStates": [
+          "queued",
+          "running",
+          "failed"
+        ]
+      }
+    },
+    {
+      "id": "video.cancellation",
+      "area": "Video",
+      "mode": "isolated_test_service",
+      "status": "PASS",
+      "detail": {
+        "jobId": "7d592e1d-3f65-4570-9907-a9efe97706b1",
+        "cancelState": "cancelled"
+      }
+    },
+    {
+      "id": "plugins.discovery_and_preflight",
+      "area": "Plugins",
+      "mode": "in_process",
+      "status": "PASS",
+      "detail": {
+        "plugins": 2,
+        "readOnly": true
+      }
+    },
+    {
+      "id": "plugins.execution_errors_and_permission_boundary",
+      "area": "Plugins",
+      "mode": "in_process",
+      "status": "PASS",
+      "detail": {
+        "invoke": 200,
+        "unknown": 404,
+        "install": 403,
+        "memberOwnerOnly": 403
+      }
+    },
+    {
+      "id": "mcp.startup_discovery",
+      "area": "MCP",
+      "mode": "in_process",
+      "status": "PASS",
+      "detail": {
+        "servers": 3,
+        "tools": 4,
+        "resources": 0,
+        "prompts": 0
+      }
+    },
+    {
+      "id": "mcp.invocation_and_error_recovery",
+      "area": "MCP",
+      "mode": "in_process",
+      "status": "PASS",
+      "detail": {
+        "preflight": 200,
+        "call": 200,
+        "unknownTool": 400,
+        "recovered": 200
+      }
+    }
+  ]
+}

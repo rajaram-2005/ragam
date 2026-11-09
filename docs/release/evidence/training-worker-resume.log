@@ -1,0 +1,7 @@
+[klyvaron-pro-lm] loading SHA-pinned corpus from /home/user/ragam/build/training-worker-qualification/corpus...
+[klyvaron-pro-lm] encoding held-out & training corpora with 4096-token Byte-BPE...
+[klyvaron-pro-lm] resumed verified atomic checkpoint from step 1/4
+[klyvaron-pro-lm] training 27,559,946 params | seq_len=512 | batch=1x1 (512 tok/step) | steps=1->4 (2 corpus-led + 2 balanced joint)
+[klyvaron-pro-lm] atomic checkpoint saved at step 2 (sha256=6c0456baf837619b...)
+[klyvaron-pro-lm] received signal 15; finishing atomic checkpoint and exiting cleanly
+[klyvaron-pro-lm] atomic checkpoint saved at step 3 (sha256=02bf5c4a0317f6b4...)

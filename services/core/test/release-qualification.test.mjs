@@ -1,0 +1,380 @@
+/**
+ * Release-qualification regression guards.
+ *
+ * A release report is a claim, and a claim needs something that fails when it
+ * stops being true. These tests pin the repairs made during remediation and
+ * refuse reports that launder BLOCKED/NOT TESTED into PASS, providers that are
+ * marked live-qualified without a call log, models declared operational without
+ * weights, and signatures produced without an authorized key.
+ */
+
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, mkdirSync, readdirSync, copyFileSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { DEFAULT_PYTHON_FALLBACKS, pythonCandidates, defaultPythonBinary, configuredPythonBinary } from '../src/klyvaron/python-executable.mjs'
+import { LocalTrainingWorkerManager } from '../src/klyvaron/training-worker.mjs'
+import { OperationalMonitor, OPERATIONAL_EVENTS, monitorFromEnv } from '../src/telemetry/monitor.mjs'
+import { OnlineApp } from '../src/online/app.mjs'
+import { PROVIDERS } from '../src/providers/catalog.mjs'
+import {
+  writeChecksums, verifyChecksumsWithSha256sum, collectSbom,
+  validateQualificationReport, RELEASE_STATES, QUALIFICATION_SCHEMA, readJson,
+} from '../../../scripts/release/lib.mjs'
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const REPO = resolve(HERE, '../../..')
+const read = (path) => readFileSync(resolve(REPO, path), 'utf8')
+const json = (path) => readJson(resolve(REPO, path))
+const temp = () => mkdtempSync(join(tmpdir(), 'ragam-qualification-'))
+
+// --- R1: clean-checkout Python runtime ------------------------------------
+
+test('a clean checkout with an in-repo venv is a Python fallback, and a configured interpreter still wins', () => {
+  assert.ok(DEFAULT_PYTHON_FALLBACKS.some((path) => path.endsWith(join('.venv', 'bin', 'python'))),
+    'the repository-local .venv must be a fallback so a clean checkout needs no shell export')
+  assert.equal(DEFAULT_PYTHON_FALLBACKS.at(-1), 'python3')
+  assert.ok(read('services/core/src/klyvaron/training-worker.mjs').includes('pythonCandidates(DEFAULT_PYTHON_FALLBACKS)'),
+    'the worker must use the shared fallback list, not a private literal')
+  assert.deepEqual(pythonCandidates(DEFAULT_PYTHON_FALLBACKS, { AETHERIS_PYTHON: '/authorized/python' }), ['/authorized/python'])
+  assert.equal(configuredPythonBinary({ AETHERIS_PYTHON: '  /authorized/python  ' }), '/authorized/python')
+  assert.equal(defaultPythonBinary({}), 'python3')
+  const root = temp()
+  const manager = new LocalTrainingWorkerManager({ root })
+  try {
+    const environment = manager.inspectEnvironment()
+    assert.equal(typeof environment.software.pythonAvailable, 'boolean')
+    assert.ok(environment.hardware.logicalCpus >= 1)
+  } finally {
+    manager.close()
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+// --- R2: privacy-conscious telemetry --------------------------------------
+
+test('telemetry records only allowlisted fields and redacts prompts, keys and datasets', () => {
+  const monitor = new OperationalMonitor({ now: () => 1_700_000_000_000 })
+  monitor.record('inference_latency', {
+    durationMs: 42, component: 'openai', outcome: 'ok',
+    prompt: 'a private prompt', apiKey: 'sk-private-value', dataset: 'private-data',
+  })
+  const snapshot = monitor.snapshot()
+  assert.equal(snapshot.recordedEvents, 1)
+  assert.equal(snapshot.redactedFields, 3)
+  assert.equal(snapshot.counters.inference_latency, 1)
+  const serialised = JSON.stringify(snapshot)
+  for (const secret of ['a private prompt', 'sk-private-value', 'private-data']) {
+    assert.ok(!serialised.includes(secret), `${secret} must never be stored`)
+  }
+  assert.equal(snapshot.privacy.transmission, 'none')
+  assert.equal(snapshot.privacy.rawPrompts, false)
+  assert.equal(snapshot.privacy.accountIdentifiers, false)
+})
+
+test('telemetry refuses unknown events, unsafe labels and unbounded samples', () => {
+  const monitor = new OperationalMonitor()
+  assert.equal(monitor.record('not_an_event', { component: 'x' }), false)
+  assert.equal(monitor.snapshot().refusedEvents, 1)
+  for (let i = 0; i < 100; i += 1) monitor.record('inference_latency', { durationMs: i, component: 'provider' })
+  assert.equal(monitor.snapshot().latency.provider.samples, 32, 'latency samples must be bounded')
+  monitor.record('job_completed', { component: '../etc/passwd' })
+  assert.equal(monitor.snapshot().counters.job_completed, 1)
+  assert.equal(monitor.snapshot().latency['../etc/passwd'], undefined)
+  assert.equal(monitor.record('api_failure', { component: 42, outcome: 'free-form text' }), true)
+  assert.equal(monitor.snapshot().counters.api_failure, 1)
+  assert.ok(OPERATIONAL_EVENTS.includes('training_worker_failure'))
+  assert.ok(OPERATIONAL_EVENTS.includes('deployment_health'))
+})
+
+test('optional telemetry has a real disable method', () => {
+  for (const value of ['false', '0', 'no', 'off', 'FALSE']) {
+    const disabled = monitorFromEnv({ AETHERIS_TELEMETRY_ENABLED: value })
+    assert.equal(disabled.enabled, false, `${value} must disable telemetry`)
+    assert.equal(disabled.record('api_failure', { outcome: 'failure' }), false)
+    assert.equal(disabled.snapshot().recordedEvents, 0)
+    assert.match(disabled.snapshot().disable, /AETHERIS_TELEMETRY_ENABLED=false/)
+  }
+  assert.equal(monitorFromEnv({ AETHERIS_TELEMETRY_ENABLED: 'true' }).enabled, true)
+  assert.ok(read('.env.example').includes('AETHERIS_TELEMETRY_ENABLED=true'))
+})
+
+test('the running app exposes telemetry counters and records API failures without secrets', (t) => {
+  const root = temp()
+  const telemetry = new OperationalMonitor()
+  const app = new OnlineApp({ dataDir: root, trustedOrigins: [], telemetry, logger: () => {} })
+  t.after(() => { app.close(); rmSync(root, { recursive: true, force: true }) })
+  assert.equal(app.readiness().telemetry.recordedEvents, 0)
+  app.recordOperationalEvent('api_failure', { outcome: 'failure', component: 'core', prompt: 'private prompt' })
+  const snapshot = app.readiness().telemetry
+  assert.equal(snapshot.recordedEvents, 1)
+  assert.equal(snapshot.redactedFields, 1)
+  assert.equal(snapshot.counters.api_failure, 1)
+  assert.ok(!JSON.stringify(snapshot).includes('private prompt'))
+})
+
+// --- R3: reproducible release tooling -------------------------------------
+
+test('checksums are written by node:crypto and independently verified by sha256sum, and tampering is refused', () => {
+  const dir = temp()
+  try {
+    const a = join(dir, 'artifact-a.bin')
+    const b = join(dir, 'artifact-b.bin')
+    writeFileSync(a, 'first artifact')
+    writeFileSync(b, 'second artifact')
+    const sums = writeChecksums(dir, [a, b])
+    assert.equal(sums.entries, 2)
+    assert.ok(verifyChecksumsWithSha256sum(dir).ok)
+    writeFileSync(a, 'tampered artifact')
+    assert.equal(verifyChecksumsWithSha256sum(dir).ok, false, 'a changed byte must fail independent verification')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('the SBOM is derived from committed lockfiles, not installed node_modules', () => {
+  const sbom = collectSbom(REPO, { version: '0.2.0', timestamp: '2026-10-17T00:00:00Z' })
+  assert.equal(sbom.bomFormat, 'CycloneDX')
+  assert.equal(sbom.specVersion, '1.5')
+  assert.ok(sbom.components.length > 100, `expected a real dependency list, got ${sbom.components.length}`)
+  assert.ok(sbom.components.some((c) => c.name === 'react' && c.purl.startsWith('pkg:npm/')))
+  assert.ok(sbom.components.some((c) => c.name === 'numpy' && c.purl.startsWith('pkg:pypi/')))
+  assert.ok(sbom.ragamSources.every((source) => /sha256/i.test(JSON.stringify(source)) || source.sha256))
+  for (const component of sbom.components) {
+    assert.ok(component.purl && component['bom-ref'] && component.version)
+  }
+})
+
+test('the release gate refuses laundered PASS, unsubstantiated BLOCKED and unauthorized live claims', () => {
+  // A minimal all-PASS report is the only shape allowed to claim qualification.
+  const base = {
+    schema: QUALIFICATION_SCHEMA,
+    finalVerdict: 'TECHNICALLY QUALIFIED',
+    releasePublished: false,
+    gates: [{ id: 'g1', name: 'one', mandatory: true, status: 'PASS', evidence: [{ command: 'node --test' }] }],
+  }
+  assert.equal(validateQualificationReport(base).ok, true)
+  assert.ok(validateQualificationReport({ ...base, gates: [{ ...base.gates[0], evidence: [] }] }).problems.some((p) => /PASS without evidence/.test(p)))
+  assert.ok(validateQualificationReport({ ...base, gates: [{ ...base.gates[0], status: 'BLOCKED' }] }).problems.some((p) => /BLOCKED without/.test(p)))
+  assert.ok(validateQualificationReport({ ...base, gates: [{ ...base.gates[0], status: 'NOT APPLICABLE' }] }).problems.some((p) => /NOT APPLICABLE without/.test(p)))
+  assert.ok(validateQualificationReport({ ...base, finalVerdict: 'NOT RELEASE READY' }).problems.some((p) => /finalVerdict/.test(p)))
+  assert.ok(validateQualificationReport({
+    ...base,
+    gates: [{ ...base.gates[0], requiresLiveCredential: true, liveCredentialEvidence: { callLog: null } }],
+  }).problems.some((p) => /live-credential gate marked PASS/.test(p)))
+  assert.equal(validateQualificationReport({ ...base, releasePublished: true }).ok, false)
+  assert.ok(RELEASE_STATES.every((state) => typeof state === 'string'))
+})
+
+test('release signing fails closed without an explicitly authorized key', () => {
+  const dir = temp()
+  try {
+    writeFileSync(join(dir, 'SHA256SUMS'), '00  nothing\n')
+    const env = { ...process.env }
+    for (const name of Object.keys(env)) if (name.startsWith('RAGAM_RELEASE_SIGNING_')) delete env[name]
+    const result = spawnSync(process.execPath, [resolve(REPO, 'scripts/release/sign-release.mjs'), '--dir', dir], { env, encoding: 'utf8' })
+    assert.equal(result.status, 2, `expected a fail-closed refusal, got ${result.status}: ${result.stderr}`)
+    assert.match(result.stderr, /RAGAM_RELEASE_SIGNING_KEY_ID/)
+    assert.match(result.stderr, /BLOCKED/)
+    assert.equal(existsSync(join(dir, 'SHA256SUMS.asc')), false, 'no signature may be fabricated')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// --- R4: honest machine-readable registers --------------------------------
+
+test('every catalogue provider is in the live register and none is claimed live-qualified', () => {
+  const register = json('docs/release/provider-register.json')
+  assert.equal(register.liveCallsMade, 0)
+  assert.equal(register.providers.length, PROVIDERS.length)
+  const ids = new Set(PROVIDERS.map((p) => p.id))
+  for (const provider of register.providers) {
+    assert.ok(ids.has(provider.id), `unknown provider ${provider.id}`)
+    assert.ok(RELEASE_STATES.includes(provider.status))
+    assert.ok(provider.configField.includes(`/api/providers/${provider.id}`))
+    assert.equal(provider.liveCredentialEvidence.callLog, null)
+    if (provider.status === 'BLOCKED') assert.ok(provider.unblock.includes('authorized'), `${provider.id} needs an exact unblock requirement`)
+    if (provider.status === 'NOT APPLICABLE') assert.ok(provider.justification)
+    assert.equal(provider.status === 'PASS', false, 'no provider was live-tested')
+  }
+})
+
+test('model register does not classify metadata-only tiers as operational models', () => {
+  const models = json('docs/release/model-register.json')
+  assert.equal(models.models.length, 3)
+  assert.deepEqual(models.models.map((m) => m.id), ['lite', 'pro', 'max'])
+  assert.equal(models.operationalModelsVerified, 0)
+  assert.equal(models.weightFilesTrackedInGit, 0)
+  for (const model of models.models) {
+    assert.equal(model.actualWeightsPresent, false)
+    assert.equal(model.qualification.realInference.status, 'BLOCKED')
+    assert.equal(model.qualification.weightsPresent.status, 'FAIL')
+    assert.match(model.tierSemantics, /not a distinct model/)
+    assert.equal(model.notFirstPartyClaim, false)
+  }
+})
+
+test('training, E2E and security evidence files are real, passing and correctly scoped', () => {
+  const training = json('docs/release/evidence/training-evidence.json')
+  assert.equal(training.fail, 0)
+  assert.ok(training.pass >= 10)
+  assert.match(training.scope, /NOT a Klyvaron Pro\/Max foundation model/)
+  assert.ok(!training.notTested.some((item) => /SIGTERM cancellation/.test(item)), 'real-trainer SIGTERM cancellation is no longer untested')
+  assert.equal(training.relatedEvidence.workerCancellation, 'docs/release/evidence/training-worker-qualification.json')
+  const worker = json('docs/release/evidence/training-worker-qualification.json')
+  assert.equal(worker.fail, 0)
+  assert.equal(worker.pass, 16)
+  assert.equal(worker.liveThirdPartyCalls, 0)
+  assert.equal(worker.foundationTrainingClaim, false)
+  assert.equal(worker.productionModelQualified, false)
+  assert.match(worker.scope, /NOT a production Klyvaron model/)
+  assert.equal(worker.measured.cancellationExitCode, 130)
+  assert.equal(worker.measured.resumeExitCode, 130)
+  assert.equal(worker.measured.failureExitCode, 1)
+  assert.equal(worker.measured.resumeStartStep, 1)
+  assert.ok(worker.measured.resumeObservedStep > worker.measured.observedStep)
+  assert.notEqual(worker.measured.resumeCheckpointSha256, worker.measured.checkpointSha256)
+  assert.ok(worker.results.every((row) => row.mode === 'real_local_process'))
+  for (const id of ['independent_sha256sum_verification', 'checkpoint_resume_started', 'parameter_state_advanced_after_resume', 'resume_checkpoint_integrity', 'resume_cancelled_before_completion']) {
+    assert.equal(worker.results.find((row) => row.id === id)?.status, 'PASS', `${id} must pass with real-trainer evidence`)
+  }
+  assert.ok(worker.logs.includes('docs/release/evidence/training-worker-resume.log'))
+  const checkpoint = json('docs/release/evidence/training-worker-checkpoint.json')
+  assert.equal(checkpoint.independentVerification.status, 0)
+  assert.equal((checkpoint.independentVerification.stdout.match(/: OK/g) ?? []).length, 2)
+  assert.equal(checkpoint.phases.phase1.npz.step, 1)
+  assert.ok(checkpoint.phases.phase2.npz.step > checkpoint.phases.phase1.npz.step)
+  assert.notEqual(checkpoint.phases.phase2.sha256, checkpoint.phases.phase1.sha256)
+  assert.ok(checkpoint.npz.weightArrays > 0 && checkpoint.npz.optimizerArrays > 0)
+  const e2e = json('docs/release/evidence/e2e-qualification.json')
+  assert.equal(e2e.fail, 0)
+  assert.ok(e2e.pass >= 15)
+  assert.equal(e2e.liveThirdPartyCalls, 0)
+  assert.ok(e2e.results.every((r) => ['isolated_test_service', 'in_process', 'live', 'local_model', 'mock'].includes(r.mode)))
+  assert.ok(e2e.results.every((r) => r.mode !== 'live'))
+  const security = json('docs/release/evidence/security-scan.json')
+  assert.equal(security.fail, 0)
+  assert.ok(security.pass >= 8)
+  assert.ok(security.checks.find((c) => c.id === 'no_hardcoded_credential_literals').detail.includes('0 unreviewed'))
+})
+
+test('the machine-readable release gate is valid, honest and still refuses publication', () => {
+  const report = json('docs/release/qualification.json')
+  assert.equal(report.schema, QUALIFICATION_SCHEMA)
+  const verdict = validateQualificationReport(report)
+  assert.equal(verdict.ok, true, verdict.problems.join('; '))
+  assert.equal(report.finalVerdict, 'NOT RELEASE READY')
+  assert.equal(report.releasePublished, false)
+  assert.ok(verdict.nonPassMandatory > 0, 'live qualification, weights, signing and staging are not PASS')
+  assert.equal(report.summary['NOT TESTED'], 1, 'only the commercial SAST/DAST gate remains NOT TESTED')
+  assert.equal(report.summary.PASS, 41)
+  assert.equal(report.summary.mandatoryNonPass, 28)
+  assert.equal(report.gates.find((g) => g.id === 'T03').status, 'PASS', 'real-trainer cancellation and resume were actually executed')
+  assert.ok(report.gates.find((g) => g.id === 'T03').evidence.some((e) => /verify-training-worker-cancellation\.mjs/.test(e.command ?? '')))
+  assert.ok(report.gates.find((g) => g.id === 'T03').evidence.some((e) => /training-worker-resume\.log/.test(e.resumeLog ?? '')))
+  assert.equal(report.gates.find((g) => g.id === 'S02').status, 'NOT TESTED')
+  assert.equal(report.artifacts.trainingWorker, 'docs/release/evidence/training-worker-qualification.json')
+  const desktopWorkflow = read('.github/workflows/desktop.yml')
+  assert.match(desktopWorkflow, /for attempt in 1 2 3/, 'Desktop packaging must retry transient electron-builder download failures')
+  assert.match(desktopWorkflow, /npx electron-builder --dir/, 'Desktop retry must still execute the real unpacked-app build')
+  assert.match(desktopWorkflow, /ELECTRON_MIRROR/, 'Desktop CI must document the official Electron mirror override')
+  assert.match(desktopWorkflow, /ELECTRON_BUILDER_BINARIES_MIRROR/, 'Desktop CI must document the official toolset mirror override')
+  for (const gate of report.gates) {
+    if (gate.requiresLiveCredential) assert.notEqual(gate.status, 'PASS', `${gate.id} cannot be PASS without a live call`)
+    if (gate.status === 'BLOCKED') assert.ok(gate.unblock && gate.unblock.length > 20, `${gate.id} needs an exact unblock requirement`)
+    if (gate.status === 'PASS') assert.ok(gate.evidence?.length > 0, `${gate.id} needs recorded evidence`)
+  }
+  // R8: the commercial SAST/DAST workflow must fail closed, not fabricate a scan.
+  const sastRoot = mkdtempSync(join(tmpdir(), 'ragam-sast-dast-'))
+  const sastOut = join(sastRoot, 'commercial-sast-dast.json')
+  const sastEnv = { ...process.env }
+  for (const name of Object.keys(sastEnv)) {
+    if (name.startsWith('RAGAM_SAST_DAST_')) delete sastEnv[name]
+  }
+  try {
+    const refused = spawnSync(process.execPath, ['scripts/release/commercial-sast-dast.mjs', '--out', sastOut], {
+      cwd: REPO, env: sastEnv, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
+    })
+    assert.equal(refused.status, 2, `expected exit 2, got ${refused.status}: ${refused.stderr || refused.stdout}`)
+    assert.match(refused.stderr, /No scan was executed and no evidence file was written/)
+    assert.match(refused.stderr, /all eight RAGAM_SAST_DAST_\* variables/)
+    assert.equal(existsSync(sastOut), false, 'a refused run must not write evidence')
+    assert.equal(existsSync(resolve(REPO, 'docs/release/evidence/commercial-sast-dast.json')), false,
+      'no fabricated commercial SAST/DAST evidence may be committed')
+    assert.match(read('docs/release/evidence/final-commercial-sast-dast-refusal.log'), /exit=2/)
+    const sastGate = report.gates.find((entry) => entry.id === 'S02')
+    assert.equal(sastGate.status, 'NOT TESTED')
+    for (const name of [
+      'RAGAM_SAST_DAST_AUTHORIZED_BY', 'RAGAM_SAST_DAST_PRODUCT', 'RAGAM_SAST_DAST_LICENSE_CONFIRM=YES',
+      'RAGAM_SAST_DAST_COMMAND', 'RAGAM_SAST_DAST_REPORT', 'RAGAM_SAST_DAST_REPORT_SHA256',
+      'RAGAM_SAST_DAST_COMMIT', 'RAGAM_SAST_DAST_CONFIRM=YES',
+    ]) assert.ok(sastGate.unblock.includes(name), `${name} must be in the exact unblock requirement`)
+    const sastWorkflow = read('.github/workflows/release.yml')
+    assert.match(sastWorkflow, /run_sast_dast/, 'the commercial workflow must be an explicit dispatch input')
+    assert.match(sastWorkflow, /RAGAM_SAST_DAST_REPORT_SHA256/, 'the workflow must supply the independent report digest')
+    assert.match(sastWorkflow, /commercial-sast-dast\.mjs/, 'the workflow must call the fail-closed verifier')
+    const generator = read('scripts/release/generate-qualification.mjs')
+    for (const pattern of [
+      /commercialSastDast\.schema/, /commercialSastDast\.commit/, /commercialSastDast\.reportSha256/,
+      /commercialSastDast\.toolExitCode/, /commercialSastDast\.criticalFindings === 0/,
+      /commercialSastDast\.highFindings === 0/, /commercialSastDast\.rawToolOutputStored === false/,
+    ]) assert.match(generator, pattern, 'the gate generator must strictly verify commercial evidence')
+  } finally {
+    rmSync(sastRoot, { recursive: true, force: true })
+  }
+})
+
+// --- R7/R8: clean-checkout gate and fail-closed commercial SAST/DAST --------
+
+test('the release gate regenerates identically in a clean checkout with no ignored build directory', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ragam-clean-gate-'))
+  const ignored = new Set(['.git', 'node_modules', '.venv', 'build'])
+  const copyTree = (source, destination) => {
+    mkdirSync(destination, { recursive: true })
+    for (const entry of readdirSync(source, { withFileTypes: true })) {
+      if (ignored.has(entry.name) || entry.isSymbolicLink()) continue
+      const from = join(source, entry.name)
+      const to = join(destination, entry.name)
+      if (entry.isDirectory()) copyTree(from, to)
+      else if (entry.isFile()) copyFileSync(from, to)
+    }
+  }
+  try {
+    copyTree(REPO, root)
+    assert.equal(existsSync(join(root, 'build', 'release', '0.2.0')), false,
+      'the clean checkout must not contain the ignored local artifact staging directory')
+    // The full Core suite streams its own TAP into this evidence file while this
+    // test runs. Use the committed TAP blob, not a partially written local file.
+    const committedTap = spawnSync('git', ['show', 'HEAD:docs/release/evidence/final-core.tap'], {
+      cwd: REPO, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
+    })
+    assert.equal(committedTap.status, 0, `could not read committed Core TAP: ${committedTap.stderr}`)
+    writeFileSync(join(root, 'docs', 'release', 'evidence', 'final-core.tap'), committedTap.stdout)
+    const generated = spawnSync(process.execPath, ['scripts/release/generate-qualification.mjs'], {
+      cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
+    })
+    assert.equal(generated.status, 0, `generator failed: ${generated.stderr || generated.stdout}`)
+    const committed = json('docs/release/qualification.json')
+    const regenerated = readJson(join(root, 'docs/release/qualification.json'))
+    const statuses = (report) => Object.fromEntries(report.gates.map((gate) => [gate.id, gate.status]))
+    assert.deepEqual(statuses(regenerated), statuses(committed),
+      'a clean checkout must not silently lose PASS gates')
+    assert.equal(regenerated.summary.PASS, committed.summary.PASS)
+    assert.equal(regenerated.summary.mandatoryNonPass, committed.summary.mandatoryNonPass)
+    assert.equal(regenerated.finalVerdict, 'NOT RELEASE READY')
+    assert.equal(regenerated.artifacts.manifest, 'docs/release/artifacts/manifest.json')
+    assert.deepEqual(regenerated.artifacts.committedArtifactVerification, { checked: 4, pass: 4, fail: 0 })
+    assert.equal(regenerated.gates.find((gate) => gate.id === 'B04').status, 'PASS',
+      'B04 must accept both push and pull_request CI/Desktop runs')
+    assert.ok(!read('scripts/release/generate-qualification.mjs').includes("existsSync(atRoot('build/release/0.2.0/"),
+      'no artifact gate may depend on the ignored build directory')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
