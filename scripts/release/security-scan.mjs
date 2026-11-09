@@ -3,12 +3,15 @@
 //
 //   node scripts/release/security-scan.mjs --out docs/release/evidence/security-scan.json
 //
-// This is a repository-level scan, not a claim of a full commercial SAST
-// product. It covers: tracked-secret exposure, static syntax across every JS
-// module, deployment binding defaults, and the privacy invariants of the
-// telemetry module. Dependency advisories (npm audit / Python advisory audit)
-// and the authenticated authorization/input-validation suites are run as
-// separate recorded commands because they need installed dependencies.
+// This is a repository-level scan, not a claim of a full commercial SAST/DAST
+// product scan. A separate fail-closed, owner-authorized workflow lives in
+// scripts/release/commercial-sast-dast.mjs and remains NOT TESTED until real
+// licensed-product evidence exists. This script covers: tracked-secret exposure,
+// static syntax across every JS module, deployment binding defaults, and the
+// privacy invariants of the telemetry module. Dependency advisories (npm audit
+// / Python advisory audit) and the authenticated authorization/input-validation
+// suites are run as separate recorded commands because they need installed
+// dependencies.
 
 import { readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { resolve, join, extname } from 'node:path'
@@ -113,7 +116,7 @@ const summary = {
   fail: checks.filter((c) => c.status === 'FAIL').length,
   reviewedSynthetic: reviewed,
   outOfScope: [
-    'Commercial SAST/DAST product scan: NOT TESTED (no tool or license configured)',
+    'Commercial SAST/DAST product scan: NOT TESTED (fail-closed owner-authorized workflow implemented in scripts/release/commercial-sast-dast.mjs; no tool or license configured)',
     'Live third-party penetration testing: BLOCKED (no authorized test/staging credentials)',
     'Production database RLS verification: BLOCKED (no staging environment)',
   ],

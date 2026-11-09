@@ -77,6 +77,25 @@ const security = safeJson('security-scan.json')
 const e2e = safeJson('e2e-qualification.json')
 const training = safeJson('training-evidence.json')
 const workerCancellation = safeJson('training-worker-qualification.json')
+const commercialSastDast = safeJson('commercial-sast-dast.json')
+const commercialSastDastPass = Boolean(commercialSastDast)
+  && commercialSastDast.schema === 'ragam-commercial-sast-dast-evidence/1'
+  && commercialSastDast.status === 'PASS'
+  && commercialSastDast.scanCompleted === true
+  && commercialSastDast.licenseConfirmed === true
+  && commercialSastDast.criticalFindings === 0
+  && commercialSastDast.highFindings === 0
+  && commercialSastDast.toolExitCode === 0
+  && commercialSastDast.commandRedacted === true
+  && commercialSastDast.rawToolOutputStored === false
+  && commercialSastDast.rawFindingsStored === false
+  && /^[0-9a-f]{40}$/.test(commercialSastDast.commit ?? '')
+  && /^[0-9a-f]{64}$/.test(commercialSastDast.reportSha256 ?? '')
+  && typeof commercialSastDast.product === 'string' && commercialSastDast.product.length > 0
+  && typeof commercialSastDast.authorizedBy === 'string' && commercialSastDast.authorizedBy.length > 0
+  && typeof commercialSastDast.reportFile === 'string' && commercialSastDast.reportFile.length > 0
+  && Number.isInteger(commercialSastDast.totalFindings) && commercialSastDast.totalFindings >= 0
+  && !Number.isNaN(Date.parse(commercialSastDast.verifiedAt ?? ''))
 const providers = safeJson('../provider-register.json')
 const models = safeJson('../model-register.json')
 const artifactVerify = passLog('final-artifact-verify.log')
@@ -242,9 +261,16 @@ add({ id: 'S01', area: 'security', name: 'Secret scan, static syntax, deployment
   status: security && security.fail === 0 ? 'PASS' : 'NOT TESTED',
   evidence: security ? [{ command: 'node scripts/release/security-scan.mjs --out docs/release/evidence/security-scan.json', artifact: 'docs/release/evidence/security-scan.json', measured: { pass: security.pass, fail: security.fail, trackedFiles: security.trackedFiles } }] : [],
   unblock: 'Run the security scan.' })
-add({ id: 'S02', area: 'security', name: 'Commercial SAST/DAST product scan', mandatory: true, status: 'NOT TESTED',
-  evidence: [{ artifact: 'docs/release/evidence/security-scan.json', note: 'outOfScope records this explicitly' }],
-  unblock: 'Configure and run a licensed SAST/DAST tool against this commit; none is configured in the repository.' })
+add({ id: 'S02', area: 'security', name: 'Commercial SAST/DAST product scan', mandatory: true,
+  status: commercialSastDastPass ? 'PASS' : 'NOT TESTED',
+  evidence: commercialSastDastPass ? [
+    { command: 'npm run release:sast-dast', artifact: 'docs/release/evidence/commercial-sast-dast.json', measured: { product: commercialSastDast.product, commit: commercialSastDast.commit, criticalFindings: 0, highFindings: 0, totalFindings: commercialSastDast.totalFindings } },
+  ] : [
+    { command: 'npm run release:sast-dast (without owner authorization/license)', log: 'docs/release/evidence/final-commercial-sast-dast-refusal.log', note: 'exit 2; no scan was run and no evidence was fabricated' },
+    { artifact: 'scripts/release/commercial-sast-dast.mjs', note: 'fail-closed owner-authorized workflow; no tool or license configured' },
+    { artifact: 'docs/release/evidence/security-scan.json', note: 'outOfScope records this explicitly' },
+  ],
+  unblock: commercialSastDastPass ? null : 'Provide an owner-authorized commercial SAST/DAST product/license and set RAGAM_SAST_DAST_AUTHORIZED_BY, RAGAM_SAST_DAST_PRODUCT, RAGAM_SAST_DAST_LICENSE_CONFIRM=YES, RAGAM_SAST_DAST_COMMAND, RAGAM_SAST_DAST_REPORT (outside the repository), RAGAM_SAST_DAST_REPORT_SHA256, RAGAM_SAST_DAST_COMMIT=<exact HEAD> and RAGAM_SAST_DAST_CONFIRM=YES. Run the licensed tool against the exact commit, then npm run release:sast-dast; the normalized report must record 0 critical/high findings. No tool or license is configured in this repository.' })
 add({ id: 'S03', area: 'security', name: 'Live third-party penetration testing and provider-side attack cases', mandatory: true, status: 'BLOCKED', requiresLiveCredential: true,
   evidence: [{ artifact: 'docs/release/provider-register.json' }], liveCredentialEvidence: { callLog: null },
   unblock: 'Authorized test/staging credentials plus explicit owner permission to probe each provider endpoint.' })

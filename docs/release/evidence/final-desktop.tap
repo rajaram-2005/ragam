@@ -1,4 +1,8 @@
 
+> aetheris-omni@0.2.0 desktop:test
+> npm --prefix apps/desktop test
+
+
 > ragam-desktop@0.2.0 test
 > node --test test/*.test.mjs
 
@@ -6,25 +10,25 @@ TAP version 13
 # Subtest: desktop web server is loopback-only and serves the SPA with safe asset headers
 ok 1 - desktop web server is loopback-only and serves the SPA with safe asset headers
   ---
-  duration_ms: 48.553004
+  duration_ms: 42.520738
   type: 'test'
   ...
 # Subtest: desktop /api proxy preserves same-origin and CSRF headers for the loopback Core
 ok 2 - desktop /api proxy preserves same-origin and CSRF headers for the loopback Core
   ---
-  duration_ms: 22.313994
+  duration_ms: 20.044755
   type: 'test'
   ...
 # Subtest: a stopped Core becomes a clear retryable 503, not a generic proxy 502
 ok 3 - a stopped Core becomes a clear retryable 503, not a generic proxy 502
   ---
-  duration_ms: 7.62914
+  duration_ms: 8.139881
   type: 'test'
   ...
 # Subtest: desktop web server refuses encoded path traversal instead of serving outside its web root
 ok 4 - desktop web server refuses encoded path traversal instead of serving outside its web root
   ---
-  duration_ms: 3.959664
+  duration_ms: 5.575127
   type: 'test'
   ...
 1..4
@@ -35,4 +39,4 @@ ok 4 - desktop web server refuses encoded path traversal instead of serving outs
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 197.612702
+# duration_ms 173.590432

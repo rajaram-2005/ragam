@@ -290,9 +290,47 @@ test('the machine-readable release gate is valid, honest and still refuses publi
     if (gate.status === 'BLOCKED') assert.ok(gate.unblock && gate.unblock.length > 20, `${gate.id} needs an exact unblock requirement`)
     if (gate.status === 'PASS') assert.ok(gate.evidence?.length > 0, `${gate.id} needs recorded evidence`)
   }
+  // R8: the commercial SAST/DAST workflow must fail closed, not fabricate a scan.
+  const sastRoot = mkdtempSync(join(tmpdir(), 'ragam-sast-dast-'))
+  const sastOut = join(sastRoot, 'commercial-sast-dast.json')
+  const sastEnv = { ...process.env }
+  for (const name of Object.keys(sastEnv)) {
+    if (name.startsWith('RAGAM_SAST_DAST_')) delete sastEnv[name]
+  }
+  try {
+    const refused = spawnSync(process.execPath, ['scripts/release/commercial-sast-dast.mjs', '--out', sastOut], {
+      cwd: REPO, env: sastEnv, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
+    })
+    assert.equal(refused.status, 2, `expected exit 2, got ${refused.status}: ${refused.stderr || refused.stdout}`)
+    assert.match(refused.stderr, /No scan was executed and no evidence file was written/)
+    assert.match(refused.stderr, /all eight RAGAM_SAST_DAST_\* variables/)
+    assert.equal(existsSync(sastOut), false, 'a refused run must not write evidence')
+    assert.equal(existsSync(resolve(REPO, 'docs/release/evidence/commercial-sast-dast.json')), false,
+      'no fabricated commercial SAST/DAST evidence may be committed')
+    assert.match(read('docs/release/evidence/final-commercial-sast-dast-refusal.log'), /exit=2/)
+    const sastGate = report.gates.find((entry) => entry.id === 'S02')
+    assert.equal(sastGate.status, 'NOT TESTED')
+    for (const name of [
+      'RAGAM_SAST_DAST_AUTHORIZED_BY', 'RAGAM_SAST_DAST_PRODUCT', 'RAGAM_SAST_DAST_LICENSE_CONFIRM=YES',
+      'RAGAM_SAST_DAST_COMMAND', 'RAGAM_SAST_DAST_REPORT', 'RAGAM_SAST_DAST_REPORT_SHA256',
+      'RAGAM_SAST_DAST_COMMIT', 'RAGAM_SAST_DAST_CONFIRM=YES',
+    ]) assert.ok(sastGate.unblock.includes(name), `${name} must be in the exact unblock requirement`)
+    const sastWorkflow = read('.github/workflows/release.yml')
+    assert.match(sastWorkflow, /run_sast_dast/, 'the commercial workflow must be an explicit dispatch input')
+    assert.match(sastWorkflow, /RAGAM_SAST_DAST_REPORT_SHA256/, 'the workflow must supply the independent report digest')
+    assert.match(sastWorkflow, /commercial-sast-dast\.mjs/, 'the workflow must call the fail-closed verifier')
+    const generator = read('scripts/release/generate-qualification.mjs')
+    for (const pattern of [
+      /commercialSastDast\.schema/, /commercialSastDast\.commit/, /commercialSastDast\.reportSha256/,
+      /commercialSastDast\.toolExitCode/, /commercialSastDast\.criticalFindings === 0/,
+      /commercialSastDast\.highFindings === 0/, /commercialSastDast\.rawToolOutputStored === false/,
+    ]) assert.match(generator, pattern, 'the gate generator must strictly verify commercial evidence')
+  } finally {
+    rmSync(sastRoot, { recursive: true, force: true })
+  }
 })
 
-// --- R7: clean-checkout gate regeneration ----------------------------------
+// --- R7/R8: clean-checkout gate and fail-closed commercial SAST/DAST --------
 
 test('the release gate regenerates identically in a clean checkout with no ignored build directory', () => {
   const root = mkdtempSync(join(tmpdir(), 'ragam-clean-gate-'))

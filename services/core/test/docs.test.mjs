@@ -156,7 +156,16 @@ test('.env.example documents active deployment variables without exposing accoun
     'AETHERIS_ALLOW_ACCOUNT_REGISTRATION', 'AETHERIS_COOKIE_SECURE',
     'AETHERIS_COOKIE_SAMESITE', 'AETHERIS_PRINT_RESET_CODES',
   ])
-  const deployment = new Set([...real].filter((name) => !directAccountMode.has(name)))
+  // The owner-authorized commercial SAST/DAST workflow lives in scripts/release,
+  // outside the runtime src tree. Its eight intentionally commented inputs are a
+  // real release-qualification configuration surface, never active app settings.
+  const releaseQualificationInputs = new Set([
+    'RAGAM_SAST_DAST_AUTHORIZED_BY', 'RAGAM_SAST_DAST_PRODUCT',
+    'RAGAM_SAST_DAST_LICENSE_CONFIRM', 'RAGAM_SAST_DAST_COMMAND',
+    'RAGAM_SAST_DAST_REPORT', 'RAGAM_SAST_DAST_REPORT_SHA256',
+    'RAGAM_SAST_DAST_COMMIT', 'RAGAM_SAST_DAST_CONFIRM',
+  ])
+  const deployment = new Set([...real, ...releaseQualificationInputs].filter((name) => !directAccountMode.has(name)))
 
   const invented = [...documented].filter((name) => !deployment.has(name))
   assert.deepEqual(invented, [], `.env.example documents variables not used by the active deployment: ${invented.join(', ')}`)

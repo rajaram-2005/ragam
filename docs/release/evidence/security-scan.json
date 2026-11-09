@@ -1,10 +1,10 @@
 {
   "schema": "ragam-security-scan/1",
   "repository": "rajaram-2005/ragam",
-  "scannedAt": "2026-11-09T05:27:48.594Z",
-  "trackedFiles": 660,
-  "textFilesScanned": 558,
-  "nodeModulesChecked": 292,
+  "scannedAt": "2026-11-09T06:15:14.801Z",
+  "trackedFiles": 663,
+  "textFilesScanned": 559,
+  "nodeModulesChecked": 293,
   "pass": 9,
   "fail": 0,
   "reviewedSynthetic": [
@@ -70,7 +70,7 @@
     }
   ],
   "outOfScope": [
-    "Commercial SAST/DAST product scan: NOT TESTED (no tool or license configured)",
+    "Commercial SAST/DAST product scan: NOT TESTED (fail-closed owner-authorized workflow implemented in scripts/release/commercial-sast-dast.mjs; no tool or license configured)",
     "Live third-party penetration testing: BLOCKED (no authorized test/staging credentials)",
     "Production database RLS verification: BLOCKED (no staging environment)"
   ],
@@ -78,17 +78,17 @@
     {
       "id": "no_tracked_secret_or_weight_files",
       "status": "PASS",
-      "detail": "660 tracked files inspected; no credentials, private keys or weight payloads"
+      "detail": "663 tracked files inspected; no credentials, private keys or weight payloads"
     },
     {
       "id": "no_hardcoded_credential_literals",
       "status": "PASS",
-      "detail": "558 text files scanned for 4 patterns; 12 reviewed synthetic fixture occurrences, 0 unreviewed"
+      "detail": "559 text files scanned for 4 patterns; 12 reviewed synthetic fixture occurrences, 0 unreviewed"
     },
     {
       "id": "node_syntax_all_modules",
       "status": "PASS",
-      "detail": "292 .mjs/.js files pass node --check"
+      "detail": "293 .mjs/.js files pass node --check"
     },
     {
       "id": "compose_defaults_loopback",

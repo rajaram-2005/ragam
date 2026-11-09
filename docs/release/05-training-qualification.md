@@ -31,7 +31,7 @@ Verification: `scripts/release/verify-training-evidence.py` → **11 PASS, 0 FAI
 | Second cancellation before completion | Resumed job cancelled with SIGTERM, exited `130`, state `cancelled_checkpointed`; no final raw artifact, report or model card was produced; no orphan process | [resume log](evidence/training-worker-resume.log), [jobs](evidence/training-worker-jobs.json) |
 | Real failure path | A separate real trainer process with an invalid corpus record exited `1`, was recorded as `failed` with no checkpoint, and left no active process | [failure log](evidence/training-worker-failure.log), [jobs](evidence/training-worker-jobs.json) |
 
-Both large checkpoints are deliberately kept in the ignored `build/training-worker-qualification/` directory; their digests and metadata are committed. This run proves cancellation/resume/lifecycle behavior only. It does **not** qualify a production Klyvaron model, does not claim foundation training, and does not use licensed weights.
+Both large checkpoints are deliberately kept in the ignored `build/training-worker-qualification/` directory; their digests and metadata are committed. The regenerated evidence records the exact source commit `16db404f4085819c8cececb714a5aa6816f4609c`. This run proves cancellation/resume/lifecycle behavior only. It does **not** qualify a production Klyvaron model, does not claim foundation training, and does not use licensed weights.
 
 ## Requested lifecycle checklist
 

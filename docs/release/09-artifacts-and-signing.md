@@ -44,6 +44,10 @@ It imports the key into a throwaway GPG home, produces a detached armor signatur
 
 **Exact remaining requirement:** an owner-authorized signing key (key id + armored private key stored as a protected secret outside the repository), the four variables above, and an owner-authorized release destination. No signature, private key or published release was created.
 
+## Commercial SAST/DAST evidence in the staged bundle
+
+`.github/workflows/release.yml` also has an explicit `run_sast_dast` dispatch input. When it is not requested, the workflow records `sast-dast-status.json` with `"status":"NOT TESTED"` in the staged bundle. When it is requested, the owner-authorized licensed tool runs, `scripts/release/commercial-sast-dast.mjs` validates the external report and the workflow copies only the privacy-preserving `commercial-sast-dast.json` summary into the staged bundle. No raw tool output, raw findings, license token or credential is stored. No commercial scan has been run and no such evidence file exists in this repository; see [07-security-and-telemetry.md](07-security-and-telemetry.md) and [evidence/final-commercial-sast-dast-refusal.log](evidence/final-commercial-sast-dast-refusal.log).
+
 ## Recorded build (actual bytes)
 
 Built from clean checkout of commit `b53c8748a82946ac57b4471be177677258bcf4f5` (tree `17b9fd48c3a87190ba60179b1acf5771df2b1d72`), Node `v22.22.3`, linux/x64. The evidence files added after the build are in a later commit; the provenance commit above is the exact source of both artifacts — nothing from the working tree was used.

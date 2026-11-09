@@ -33,6 +33,7 @@
     "release:providers": "node scripts/release/generate-provider-register.mjs",
     "release:models": "node scripts/release/generate-model-register.mjs",
     "release:security": "node scripts/release/security-scan.mjs",
+    "release:sast-dast": "node scripts/release/commercial-sast-dast.mjs",
     "release:e2e": "node scripts/release/e2e-qualification.mjs",
     "release:training-worker": "node scripts/release/verify-training-worker-cancellation.mjs",
     "release:build": "node scripts/release/build-release.mjs",

@@ -1,0 +1,15 @@
+# Measured fail-closed refusal (no owner authorization/license/tool/report configured)
+# command: node scripts/release/commercial-sast-dast.mjs --out "$TMP_OUT"
+# all eight RAGAM_SAST_DAST_* variables unset; no scan executed; no evidence written
+commercial SAST/DAST refused: no authorized product/license/report is configured.
+  missing RAGAM_SAST_DAST_AUTHORIZED_BY — identity of the repository owner who authorized this scan
+  missing RAGAM_SAST_DAST_PRODUCT — commercial SAST/DAST product name and version
+  missing RAGAM_SAST_DAST_LICENSE_CONFIRM — must be exactly YES after verifying the license entitlement
+  missing RAGAM_SAST_DAST_COMMAND — shell command that runs the licensed tool and writes the normalized JSON report
+  missing RAGAM_SAST_DAST_REPORT — absolute path to the normalized JSON report, outside this repository
+  missing RAGAM_SAST_DAST_REPORT_SHA256 — expected SHA-256 of the normalized JSON report, supplied independently
+  missing RAGAM_SAST_DAST_COMMIT — exact 40-character commit SHA that the tool scanned
+  missing RAGAM_SAST_DAST_CONFIRM — must be exactly YES to confirm explicit owner authorization
+  No scan was executed and no evidence file was written. The gate remains NOT TESTED.
+  Exact requirement: set all eight RAGAM_SAST_DAST_* variables listed above, run the licensed tool against the exact commit, then re-run this script.
+exit=2
