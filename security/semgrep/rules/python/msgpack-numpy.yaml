@@ -2,7 +2,7 @@ rules:
   - id: msgpack-numpy
     message: >-
       Found usage of msgpack-numpy unpacking, which relies on pickle to deserialize numpy arrays containing objects.
-      Functions reliant on pickle can result in arbitrary code execution. 
+      Functions reliant on pickle can result in arbitrary code execution.
       Consider switching to a safer serialization method.
     languages: [python]
     severity: ERROR

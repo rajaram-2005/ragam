@@ -1,7 +1,7 @@
 rules:
   - id: pickles-in-numpy
     message: >-
-      Functions reliant on pickle can result in arbitrary code execution. 
+      Functions reliant on pickle can result in arbitrary code execution.
       Consider using fickling or switching to a safer serialization method
     languages: [python]
     severity: ERROR
