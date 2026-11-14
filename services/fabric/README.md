@@ -63,9 +63,13 @@ python services/fabric/remote/run_smoke_local.py --workdir ./aetheris-smoke
 It installs only missing/mismatched reviewed dependencies (retrying with pip's
 `--break-system-packages` escape hatch only after an explicit PEP 668 refusal), uses
 CUDA when available and otherwise runs on CPU, resumes valid checkpoints in the same
-work directory, and always puts the stage ledger at `aetheris-smoke/status.json`. This does not add torch
-to Fabric's runtime dependency set; the normal service and tests remain NumPy-only.
-See [docs/21](../../docs/21-remote-training.md) for exactly what the smoke run proves.
+work directory, and always puts the stage ledger at `aetheris-smoke/status.json`. The
+optional HF backend stores checkpoint tensors as safetensors and optimizer metadata
+as strict JSON; legacy `.pt` pickle checkpoints are preserved but refused on load, so
+choose a new checkpoint directory rather than weakening deserialization protections.
+This does not add torch to Fabric's runtime dependency set; the normal service and
+tests remain NumPy-only. See [docs/21](../../docs/21-remote-training.md) for exactly
+what the smoke run proves.
 
 ## The pipeline
 

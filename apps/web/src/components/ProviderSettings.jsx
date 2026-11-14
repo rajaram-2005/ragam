@@ -211,7 +211,7 @@ export default function ProviderSettings({ account, onClose, onChanged, provider
           setNotice(`Connection checked: ${s.models.length} listed models. Inference and modality support are not yet verified.`)
           if (kind === 'comfyui') await inspectComfyHardware(kind)
         }
-      }}>Test connection & refresh models</Button>
+      }}>Test connection &amp; refresh models</Button>
       <Button variant="danger" disabled={busy || !owner || !saved} onClick={async () => { if (window.confirm('Remove the connection and any stored key? Your conversations are kept.')) { if (await act(() => api.removeProvider(kind))) setNotice('Connection and stored credential removed.') } }}>Remove connection</Button>
     </div>
     {runtime.wire === 'comfyui_images' ? <section className="provider-hardware" aria-label="ComfyUI hardware report">

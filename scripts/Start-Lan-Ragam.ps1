@@ -24,6 +24,12 @@ if (Test-PrivateIpv4 $lanHost) {
   throw 'Use the private IPv4 address above or a valid mDNS hostname ending in .local. Schemes, ports, paths, and public names are not accepted.'
 }
 
+# Docker Compose gives inherited process variables precedence over --env-file. Pin
+# the origin this launcher validated so a stale/global environment variable cannot
+# silently change Core's exact trusted HTTPS origin. Port publication is written to a
+# temporary Compose override only after the private IPv4 above has been validated.
+$env:RAGAM_LAN_HOSTNAME = $lanHost
+
 $authUser = (Read-Host 'Shared Basic Auth username (letters, digits, dot, underscore, or hyphen)').Trim()
 if ($authUser -notmatch '^[A-Za-z0-9._-]{1,64}$') {
   throw 'Username must be 1-64 letters, digits, dots, underscores, or hyphens.'
@@ -62,27 +68,37 @@ $rendered = $template.Replace('__RAGAM_LAN_HOSTNAME__', $lanHost).
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 [System.IO.File]::WriteAllText($generatedPath, $rendered, $utf8NoBom)
 
-# This file contains no password or password hash; Compose needs it only for bind/origin.
+# The tracked overlay contains no host-port mapping. Generate that one setting outside
+# the repository from the already validated private IPv4, then use the same external
+# file for config/up/health checks. The generated file contains no credentials.
 [System.IO.File]::WriteAllText((Join-Path $repo '.env.lan'),
-  "RAGAM_BIND_ADDRESS=$bindAddress`nRAGAM_LAN_HOSTNAME=$lanHost`n", $utf8NoBom)
+  "RAGAM_LAN_HOSTNAME=$lanHost`n", $utf8NoBom)
+$tempComposeOverride = Join-Path ([System.IO.Path]::GetTempPath()) "ragam-lan-ports-$([System.Guid]::NewGuid().ToString('N')).yaml"
+$portMapping = '      - "' + $bindAddress + ':443:443"'
+$overrideText = "services:`n  caddy:`n    ports:`n$portMapping`n"
+[System.IO.File]::WriteAllText($tempComposeOverride, $overrideText, $utf8NoBom)
 
-$composeArgs = @('--env-file', '.env.lan', '-f', 'compose.yaml', '-f', 'compose.lan.yaml')
-& docker compose @composeArgs config --quiet
-if ($LASTEXITCODE -ne 0) { throw 'Docker Compose configuration validation failed; no containers were started.' }
-& docker compose @composeArgs up -d --build
-if ($LASTEXITCODE -ne 0) { throw 'Docker Compose could not start the LAN stack. The local loopback deployment remains available with compose.yaml alone.' }
+$composeArgs = @('--env-file', '.env.lan', '-f', 'compose.yaml', '-f', 'compose.lan.yaml', '-f', $tempComposeOverride)
+try {
+  & docker compose @composeArgs config --quiet
+  if ($LASTEXITCODE -ne 0) { throw 'Docker Compose configuration validation failed; no containers were started.' }
+  & docker compose @composeArgs up -d --build
+  if ($LASTEXITCODE -ne 0) { throw 'Docker Compose could not start the LAN stack. The local loopback deployment remains available with compose.yaml alone.' }
 
-Write-Host "LAN workspace started at https://$lanHost" -ForegroundColor Green
-Write-Host 'Caddy requires its private root certificate to be trusted on each client device. Do not bypass browser certificate warnings.' -ForegroundColor Yellow
+  Write-Host "LAN workspace started at https://$lanHost" -ForegroundColor Green
+  Write-Host 'Caddy requires its private root certificate to be trusted on each client device. Do not bypass browser certificate warnings.' -ForegroundColor Yellow
 
-$certPath = Join-Path $repo 'deploy/ragam-lan-root.crt'
-$certLines = & docker compose @composeArgs exec -T caddy cat /data/caddy/pki/authorities/local/root.crt 2>$null
-if ($LASTEXITCODE -eq 0 -and $certLines) {
-  [System.IO.File]::WriteAllText($certPath, (($certLines -join "`n").Trim() + "`n"), [System.Text.Encoding]::ASCII)
-  Write-Host "Caddy public root certificate exported to $certPath" -ForegroundColor Green
-  Write-Host 'On each Windows client, import it as a trusted Root CA (for example: certutil -addstore -f Root deploy/ragam-lan-root.crt).' -ForegroundColor Yellow
-} else {
-  Write-Warning "Caddy's root certificate is not available yet. After Caddy is healthy, export /data/caddy/pki/authorities/local/root.crt from its data volume and trust that certificate on each client."
+  $certPath = Join-Path $repo 'deploy/ragam-lan-root.crt'
+  $certLines = & docker compose @composeArgs exec -T caddy cat /data/caddy/pki/authorities/local/root.crt 2>$null
+  if ($LASTEXITCODE -eq 0 -and $certLines) {
+    [System.IO.File]::WriteAllText($certPath, (($certLines -join "`n").Trim() + "`n"), [System.Text.Encoding]::ASCII)
+    Write-Host "Caddy public root certificate exported to $certPath" -ForegroundColor Green
+    Write-Host 'On each Windows client, import it as a trusted Root CA (for example: certutil -addstore -f Root deploy/ragam-lan-root.crt).' -ForegroundColor Yellow
+  } else {
+    Write-Warning "Caddy's root certificate is not available yet. After Caddy is healthy, export /data/caddy/pki/authorities/local/root.crt from its data volume and trust that certificate."
+  }
+
+  Write-Host 'Stop without deleting data: powershell -ExecutionPolicy Bypass -File scripts/Stop-Lan-Ragam.ps1' -ForegroundColor Cyan
+} finally {
+  Remove-Item -LiteralPath $tempComposeOverride -Force -ErrorAction SilentlyContinue
 }
-
-Write-Host 'Stop without deleting data: powershell -ExecutionPolicy Bypass -File scripts/Stop-Lan-Ragam.ps1' -ForegroundColor Cyan
