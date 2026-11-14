@@ -1,6 +1,8 @@
 # Opt-in LAN-only overlay. scripts/Start-Lan-Ragam.ps1 generates the ignored
-# deploy/Caddyfile.lan.local and .env.lan after collecting a private bind address,
-# a LAN hostname, and a password. The default compose.yaml remains loopback-only.
+# deploy/Caddyfile.lan.local after collecting a private bind address, a LAN hostname,
+# and a password. This tracked overlay never publishes a host port: only the launcher
+# adds a temporary, external Compose override after validating the private IPv4.
+# The default compose.yaml remains loopback-only.
 services:
   core:
     environment:
@@ -9,8 +11,6 @@ services:
       AETHERIS_TRUSTED_WEB_ORIGINS: "https://${RAGAM_LAN_HOSTNAME:?Run scripts/Start-Lan-Ragam.ps1 first}"
 
   caddy:
-    ports:
-      - "${RAGAM_BIND_ADDRESS:?Run scripts/Start-Lan-Ragam.ps1 first}:443:443"
     volumes:
       - ./deploy/Caddyfile.lan.local:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

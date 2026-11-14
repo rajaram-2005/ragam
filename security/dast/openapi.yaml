@@ -1,0 +1,119 @@
+openapi: 3.0.3
+info:
+  title: Ragam local security qualification API scope
+  version: 1.0.0
+  description: >-
+    Local-only OpenAPI subset used by the OWASP ZAP API active scan. The DAST
+    runner enforces the internal Docker network and refuses non-local targets.
+servers:
+  - url: http://edge:8080
+    description: Isolated Ragam DAST network alias; no external egress.
+paths:
+  /api/health:
+    get:
+      operationId: health
+      responses:
+        '200':
+          description: Health response
+  /api/auth:
+    get:
+      operationId: authStatus
+      responses:
+        '200':
+          description: Authentication state
+  /api/config:
+    get:
+      operationId: getConfig
+      responses:
+        '200':
+          description: Authenticated config or an authentication refusal
+  /api/ready:
+    get:
+      operationId: readiness
+      responses:
+        '200':
+          description: Readiness response
+  /api/providers:
+    get:
+      operationId: providers
+      responses:
+        '200':
+          description: Public provider connection state; never includes credentials
+  /api/providers/catalog:
+    get:
+      operationId: providerCatalog
+      responses:
+        '200':
+          description: Provider catalogue
+  /api/klyvaron:
+    get:
+      operationId: klyvaronProfiles
+      responses:
+        '200':
+          description: Shared processing profiles
+  /api/models:
+    get:
+      operationId: models
+      responses:
+        '200':
+          description: Available model selections
+  /api/models/catalog:
+    get:
+      operationId: modelCatalog
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Local model catalogue
+  /api/plugins:
+    get:
+      operationId: plugins
+      responses:
+        '200':
+          description: Installed plugin metadata
+  /api/plugins/capabilities:
+    get:
+      operationId: pluginCapabilities
+      responses:
+        '200':
+          description: Plugin capability metadata
+  /api/plugins/validate:
+    post:
+      operationId: validatePluginManifest
+      description: Pure input validation; does not install or execute code.
+      parameters:
+        - in: header
+          name: X-Aetheris-Request
+          required: true
+          description: Required same-origin mutation marker for the local API scan.
+          schema:
+            type: string
+            enum: ['1']
+          example: '1'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+            example:
+              manifestVersion: 1
+              id: security.scan.fixture
+              name: Security scan fixture
+              version: 1.0.0
+              protocol: local_tool
+              builtin: false
+              author: Ragam security test
+              license: MIT
+              scopes: []
+              description: Ephemeral validation-only fixture.
+              capabilities: []
+      responses:
+        '200':
+          description: Validation result
+        '400':
+          description: Invalid manifest

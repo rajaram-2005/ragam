@@ -583,7 +583,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
           {offeredTools.length && !provider?.chatTools ? <p className="small">The current Chat wire cannot receive function tool schemas. Choose a supported provider; no fallback occurs.</p> : null}
           <div className="composer-actions">
             <details style={{ display: 'inline-block' }}>
-              <summary style={{ listStyle: 'none', cursor: 'pointer', fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Context & options</summary>
+              <summary style={{ listStyle: 'none', cursor: 'pointer', fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Context &amp; options</summary>
               <div style={{ padding: '10px 0 4px' }}>
                 <div className="row" style={{ marginBottom: 8 }}>
                   <Field label="Temperature"><input className="input" type="number" min="0" max="2" step="0.1" value={temperature} onChange={(e) => setTemperature(e.target.value)} style={{ width: 90 }} /></Field>
@@ -627,7 +627,7 @@ export default function ChatArea({ provider, readiness, refreshReadiness, onSett
     </details>
     <details className="context-section"><summary>Conversation history</summary><HistoryPanel sessionId={sessionId} onOpen={openSavedSession} onDelete={handleDeletedSession} disabled={busy || saving} /></details>
     <details className="context-section"><summary>Use a connected MCP tool (manual, optional)</summary><ChatToolRunner onAddResult={addToolResultToDraft} onToolsChange={setOfferedTools} /></details>
-    <details className="context-section"><summary>Optional files & knowledge</summary><KnowledgePanel /></details>
+    <details className="context-section"><summary>Optional files &amp; knowledge</summary><KnowledgePanel /></details>
     <details className="context-section"><summary>Optional approved memory</summary><MemoryPanel /></details>
     <details className="context-section"><summary>Reviewed procedure (optional)</summary><SkillsPanel value={skill} onChange={setSkill} account={account} model={model} provider={provider} /></details>
   </div>

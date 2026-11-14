@@ -35,25 +35,31 @@ jobs:
     name: Build, checksum, SBOM, provenance and optional signing
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Never interpolate dispatch input into a shell script. It crosses the
+    # expression boundary as an environment value and is validated before any
+    # path or release command consumes it.
+    env:
+      RAGAM_RELEASE_VERSION: ${{ inputs.version }}
+      RAGAM_RELEASE_COMMIT: ${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
       - name: Refuse a version that disagrees with the source
         run: |
-          test "${{ inputs.version }}" = "$(cat VERSION)" || {
+          test "$RAGAM_RELEASE_VERSION" = "$(cat VERSION)" || {
             echo "::error::input version does not match VERSION"; exit 1; }
 
       - name: Build from a clean checkout of this exact commit
-        run: node scripts/release/build-release.mjs --out "build/release/${{ inputs.version }}"
+        run: node scripts/release/build-release.mjs --out "build/release/$RAGAM_RELEASE_VERSION"
 
       - name: Verify checksums independently and validate the qualification report
-        run: node scripts/release/verify-release.mjs --dir "build/release/${{ inputs.version }}"
+        run: node scripts/release/verify-release.mjs --dir "build/release/$RAGAM_RELEASE_VERSION"
 
       # Commercial SAST/DAST is fail-closed. It is never simulated: without an
       # owner-authorized product, license, command, external report and expected
@@ -69,17 +75,17 @@ jobs:
           RAGAM_SAST_DAST_REPORT_SHA256: ${{ secrets.RAGAM_SAST_DAST_REPORT_SHA256 }}
           RAGAM_SAST_DAST_COMMIT: ${{ github.sha }}
           RAGAM_SAST_DAST_CONFIRM: 'YES'
-        run: node scripts/release/commercial-sast-dast.mjs --out docs/release/evidence/commercial-sast-dast.json --commit "${{ github.sha }}"
+        run: node scripts/release/commercial-sast-dast.mjs --out docs/release/evidence/commercial-sast-dast.json --commit "$RAGAM_RELEASE_COMMIT"
 
       - name: Retain the verified commercial SAST/DAST evidence in the staged bundle
         if: ${{ inputs.run_sast_dast }}
-        run: cp docs/release/evidence/commercial-sast-dast.json "build/release/${{ inputs.version }}/commercial-sast-dast.json"
+        run: cp docs/release/evidence/commercial-sast-dast.json "build/release/$RAGAM_RELEASE_VERSION/commercial-sast-dast.json"
 
       - name: Record commercial SAST/DAST as intentionally NOT TESTED
         if: ${{ !inputs.run_sast_dast }}
         run: |
           printf '{"status":"NOT TESTED","reason":"no owner-authorized commercial SAST/DAST product/license/report configured","requirement":"RAGAM_SAST_DAST_AUTHORIZED_BY, RAGAM_SAST_DAST_PRODUCT, RAGAM_SAST_DAST_LICENSE_CONFIRM=YES, RAGAM_SAST_DAST_COMMAND, RAGAM_SAST_DAST_REPORT, RAGAM_SAST_DAST_REPORT_SHA256, RAGAM_SAST_DAST_COMMIT, RAGAM_SAST_DAST_CONFIRM=YES"}\n' \
-            > "build/release/${{ inputs.version }}/sast-dast-status.json"
+            > "build/release/$RAGAM_RELEASE_VERSION/sast-dast-status.json"
 
       # Signing is fail-closed. Without an authorized key the workflow reports an
       # UNSIGNED bundle instead of fabricating a signature.
@@ -93,19 +99,19 @@ jobs:
         run: |
           test -n "$RAGAM_RELEASE_SIGNING_KEY_ID" || { echo "::error::authorized signing key id secret is missing"; exit 2; }
           test -n "$RAGAM_RELEASE_SIGNING_KEY_FILE" || { echo "::error::authorized signing key file secret is missing"; exit 2; }
-          node scripts/release/sign-release.mjs --dir "build/release/${{ inputs.version }}"
+          node scripts/release/sign-release.mjs --dir "build/release/$RAGAM_RELEASE_VERSION"
 
       - name: Record the unsigned state explicitly
         if: ${{ !inputs.sign }}
         run: |
           printf '{"status":"UNSIGNED","reason":"no authorized signing key requested","requirement":"RAGAM_RELEASE_SIGNING_KEY_ID, RAGAM_RELEASE_SIGNING_KEY_FILE, RAGAM_RELEASE_SIGNING_AUTHORIZED_BY, RAGAM_RELEASE_SIGNING_CONFIRM=YES"}\n' \
-            > "build/release/${{ inputs.version }}/signature-status.json"
+            > "build/release/$RAGAM_RELEASE_VERSION/signature-status.json"
 
       - name: Stage artifacts on this workflow run (not a release)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ragam-${{ inputs.version }}-${{ github.sha }}
-          path: build/release/${{ inputs.version }}/
+          name: ragam-${{ env.RAGAM_RELEASE_VERSION }}-${{ github.sha }}
+          path: build/release/${{ env.RAGAM_RELEASE_VERSION }}/
           if-no-files-found: error
           retention-days: 30
 

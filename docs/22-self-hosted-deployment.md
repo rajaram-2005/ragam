@@ -62,7 +62,9 @@ use the same workspace, run `scripts/Start-Lan-Ragam.ps1` from PowerShell on the
 host. It asks for a private IPv4 address reserved for that host, a client hostname (that
 same IP or an mDNS name ending in `.local`), and a strong shared password. It uses the
 Caddy container to create a bcrypt hash, writes ignored local settings, validates the
-Compose overlay, and starts the stack. It does not switch off Core's local-only mode.
+Compose overlay, and starts the stack. The tracked overlay has no published port; only
+a temporary Compose override outside the repository adds the exact private IPv4 after
+validation. It does not switch off Core's local-only mode.
 
 Open `https://<the-hostname-you-entered>` from a client on the LAN. Caddy's internal CA
 certificate must be trusted by each client OS/browser; the launcher exports the public
@@ -73,12 +75,13 @@ and any backups. Never port-forward 80/443 or use a public DNS name for this LAN
 
 Stop the LAN stack without deleting data with `scripts/Stop-Lan-Ragam.ps1`. It runs
 `docker compose down` without `-v`; the workspace and Caddy CA volumes remain in place.
-For non-Windows hosts, the same configuration uses `compose.yaml` plus `compose.lan.yaml`,
-`.env.lan`, and a locally rendered `deploy/Caddyfile.lan.local`; see the launcher for the
-required variable names and Caddyfile template.
+For non-Windows hosts, use the guarded launcher from PowerShell (`pwsh`) or reproduce
+its checks before generating a temporary Compose override outside the repository. The
+tracked `compose.lan.yaml` alone never publishes a host port; do not add an unvalidated
+bind or use it as a substitute for the launcher.
 
 For another Docker Compose UI, open `compose.yaml` and use its default settings to keep
-the published address on `127.0.0.1`. For LAN-only access, use the guarded overlay and
+the published address on `127.0.0.1`. For LAN-only access, use the guarded launcher and
 never bind to `0.0.0.0`, a public address, or a hosted server.
 
 To use a model, open **Provider Settings**, choose a supported provider (including OpenAI
@@ -155,4 +158,4 @@ them before execution. Preserve the prior volume until every restore check passe
 
 ## Updating and cutover gates
 
-Rebuild the default local stack from reviewed repository source with `docker compose up -d --build`; back up first and keep the previous known-good images/backup until health and local workspace checks pass. For LAN mode, include `--env-file .env.lan -f compose.yaml -f compose.lan.yaml` on each Compose command. The local Docker edition does not import hosted accounts or hosted provider settings; the opt-in hosted BYOK deployment remains a separate service and data boundary.
+Rebuild the default local stack from reviewed repository source with `docker compose up -d --build`; back up first and keep the previous known-good images/backup until health and local workspace checks pass. For LAN mode, use `scripts/Start-Lan-Ragam.ps1` and `scripts/Stop-Lan-Ragam.ps1`; do not run the tracked overlay directly to publish a port. The local Docker edition does not import hosted accounts or hosted provider settings; the opt-in hosted BYOK deployment remains a separate service and data boundary.

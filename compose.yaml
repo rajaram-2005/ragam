@@ -67,9 +67,9 @@ services:
     # The UI and unauthenticated single-user API are intentionally host-loopback only.
     # Do not publish them on a LAN or public interface.
     ports:
-      # The default remains loopback-only. The opt-in LAN overlay uses a .env.lan
-      # private IPv4 bind address plus Caddy internal TLS and shared Basic Auth.
-      - "${RAGAM_BIND_ADDRESS:-127.0.0.1}:80:80"
+      # Keep the account-free base profile hard-bound to loopback. LAN access is
+      # added only by compose.lan.yaml after the launcher validates a private IPv4.
+      - "127.0.0.1:80:80"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
