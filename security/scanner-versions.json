@@ -1,0 +1,40 @@
+{
+  "schema": "ragam-security-scanner-lock/1",
+  "semgrep": {
+    "name": "Semgrep Community Edition",
+    "package": "semgrep",
+    "version": "1.185.0",
+    "install": "python3 -m pip install semgrep==1.185.0",
+    "engineLicense": "LGPL-2.1",
+    "rulesRepository": "https://github.com/trailofbits/semgrep-rules",
+    "rulesCommit": "31390b3a99c04c81522d1b37c8d1900aa2dd4094",
+    "rulesArchiveSha256": "d581db6374b32e63509daf569798e7ccad7d40375a5058a85c21033598ec73d8",
+    "rulesLicense": "AGPL-3.0; upstream license preserved in security/semgrep/UPSTREAM-LICENSE.txt",
+    "registryNetworkAccess": false,
+    "metrics": "off"
+  },
+  "gitleaks": {
+    "name": "Gitleaks",
+    "version": "8.30.1",
+    "asset": "gitleaks_8.30.1_linux_x64.tar.gz",
+    "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz",
+    "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  },
+  "trivy": {
+    "name": "Trivy",
+    "version": "0.76.2",
+    "asset": "trivy_0.76.2_Linux-64bit.tar.gz",
+    "url": "https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz",
+    "sha256": "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf"
+  },
+  "zap": {
+    "name": "OWASP ZAP",
+    "version": "2.17.0",
+    "image": "ghcr.io/zaproxy/zaproxy:2.17.0@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6",
+    "imageDigestVerified": false,
+    "imageDigestVerification": "Before pulling/running ZAP, the runner compares the pinned digest to the official GHCR tag with Docker Buildx; a mismatch or unavailable check blocks DAST. No verification date is claimed here.",
+    "networkPolicy": "Docker internal network; only http://edge:8080 is in scope; no external egress"
+  },
+  "platform": "linux/amd64",
+  "evidenceRetention": "CI artifact; report JSON/SARIF/HTML is sanitized to omit source snippets and secret values"
+}

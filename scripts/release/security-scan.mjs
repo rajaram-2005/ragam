@@ -85,10 +85,12 @@ add('node_syntax_all_modules', syntaxFailures.length === 0, syntaxFailures.lengt
 // 4. Deployment configuration invariants.
 const compose = readFileSync(atRoot('compose.yaml'), 'utf8')
 const lan = readFileSync(atRoot('compose.lan.yaml'), 'utf8')
+const lanStart = readFileSync(atRoot('scripts/Start-Lan-Ragam.ps1'), 'utf8')
 const lanCaddy = readFileSync(atRoot('deploy/Caddyfile.lan'), 'utf8')
 const fabricServer = readFileSync(atRoot('services/fabric/fabric/server.py'), 'utf8')
-add('compose_defaults_loopback', /RAGAM_BIND_ADDRESS:-127\.0\.0\.1/.test(compose) && /AETHERIS_LOCAL_SINGLE_USER:\s*'true'/.test(compose), 'single-user Docker mode binds 127.0.0.1 by default')
-add('lan_requires_explicit_bind_and_auth', /RAGAM_BIND_ADDRESS:\?/.test(lan) && lanCaddy.includes('basic_auth') && lanCaddy.includes('tls internal'), 'LAN overlay requires explicit private bind, Basic Auth and internal TLS')
+add('compose_defaults_loopback', /127\.0\.0\.1:80:80/.test(compose) && !/RAGAM_BIND_ADDRESS/.test(compose) && /AETHERIS_LOCAL_SINGLE_USER:\s*'true'/.test(compose), 'single-user Docker mode is hard-bound to 127.0.0.1; LAN exposure is separate and validated')
+add('lan_bind_generated_after_private_validation', !/^\s+ports\s*:/m.test(lan) && /Test-PrivateIpv4/.test(lanStart) && /GetTempPath/.test(lanStart) && /:443:443/.test(lanStart) && !/RAGAM_BIND_ADDRESS/.test(lanStart), 'tracked LAN Compose overlay publishes no ports; launcher validates RFC1918 IPv4 before generating an external temporary port override')
+add('lan_requires_basic_auth_and_internal_tls', lanCaddy.includes('basic_auth') && lanCaddy.includes('tls internal'), 'LAN Caddy requires Basic Auth and internal TLS')
 add('fabric_defaults_loopback', /DEFAULT_HOST = "127\.0\.0\.1"/.test(fabricServer), 'unauthenticated Fabric service defaults to loopback')
 
 // 5. Telemetry privacy invariants are structural, not promises.

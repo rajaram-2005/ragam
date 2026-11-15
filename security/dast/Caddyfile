@@ -1,0 +1,21 @@
+:8080 {
+  encode zstd gzip
+
+  @health path /healthz
+  respond @health 200
+
+  @api path /api /api/*
+  handle @api {
+    reverse_proxy core:8790 {
+      # The browser/probe origin and Core's Host comparison are both the private
+      # Docker alias; no external/LAN hostname is accepted by this scan stack.
+      header_up Host edge:8080
+    }
+  }
+
+  handle {
+    root * /srv
+    try_files {path} /index.html
+    file_server
+  }
+}

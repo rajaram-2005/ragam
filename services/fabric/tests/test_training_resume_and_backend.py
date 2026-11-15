@@ -210,3 +210,65 @@ def test_the_loss_is_taken_on_the_answer_only_not_the_prompt():
     assert labels[:prompt_len] == [-100] * prompt_len
     assert labels[prompt_len:] == ids[prompt_len:]
     assert labels[prompt_len:] == [ord(c) for c in "A!"]
+
+
+# ----------------------------------------------------------------- safe HF checkpoint encoding without torch
+
+class _FakeTensor:
+    def __init__(self, value):
+        self.value = value
+
+    def __eq__(self, other):
+        return isinstance(other, _FakeTensor) and self.value == other.value
+
+    def detach(self):
+        return self
+
+    def cpu(self):
+        return self
+
+    def contiguous(self):
+        return self
+
+
+class _FakeTorch:
+    @staticmethod
+    def is_tensor(value):
+        return isinstance(value, _FakeTensor)
+
+
+def test_hf_optimizer_checkpoint_tree_roundtrips_only_json_scalars_and_tensor_refs():
+    source = {
+        "state": {0: {"step": _FakeTensor(7), "exp_avg": _FakeTensor("momentum")}},
+        "param_groups": [{"lr": 0.0002, "betas": (0.9, 0.999), "params": [0], "foreach": None}],
+    }
+    tensor_values = {}
+    encoded = hf_peft._encode_checkpoint_tree(source, _FakeTorch(), tensor_values)
+    serialized = json.dumps(encoded, sort_keys=True, allow_nan=False)
+    decoded = hf_peft._decode_checkpoint_tree(json.loads(serialized), tensor_values)
+    assert decoded == source
+    assert decoded["state"][0]["step"] is tensor_values["tensor-00000000"]
+    assert decoded["param_groups"][0]["betas"] == (0.9, 0.999)
+
+
+def test_hf_optimizer_checkpoint_tree_rejects_untrusted_or_nonfinite_metadata():
+    with pytest.raises(TypeError, match="unsupported checkpoint value type"):
+        hf_peft._encode_checkpoint_tree(object(), _FakeTorch(), {})
+    with pytest.raises(ValueError, match="finite"):
+        hf_peft._decode_checkpoint_tree({"kind": "scalar", "type": "float", "value": float("nan")}, {})
+    with pytest.raises(ValueError, match="tensor reference"):
+        hf_peft._decode_checkpoint_tree({"kind": "tensor", "name": "missing"}, {})
+
+
+def test_hf_checkpoint_writer_uses_safetensors_and_refuses_legacy_pickle_state():
+    import inspect
+
+    writer = inspect.getsource(hf_peft.HFLoraTrainer.state_files)
+    reader = inspect.getsource(hf_peft.HFLoraTrainer.load_state_files)
+    assert "safetensors.torch" in writer and "safetensors.torch" in reader
+    assert "torch.save" not in writer and "torch.load" not in reader
+
+    trainer = object.__new__(hf_peft.HFLoraTrainer)
+    trainer._torch = None
+    with pytest.raises(ValueError, match="pickle-based training state is not loaded"):
+        trainer.load_state_files({"adapter.pt": b"legacy pickle bytes"})

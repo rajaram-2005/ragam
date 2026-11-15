@@ -71,7 +71,7 @@ output validation happens — never in the browser.
 
 Line counts are real (`wc -l`), listed so the weight of each part is visible.
 
-### `services/core` — 43,655 source lines, 28,172 test lines
+### `services/core` — 43,655 source lines, 28,190 test lines
 
 | Module | Lines | Owns |
 |---|---|---|
@@ -251,7 +251,7 @@ Line counts are real (`wc -l`), listed so the weight of each part is visible.
 | `providers/wires/firefly-images.mjs` | 126 | Adobe Firefly: a validated two-part OAuth client credential, an in-memory IMS token exchange and cache, `x-api-key` plus Bearer generation, and a delivery download that carries neither secret |
 | `providers/wires/comfyui-images.mjs` | 163 | ComfyUI local image generation and hardware reporting: installed checkpoint discovery, device/backend/VRAM inspection from `/system_stats`, bounded stock text-to-image workflow and polling, safe output-path validation, and bounded image-byte verification |
 
-### `services/fabric` — 17,256 source lines, 10,582 test lines
+### `services/fabric` — 17,359 source lines, 10,644 test lines
 
 Data validation → base selection → domain training → SFT → preference
 optimization → distillation → evaluation → release, as a single reproducible

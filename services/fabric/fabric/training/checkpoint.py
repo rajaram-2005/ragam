@@ -18,7 +18,7 @@ Three properties matter, and each has a test:
   refuses instead.
 
 The store knows nothing about frameworks. It takes bytes, so the same code serves
-the NumPy fixture and a PEFT adapter saved with ``torch.save`` into a buffer.
+the NumPy fixture and a PEFT adapter represented as safetensors plus JSON metadata.
 """
 
 from __future__ import annotations

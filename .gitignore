@@ -93,3 +93,7 @@ yarn-error.log*
 # Vite dependency) so they can be server-rendered under `node --test`, which cannot
 # parse JSX itself. The bundle is generated, never committed.
 apps/web/test/.render-build/
+
+# OSS scanner qualification is generated for each run and uploaded as sanitized evidence.
+# Keep it outside source identity/clean-checkout checks so repeated gates remain reproducible.
+docs/release/evidence/open-source-security-qualification.json

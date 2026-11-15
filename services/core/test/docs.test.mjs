@@ -174,9 +174,9 @@ test('.env.example documents active deployment variables without exposing accoun
   assert.deepEqual(missing, [], `.env.example omits active deployment variables: ${missing.join(', ')}`)
   const compose = readFileSync(resolve(REPO, 'compose.yaml'), 'utf8')
   assert.match(compose, /AETHERIS_LOCAL_SINGLE_USER:\s*'true'/, 'Compose must force the account-free mode')
-  assert.match(compose, /RAGAM_BIND_ADDRESS:-127\.0\.0\.1.*:80:80/, 'the no-login app must default to loopback-only')
+  assert.match(compose, /127\.0\.0\.1:80:80/, 'the no-login app must default to loopback-only')
   const lanCompose = readFileSync(resolve(REPO, 'compose.lan.yaml'), 'utf8')
-  assert.match(lanCompose, /RAGAM_BIND_ADDRESS:\?/, 'LAN mode must require an explicit private bind address')
+  assert.doesNotMatch(lanCompose, /^\s+ports\s*:/m, 'tracked LAN Compose overlay must never publish a host port')
   assert.match(lanCompose, /AETHERIS_TRUSTED_WEB_ORIGINS:.*https:\/\//, 'Core must trust only the HTTPS LAN origin')
   const lanCaddy = readFileSync(resolve(REPO, 'deploy/Caddyfile.lan'), 'utf8')
   assert.ok(lanCaddy.includes('tls internal'), 'LAN TLS must use Caddy internal PKI')
@@ -185,6 +185,8 @@ test('.env.example documents active deployment variables without exposing accoun
   assert.ok(lanCaddy.includes('header_up -Authorization'), 'Caddy must not forward its shared credential to Core')
   const lanLauncher = readFileSync(resolve(REPO, 'scripts/Start-Lan-Ragam.ps1'), 'utf8')
   assert.ok(lanLauncher.includes('Test-PrivateIpv4'), 'the launcher must refuse public and wildcard binds')
+  assert.ok(lanLauncher.includes('GetTempPath()') && lanLauncher.includes(':443:443'), 'only the validated address may create an external temporary LAN port override')
+  assert.ok(!lanLauncher.includes('RAGAM_BIND_ADDRESS'), 'direct Compose interpolation must not be able to widen the LAN bind')
   assert.ok(lanLauncher.includes('$password.Length -lt 16'), 'the shared password must have a strong minimum length')
   const lanStopper = readFileSync(resolve(REPO, 'scripts/Stop-Lan-Ragam.ps1'), 'utf8')
   assert.match(lanStopper, /composeArgs\s+down/, 'stopping LAN mode must retain named volumes')
@@ -860,7 +862,7 @@ test('the account and sign-in document describes the code that implements it', (
   assert.equal(number(accounts, 'DEFAULT_MAX_ACCOUNTS'), 64)
   const compose = readFileSync(resolve(REPO, 'compose.yaml'), 'utf8')
   assert.match(compose, /AETHERIS_LOCAL_SINGLE_USER:\s*'true'/, 'the end-user Docker deployment must not use account mode')
-  assert.match(compose, /RAGAM_BIND_ADDRESS:-127\.0\.0\.1.*:80:80/, 'account-free access must default to loopback-only')
+  assert.match(compose, /127\.0\.0\.1:80:80/, 'account-free access must default to loopback-only')
   assert.ok(squash(read('docs/22-self-hosted-deployment.md')).includes('shared Caddy Basic Auth'))
   assert.ok(squash(read('docs/22-self-hosted-deployment.md')).includes("Caddy's internal CA"))
 
@@ -1590,10 +1592,14 @@ test('LAN mode stays opt-in, password-gated, TLS-protected and private-network-b
   const stop = read('scripts/Stop-Lan-Ragam.ps1')
   const deployment = squash(read('docs/22-self-hosted-deployment.md'))
 
-  assert.match(compose, /RAGAM_BIND_ADDRESS:-127\.0\.0\.1/,
+  assert.match(compose, /127\.0\.0\.1:80:80/,
     'the unmodified Docker stack must remain loopback-only')
-  assert.match(overlay, /RAGAM_BIND_ADDRESS:\?/,
-    'LAN mode must fail closed unless an explicit bind address is supplied')
+  assert.doesNotMatch(compose, /RAGAM_BIND_ADDRESS/,
+    'the base single-user Compose profile must not expose an environment-controlled bind override')
+  assert.doesNotMatch(overlay, /^\s+ports\s*:/m,
+    'the tracked LAN overlay must not publish a host port that bypasses launcher validation')
+  assert.match(overlay, /launcher[\s\S]*temporary, external Compose override/i,
+    'the tracked overlay must document that only the validated launcher can add a host port')
   assert.match(overlay, /AETHERIS_TRUSTED_WEB_ORIGINS/,
     'Core must trust only the LAN HTTPS origin chosen for this deployment')
   assert.match(caddy, /tls internal/)
@@ -1603,6 +1609,18 @@ test('LAN mode stays opt-in, password-gated, TLS-protected and private-network-b
   assert.match(caddy, /header_up -Authorization/,
     'the shared Caddy password must not be forwarded into Core')
   assert.match(start, /Test-PrivateIpv4/)
+  assert.doesNotMatch(start, /RAGAM_BIND_ADDRESS/,
+    'LAN port binding must not come from an environment variable that direct Compose use could widen')
+  assert.match(start, /\$env:RAGAM_LAN_HOSTNAME = \$lanHost/,
+    'a stale process environment must not override the validated LAN origin in Compose interpolation')
+  assert.match(start, /GetTempPath\(\)/,
+    'the private port mapping must be generated outside the repository')
+  assert.match(start, /\$portMapping = .*\$bindAddress.*:443:443/,
+    'only the validated private IPv4 is placed in the temporary port override')
+  assert.ok(start.indexOf('if (-not (Test-PrivateIpv4 $bindAddress))') < start.indexOf('$portMapping ='),
+    'private bind validation must happen before generating the LAN port override')
+  assert.ok(start.indexOf('$portMapping =') < start.indexOf('& docker compose @composeArgs config'),
+    'the generated mapping must be in place before Compose validates or launches the LAN profile')
   assert.match(start, /16 characters/)
   assert.match(start, /caddy hash-password/)
   assert.match(start, /Caddyfile\.lan\.local/)

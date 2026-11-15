@@ -301,8 +301,8 @@ Status of every acceptance criterion, with evidence:
 
 | Component | Stack | Source lines | Test lines | Dependencies | Tests |
 |---|---|---|---|---|---|
-| `services/core` | Node 22 ESM | 43,655 | 28,172 | **zero npm packages** | 1086 |
-| `services/fabric` | Python 3.11 | 17,256 | 10,582 | NumPy only | 823 |
+| `services/core` | Node 22 ESM | 43,655 | 28,190 | **zero npm packages** | 1086 |
+| `services/fabric` | Python 3.11 | 17,359 | 10,644 | NumPy only | 823 |
 | `apps/web` | React 18 + Vite | 7,631 | 2,616 | pdfjs-dist, react, react-dom | 143 |
 
 The core service has **no npm dependencies at all** — that is why the root

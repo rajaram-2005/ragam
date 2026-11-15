@@ -27,6 +27,7 @@ import gc
 import hashlib
 import io
 import json
+import math
 import platform
 import random
 import shutil
@@ -62,6 +63,76 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1 << 20), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _encode_checkpoint_tree(value: Any, torch: Any, tensors: dict) -> dict:
+    """Encode optimizer metadata as JSON nodes and tensors as separate safe tensors.
+
+    This deliberately supports only the built-in AdamW state types. Unexpected
+    framework objects fail closed rather than being pickled into a checkpoint.
+    """
+    if torch.is_tensor(value):
+        name = f"tensor-{len(tensors):08d}"
+        tensors[name] = value.detach().cpu().contiguous()
+        return {"kind": "tensor", "name": name}
+    if isinstance(value, Mapping):
+        return {
+            "kind": "mapping",
+            "items": [[_encode_checkpoint_tree(key, torch, tensors),
+                       _encode_checkpoint_tree(item, torch, tensors)]
+                      for key, item in value.items()],
+        }
+    if isinstance(value, tuple):
+        return {"kind": "tuple", "items": [_encode_checkpoint_tree(item, torch, tensors) for item in value]}
+    if isinstance(value, list):
+        return {"kind": "list", "items": [_encode_checkpoint_tree(item, torch, tensors) for item in value]}
+    if value is None:
+        return {"kind": "scalar", "type": "none"}
+    if type(value) in (bool, int, float, str):
+        return {"kind": "scalar", "type": type(value).__name__, "value": value}
+    raise TypeError(f"unsupported checkpoint value type: {type(value).__name__}")
+
+
+def _decode_checkpoint_tree(node: Any, tensors: Mapping) -> Any:
+    """Decode the strict JSON/safetensors format without executing serialized code."""
+    if not isinstance(node, dict) or not isinstance(node.get("kind"), str):
+        raise ValueError("checkpoint tree node is malformed")
+    kind = node["kind"]
+    if kind == "tensor":
+        if set(node) != {"kind", "name"} or not isinstance(node["name"], str) or node["name"] not in tensors:
+            raise ValueError("checkpoint tensor reference is invalid")
+        return tensors[node["name"]]
+    if kind == "scalar":
+        if node.get("type") == "none" and set(node) == {"kind", "type"}:
+            return None
+        types = {"bool": bool, "int": int, "float": float, "str": str}
+        expected = types.get(node.get("type"))
+        if expected is None or set(node) != {"kind", "type", "value"} or type(node.get("value")) is not expected:
+            raise ValueError("checkpoint scalar has an unsupported type")
+        if expected is float and not math.isfinite(node["value"]):
+            raise ValueError("checkpoint scalar must be finite")
+        return node["value"]
+    if kind in ("list", "tuple"):
+        if set(node) != {"kind", "items"} or not isinstance(node["items"], list):
+            raise ValueError("checkpoint sequence is malformed")
+        values = [_decode_checkpoint_tree(item, tensors) for item in node["items"]]
+        return tuple(values) if kind == "tuple" else values
+    if kind == "mapping":
+        if set(node) != {"kind", "items"} or not isinstance(node["items"], list):
+            raise ValueError("checkpoint mapping is malformed")
+        result = {}
+        for pair in node["items"]:
+            if not isinstance(pair, list) or len(pair) != 2:
+                raise ValueError("checkpoint mapping entry is malformed")
+            key = _decode_checkpoint_tree(pair[0], tensors)
+            try:
+                if key in result:
+                    raise ValueError("checkpoint mapping contains duplicate keys")
+                result[key] = _decode_checkpoint_tree(pair[1], tensors)
+            except TypeError as error:
+                raise ValueError("checkpoint mapping key is not hashable") from error
+        return result
+    raise ValueError("checkpoint tree contains an unknown node kind")
 
 
 class HFPeftBackend:
@@ -400,28 +471,60 @@ class HFLoraTrainer:
     def state_files(self) -> dict:
         torch = self._torch
         from peft import get_peft_model_state_dict
+        from safetensors.torch import save as save_safetensors
 
-        def pack(obj) -> bytes:
-            buffer = io.BytesIO()
-            torch.save(obj, buffer)
-            return buffer.getvalue()
-
+        adapter = {
+            name: tensor.detach().cpu().contiguous()
+            for name, tensor in get_peft_model_state_dict(self._model).items()
+        }
+        optimizer_tensors: dict = {}
+        optimizer_tree = _encode_checkpoint_tree(self._optimizer.state_dict(), torch, optimizer_tensors)
+        optimizer_json = json.dumps(
+            {"format": "ragam-hf-optimizer-state/1", "tree": optimizer_tree},
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        rng = {"cpu_rng_state": torch.get_rng_state().detach().cpu().contiguous()}
         return {
-            "adapter.pt": pack(get_peft_model_state_dict(self._model)),
-            "optimizer.pt": pack(self._optimizer.state_dict()),
-            "rng.pt": pack(torch.get_rng_state()),
+            "adapter.safetensors": save_safetensors(adapter),
+            "optimizer.json": optimizer_json,
+            "optimizer.safetensors": save_safetensors(optimizer_tensors),
+            "rng.safetensors": save_safetensors(rng),
         }
 
     def load_state_files(self, files: Mapping) -> None:
+        required = {"adapter.safetensors", "optimizer.json", "optimizer.safetensors", "rng.safetensors"}
+        if not required.issubset(files):
+            raise ValueError(
+                "checkpoint uses an unsupported legacy or incomplete format; pickle-based "
+                "training state is not loaded. Preserve it and start with a new checkpoint directory."
+            )
+        if not isinstance(files["optimizer.json"], (bytes, bytearray)) or len(files["optimizer.json"]) > 8 * 1024 * 1024:
+            raise ValueError("optimizer checkpoint metadata is oversized or malformed")
         torch = self._torch
         from peft import set_peft_model_state_dict
+        from safetensors.torch import load as load_safetensors
 
-        def unpack(name: str):
-            return torch.load(io.BytesIO(files[name]), map_location="cpu", weights_only=True)
-
-        set_peft_model_state_dict(self._model, unpack("adapter.pt"))
-        self._optimizer.load_state_dict(unpack("optimizer.pt"))
-        torch.set_rng_state(unpack("rng.pt"))
+        adapter = load_safetensors(files["adapter.safetensors"])
+        try:
+            optimizer_document = json.loads(files["optimizer.json"].decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("optimizer checkpoint metadata is not valid UTF-8 JSON") from error
+        if (not isinstance(optimizer_document, dict)
+                or set(optimizer_document) != {"format", "tree"}
+                or optimizer_document.get("format") != "ragam-hf-optimizer-state/1"):
+            raise ValueError("optimizer checkpoint metadata has an unsupported format")
+        optimizer_tensors = load_safetensors(files["optimizer.safetensors"])
+        optimizer_state = _decode_checkpoint_tree(optimizer_document["tree"], optimizer_tensors)
+        if not isinstance(optimizer_state, Mapping):
+            raise ValueError("optimizer checkpoint root is not a mapping")
+        rng = load_safetensors(files["rng.safetensors"])
+        if set(rng) != {"cpu_rng_state"}:
+            raise ValueError("RNG checkpoint contains unexpected tensor fields")
+        self._optimizer.load_state_dict(dict(optimizer_state))
+        set_peft_model_state_dict(self._model, adapter)
+        torch.set_rng_state(rng["cpu_rng_state"])
 
     def export_artifact(self, directory: Path) -> list:
         directory = Path(directory)

@@ -1,0 +1,116 @@
+name: ragam-security-dast
+
+services:
+  core:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.core
+    image: ragam/security-core:${RAGAM_DAST_IMAGE_TAG:?set by the security runner}
+    environment:
+      NODE_ENV: test
+      AETHERIS_CORE_HOST: 0.0.0.0
+      AETHERIS_CORE_PORT: 8790
+      AETHERIS_ONLINE_DATA_DIR: /var/lib/ragam/online
+      AETHERIS_LOCAL_SINGLE_USER: 'false'
+      AETHERIS_OWNER_EMAIL: security-owner@example.invalid
+      AETHERIS_ALLOW_ACCOUNT_REGISTRATION: 'true'
+      AETHERIS_MAX_ACCOUNTS: '2'
+      AETHERIS_COOKIE_SECURE: 'true'
+      AETHERIS_COOKIE_SAMESITE: strict
+      AETHERIS_TRUSTED_ORIGINS: ''
+      AETHERIS_TRUSTED_WEB_ORIGINS: ''
+      AETHERIS_PRINT_RESET_CODES: 'false'
+      AETHERIS_TELEMETRY_ENABLED: 'false'
+    tmpfs:
+      - /var/lib/ragam:rw,noexec,nosuid,nodev,size=64m,mode=1777
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    expose:
+      - '8790'
+    networks:
+      - isolated
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8790/api/health').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+    restart: 'no'
+
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.web
+    image: ragam/security-web:${RAGAM_DAST_IMAGE_TAG:?set by the security runner}
+    depends_on:
+      core:
+        condition: service_healthy
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    expose:
+      - '8080'
+    networks:
+      isolated:
+        aliases:
+          - edge
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/healthz]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+    restart: 'no'
+
+  probe:
+    image: ragam/security-core:${RAGAM_DAST_IMAGE_TAG:?set by the security runner}
+    depends_on:
+      web:
+        condition: service_healthy
+    entrypoint: [node]
+    command: [/tmp/probe.mjs]
+    environment:
+      RAGAM_DAST_BASE_URL: http://edge:8080
+    volumes:
+      - ./probe.mjs:/tmp/probe.mjs:ro
+    networks:
+      - isolated
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    restart: 'no'
+
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6
+    # Map only the report writer to the invoking host UID/GID so reports remain
+    # private without making the host-mounted directory world-writable.
+    user: "${RAGAM_DAST_UID:?set by the security runner}:${RAGAM_DAST_GID:?set by the security runner}"
+    environment:
+      HOME: /tmp/zap-home
+      JAVA_TOOL_OPTIONS: -Duser.home=/tmp/zap-home -Djava.io.tmpdir=/tmp
+    entrypoint: []
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777
+    volumes:
+      - ./openapi.yaml:/zap/wrk/openapi.yaml:ro
+      - ${RAGAM_DAST_REPORT_DIR:?set by the security runner}:/zap/wrk/out:rw
+    networks:
+      - isolated
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: 'no'
+
+networks:
+  isolated:
+    internal: true

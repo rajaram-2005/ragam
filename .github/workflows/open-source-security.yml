@@ -1,0 +1,65 @@
+name: Open-source security qualification
+
+on:
+  pull_request:
+    branches: [main, 'release/**']
+  push:
+    branches: [main, 'release/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: open-source-security-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  security-runner-tests:
+    name: Security evidence sanitization and gate fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Test fail-closed gates and secret-safe report projections
+        run: npm run release:security:test
+
+  open-source-qualification:
+    name: Semgrep, OWASP ZAP, Gitleaks and Trivy (OSS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Run the four independent OSS release gates
+        env:
+          RAGAM_SECURITY_OUTPUT_DIR: ${{ runner.temp }}/ragam-security-qualification
+        run: npm run release:security:full
+      - name: Upload sanitized OSS scanner reports and unified evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: open-source-security-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/ragam-security-qualification/*/open-source-security-qualification.json
+            ${{ runner.temp }}/ragam-security-qualification/*/source-snapshot.json
+            ${{ runner.temp }}/ragam-security-qualification/*/source-inventory.json
+            ${{ runner.temp }}/ragam-security-qualification/*/reports/**
+            ${{ runner.temp }}/ragam-security-qualification/*/SHA256SUMS-*
+          if-no-files-found: error
+          retention-days: 30
