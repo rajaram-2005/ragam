@@ -1,0 +1,35 @@
+Supplementary security-run evidence — not part of the authoritative 2026-10-17 cutoff
+Recorded: 2026-11-16 (UTC)
+Branch: arena/947d8745-ragam
+Exact source commit: 25f35fe039fdbd605e6812907a492aae59d71c81
+
+GitHub Actions run: https://github.com/rajaram-2005/ragam/actions/runs/43810561806
+Workflow: Open-source security qualification; event: push; run started 2026-11-16T05:29:25Z; conclusion: FAIL; elapsed 1m19s.
+- Security evidence sanitization and gate fixtures: PASS.
+- Semgrep, OWASP ZAP, Gitleaks and Trivy (OSS): FAIL at “Run the four independent OSS release gates”; the step exited 1. The GitHub check annotation reports only the generic exit code; no scanner-specific cause or finding is available from it.
+- Upload sanitized OSS scanner reports and unified evidence: PASS.
+- CI run 43810561684: PASS; the Klyvaron production evidence gate was SKIPPED.
+- Desktop run 43810561627: PASS across Windows x64/ARM64, Linux x64/ARM64, macOS Apple Silicon and macOS Intel.
+
+Uploaded artifact metadata from the GitHub Actions API:
+- ID: 14199784133
+- Name: open-source-security-25f35fe039fdbd605e6812907a492aae59d71c81
+- Size: 146269 bytes
+- Artifact SHA-256: sha256:657b6895616ec914966b7898ae53e3e181fbdc136752bf3eddca06c9d63b91eb
+- Created: 2026-11-16T05:30:39Z; expires: 2026-12-16T05:30:38Z.
+This digest is for the uploaded ZIP artifact, not for any individual scanner report.
+
+Report access/review outcome:
+- `gh api repos/rajaram-2005/ragam/actions/artifacts/14199784133/zip` failed with EOF while fetching the artifact payload; the resulting local file was empty (zero bytes).
+- The public job page and check-run annotation expose the failed step and generic exit code, not scanner-specific output. The sanitized ZIP payload and individual report SHA-256 values were not available in this workspace.
+- No scanner finding was reviewed or classified from this run. The artifact's metadata digest is not treated as a report digest or scan result.
+
+Disposition:
+- Overall security workflow: FAIL.
+- Semgrep findings, full-history Gitleaks coverage/findings and credential classification, Trivy filesystem/built-image findings and threshold dispositions, ZAP official image-index/platform verification and baseline/full-scan findings, per-report hashes, and independent report-hash verification: NOT TESTED from the inaccessible payload.
+- No clean scan, zero-finding result, confirmed vulnerability, false positive, or credential rotation is inferred.
+- Configured pins remain Semgrep CE 1.185.0, Gitleaks 8.30.1, Trivy 0.76.2, and ZAP 2.17.0 with the existing unverified digest and linux/amd64 platform.
+
+The failed run followed the sanitized-summary change. Review of the renderer found that its “Overall qualification” field incorrectly reused `run.status`, and the fixture test did not distinguish run status from aggregate qualification status. A subsequent source/test correction renders the aggregate `qualification.ossSecurity.status` fail-closed as PASS or BLOCKED and adds a regression case with run status PASS but aggregate qualification NOT QUALIFIED. This correction is not evidence of scanner success; a new exact-commit run remains necessary, and any reports must be reviewed before the scanner gates can qualify.
+
+The overall release verdict remains NOT RELEASE READY. The authoritative cutoff log and cutoff evidence remain unchanged.

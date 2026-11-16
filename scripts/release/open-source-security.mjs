@@ -2272,6 +2272,7 @@ export function renderSecurityStepSummary(evidence) {
   const run = evidence?.run ?? {}
   const scanners = evidence?.scanners ?? {}
   const gates = Array.isArray(evidence?.releaseGates) ? evidence.releaseGates : []
+  const qualification = evidence?.qualification?.ossSecurity ?? {}
   const gateById = new Map(gates.map((gate) => [gate.id, gate]))
   const scannerGateIds = {
     sast: 'SAST',
@@ -2281,6 +2282,7 @@ export function renderSecurityStepSummary(evidence) {
   }
   const allowedStatuses = new Set(['PASS', 'FAIL', 'BLOCKED', 'NOT TESTED', 'OWNER ACTION REQUIRED'])
   const status = (value) => allowedStatuses.has(String(value ?? '')) ? String(value) : 'NOT TESTED'
+  const qualificationStatus = qualification.status === 'NOT QUALIFIED' ? 'BLOCKED' : status(qualification.status)
   const pinnedVersions = {
     sast: LOCK.semgrep.version,
     dast: LOCK.zap.version,
@@ -2294,7 +2296,7 @@ export function renderSecurityStepSummary(evidence) {
     `- **Branch:** ${summaryCell(evidence?.source?.branch, 160)}`,
     `- **Exact commit:** ${summaryCell(evidence?.source?.commit, 64)}`,
     `- **Mode / result:** ${summaryCell(run.mode, 40)} / ${status(run.status)}`,
-    `- **Overall qualification:** ${status(run.status)}`,
+    `- **Overall qualification:** ${qualificationStatus}`,
     '',
     'This projection contains no scanner source snippets, secret values, request/response bodies, cookies, or credentials. Every finding has status NOT TESTED until a reviewer records a disposition; a reported finding is not a confirmed vulnerability.',
     '',

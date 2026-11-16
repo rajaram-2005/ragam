@@ -102,7 +102,7 @@ test('ZAP registry inspection parser requires the locked digest and platform des
 
 test('GitHub step summary exposes only sanitized findings, locked identity and report hashes', () => {
   const evidence = {
-    run: { id: 'fixture-run', mode: 'full', status: 'BLOCKED' },
+    run: { id: 'fixture-run', mode: 'full', status: 'PASS' },
     source: { branch: 'arena/947d8745-ragam', commit: 'a'.repeat(40) },
     qualification: { ossSecurity: { status: 'NOT QUALIFIED' } },
     scanners: {
@@ -125,6 +125,8 @@ test('GitHub step summary exposes only sanitized findings, locked identity and r
   const summary = renderSecurityStepSummary(evidence)
   assert.match(summary, /arena\/947d8745-ragam/)
   assert.match(summary, /services\/core\/app\.mjs:17/)
+  assert.match(summary, /- \*\*Mode \/ result:\*\* full \/ PASS/)
+  assert.match(summary, /- \*\*Overall qualification:\*\* BLOCKED/)
   assert.match(summary, /NOT TESTED/)
   assert.match(summary, /Platform manifest digest/)
   assert.match(summary, /1\.185\.0 \/ 1\.185\.0/)
