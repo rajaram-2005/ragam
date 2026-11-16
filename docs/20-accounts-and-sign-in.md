@@ -91,8 +91,16 @@ enforces another is a support queue.
 
 - Eight consecutive failures lock **that account** for fifteen minutes. The counter is per
   account, so one person's typo storm cannot lock everybody out.
-- The public auth endpoints are throttled per address (12/minute) and per installation
-  (60/minute). Both are in-memory windows; the durable half is the account lockout.
+- Each public auth action (`register`, `login`, `password_reset`, `password_reset_confirm`)
+  has independent rolling windows in the default Core process: 12 per normalized email,
+  30 per socket peer address, and 60 per installation **per action** per minute. The source
+  key is `req.socket.remoteAddress`; forwarded client headers are not trusted. Behind a
+  reverse proxy, clients therefore share the proxy's peer-address bucket unless the edge
+  applies its own per-client controls.
+- These windows are process-local, reset on restart, and do not coordinate across Core
+  replicas. They are not a global API/provider-spend quota. The Chat route also caps at two
+  concurrent requests per Core process, but does not limit repeated sequential requests;
+  the account lockout is the durable sign-in-specific control.
 - An unknown address and a wrong password return the same code, status and message, and
   an unknown address still pays for one scrypt pass against a dummy hash, so the two are
   not separable by timing either.

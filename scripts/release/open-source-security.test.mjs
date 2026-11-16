@@ -1,7 +1,11 @@
 import test from 'node:test'
-import { readFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
-import { excludedWorktreeClass } from './open-source-security.mjs'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { assertDastConfig, excludedWorktreeClass } from './open-source-security.mjs'
 import {
   gateFromScanner,
   TRIVY_PIP_REQUIREMENTS_LOCK_PATTERN,
@@ -69,6 +73,113 @@ test('the OSS workflow covers PRs, release pushes, manual dispatch, full qualifi
   assert.match(workflow, /if: always\(\)/)
   assert.match(workflow, /source-inventory\.json/)
   assert.match(workflow, /retention-days: 30/)
+})
+
+test('production and isolated DAST Web containers enforce non-root, read-only runtime controls', () => {
+  const root = fileURLToPath(new URL('../..', import.meta.url))
+  assert.doesNotThrow(() => assertDastConfig(root))
+
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'ragam-web-hardening-'))
+  try {
+    for (const relativePath of [
+      'Dockerfile.web',
+      'compose.yaml',
+      'security/dast/compose.yaml',
+      'security/dast/Caddyfile',
+      'security/dast/openapi.yaml',
+    ]) {
+      const target = join(fixtureRoot, relativePath)
+      mkdirSync(dirname(target), { recursive: true })
+      copyFileSync(join(root, relativePath), target)
+    }
+
+    const regressions = [
+      ['Dockerfile.web', 'USER 10001:10001', 'USER root', 'Web image must run as non-root UID/GID 10001'],
+      ['compose.yaml', '    init: true\n    read_only: true\n', '    init: true\n    read_only: false\n', 'compose.yaml Web root filesystem must be read-only'],
+      ['compose.yaml', '      - no-new-privileges:true\n    cap_drop:\n      - ALL\n    expose:\n      - "8080"', '      - no-new-privileges:false\n    cap_drop:\n      - ALL\n    expose:\n      - "8080"', 'compose.yaml Web must enable no-new-privileges'],
+      ['compose.yaml', '    cap_drop:\n      - ALL\n    expose:\n      - "8080"', '    cap_drop:\n      - NET_BIND_SERVICE\n    expose:\n      - "8080"', 'compose.yaml Web must drop all Linux capabilities'],
+      ['compose.yaml', '      - /data:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=10001,gid=10001', '      - /data:rw', 'compose.yaml Web is missing its restricted ephemeral /data mount'],
+      ['security/dast/compose.yaml', '          - edge\n    security_opt:\n      - no-new-privileges:true\n    cap_drop:\n      - ALL\n    healthcheck:', '          - edge\n    security_opt:\n      - no-new-privileges:false\n    cap_drop:\n      - ALL\n    healthcheck:', 'security/dast/compose.yaml Web must enable no-new-privileges'],
+    ]
+
+    for (const [relativePath, before, after, expectedError] of regressions) {
+      const target = join(fixtureRoot, relativePath)
+      const original = readFileSync(target, 'utf8')
+      assert.ok(original.includes(before), `regression fixture must contain ${before}`)
+      writeFileSync(target, original.replace(before, after))
+      try {
+        assert.throws(() => assertDastConfig(fixtureRoot), (error) => error.message.includes(expectedError), `${relativePath} must fail closed: ${expectedError}`)
+      } finally {
+        writeFileSync(target, original)
+      }
+    }
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true })
+  }
+})
+
+test('release verifier reports unsigned staging bundles honestly and blocks a required missing signature', () => {
+  const root = fileURLToPath(new URL('../..', import.meta.url))
+  const verifier = fileURLToPath(new URL('./verify-release.mjs', import.meta.url))
+  const workflow = readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8')
+  assert.match(workflow, /Verify signed bundle against the owner-pinned public key/)
+  assert.match(workflow, /RAGAM_RELEASE_VERIFY_PUBLIC_KEY_ASCII/)
+  assert.match(workflow, /RAGAM_RELEASE_VERIFY_FINGERPRINT/)
+  assert.match(workflow, /--require-signature/)
+  assert.match(workflow, /secrets\.RAGAM_RELEASE_SIGNING_PRIVATE_KEY_ASCII/)
+  assert.match(workflow, /only the repository owner may request signing/)
+  assert.match(workflow, /GITHUB_ACTOR.*GITHUB_REPOSITORY_OWNER/)
+  assert.match(workflow, /umask 077/)
+  assert.match(workflow, /chmod 600 "\$key_file"/)
+  assert.match(workflow, /unset RAGAM_RELEASE_SIGNING_PRIVATE_KEY_ASCII/)
+  assert.match(workflow, /trap 'rm -f -- "\$key_file"' EXIT/)
+  assert.doesNotMatch(workflow, /secrets\.RAGAM_RELEASE_SIGNING_KEY_FILE/)
+  const bundle = join(root, 'docs/release/artifacts')
+  const signature = join(bundle, 'SHA256SUMS.asc')
+  assert.equal(existsSync(signature), false, 'the committed reproducible bundle remains unsigned')
+
+  const runVerifier = (extra = []) => spawnSync(process.execPath,
+    [verifier, '--dir', bundle, ...extra], { cwd: root, encoding: 'utf8', timeout: 30_000 })
+  const optional = runVerifier()
+  assert.match(optional.stdout, /NOT TESTED\s+detached signature verification/)
+  assert.doesNotMatch(optional.stdout, /FAIL\s+detached signature verification/)
+
+  const required = runVerifier(['--require-signature'])
+  assert.equal(required.status, 1, `${required.stdout}\n${required.stderr}`)
+  assert.match(required.stdout, /BLOCKED\s+detached signature verification/)
+  assert.match(required.stdout, /SHA256SUMS\.asc is missing/)
+  assert.equal(existsSync(signature), false, 'verification must not manufacture a signature')
+})
+
+test('release verifier refuses manifest paths that escape the bundle even when the outside digest matches', () => {
+  const root = fileURLToPath(new URL('../..', import.meta.url))
+  const verifier = fileURLToPath(new URL('./verify-release.mjs', import.meta.url))
+  const scratch = mkdtempSync(join(tmpdir(), 'ragam-release-path-'))
+  const bundle = join(scratch, 'bundle')
+  const outside = join(scratch, 'outside.txt')
+  mkdirSync(bundle)
+  const outsideBytes = Buffer.from('outside fixture content')
+  writeFileSync(outside, outsideBytes)
+  try {
+    writeFileSync(join(bundle, 'SHA256SUMS'), `${sha256(outsideBytes)}  ../outside.txt\n`)
+    const checksumDigest = sha256(readFileSync(join(bundle, 'SHA256SUMS')))
+    writeFileSync(join(bundle, 'manifest.json'), `${JSON.stringify({
+      version: '0.2.0', signed: false, unsigned: true, published: false,
+      artifacts: [{ name: '../outside.txt', bytes: outsideBytes.length, sha256: sha256(outsideBytes) }],
+      checksumFile: { name: 'SHA256SUMS', sha256: checksumDigest },
+      sbom: { name: 'sbom.cdx.json', sha256: '0'.repeat(64) },
+      provenance: { name: 'provenance.json', sha256: '0'.repeat(64) },
+    }, null, 2)}\n`)
+    const result = spawnSync(process.execPath, [verifier, '--dir', bundle], {
+      cwd: root, encoding: 'utf8', timeout: 30_000,
+    })
+    assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`)
+    assert.match(result.stdout, /FAIL\s+manifest artifact set is exact/)
+    assert.match(result.stdout, /FAIL\s+artifact \[unsafe manifest filename\]/)
+    assert.doesNotMatch(result.stdout, /PASS\s+artifact \[unsafe manifest filename\]/)
+  } finally {
+    rmSync(scratch, { recursive: true, force: true })
+  }
 })
 
 test('runner scans one recorded external source snapshot and emits independent release-control gates', () => {

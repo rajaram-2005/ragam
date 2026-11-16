@@ -1,0 +1,91 @@
+# Supplementary local Core HTTP authentication/authorization regression tests
+# This is not an isolated DAST run or a ZAP scan.
+# Repository: rajaram-2005/ragam; branch: arena/947d8745-ragam
+# HEAD: 85903b135fa2b9b1b143278bbd1d7d4bc30553c7
+# Synthetic local fixtures only; no provider credentials or live provider calls.
+# Command: node --test --test-reporter=spec test/accounts.test.mjs test/online.test.mjs test/online-remote-servers.test.mjs test/online-mcp.test.mjs
+(node:1775) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ passwords are scrypt-hashed with a per-password salt and no reversible copy is kept (408.509328ms)
+✔ password policy is length and denylist, and every rejection names the problem (115.983815ms)
+✔ auth routes delegate session creation, lookup and logout to the durable session store (183.016881ms)
+✔ auth routes await an injected account store and do not adopt local legacy files (35.353563ms)
+✔ the first account owns the installation, later ones are members, and no caller can ask for a role (327.124697ms)
+✔ the operator token sign-in is gone: no token file, no token route, no token field (211.81407ms)
+✔ an unknown address and a wrong password are indistinguishable in code, status and message (351.995717ms)
+✔ eight failures lock that account for fifteen minutes and nobody else (641.212183ms)
+✔ registration and sign-in are throttled per address as well as per installation (617.590838ms)
+✔ the account count is capped, so an open sign-up page cannot fill the disk (213.894423ms)
+✔ a session cookie is HttpOnly, SameSite=Strict, scoped to /api, secure and eight hours (127.021804ms)
+✔ the cookie SameSite policy is an operator choice, and the unusable combination is refused (427.627024ms)
+✔ self-hosted entrypoint fails closed until the configured owner signs up, then closes registration (348.7593ms)
+✔ a cold copy of the persistent account directory restores the owner and remains closed to sign-up (224.234662ms)
+✔ member registration requires explicit opt-in and remains bounded by the configured account cap (199.741391ms)
+✔ the production entrypoint binds the managed PORT and Core sign-in/API remains secure (385.067582ms)
+✔ sessions belong to one account, roll over at the cap, and die with the process (620.951754ms)
+✔ only the owner account changes the installation gateway; a member can still use it (289.544829ms)
+✔ history, memory and knowledge belong to the account that made them (249.808699ms)
+✔ a single-operator installation hands its existing history to the first account (196.142405ms)
+✔ a reset code is delivered on the host, works once, and ends every session (1472.306215ms)
+✔ public auth rate limits are enforced by normalized address, source address, and installation (180.258972ms)
+✔ changing a password from inside a session keeps that session and drops the others (348.699001ms)
+✔ the account store stands alone: caps, roles, reset lifetime and a repeatable close (517.568645ms)
+✔ reset codes for two accounts coexist, and a weak first attempt does not burn the code (609.430161ms)
+(node:1795) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ the installation exposes its reviewed in-process servers and read-only tools (276.913575ms)
+✔ preflight states the gate before a call and names an unknown tool (153.611817ms)
+✔ a tool call validates arguments and returns untrusted data, never permissions (172.996138ms)
+✔ only the owner can disable a server, and a disabled server is refused (359.035576ms)
+✔ the plugin surface lists the reviewed built-in and installs nothing custom (179.987029ms)
+✔ a member can run read-only plugin tools; state changes and writing tools stay owner-only (322.338869ms)
+✔ an uncoded internal error is sanitized instead of leaking implementation details (142.311934ms)
+(node:1804) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ owner can connect MCP and Ragam HTTP plugin servers; every remote invocation needs explicit approval (339.686577ms)
+✔ only the installation owner can connect or disconnect remote servers (331.264459ms)
+(node:1813) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ online entry has no local startup requirements and defaults to setup required (102.013514ms)
+✔ Klyvaron starts without loading model files and retires artifact, qualification, and worker APIs (176.220398ms)
+✔ provider, context, model and tool routes require owner authentication (80.304991ms)
+✔ the provider catalogue is authenticated, read-only and carries no secrets (135.48535ms)
+✔ readiness exposes a contract-tested provider fabric without secrets or a live call (153.699775ms)
+✔ Phase 3–9 orchestration routes are authenticated, local-only and leak no secrets (191.051919ms)
+✔ owner login uses an HttpOnly secure cookie; wrong passwords and cross-origin mutations fail (198.32875ms)
+✔ a private gateway needs an exactly matching trusted origin, and nothing is stored without one (503.274247ms)
+✔ gateway credential is encrypted at rest and never returned publicly (122.457699ms)
+✔ model discovery remains unverified and never silently selects a model (125.834315ms)
+✔ explicit model selection and encrypted connection survive recreation (180.460421ms)
+✔ changing model sends the exact id; unknown models fail without network fallback (173.021078ms)
+✔ all local or hybrid execution requests are rejected (123.01842ms)
+✔ classified history cannot be downgraded by a public label (159.78031ms)
+✔ context and sensitive transfers require explicit current-recipient consent (150.81727ms)
+✔ provider body timeout covers headers-to-body delay (204.239415ms)
+✔ redirects are not followed and provider errors do not expose raw bodies (158.824142ms)
+✔ streaming passes deltas and requires a real completion sentinel (163.986619ms)
+✔ completed conversations are stored; failed streams do not become saved assistant turns (180.031859ms)
+✔ file knowledge and approved memory remain opt-in and backed by real stores (175.931893ms)
+✔ manufacturing operations guidance reaches the selected gateway; retired native models fail closed without fallback (200.149913ms)
+✔ only reviewed built-in tools execute; custom installs and removed features are unavailable (224.941347ms)
+✔ connection removal clears credentials and model selection without deleting conversations (158.690026ms)
+✔ public HTTPS endpoints are required unless the operator trusts an exact internal origin (1.466226ms)
+✔ an already cancelled request never reaches the gateway (225.694185ms)
+✔ a schema-1 store migrates to one connection without losing the key (1.788902ms)
+✔ the migration is pure and refuses a record that is neither schema (2.053572ms)
+✔ a saved connection this build cannot resolve is listed as unsupported, and can still be removed (1.417888ms)
+✔ a second provider connection is stored beside the first, with its own key (163.463164ms)
+✔ ComfyUI is an optional keyless catalogue connection while unknown ids still refuse (181.070939ms)
+✔ a named custom OpenAI-compatible endpoint is a first-class connection (160.338971ms)
+✔ testing one connection does not write another connection's model list (121.56584ms)
+✔ the public shape never contains a sealed credential, with any number of connections (142.638526ms)
+ℹ tests 67
+ℹ suites 0
+ℹ pass 67
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 17295.03495
+
+# Exit status: 0

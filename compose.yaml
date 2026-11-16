@@ -46,6 +46,15 @@ services:
     image: ragam/web:local
     restart: unless-stopped
     init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+      - /config:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=10001,gid=10001
+      - /data:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=10001,gid=10001
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     expose:
       - "8080"
     healthcheck:

@@ -11,15 +11,16 @@ Two things this service must never do:
   can run on this host and which cannot, with the reason. A caller that trains a
   model through here gets the same honest record it would get from the library.
 * **Run anything an unauthorised caller asks for.** There are no credentials in
-  this service and no route that accepts one; it binds to **loopback by default**
-  (``AETHERIS_FABRIC_HOST`` opts into anything wider, with a warning printed), and
-  ``/status`` reports the same recommendation.
+  this service and no route that accepts one; both the server factory and CLI
+  refuse non-loopback binds, and ``/status`` reports that strict boundary.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
+import socket
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -38,11 +39,28 @@ __all__ = ["FabricService", "create_server", "main"]
 
 MAX_BODY_BYTES = 1 << 20  # 1 MB: this service takes small JSON commands, not data.
 
-# Loopback by DEFAULT. This service performs no authentication, so a wider bind must
-# be an explicit opt-in rather than something that happens by accident.
+# The service performs no authentication, so non-loopback binds are refused at both
+# the CLI and server-factory boundary; a warning is not sufficient protection.
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8791
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+class _ThreadingHTTPServerIPv6(ThreadingHTTPServer):
+    address_family = socket.AF_INET6
+
+
+def _canonical_loopback_host(host: str) -> str:
+    """Return a numeric loopback address, refusing names that could resolve widely."""
+    if host.lower() == "localhost":
+        return "127.0.0.1"
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError as error:
+        raise ValueError("Aetheris Fabric has no authentication and refuses non-loopback binds") from error
+    if not address.is_loopback:
+        raise ValueError("Aetheris Fabric has no authentication and refuses non-loopback binds")
+    return str(address)
 
 
 class FabricService:
@@ -132,7 +150,7 @@ class FabricService:
             "failures": self.failures.summary(),
             "security": {
                 "acceptsCredentials": False,
-                "bindRecommendation": "loopback or private network only; this service performs no authentication",
+                "bindRecommendation": "loopback only; this service performs no authentication",
             },
         }
 
@@ -277,9 +295,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def create_server(service: FabricService | None = None, *, host: str = "127.0.0.1", port: int = 0) -> ThreadingHTTPServer:
-    """Build (but do not start) the HTTP server."""
+    """Build (but do not start) a loopback-only HTTP server."""
+    host = _canonical_loopback_host(host)
     handler = type("BoundHandler", (Handler,), {"service": service or FabricService()})
-    return ThreadingHTTPServer((host, port), handler)
+    server_type = _ThreadingHTTPServerIPv6 if ":" in host else ThreadingHTTPServer
+    return server_type((host, port), handler)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -291,6 +311,12 @@ def main(argv: list[str] | None = None) -> int:
     if "--help" in args or "-h" in args:
         print(__doc__)
         return 0
+    try:
+        host = _canonical_loopback_host(host)
+    except ValueError:
+        print("aetheris-fabric refuses a non-loopback bind because this service performs no authentication", file=sys.stderr)
+        print("set AETHERIS_FABRIC_HOST to 127.0.0.1 (or another numeric loopback address)", file=sys.stderr)
+        return 2
 
     service = FabricService(output_dir=data_dir)
     server = create_server(service, host=host, port=port)
@@ -306,10 +332,6 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  status    {status['status']} ({len(runnable)}/{status['stages']['total']} stages runnable here)")
     for entry in blocked:
         print(f"  blocked   {entry['stage']}: {entry['reason']}")
-    if host not in LOOPBACK_HOSTS:
-        print(f"  warning   bound to {host}; this service performs NO authentication")
-        print("            set AETHERIS_FABRIC_HOST=127.0.0.1 unless a wider bind is intended")
-
     try:
         server.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:

@@ -50,6 +50,11 @@ services:
         condition: service_healthy
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+      - /config:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=10001,gid=10001
+      - /data:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=10001,gid=10001
     expose:
       - '8080'
     networks:

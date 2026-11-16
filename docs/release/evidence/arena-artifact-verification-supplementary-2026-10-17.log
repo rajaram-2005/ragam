@@ -1,0 +1,69 @@
+# Supplementary committed-artifact verification after fetching recorded source commit
+# Authoritative evidence cutoff remains 2026-10-17; these are supplementary local observations.
+# Repository: rajaram-2005/ragam; branch: arena/947d8745-ragam
+# HEAD: 85903b135fa2b9b1b143278bbd1d7d4bc30553c7
+# Worktree was modified; verification targeted docs/release/artifacts/ and also ran the default qualification-report integrity checks.
+# Those report checks validate schema/status integrity only; they do not establish current-branch evidence freshness.
+# The recorded provenance commit was fetched without changing the current branch:
+# git fetch --no-tags origin b53c8748a82946ac57b4471be177677258bcf4f5
+# Retrieved object:
+# commit=b53c8748a82946ac57b4471be177677258bcf4f5
+# tree=17b9fd48c3a87190ba60179b1acf5771df2b1d72
+# subject=Release readiness remediation: reproducible verification, telemetry and honest qualification gate
+
+# Default bundle verification (signature is reported, not required):
+
+# Command: node scripts/release/verify-release.mjs --dir docs/release/artifacts
+PASS  sha256sum -c SHA256SUMS — ragam-source-0.2.0.tar.gz: OK | ragam-web-0.2.0.tar.gz: OK | sbom.cdx.json: OK
+NOT TESTED  detached signature verification — NOT TESTED: bundle is unsigned; pass --require-signature for release acceptance
+PASS  manifest declares UNSIGNED — signed=false
+PASS  manifest declares no publication — published=false
+PASS  manifest artifact set is exact — ragam-source-0.2.0.tar.gz, ragam-web-0.2.0.tar.gz, sbom.cdx.json, provenance.json
+PASS  artifact ragam-source-0.2.0.tar.gz — 2718279 bytes
+PASS  artifact ragam-web-0.2.0.tar.gz — 646873 bytes
+PASS  artifact sbom.cdx.json — 114784 bytes
+PASS  artifact provenance.json — 1886 bytes
+PASS  SHA256SUMS digest — digest matches manifest
+PASS  SBOM digest — sbom.cdx.json digest matches manifest
+PASS  provenance digest — provenance.json digest matches manifest
+PASS  provenance commit resolves — b53c8748a82946ac57b4471be177677258bcf4f5
+PASS  provenance tree matches commit — 17b9fd48c3a87190ba60179b1acf5771df2b1d72 vs 17b9fd48c3a87190ba60179b1acf5771df2b1d72
+PASS  provenance clean checkout — git archive <commit> extracted into an empty temporary directory; no working-tree files are used
+PASS  manifest commit and version match provenance — manifest b53c8748a82946ac57b4471be177677258bcf4f5/0.2.0 vs provenance b53c8748a82946ac57b4471be177677258bcf4f5/0.2.0
+PASS  release artifact digests match provenance — source and web digests match
+PASS  SBOM digest matches provenance — SBOM digest matches
+PASS  provenance lockfile inputs match — three committed lockfile digests match
+PASS  VERSION matches manifest — 0.2.0 vs 0.2.0
+PASS  qualification report schema and statuses
+PASS  no mandatory gate laundered to PASS — 28 non-PASS mandatory gates
+
+verified 22 independent checks for artifacts
+# Exit status: 0
+
+# Release-acceptance verification (signature is required):
+# Command: node scripts/release/verify-release.mjs --dir docs/release/artifacts --require-signature
+PASS  sha256sum -c SHA256SUMS — ragam-source-0.2.0.tar.gz: OK | ragam-web-0.2.0.tar.gz: OK | sbom.cdx.json: OK
+BLOCKED  detached signature verification — required but SHA256SUMS.asc is missing
+PASS  manifest declares UNSIGNED — signed=false
+PASS  manifest declares no publication — published=false
+PASS  manifest artifact set is exact — ragam-source-0.2.0.tar.gz, ragam-web-0.2.0.tar.gz, sbom.cdx.json, provenance.json
+PASS  artifact ragam-source-0.2.0.tar.gz — 2718279 bytes
+PASS  artifact ragam-web-0.2.0.tar.gz — 646873 bytes
+PASS  artifact sbom.cdx.json — 114784 bytes
+PASS  artifact provenance.json — 1886 bytes
+PASS  SHA256SUMS digest — digest matches manifest
+PASS  SBOM digest — sbom.cdx.json digest matches manifest
+PASS  provenance digest — provenance.json digest matches manifest
+PASS  provenance commit resolves — b53c8748a82946ac57b4471be177677258bcf4f5
+PASS  provenance tree matches commit — 17b9fd48c3a87190ba60179b1acf5771df2b1d72 vs 17b9fd48c3a87190ba60179b1acf5771df2b1d72
+PASS  provenance clean checkout — git archive <commit> extracted into an empty temporary directory; no working-tree files are used
+PASS  manifest commit and version match provenance — manifest b53c8748a82946ac57b4471be177677258bcf4f5/0.2.0 vs provenance b53c8748a82946ac57b4471be177677258bcf4f5/0.2.0
+PASS  release artifact digests match provenance — source and web digests match
+PASS  SBOM digest matches provenance — SBOM digest matches
+PASS  provenance lockfile inputs match — three committed lockfile digests match
+PASS  VERSION matches manifest — 0.2.0 vs 0.2.0
+PASS  qualification report schema and statuses
+PASS  no mandatory gate laundered to PASS — 28 non-PASS mandatory gates
+
+verification refused: 1 problem(s)
+# Exit status: 1

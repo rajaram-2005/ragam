@@ -23,7 +23,7 @@ exercised on this host, that is stated rather than implied to work.
 | An unvalidated model replacing a known-good release | Explicit requirement. Validation gates release; rollback restores |
 | Unbounded agent execution | Budgets on steps, tool calls, model calls and duration, accounted **by the core** |
 | A malicious repository, web page or document | All external content is untrusted input. Instructions found in data are never executed |
-| Anonymous abuse of the training service | Fabric performs **no** authentication, so it binds loopback by default |
+| Anonymous abuse of the training service | Fabric performs **no** authentication and now refuses non-loopback binds |
 
 Not modelled: a compromised host, a malicious operator with filesystem access, or
 side-channel attacks. This is a local-first platform; the trust boundary is the
@@ -215,10 +215,12 @@ feature matrix, because a signature is the control most often described as more 
 | Where it is checked | At install, and again before every invocation — the installed record is an object in this process, so "it was signed when we installed it" is weaker than "the capability is running from the bytes that were signed". The re-check distinguishes *the signature is gone*, *the signed bytes were replaced* and *the manifest the capability reads was edited* |
 | Status codes | `403` for a refusal, `400` for a malformed signature block. A rejected install is audited with its reason, and adding or removing a trusted key is audited too |
 
-Two limitations belong here rather than in a footnote: there is **no revocation** — removing
-a key stops future installs and does not retroactively invalidate an installed plugin — and
-**no review pipeline**. A key is trusted because a person put it in the file, and this
-document does not claim otherwise.
+Two limits belong here rather than in a footnote. There is no distributed revocation feed
+or automatic uninstall, but **local key removal is an effective revocation**: it is audited,
+blocks new installs, and the invocation-time trust check refuses to execute already-installed
+plugins. Their records remain installed for review; re-trusting the same key is an explicit
+owner action. There is also **no formal publisher-review pipeline**. Trust is a local owner
+decision, not an independent certification of a publisher or its code.
 
 ---
 
@@ -430,26 +432,19 @@ treated as untrusted. Concretely:
 
 `services/fabric` performs **no authentication**. There is no route that accepts a
 credential, and `/status` reports `security.acceptsCredentials: false` with
-`bindRecommendation: "loopback or private network only; this service performs no
-authentication"`.
+`bindRecommendation: "loopback only; this service performs no authentication"`.
 
-Because that advice would be worthless if the service contradicted it, the bind
-default is **`127.0.0.1`** (`DEFAULT_HOST`), pinned by a test. `AETHERIS_FABRIC_HOST`
-opts into a wider bind, and doing so prints:
+As a result, the bind default is **`127.0.0.1`** (`DEFAULT_HOST`), pinned by a test.
+`AETHERIS_FABRIC_HOST` may select another loopback address, but the CLI and
+`create_server` both refuse any non-loopback bind; a warning is not treated as an
+access-control boundary. It was originally `0.0.0.0`, which would have exposed an
+unauthenticated training endpoint to the network by accident. Other controls: 1 MB
+body limit, malformed JSON → 400, non-object JSON → 400, unknown route → 404,
+`cache-control: no-store`, concurrent runs serialised into distinct `runId`s, and
+`OPTIONS` answered with an `allow` header.
 
-```
-warning   bound to 0.0.0.0; this service performs NO authentication
-          set AETHERIS_FABRIC_HOST=127.0.0.1 unless a wider bind is intended
-```
-
-It was originally `0.0.0.0`, which would have exposed an unauthenticated training
-endpoint to the network by accident. Other controls: 1 MB body limit, malformed
-JSON → 400, non-object JSON → 400, unknown route → 404, `cache-control: no-store`,
-concurrent runs serialised into distinct `runId`s, and `OPTIONS` answered with an
-`allow` header.
-
-**Do not expose this service publicly.** Put it behind an authenticating reverse
-proxy if it must be reachable off-host.
+**Do not expose this service publicly.** Off-host access requires a separately
+authenticated service-to-service design; this change does not add one.
 
 ---
 
@@ -469,12 +464,23 @@ Stated plainly, because an unstated gap is worse than a stated one.
    than from the request. Its boundaries — including what an open sign-up page and a
    host-delivered password reset do and do not protect against — are stated in
    [docs/20](20-accounts-and-sign-in.md).
-3. **Fabric has no authentication at all** (§15). Loopback default is a mitigation,
-   not an authn mechanism.
-4. **No rate limiting.** A local client can exhaust the media queue or the God Core
-   budget. Budgets bound a single task, not aggregate load.
-5. **Dependency vulnerability scanning has been run, but it is not automated.**
-   Results, and what they cost:
+3. **Fabric has no authentication at all** (§15). Its current server factory and CLI
+   refuse non-loopback binds, but loopback is a network-exposure mitigation, not caller
+   identity or authenticated service-to-service access.
+4. **Aggregate resource limits are incomplete.** The active online Core has independent,
+   process-local auth windows (12 per normalized address, 30 per socket peer, 60 per
+   installation *per auth action* per minute) and a two-concurrent-request Chat cap per
+   Core process. These are not a shared request or provider-spend quota: repeated sequential
+   Chat calls remain possible. Media jobs run one at a time per account, but the persisted
+   pending queue has no depth cap. Auth counters reset on restart and are not coordinated
+   across replicas; clients behind one reverse proxy share its socket-peer bucket unless the
+   edge adds controls. Per-task budgets do not bound aggregate load. Before public or
+   unattended use with a configured paid provider, add owner-approved aggregate budgets and
+   bounded queueing at the application or trusted edge.
+5. **Dependency advisory scans run in CI, but the recorded results below are historical.**
+   They do not establish a fresh scan of the current worktree or replace the separate
+   Semgrep/Gitleaks/Trivy/ZAP qualification, which remains unverified as recorded in
+   [the release verdict](release/12-final-verdict.md). Historical results, and what they cost:
 
    | Tree | Tool | Result |
    |---|---|---|
@@ -517,8 +523,10 @@ Stated plainly, because an unstated gap is worse than a stated one.
    nonetheless raised its floor from `pytest>=8.0` to `pytest>=9.0.3`, because a
    declared range that permits a known-bad version is a defect in the declaration
    even when the installed copy happens to be safe. All 575 Fabric tests were
-   verified green under pytest 9.1.1 before the floor moved. The current Fabric suite,
-   823 Fabric tests, was also run green under pytest 9.1.1 after the checkpoint change.
+   verified green under pytest 9.1.1 before the floor moved. The suite after the
+   checkpoint change contained 823 tests and passed under pytest 9.1.1. The current
+   Arena branch has 831 Fabric tests; all 831 passed using the committed Python lock
+   (including pytest 9.2.0) in an isolated venv.
 
    **Scanning is now enforced in CI, not just run once by hand.** The `web` job
    executes two audits with deliberately different bars:
@@ -571,13 +579,13 @@ Stated plainly, because an unstated gap is worse than a stated one.
    community-licence or acceptable-use restrictions that are **not** MIT-compatible
    and would constrain redistribution. Any such base must have its licence recorded
    in its model card before release.
-7. **No signed artifacts.** Weights and media are identified by sha256, which gives
-   integrity but not authenticity. There is no signature chain from a release to its
-   producer. A Klyvaron artifact is verified against the digests in its own manifest
-   before a byte is used (at export, at install, and again at load), and a mismatch is
-   refused rather than loaded — but an attacker who can rewrite both the manifest and
-   the weights defeats a digest, and nothing here detects that. Signing the manifest is
-   the missing control.
+7. **No owner-authorized signed release artifact is available.** A fail-closed signing
+   workflow and independent pinned-key verifier exist, but no authorized key or signed
+   bundle was supplied. The committed weights/media and release archives have SHA-256
+   integrity checks, not producer authenticity. A Klyvaron artifact is checked against
+   its manifest before use (at export, install and load), but an attacker who can rewrite
+   both the manifest and weights defeats an unsigned digest. Owner-authorized signing and
+   a verified signature chain remain mandatory before release.
 
 ---
 

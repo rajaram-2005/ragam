@@ -1474,11 +1474,44 @@ function runDockerAvailable() {
   return { ok: true, binary: docker, composeVersion: compose.stdout.trim(), localEngine: true, daemonVersion: daemon.stdout.trim() }
 }
 
-function assertDastConfig(sourceRoot) {
+function composeServiceSection(compose, service) {
+  const lines = compose.split(/\r?\n/)
+  const start = lines.findIndex((line) => line === `  ${service}:`)
+  if (start < 0) return null
+  const end = lines.findIndex((line, index) => index > start
+    && (/^  [A-Za-z0-9_.-]+:\s*$/.test(line) || /^[A-Za-z0-9_.-]+:\s*$/.test(line)))
+  return lines.slice(start, end < 0 ? lines.length : end).join('\n')
+}
+
+function webContainerHardeningErrors(sourceRoot) {
+  const dockerfile = readFileSync(join(sourceRoot, 'Dockerfile.web'), 'utf8')
+  const errors = []
+  if (!/^[ \t]*USER[ \t]+10001:10001[ \t]*$/m.test(dockerfile)) errors.push('Web image must run as non-root UID/GID 10001')
+  const mounts = [
+    '/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777',
+    '/config:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=10001,gid=10001',
+    '/data:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=10001,gid=10001',
+  ]
+  for (const composePath of ['compose.yaml', 'security/dast/compose.yaml']) {
+    const compose = readFileSync(join(sourceRoot, composePath), 'utf8')
+    const web = composeServiceSection(compose, 'web') ?? ''
+    if (!/^[ \t]*read_only:[ \t]*true[ \t]*$/m.test(web)) errors.push(`${composePath} Web root filesystem must be read-only`)
+    if (!/^[ \t]*security_opt:[ \t]*\r?\n[ \t]*-[ \t]*no-new-privileges:true[ \t]*$/m.test(web)) errors.push(`${composePath} Web must enable no-new-privileges`)
+    if (!/^[ \t]*cap_drop:[ \t]*\r?\n[ \t]*-[ \t]*ALL[ \t]*$/m.test(web)) errors.push(`${composePath} Web must drop all Linux capabilities`)
+    for (const mount of mounts) {
+      if (!web.split(/\r?\n/).some((line) => line.trim() === `- ${mount}`)) {
+        errors.push(`${composePath} Web is missing its restricted ephemeral ${mount.split(':', 1)[0]} mount`)
+      }
+    }
+  }
+  return errors
+}
+
+export function assertDastConfig(sourceRoot) {
   const compose = readFileSync(join(sourceRoot, 'security/dast/compose.yaml'), 'utf8')
   const proxy = readFileSync(join(sourceRoot, 'security/dast/Caddyfile'), 'utf8')
   const api = readFileSync(join(sourceRoot, 'security/dast/openapi.yaml'), 'utf8')
-  const errors = []
+  const errors = webContainerHardeningErrors(sourceRoot)
   if (!/^\s+internal:\s+true\s*$/m.test(compose)) errors.push('isolated Docker network must be internal')
   if (/^\s+ports\s*:/m.test(compose)) errors.push('DAST services must not publish host ports')
   if (!compose.includes(LOCK.zap.image)) errors.push('ZAP image must match the pinned version and digest in scanner-versions.json')

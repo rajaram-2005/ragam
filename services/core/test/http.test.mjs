@@ -1120,7 +1120,7 @@ test('every field the web panels read comes back from the routes they call', asy
 
 // --- plugin signing and the MCP allowlist, over the real HTTP surface ----------------
 
-test('a signed plugin installs over HTTP once its key is trusted, and not before', async () => {
+test('removing a trusted plugin key revokes already-installed execution over HTTP', async () => {
   const core = await startCore({ withModel: false })
   try {
     const { generateKeyPair, signManifest } = await import('../src/plugins/signing.mjs')
@@ -1168,10 +1168,27 @@ test('a signed plugin installs over HTTP once its key is trusted, and not before
     assert.equal(installed.status, 201)
     assert.equal(installed.json.signature.state, 'verified')
     assert.equal(installed.json.signature.keyId, publisher.keyId)
+    assert.equal((await core.post(`/api/plugins/${manifest.id}/enable`, {})).status, 200)
 
-    // Removing the key does not retroactively bless the plugin: installing again now fails,
-    // and the refusal is the same one as before the key was ever added.
+    let handlerCalls = 0
+    core.app.plugins.bindHandlers(manifest.id, () => { handlerCalls += 1; return { ok: true } })
+    const initialInvocation = await core.post(`/api/plugins/${manifest.id}/invoke`, {
+      capability: 'summarize', input: { path: '/repo' },
+    })
+    assert.equal(initialInvocation.status, 200, JSON.stringify(initialInvocation.json))
+    assert.equal(handlerCalls, 1)
+
+    // Removing the key is an effective local revocation: future installs and every
+    // invocation-time signature re-check refuse the already-installed plugin too.
     assert.equal((await core.del(`/api/plugins/trust/${publisher.keyId}`)).status, 200)
+    const revokedInvocation = await core.post(`/api/plugins/${manifest.id}/invoke`, {
+      capability: 'summarize', input: { path: '/repo' },
+    })
+    assert.equal(revokedInvocation.status, 403)
+    assert.equal(revokedInvocation.json.error, 'plugin_signature_rejected')
+    assert.equal(handlerCalls, 1, 'revocation must stop execution before the handler runs')
+
+    // The installed record remains, but reinstalling now fails for the same trust reason.
     const afterRemoval = await core.post('/api/plugins/install', { ...signed, version: '1.0.1' })
     assert.equal(afterRemoval.status, 403)
     assert.equal(afterRemoval.json.error, 'plugin_signature_rejected')

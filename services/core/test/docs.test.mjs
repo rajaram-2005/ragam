@@ -777,17 +777,17 @@ test('the status doc reports the real test totals', () => {
 
   const status = squash(doc.status())
   assert.ok(status.includes('**1086 tests**'), 'current core test inventory must be stated')
-  assert.ok(status.includes('**823 tests**'), 'fabric test inventory must be stated')
+  assert.ok(status.includes('**831 tests**'), 'fabric test inventory must be stated')
   assert.ok(status.includes('**143 tests**'), 'web test inventory must be stated')
-  assert.ok(status.includes('2052 cases across the three suites'), 'the grand total must equal the current suite inventory')
+  assert.ok(status.includes('2060 cases across the three suites'), 'the grand total must equal the current suite inventory')
   // README and docs/03 must state the *same* total.
-  assert.ok(squash(doc.readme()).includes('2052 tests: core 1086, web 143, fabric 823'),
+  assert.ok(squash(doc.readme()).includes('2060 tests: core 1086, web 143, fabric 831'),
     'README must state the current inventory as docs/03 does')
   assert.ok(squash(doc.readme()).includes('latest completed full CI run')
     && squash(doc.readme()).includes('41394564087')
     && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
-    && squash(doc.readme()).includes('The current tree has 2,052 tests (Core 1,086, Web 143, Fabric 823). The full Core suite passed 1,082/1,086 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 143/143 and the production bundle built. Fabric passed 823/823 with NumPy, JAX, PyAV and Pillow installed in an isolated venv.')
-    && squash(doc.readme()).includes('Full CI for this current tree is recorded in the pull-request checks and final engineering report')
+    && squash(doc.readme()).includes('The current tree has 2,060 tests (Core 1,086, Web 143, Fabric 831). The full Core suite passed 1,082/1,086 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 143/143 and the production bundle built. On the current Arena branch, Fabric passed 831/831 with NumPy, JAX, PyAV and Pillow installed from the committed lock in an isolated venv.')
+    && squash(doc.readme()).includes('Documentation/release consistency tests passed 67/67, and the security regression passed 16/16.') && squash(doc.readme()).includes('No full CI run, Docker-backed scan, signed-bundle verification, or full release qualification is established for this current worktree; the linked main/PR runs are historical.')
     && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
   'README must distinguish the last full CI run from the current full local suite')
   assert.ok(status.includes('(78 files'), 'the file count must move with the suite')
@@ -796,13 +796,13 @@ test('the status doc reports the real test totals', () => {
   assert.equal(perComponent.length, 3, `expected three component headings, found ${JSON.stringify(perComponent)}`)
   const fromHeadings = perComponent
   assert.ok(fromHeadings.includes(1086), `core heading must say 1086, found ${JSON.stringify(fromHeadings)}`)
-  assert.ok(fromHeadings.includes(823), `fabric heading must say 822, found ${JSON.stringify(fromHeadings)}`)
+  assert.ok(fromHeadings.includes(831), `fabric heading must say 831, found ${JSON.stringify(fromHeadings)}`)
   assert.ok(fromHeadings.includes(143), `web heading must say 143, found ${JSON.stringify(fromHeadings)}`)
   // And the headings must sum to the stated grand total, not merely contain it.
   assert.equal(
     fromHeadings.reduce((a, b) => a + b, 0),
-    2052,
-    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 2052`,
+    2060,
+    `component headings sum to ${fromHeadings.reduce((a, b) => a + b, 0)}, grand total says 2060`,
   )
 })
 
@@ -1692,6 +1692,21 @@ test('CI exists, covers all three components, and is documented', () => {
     'CI must audit the Python dependencies against the advisory database')
   assert.ok(workflow.includes('GITHUB_TOKEN'),
     'the advisory query must be authenticated so a shared runner IP cannot exhaust the limit')
+
+  // The security overview must distinguish these recurring CI advisory checks from
+  // the separate OSS qualification scanners, and must not present historical results
+  // as a fresh scan of the current worktree.
+  const securityDocs = squash(doc.security())
+  assert.ok(securityDocs.includes('Dependency advisory scans run in CI'),
+    'docs/05 must acknowledge that dependency advisory checks are automated')
+  assert.ok(securityDocs.includes('recorded results below are historical'),
+    'docs/05 must label the recorded advisory results as historical')
+  assert.ok(securityDocs.includes('do not establish a fresh scan of the current worktree'),
+    'docs/05 must not imply that historical results qualify the current worktree')
+  assert.ok(securityDocs.includes('separate Semgrep/Gitleaks/Trivy/ZAP qualification'),
+    'docs/05 must distinguish advisory checks from the OSS scanner qualification')
+  assert.doesNotMatch(securityDocs, /dependency vulnerability scanning has been run, but it is not automated/i,
+    'docs/05 must not contradict the checked-in CI advisory scans')
 
   // And the workflow must be reachable from the documentation.
   assert.ok(doc.readme().includes('.github/workflows/ci.yml'), 'README must link the workflow')

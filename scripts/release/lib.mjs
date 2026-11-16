@@ -7,7 +7,7 @@
 // an unverified artifact look verified.
 
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, lstatSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -40,7 +40,38 @@ export function writeChecksums(outDir, filePaths) {
 /** Independent verification: the system `sha256sum`, not our own hashing code. */
 export function verifyChecksumsWithSha256sum(outDir) {
   const target = join(outDir, 'SHA256SUMS')
-  if (!existsSync(target)) return { ok: false, output: 'SHA256SUMS is missing' }
+  if (!existsSync(target)) return { ok: false, output: 'SHA256SUMS is missing', status: null }
+  try {
+    if (!lstatSync(target).isFile()) return { ok: false, output: 'SHA256SUMS must be a regular file; verification refused', status: null }
+  } catch {
+    return { ok: false, output: 'SHA256SUMS could not be inspected safely; verification refused', status: null }
+  }
+  let contents
+  try { contents = readFileSync(target, 'utf8') } catch {
+    return { ok: false, output: 'SHA256SUMS could not be read; verification refused', status: null }
+  }
+  const lines = contents.split(/\r?\n/).filter(Boolean)
+  const entries = []
+  for (const line of lines) {
+    const match = /^([a-f0-9]{64})  ([A-Za-z0-9][A-Za-z0-9._-]{0,199})$/.exec(line)
+    if (!match || match[2] === '.' || match[2] === '..') {
+      return { ok: false, output: 'SHA256SUMS contains an unsafe or malformed entry; verification refused', status: null }
+    }
+    entries.push({ digest: match[1], name: match[2] })
+  }
+  if (entries.length === 0) return { ok: false, output: 'SHA256SUMS contains no entries; verification refused', status: null }
+  if (new Set(entries.map((entry) => entry.name)).size !== entries.length) {
+    return { ok: false, output: 'SHA256SUMS contains duplicate filenames; verification refused', status: null }
+  }
+  for (const entry of entries) {
+    try {
+      if (!lstatSync(join(outDir, entry.name)).isFile()) {
+        return { ok: false, output: 'A checksum target is not a regular file; verification refused', status: null }
+      }
+    } catch {
+      return { ok: false, output: 'A checksum target is missing or could not be inspected; verification refused', status: null }
+    }
+  }
   const result = spawnSync('sha256sum', ['-c', 'SHA256SUMS'], { cwd: outDir, encoding: 'utf8' })
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
   return { ok: result.status === 0 && !result.error, output, status: result.status }
