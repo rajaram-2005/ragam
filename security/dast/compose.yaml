@@ -21,8 +21,9 @@ services:
       AETHERIS_TRUSTED_WEB_ORIGINS: ''
       AETHERIS_PRINT_RESET_CODES: 'false'
       AETHERIS_TELEMETRY_ENABLED: 'false'
+    read_only: true
     tmpfs:
-      - /var/lib/ragam:rw,noexec,nosuid,nodev,size=64m,mode=1777
+      - /var/lib/ragam:rw,noexec,nosuid,nodev,size=64m,mode=0700,uid=1000,gid=1000
       - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
     expose:
       - '8790'

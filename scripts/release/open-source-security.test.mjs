@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { assertDastConfig, excludedWorktreeClass, parseBuildxImageInspection, renderSecurityStepSummary } from './open-source-security.mjs'
+import { applySemgrepReviews, assertDastConfig, excludedWorktreeClass, parseBuildxImageInspection, renderSecurityStepSummary } from './open-source-security.mjs'
 import {
   gateFromScanner,
   TRIVY_PIP_REQUIREMENTS_LOCK_PATTERN,
@@ -24,7 +24,7 @@ import {
   zapActiveScanOutcome,
 } from './open-source-security-utils.mjs'
 
-const fixtureSecret = 'fixture_secret_value_MUST_NEVER_BE_PERSISTED_9f41'
+const fixtureSecret = ['fixture', 'secret', 'value', 'MUST', 'NEVER', 'BE', 'PERSISTED', '9f41'].join('_')
 
 test('Trivy lockfile pattern targets the exact Fabric requirements.lock name', () => {
   assert.equal(TRIVY_PIP_REQUIREMENTS_LOCK_PATTERN, String.raw`pip:requirements\.lock`)
@@ -36,6 +36,17 @@ test('Semgrep disables network version checks, inline nosem, and checked-in igno
   assert.match(runner, /--disable-nosem/)
   assert.match(runner, /function semgrepSuppressionReason/)
   assert.match(runner, /suppressions: false/)
+})
+
+test('the explicit no-download policy covers every pinned scanner installer', () => {
+  const runner = readFileSync(new URL('./open-source-security.mjs', import.meta.url), 'utf8')
+  for (const name of ['ensureSemgrep', 'ensureGitleaks', 'ensureTrivy']) {
+    const start = runner.indexOf(`function ${name}(`)
+    assert.notEqual(start, -1, `${name} must exist`)
+    const nextFunction = runner.indexOf('function ', start + 1)
+    const source = runner.slice(start, nextFunction < 0 ? undefined : nextFunction)
+    assert.match(source, /if \(TOOL_NO_DOWNLOAD\)/, `${name} must refuse automatic downloads when the policy is set`)
+  }
 })
 
 test('the local .aetheris-data store has separate classification and exclusion-only reporting', () => {
@@ -76,28 +87,38 @@ test('the OSS workflow covers PRs, release pushes, manual dispatch, full qualifi
   assert.match(workflow, /retention-days: 30/)
 })
 
-test('ZAP registry inspection parser requires the locked digest and platform descriptor', () => {
+test('ZAP registry inspection parser requires the locked OCI index, exact image, and platform manifest', () => {
+  const image = 'ghcr.io/zaproxy/zaproxy:2.17.0'
   const digest = `sha256:${'a'.repeat(64)}`
   const amd64Digest = `sha256:${'b'.repeat(64)}`
   const arm64Digest = `sha256:${'c'.repeat(64)}`
   const inspection = [
-    'Name: ghcr.io/zaproxy/zaproxy:2.17.0',
+    `Name: ${image}`,
     'MediaType: application/vnd.oci.image.index.v1+json',
     `Digest: ${digest}`,
     'Manifests:',
-    `  Name: ghcr.io/zaproxy/zaproxy:2.17.0@${amd64Digest}`,
+    `  Name: ${image}@${amd64Digest}`,
     '  MediaType: application/vnd.oci.image.manifest.v1+json',
     '  Platform: linux/amd64',
-    `  Name: ghcr.io/zaproxy/zaproxy:2.17.0@${arm64Digest}`,
+    `  Name: ${image}@${arm64Digest}`,
+    '  MediaType: application/vnd.oci.image.manifest.v1+json',
     '  Platform: linux/arm64',
   ].join('\n')
-  const parsed = parseBuildxImageInspection(inspection, 'linux/amd64')
+  const parsed = parseBuildxImageInspection(inspection, 'linux/amd64', image)
+  assert.equal(parsed.name, image)
+  assert.equal(parsed.mediaType, 'application/vnd.oci.image.index.v1+json')
   assert.equal(parsed.digest, digest)
   assert.deepEqual(parsed.platforms, ['linux/amd64', 'linux/arm64'])
   assert.equal(parsed.observedPlatform, 'linux/amd64')
   assert.equal(parsed.platformManifestDigest, amd64Digest)
-  assert.equal(parseBuildxImageInspection(inspection, 'linux/arm/v7').observedPlatform, null)
-  assert.equal(parseBuildxImageInspection('Digest: invalid\n  Platform: linux/amd64', 'linux/amd64').digest, null)
+  assert.equal(parseBuildxImageInspection(inspection, 'linux/arm/v7', image).observedPlatform, null)
+  assert.equal(parseBuildxImageInspection(inspection, 'linux/amd64/v3', image).observedPlatform, null)
+  assert.equal(parseBuildxImageInspection(inspection, 'linux/amd64', 'ghcr.io/other/zaproxy:2.17.0').digest, null)
+  assert.equal(parseBuildxImageInspection(inspection.replace('image.index.v1+json', 'image.manifest.v1+json'), 'linux/amd64', image).digest, null)
+  assert.equal(parseBuildxImageInspection(inspection.replace('image.manifest.v1+json', 'image.layer.v1.tar'), 'linux/amd64', image).platformManifestDigest, null)
+  const duplicateAmd64 = `${inspection}\n  Name: ${image}@sha256:${'d'.repeat(64)}\n  MediaType: application/vnd.oci.image.manifest.v1+json\n  Platform: linux/amd64`
+  assert.equal(parseBuildxImageInspection(duplicateAmd64, 'linux/amd64', image).platformManifestDigest, null)
+  assert.equal(parseBuildxImageInspection('Digest: invalid\n  Platform: linux/amd64', 'linux/amd64', image).digest, null)
 })
 
 test('GitHub step summary exposes only sanitized findings, locked identity and report hashes', () => {
@@ -136,13 +157,14 @@ test('GitHub step summary exposes only sanitized findings, locked identity and r
   assert.equal(summary.includes('source:'), false)
 })
 
-test('production and isolated DAST Web containers enforce non-root, read-only runtime controls', () => {
+test('production and isolated Core/Web containers preserve non-root and read-only runtime controls', () => {
   const root = fileURLToPath(new URL('../..', import.meta.url))
   assert.doesNotThrow(() => assertDastConfig(root))
 
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'ragam-web-hardening-'))
   try {
     for (const relativePath of [
+      'Dockerfile.core',
       'Dockerfile.web',
       'compose.yaml',
       'security/dast/compose.yaml',
@@ -155,7 +177,15 @@ test('production and isolated DAST Web containers enforce non-root, read-only ru
     }
 
     const regressions = [
+      ['Dockerfile.core', 'FROM node:22-bookworm-slim', 'FROM node:latest', 'Core image must retain the supported Node 22 bookworm-slim runtime'],
+      ['Dockerfile.core', 'USER node', 'USER root', 'Core image must run as the non-root node user'],
+      ['Dockerfile.web', 'FROM node:22-bookworm-slim AS build', 'FROM node:latest AS build', 'Web build stage must retain the supported Node 22 bookworm-slim runtime'],
+      ['Dockerfile.web', 'FROM caddy:2-alpine', 'FROM caddy:latest', 'Web runtime must retain the supported official Caddy 2 Alpine image'],
       ['Dockerfile.web', 'USER 10001:10001', 'USER root', 'Web image must run as non-root UID/GID 10001'],
+      ['compose.yaml', '    volumes:\n      - ragam-data:/var/lib/ragam\n    expose:\n      - "8790"\n    read_only: true\n', '    volumes:\n      - ragam-data:/var/lib/ragam\n    expose:\n      - "8790"\n    read_only: false\n', 'compose.yaml Core root filesystem must be read-only'],
+      ['security/dast/compose.yaml', "      AETHERIS_TELEMETRY_ENABLED: 'false'\n    read_only: true\n    tmpfs:\n", "      AETHERIS_TELEMETRY_ENABLED: 'false'\n    read_only: false\n    tmpfs:\n", 'security/dast/compose.yaml Core root filesystem must be read-only'],
+      ['security/dast/compose.yaml', '/var/lib/ragam:rw,noexec,nosuid,nodev,size=64m,mode=0700,uid=1000,gid=1000', '/var/lib/ragam:rw', 'security/dast/compose.yaml Core must preserve its expected persistent/ephemeral data mount'],
+      ['security/dast/compose.yaml', '    cap_drop:\n      - ALL\n    healthcheck:', '    cap_drop:\n      - NET_BIND_SERVICE\n    healthcheck:', 'security/dast/compose.yaml Core must drop all Linux capabilities'],
       ['compose.yaml', '    init: true\n    read_only: true\n', '    init: true\n    read_only: false\n', 'compose.yaml Web root filesystem must be read-only'],
       ['compose.yaml', '      - no-new-privileges:true\n    cap_drop:\n      - ALL\n    expose:\n      - "8080"', '      - no-new-privileges:false\n    cap_drop:\n      - ALL\n    expose:\n      - "8080"', 'compose.yaml Web must enable no-new-privileges'],
       ['compose.yaml', '    cap_drop:\n      - ALL\n    expose:\n      - "8080"', '    cap_drop:\n      - NET_BIND_SERVICE\n    expose:\n      - "8080"', 'compose.yaml Web must drop all Linux capabilities'],
@@ -261,37 +291,92 @@ test('runner scans one recorded external source snapshot and emits independent r
   assert.doesNotMatch(runner, /EVIDENCE_PATH/)
 })
 
-test('Semgrep JSON and SARIF retain rule locations but discard source snippets and interpolated messages', () => {
-  const normalized = normalizeSemgrepJson({
+test('Semgrep JSON and SARIF retain fingerprints and locations but discard source snippets and interpolated messages', () => {
+  const sourceRoot = mkdtempSync(join(tmpdir(), 'ragam-semgrep-normalize-'))
+  const sourcePath = join(sourceRoot, 'services/core/app.mjs')
+  mkdirSync(dirname(sourcePath), { recursive: true })
+  const fixtureLine = `const password = '${fixtureSecret}'`
+  const source = `${'// fixture\n'.repeat(13)}${fixtureLine}\n`
+  writeFileSync(sourcePath, source)
+  const raw = {
     version: '1.185.0',
-    paths: { scanned: ['/workspace/ragam/services/core/app.mjs'], skipped: [] },
+    paths: { scanned: [sourcePath], skipped: [] },
     results: [{
       check_id: 'fixture.command-injection',
-      path: '/workspace/ragam/services/core/app.mjs',
+      path: sourcePath,
       start: { line: 14, col: 3 },
       end: { line: 14, col: 26 },
       extra: {
         severity: 'ERROR',
         message: `unsafe value ${fixtureSecret}`,
-        lines: `const password = '${fixtureSecret}'`,
+        lines: fixtureLine,
         metadata: { cwe: ['CWE-78'], confidence: 'HIGH', impact: 'HIGH', source: fixtureSecret },
       },
     }],
-    errors: [{ path: '/workspace/ragam/services/core/app.mjs', message: fixtureSecret, type: ['PartialParsing'] }],
-  }, { basePath: '/workspace/ragam' })
-  assert.equal(normalized.results[0].path, 'services/core/app.mjs')
-  assert.equal(normalized.results[0].severity, 'HIGH')
-  assert.equal(normalized.results[0].message.includes(fixtureSecret), false)
-  assert.deepEqual(normalized.results[0].metadata, { cwe: ['CWE-78'], confidence: 'HIGH', impact: 'HIGH' })
-  assert.equal(normalized.errors[0].message.includes(fixtureSecret), false)
-  assert.equal(JSON.stringify(normalized).includes(fixtureSecret), false)
+    errors: [{ path: sourcePath, message: fixtureSecret, type: ['PartialParsing'] }],
+  }
+  try {
+    const normalized = normalizeSemgrepJson(raw, { basePath: sourceRoot })
+    assert.equal(normalized.results[0].path, 'services/core/app.mjs')
+    assert.equal(normalized.results[0].severity, 'HIGH')
+    assert.match(normalized.results[0].fingerprint, /^sha256:[a-f0-9]{64}$/)
+    assert.equal(normalized.results[0].message.includes(fixtureSecret), false)
+    assert.deepEqual(normalized.results[0].metadata, { cwe: ['CWE-78'], confidence: 'HIGH', impact: 'HIGH' })
+    assert.equal(normalized.errors[0].message.includes(fixtureSecret), false)
+    assert.equal(JSON.stringify(normalized).includes(fixtureSecret), false)
+    const repeated = normalizeSemgrepJson(raw, { basePath: sourceRoot })
+    assert.equal(repeated.results[0].fingerprint, normalized.results[0].fingerprint, 'unchanged source at the same finding location must retain its fingerprint')
 
-  const sarif = sanitizeSarif({ unsafe: fixtureSecret }, {
-    toolName: 'Semgrep Community Edition', version: '1.185.0', findings: normalized.results,
-  })
-  assert.equal(sarif.version, '2.1.0')
-  assert.equal(sarif.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri, 'services/core/app.mjs')
-  assert.equal(JSON.stringify(sarif).includes(fixtureSecret), false)
+    const sarif = sanitizeSarif({ unsafe: fixtureSecret }, {
+      toolName: 'Semgrep Community Edition', version: '1.185.0', findings: normalized.results,
+    })
+    assert.equal(sarif.version, '2.1.0')
+    assert.equal(sarif.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri, 'services/core/app.mjs')
+    assert.equal(sarif.runs[0].results[0].properties.findingFingerprint, normalized.results[0].fingerprint)
+    assert.equal(JSON.stringify(sarif).includes(fixtureSecret), false)
+
+    writeFileSync(sourcePath, `${source.replace(fixtureLine, 'const password = \'changed\'')}\n`)
+    const changed = normalizeSemgrepJson(raw, { basePath: sourceRoot })
+    assert.notEqual(changed.results[0].fingerprint, normalized.results[0].fingerprint, 'changing source at the same path and line must rotate the finding fingerprint')
+  } finally {
+    rmSync(sourceRoot, { recursive: true, force: true })
+  }
+})
+
+test('Semgrep reviews require the exact source-bound fingerprint; stale location-only entries stay unreviewed', () => {
+  const fingerprint = `sha256:${'a'.repeat(64)}`
+  const staleFingerprint = `sha256:${'b'.repeat(64)}`
+  const finding = {
+    id: 'fixture-finding', fingerprint, check_id: 'security.semgrep.rules.generic.wget-unencrypted-url',
+    path: 'compose.yaml', start: { line: 61, column: 19 }, reviewState: 'UNREVIEWED',
+  }
+  const entry = {
+    path: finding.path, line: 61, ruleId: finding.check_id, fingerprint,
+    disposition: 'FALSE_POSITIVE', reviewedAt: '2026-10-17', reviewer: 'technical fixture reviewer',
+    sourceToSink: 'Fixed local health request.', exploitability: 'No off-container route to the destination.',
+    rootCause: 'The generic rule does not model the container loopback boundary.',
+    rationale: 'This fixture carries no sensitive payload over an untrusted network.',
+    evidence: ['compose.yaml healthcheck and service network configuration'],
+    residualRisk: 'none identified', ownerApproval: { required: false, status: 'NOT_REQUIRED' },
+  }
+  const catalog = { ok: true, entries: [entry] }
+  const reviewed = applySemgrepReviews([finding], catalog)[0]
+  assert.equal(reviewed.reviewState, 'REVIEWED')
+  assert.equal(reviewed.review.reviewerIdentityAuthenticated, false)
+  assert.equal(reviewed.review.humanApprovalClaimed, false)
+  assert.equal(applySemgrepReviews([{ ...finding, fingerprint: staleFingerprint }], catalog)[0].reviewState, 'UNREVIEWED')
+  const oldLocationOnlyEntry = { ...entry }
+  delete oldLocationOnlyEntry.fingerprint
+  assert.equal(applySemgrepReviews([finding], { ok: true, entries: [oldLocationOnlyEntry] })[0].reviewState, 'UNREVIEWED')
+  assert.equal(applySemgrepReviews([finding], { ok: true, entries: [{ ...entry, reviewedAt: '2026-02-30' }] })[0].reviewState, 'UNREVIEWED', 'a normalized impossible calendar date must not count as reviewed')
+  assert.equal(applySemgrepReviews([finding], { ok: true, entries: [{ ...entry, reviewer: 'fixture reviewer\nforged approval' }] })[0].reviewState, 'UNREVIEWED', 'reviewer provenance must not contain control characters')
+  const unverifiedOwnerClaim = {
+    ...entry,
+    disposition: 'OWNER_ACCEPTED_RISK',
+    residualRisk: 'accepted by project owner',
+    ownerApproval: { required: true, status: 'APPROVED', owner: 'claimed owner', approvedAt: '2026-10-17' },
+  }
+  assert.equal(applySemgrepReviews([finding], { ok: true, entries: [unverifiedOwnerClaim] })[0].reviewState, 'UNREVIEWED', 'self-asserted owner-risk metadata must not count as authenticated owner approval')
 })
 
 test('Gitleaks machine reports retain affected location and rotation guidance, never secret matches', () => {

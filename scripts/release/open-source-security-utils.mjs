@@ -2,7 +2,8 @@
 // Scanner-native reports are reduced before they are persisted: source snippets,
 // request/response bodies, credentials and secret matches are never evidence.
 import { createHash } from 'node:crypto'
-import { isAbsolute, relative, sep } from 'node:path'
+import { readFileSync, realpathSync } from 'node:fs'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 
 export const OSS_SECURITY_SCHEMA = 'ragam-open-source-security-qualification/1'
 export const TRIVY_PIP_REQUIREMENTS_LOCK_PATTERN = String.raw`pip:requirements\.lock`
@@ -43,6 +44,29 @@ function normalizedSemgrepSeverity(value) {
   return 'LOW'
 }
 
+// Bind each catalog disposition to the rule, location, and source line without
+// persisting the source text; a changed match at the same line must be reviewed anew.
+function sourceLineHash(path, line, basePath) {
+  if (!path || path === '[outside-scope]' || !Number.isInteger(line) || line < 1) return null
+  const root = resolve(basePath)
+  const candidate = resolve(root, path)
+  const candidateRelative = relative(root, candidate)
+  if (!candidateRelative || candidateRelative === '.' || candidateRelative === '..'
+    || candidateRelative.startsWith(`..${sep}`) || isAbsolute(candidateRelative)) return null
+  try {
+    const rootReal = realpathSync(root)
+    const candidateReal = realpathSync(candidate)
+    const realRelative = relative(rootReal, candidateReal)
+    if (!realRelative || realRelative === '.' || realRelative === '..'
+      || realRelative.startsWith(`..${sep}`) || isAbsolute(realRelative)) return null
+    const text = readFileSync(candidateReal, 'utf8')
+    const sourceLine = text.split(/\r\n|\n|\r/)[line - 1]
+    return sourceLine === undefined ? null : sha256(sourceLine)
+  } catch {
+    return null
+  }
+}
+
 export function normalizeSemgrepJson(raw, { basePath = process.cwd() } = {}) {
   const results = (Array.isArray(raw?.results) ? raw.results : []).map((result) => {
     const extra = result.extra ?? {}
@@ -51,12 +75,18 @@ export function normalizeSemgrepJson(raw, { basePath = process.cwd() } = {}) {
     const line = Number.isInteger(result.start?.line) ? result.start.line : null
     const endLine = Number.isInteger(result.end?.line) ? result.end.line : line
     const ruleId = String(result.check_id ?? 'unknown')
-    const id = sha256(`${ruleId}\0${path}\0${line ?? ''}\0${result.start?.col ?? ''}`).slice(0, 24)
+    const column = Number.isInteger(result.start?.col) ? result.start.col : null
+    const sourceHash = sourceLineHash(path, line, basePath)
+    const fingerprint = sourceHash
+      ? `sha256:${sha256(`${ruleId}\0${path}\0${line ?? ''}\0${column ?? ''}\0${sourceHash}`)}`
+      : null
+    const id = sha256(`${ruleId}\0${path}\0${line ?? ''}\0${column ?? ''}`).slice(0, 24)
     return {
       id,
+      fingerprint,
       check_id: ruleId,
       path,
-      start: { line, column: Number.isInteger(result.start?.col) ? result.start.col : null },
+      start: { line, column },
       end: { line: endLine, column: Number.isInteger(result.end?.col) ? result.end.col : null },
       severity: normalizedSemgrepSeverity(extra.severity),
       scannerSeverity: String(extra.severity ?? 'INFO').toUpperCase(),
@@ -128,6 +158,7 @@ function makeSarif({ toolName, version, findings }) {
         severity: String(finding.severity ?? finding.risk ?? 'UNKNOWN'),
         confidence: String(finding.confidence ?? 'UNKNOWN'),
         reviewState: String(finding.reviewState ?? 'UNREVIEWED'),
+        findingFingerprint: typeof finding.fingerprint === 'string' ? finding.fingerprint : null,
         metadata: metadataSubset(finding.metadata ?? {}),
       },
     }

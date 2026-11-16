@@ -322,6 +322,7 @@ function ensureGitleaks({ runDir }) {
   const expected = LOCK.gitleaks.version
   let binary = findExecutable('gitleaks', [process.env.RAGAM_GITLEAKS_BIN, join(runDir, 'tools', 'gitleaks')].filter(Boolean))
   if (!binary) {
+    if (TOOL_NO_DOWNLOAD) return { ok: false, path: null, version: null, reason: 'Pinned Gitleaks is not installed; automatic release-asset download was explicitly disabled by RAGAM_SECURITY_NO_DOWNLOAD=1.' }
     const installed = installPinnedArchive({
       name: 'Gitleaks', url: LOCK.gitleaks.url, sha256: LOCK.gitleaks.sha256, binaryName: 'gitleaks', installDir: join(runDir, 'tools'),
     })
@@ -336,6 +337,7 @@ function ensureTrivy({ runDir }) {
   const expected = LOCK.trivy.version
   let binary = findExecutable('trivy', [process.env.RAGAM_TRIVY_BIN, join(runDir, 'tools', 'trivy')].filter(Boolean))
   if (!binary) {
+    if (TOOL_NO_DOWNLOAD) return { ok: false, path: null, version: null, reason: 'Pinned Trivy is not installed; automatic release-asset download was explicitly disabled by RAGAM_SECURITY_NO_DOWNLOAD=1.' }
     const installed = installPinnedArchive({
       name: 'Trivy', url: LOCK.trivy.url, sha256: LOCK.trivy.sha256, binaryName: 'trivy', installDir: join(runDir, 'tools'),
     })
@@ -952,8 +954,8 @@ function findingReviewGate({ requested, mode, record, evidencePath }) {
     name,
     status: passed ? 'PASS' : 'FAIL',
     reason: passed
-      ? (record.findings.length ? 'Every Semgrep finding has a location-specific technical disposition; any residual risk has recorded owner approval.' : 'Semgrep completed with no findings requiring individual review.')
-      : `${unreviewed.length} Semgrep finding(s) remain unreviewed or lack complete technical disposition; residual-risk approval is mandatory.`,
+      ? (record.findings.length ? 'Every Semgrep finding has an exact-fingerprint technical disposition; reviewer labels are unauthenticated provenance, not human or owner approval.' : 'Semgrep completed with no findings requiring individual review.')
+      : `${unreviewed.length} Semgrep finding(s) remain unreviewed or lack complete technical disposition; self-asserted owner-risk dispositions are not accepted.`,
     reviewState: passed ? (record.findings.length ? 'REVIEWED' : 'NO_FINDINGS') : 'UNREVIEWED',
     findingSummary: record.findingSummary,
     evidence: [
@@ -1115,24 +1117,37 @@ function semgrepSuppressionReason(sourceRoot) {
 }
 
 const SEMGREP_REVIEW_PATH = 'security/reviews/semgrep-findings.json'
-const SEMGREP_REVIEW_DISPOSITIONS = new Set(['FALSE_POSITIVE', 'OWNER_ACCEPTED_RISK'])
+// This catalog has no authenticated owner-identity trust root; it may record only
+// technically reviewed false positives, never self-asserted owner risk acceptance.
+const SEMGREP_REVIEW_DISPOSITIONS = new Set(['FALSE_POSITIVE'])
 
-function reviewKey(path, line, ruleId) { return `${path}\0${line}\0${ruleId}` }
+function reviewKey(path, line, ruleId, fingerprint) { return `${path}\0${line}\0${ruleId}\0${fingerprint}` }
+
+function validReviewDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(0)
+  date.setUTCHours(0, 0, 0, 0)
+  date.setUTCFullYear(year, month - 1, day)
+  return Number.isFinite(date.valueOf()) && date.toISOString().slice(0, 10) === value
+}
+
+function validReviewerLabel(value) {
+  // This is review provenance, not an authenticated human identity or owner approval.
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= 240 && !/[\u0000-\u001f\u007f]/.test(value)
+}
 
 function validSemgrepReview(entry) {
   if (!entry || typeof entry !== 'object' || !SEMGREP_REVIEW_DISPOSITIONS.has(entry.disposition)) return false
-  for (const key of ['path', 'ruleId', 'reviewedAt', 'reviewer', 'sourceToSink', 'exploitability', 'rootCause', 'rationale', 'residualRisk']) {
+  if (typeof entry.fingerprint !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(entry.fingerprint)) return false
+  for (const key of ['path', 'ruleId', 'reviewedAt', 'sourceToSink', 'exploitability', 'rootCause', 'rationale', 'residualRisk']) {
     if (typeof entry[key] !== 'string' || !entry[key].trim()) return false
   }
-  if (!Number.isInteger(entry.line) || entry.line < 1 || Number.isNaN(Date.parse(entry.reviewedAt))) return false
+  if (!validReviewerLabel(entry.reviewer) || !Number.isInteger(entry.line) || entry.line < 1 || !validReviewDate(entry.reviewedAt)) return false
   if (!Array.isArray(entry.evidence) || entry.evidence.length === 0 || entry.evidence.some((item) => typeof item !== 'string' || !item.trim())) return false
-  if (entry.disposition === 'FALSE_POSITIVE') {
-    return entry.residualRisk.toLowerCase() === 'none identified' && entry.ownerApproval?.required === false
-  }
-  return entry.ownerApproval?.required === true
-    && entry.ownerApproval?.status === 'APPROVED'
-    && typeof entry.ownerApproval?.owner === 'string' && entry.ownerApproval.owner.trim().length > 0
-    && typeof entry.ownerApproval?.approvedAt === 'string' && !Number.isNaN(Date.parse(entry.ownerApproval.approvedAt))
+  return entry.disposition === 'FALSE_POSITIVE'
+    && entry.residualRisk.toLowerCase() === 'none identified'
+    && entry.ownerApproval?.required === false
 }
 
 function loadSemgrepReviewCatalog(sourceRoot) {
@@ -1145,7 +1160,7 @@ function loadSemgrepReviewCatalog(sourceRoot) {
       return { ok: false, entries: [], sha256: sha256(bytes), reason: 'SAST finding review catalog schema is invalid.' }
     }
     const entries = catalog.findings
-    const keys = entries.map((entry) => reviewKey(entry?.path, entry?.line, entry?.ruleId))
+    const keys = entries.map((entry) => reviewKey(entry?.path, entry?.line, entry?.ruleId, entry?.fingerprint))
     const duplicate = new Set(keys).size !== keys.length
     if (duplicate || entries.some((entry) => !validSemgrepReview(entry))) {
       return { ok: false, entries: [], sha256: sha256(bytes), reason: 'SAST finding review catalog contains a duplicate, malformed, or unapproved disposition.' }
@@ -1156,21 +1171,22 @@ function loadSemgrepReviewCatalog(sourceRoot) {
   }
 }
 
-function applySemgrepReviews(findings, catalog) {
-  const byLocation = new Map(catalog.entries.map((entry) => [reviewKey(entry.path, entry.line, entry.ruleId), entry]))
+export function applySemgrepReviews(findings, catalog) {
+  const byLocation = new Map(catalog.entries.map((entry) => [reviewKey(entry.path, entry.line, entry.ruleId, entry.fingerprint), entry]))
   return findings.map((finding) => {
-    const entry = byLocation.get(reviewKey(finding.path, finding.start?.line, finding.check_id))
+    const entry = byLocation.get(reviewKey(finding.path, finding.start?.line, finding.check_id, finding.fingerprint))
     if (!catalog.ok || !entry || !validSemgrepReview(entry)) return finding
-    const ownerApproval = entry.disposition === 'OWNER_ACCEPTED_RISK'
-      ? { required: true, status: 'APPROVED', owner: entry.ownerApproval.owner, approvedAt: entry.ownerApproval.approvedAt }
-      : { required: false, status: 'NOT_REQUIRED' }
+    const ownerApproval = { required: false, status: 'NOT_REQUIRED' }
     const review = {
       path: entry.path,
       line: entry.line,
       ruleId: entry.ruleId,
+      fingerprint: entry.fingerprint,
       disposition: entry.disposition,
-      reviewedAt: new Date(entry.reviewedAt).toISOString(),
+      reviewedAt: entry.reviewedAt,
       reviewer: entry.reviewer,
+      reviewerIdentityAuthenticated: false,
+      humanApprovalClaimed: false,
       sourceToSink: entry.sourceToSink,
       exploitability: entry.exploitability,
       rootCause: entry.rootCause,
@@ -1486,6 +1502,8 @@ function composeServiceSection(compose, service) {
 function webContainerHardeningErrors(sourceRoot) {
   const dockerfile = readFileSync(join(sourceRoot, 'Dockerfile.web'), 'utf8')
   const errors = []
+  if (!dockerfile.includes('FROM node:22-bookworm-slim AS build')) errors.push('Web build stage must retain the supported Node 22 bookworm-slim runtime')
+  if (!dockerfile.includes('FROM caddy:2-alpine')) errors.push('Web runtime must retain the supported official Caddy 2 Alpine image')
   if (!/^[ \t]*USER[ \t]+10001:10001[ \t]*$/m.test(dockerfile)) errors.push('Web image must run as non-root UID/GID 10001')
   const mounts = [
     '/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777',
@@ -1507,12 +1525,46 @@ function webContainerHardeningErrors(sourceRoot) {
   return errors
 }
 
+function coreContainerHardeningErrors(sourceRoot) {
+  const dockerfile = readFileSync(join(sourceRoot, 'Dockerfile.core'), 'utf8')
+  const errors = []
+  if (!dockerfile.includes('FROM node:22-bookworm-slim')) errors.push('Core image must retain the supported Node 22 bookworm-slim runtime')
+  if (!dockerfile.includes('USER node')) errors.push('Core image must run as the non-root node user')
+  if (!dockerfile.includes('AETHERIS_ONLINE_DATA_DIR=/var/lib/ragam/online')) errors.push('Core data directory must remain under /var/lib/ragam/online')
+  const profiles = [
+    {
+      path: 'compose.yaml',
+      dataMount: 'ragam-data:/var/lib/ragam',
+      tmpfs: '/tmp:size=32m,noexec,nosuid',
+    },
+    {
+      path: 'security/dast/compose.yaml',
+      dataMount: '/var/lib/ragam:rw,noexec,nosuid,nodev,size=64m,mode=0700,uid=1000,gid=1000',
+      tmpfs: '/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777',
+    },
+  ]
+  for (const profile of profiles) {
+    const compose = readFileSync(join(sourceRoot, profile.path), 'utf8')
+    const core = composeServiceSection(compose, 'core') ?? ''
+    const coreLines = core.split('\n').map((line) => line.trim())
+    const securityOptIndex = coreLines.indexOf('security_opt:')
+    const capDropIndex = coreLines.indexOf('cap_drop:')
+    if (!coreLines.includes('read_only: true')) errors.push(`${profile.path} Core root filesystem must be read-only`)
+    if (securityOptIndex < 0 || coreLines[securityOptIndex + 1] !== '- no-new-privileges:true') errors.push(`${profile.path} Core must enable no-new-privileges`)
+    if (capDropIndex < 0 || coreLines[capDropIndex + 1] !== '- ALL') errors.push(`${profile.path} Core must drop all Linux capabilities`)
+    if (!core.includes(profile.dataMount)) errors.push(`${profile.path} Core must preserve its expected persistent/ephemeral data mount`)
+    if (!core.includes(profile.tmpfs)) errors.push(`${profile.path} Core must retain its restricted temporary filesystem`)
+    if (!core.includes('127.0.0.1:8790/api/health')) errors.push(`${profile.path} Core must retain its loopback healthcheck`)
+  }
+  return errors
+}
+
 export function assertDastConfig(sourceRoot) {
   const compose = readFileSync(join(sourceRoot, 'security/dast/compose.yaml'), 'utf8')
   const zap = composeServiceSection(compose, 'zap') ?? ''
   const proxy = readFileSync(join(sourceRoot, 'security/dast/Caddyfile'), 'utf8')
   const api = readFileSync(join(sourceRoot, 'security/dast/openapi.yaml'), 'utf8')
-  const errors = webContainerHardeningErrors(sourceRoot)
+  const errors = [...webContainerHardeningErrors(sourceRoot), ...coreContainerHardeningErrors(sourceRoot)]
   if (!/^\s+internal:\s+true\s*$/m.test(compose)) errors.push('isolated Docker network must be internal')
   if (/^\s+ports\s*:/m.test(compose)) errors.push('DAST services must not publish host ports')
   if (!compose.includes(LOCK.zap.image)) errors.push('ZAP image must match the pinned version and digest in scanner-versions.json')
@@ -2066,30 +2118,48 @@ async function runDependencies({ context, reportsDir, runDir, project, imageTag,
   })
 }
 
-export function parseBuildxImageInspection(output, expectedPlatform) {
+export function parseBuildxImageInspection(output, expectedPlatform, expectedName = null) {
   const text = String(output ?? '')
-  const digest = text.match(/^Digest:\s*(sha256:[a-f0-9]{64})\s*$/im)?.[1]?.toLowerCase() ?? null
+  const indexDigest = text.match(/^Digest:\s*(sha256:[a-f0-9]{64})\s*$/im)?.[1]?.toLowerCase() ?? null
+  const indexName = text.match(/^Name:\s*([^\s]+)\s*$/im)?.[1] ?? null
+  const indexMediaType = text.match(/^MediaType:\s*([^\s]+)\s*$/im)?.[1]?.toLowerCase() ?? null
+  const indexMediaTypes = new Set([
+    'application/vnd.oci.image.index.v1+json',
+    'application/vnd.docker.distribution.manifest.list.v2+json',
+  ])
+  const manifestMediaTypes = new Set([
+    'application/vnd.oci.image.manifest.v1+json',
+    'application/vnd.docker.distribution.manifest.v2+json',
+  ])
   const manifests = []
   let current = null
   for (const line of text.split(/\r?\n/)) {
-    const name = line.match(/^[ \t]+Name:\s+[^@\s]+@(sha256:[a-f0-9]{64})\s*$/i)
+    const name = line.match(/^[ \t]+Name:\s+([^@\s]+)@(sha256:[a-f0-9]{64})\s*$/i)
     if (name) {
-      current = { digest: name[1].toLowerCase(), platform: null }
+      current = { name: name[1], digest: name[2].toLowerCase(), mediaType: null, platform: null }
       manifests.push(current)
+      continue
+    }
+    const mediaType = line.match(/^[ \t]+MediaType:\s*([^\s]+)\s*$/i)
+    if (mediaType && current) {
+      current.mediaType = mediaType[1].toLowerCase()
       continue
     }
     const platform = line.match(/^[ \t]+Platform:\s*([a-z0-9_.-]+(?:\/[a-z0-9_.-]+){1,2})\s*$/i)
     if (platform && current) current.platform = platform[1].toLowerCase()
   }
-  const platforms = manifests.map((manifest) => manifest.platform).filter(Boolean)
-  const wanted = String(expectedPlatform ?? '').trim().toLowerCase().split('/')
-  const matchingManifest = manifests.find(({ platform, digest: manifestDigest }) => {
-    const actual = String(platform ?? '').split('/')
-    return Boolean(manifestDigest) && wanted.length >= 2 && actual[0] === wanted[0] && actual[1] === wanted[1]
-      && (!wanted[2] || actual[2] === wanted[2])
-  }) ?? null
+  const validIndex = indexName !== null && indexDigest !== null && indexMediaTypes.has(indexMediaType)
+    && (!expectedName || indexName === expectedName)
+  const validManifests = validIndex ? manifests.filter((manifest) => manifestMediaTypes.has(manifest.mediaType)
+    && (!expectedName || manifest.name === expectedName)) : []
+  const platforms = validManifests.map((manifest) => manifest.platform).filter(Boolean)
+  const wanted = String(expectedPlatform ?? '').trim().toLowerCase()
+  const matchingManifests = validManifests.filter(({ platform }) => platform === wanted)
+  const matchingManifest = matchingManifests.length === 1 ? matchingManifests[0] : null
   return {
-    digest,
+    name: validIndex ? indexName : null,
+    mediaType: validIndex ? indexMediaType : null,
+    digest: validIndex ? indexDigest : null,
     platforms: [...new Set(platforms)],
     observedPlatform: matchingManifest?.platform ?? null,
     platformManifestDigest: matchingManifest?.digest ?? null,
@@ -2105,7 +2175,7 @@ function verifyZapRegistryDigest(docker) {
     return { ok: false, tag, expectedDigest: expected, observedDigest: null, expectedPlatform, reason: 'OWASP ZAP lock entry has no valid platform; registry image pull and scan refused.' }
   }
   const checked = run(docker, ['buildx', 'imagetools', 'inspect', tag], { timeout: 120_000, maxBuffer: 4 * 1024 * 1024 })
-  const inspected = parseBuildxImageInspection(checked.stdout, expectedPlatform)
+  const inspected = parseBuildxImageInspection(checked.stdout, expectedPlatform, tag)
   if (checked.exitCode !== 0 || !inspected.digest) {
     return {
       ok: false, tag, expectedDigest: expected, observedDigest: inspected.digest, expectedPlatform, observedPlatforms: inspected.platforms,
@@ -2127,10 +2197,11 @@ function verifyZapRegistryDigest(docker) {
     }
   }
   return {
-    ok: true, tag, expectedDigest: expected, observedDigest: inspected.digest,
+    ok: true, tag, registryName: inspected.name, indexMediaType: inspected.mediaType,
+    expectedDigest: expected, observedDigest: inspected.digest,
     expectedPlatform, observedPlatform: inspected.observedPlatform, platformManifestDigest: inspected.platformManifestDigest, observedPlatforms: inspected.platforms,
     verifiedAt: now(),
-    method: 'docker buildx imagetools inspect against the official GHCR tag; verified index digest and matching platform descriptor',
+    method: 'docker buildx imagetools inspect against the official GHCR tag; verified OCI index identity and unique matching platform-manifest descriptor',
   }
 }
 

@@ -53,13 +53,23 @@ worktree blocks release qualification.
   and pinned scanner lock. Scanner metrics, Semgrep version checks, and registry access are disabled. Parser
   errors make the result incomplete; `.semgrepignore` files and inline `nosem`
   comments are refused. The runner disables Semgrep's version-check network request
-  and usage metrics; no rule is suppressed to obtain a pass. The
+  and usage metrics; no rule is suppressed to obtain a pass. Finding dispositions are
+  keyed by the rule, location, and a deterministic SHA-256 fingerprint bound to the
+  exact source line; a location-only or stale catalog record cannot review a changed
+  match, and source text is never emitted as part of the fingerprint. Catalog reviewer
+  strings are unauthenticated provenance labels, not evidence of a human review or owner
+  approval; this gate records technical dispositions only and refuses self-asserted
+  `OWNER_ACCEPTED_RISK` entries until a trusted owner-identity verification mechanism is
+  available. Review dates must be canonical, real `YYYY-MM-DD` calendar dates. The
   preliminary engineering context for the earlier seven-MEDIUM report and subsequent
   six-MEDIUM worktree scan is documented in `docs/release/open-source-sast-triage.md`;
   it is not a substitute for fresh evidence or owner sign-off.
 - **DAST — OWASP ZAP 2.17.0:** requires Docker Compose v2 and Buildx on Linux/amd64.
   `security/dast/compose.yaml` creates only an internal Docker network, publishes no
-  host ports, and uses fresh tmpfs Core data. A fixed `http://edge:8080` alias is the
+  host ports, keeps Core and Web root filesystems read-only, and gives Core a fresh,
+  size-bounded `noexec,nosuid,nodev` tmpfs data mount owned by its non-root runtime UID.
+  Core and Web retain `no-new-privileges` and drop all capabilities. A fixed
+  `http://edge:8080` alias is the
   sole target. ZAP runs passive spider/alerting plus time-bounded full-web and OpenAPI
   active scans. Both active scripts ignore warning-level process exits (`-I`) while
   preserving alerts in the reports; any nonzero active-scan exit or missing validated
