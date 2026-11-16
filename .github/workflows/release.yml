@@ -93,13 +93,37 @@ jobs:
         if: ${{ inputs.sign }}
         env:
           RAGAM_RELEASE_SIGNING_KEY_ID: ${{ secrets.RAGAM_RELEASE_SIGNING_KEY_ID }}
-          RAGAM_RELEASE_SIGNING_KEY_FILE: ${{ secrets.RAGAM_RELEASE_SIGNING_KEY_FILE }}
+          RAGAM_RELEASE_SIGNING_PRIVATE_KEY_ASCII: ${{ secrets.RAGAM_RELEASE_SIGNING_PRIVATE_KEY_ASCII }}
           RAGAM_RELEASE_SIGNING_AUTHORIZED_BY: ${{ github.actor }}
           RAGAM_RELEASE_SIGNING_CONFIRM: 'YES'
         run: |
+          test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER" || { echo "::error::only the repository owner may request signing"; exit 2; }
           test -n "$RAGAM_RELEASE_SIGNING_KEY_ID" || { echo "::error::authorized signing key id secret is missing"; exit 2; }
-          test -n "$RAGAM_RELEASE_SIGNING_KEY_FILE" || { echo "::error::authorized signing key file secret is missing"; exit 2; }
+          test -n "$RAGAM_RELEASE_SIGNING_PRIVATE_KEY_ASCII" || { echo "::error::owner-authorized private-key secret is missing"; exit 2; }
+          key_file="$RUNNER_TEMP/ragam-release-private.asc"
+          umask 077
+          printf '%s\n' "$RAGAM_RELEASE_SIGNING_PRIVATE_KEY_ASCII" > "$key_file"
+          chmod 600 "$key_file"
+          unset RAGAM_RELEASE_SIGNING_PRIVATE_KEY_ASCII
+          export RAGAM_RELEASE_SIGNING_KEY_FILE="$key_file"
+          trap 'rm -f -- "$key_file"' EXIT
           node scripts/release/sign-release.mjs --dir "build/release/$RAGAM_RELEASE_VERSION"
+
+      - name: Verify signed bundle against the owner-pinned public key
+        if: ${{ inputs.sign }}
+        env:
+          RAGAM_RELEASE_VERIFY_PUBLIC_KEY_ASCII: ${{ secrets.RAGAM_RELEASE_VERIFY_PUBLIC_KEY_ASCII }}
+          RAGAM_RELEASE_VERIFY_FINGERPRINT: ${{ secrets.RAGAM_RELEASE_VERIFY_FINGERPRINT }}
+        run: |
+          test -n "$RAGAM_RELEASE_VERIFY_PUBLIC_KEY_ASCII" || { echo "::error::owner-authorized public key secret is missing"; exit 2; }
+          test -n "$RAGAM_RELEASE_VERIFY_FINGERPRINT" || { echo "::error::pinned public-key fingerprint secret is missing"; exit 2; }
+          public_key="$RUNNER_TEMP/ragam-release-public.asc"
+          printf '%s\n' "$RAGAM_RELEASE_VERIFY_PUBLIC_KEY_ASCII" > "$public_key"
+          node scripts/release/verify-release.mjs \
+            --dir "build/release/$RAGAM_RELEASE_VERSION" \
+            --require-signature \
+            --public-key "$public_key" \
+            --fingerprint "$RAGAM_RELEASE_VERIFY_FINGERPRINT"
 
       - name: Record the unsigned state explicitly
         if: ${{ !inputs.sign }}

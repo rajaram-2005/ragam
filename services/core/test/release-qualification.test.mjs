@@ -132,6 +132,11 @@ test('checksums are written by node:crypto and independently verified by sha256s
     assert.ok(verifyChecksumsWithSha256sum(dir).ok)
     writeFileSync(a, 'tampered artifact')
     assert.equal(verifyChecksumsWithSha256sum(dir).ok, false, 'a changed byte must fail independent verification')
+    writeFileSync(join(dir, 'SHA256SUMS'), `${'0'.repeat(64)}  ../outside.txt\n`)
+    const unsafe = verifyChecksumsWithSha256sum(dir)
+    assert.equal(unsafe.ok, false, 'checksum paths must not escape the artifact directory')
+    assert.equal(unsafe.status, null, 'unsafe paths are refused before invoking sha256sum')
+    assert.match(unsafe.output, /unsafe or malformed entry/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -332,7 +337,7 @@ test('the machine-readable release gate is valid, honest and still refuses publi
 
 // --- R7/R8: clean-checkout gate and fail-closed commercial SAST/DAST --------
 
-test('the release gate regenerates identically in a clean checkout with no ignored build directory', () => {
+test('the release gate rejects stale log claims and unresolved provenance in a clean copy', () => {
   const root = mkdtempSync(join(tmpdir(), 'ragam-clean-gate-'))
   const ignored = new Set(['.git', 'node_modules', '.venv', 'build'])
   const copyTree = (source, destination) => {
@@ -361,17 +366,41 @@ test('the release gate regenerates identically in a clean checkout with no ignor
     })
     assert.equal(generated.status, 0, `generator failed: ${generated.stderr || generated.stdout}`)
     const committed = json('docs/release/qualification.json')
-    const regenerated = readJson(join(root, 'docs/release/qualification.json'))
-    const statuses = (report) => Object.fromEntries(report.gates.map((gate) => [gate.id, gate.status]))
-    assert.deepEqual(statuses(regenerated), statuses(committed),
-      'a clean checkout must not silently lose PASS gates')
-    assert.equal(regenerated.summary.PASS, committed.summary.PASS)
-    assert.equal(regenerated.summary.mandatoryNonPass, committed.summary.mandatoryNonPass)
+    let regenerated = readJson(join(root, 'docs/release/qualification.json'))
+    const gate = (id) => regenerated.gates.find((entry) => entry.id === id)
     assert.equal(regenerated.finalVerdict, 'NOT RELEASE READY')
+    assert.ok(regenerated.summary.PASS < committed.summary.PASS,
+      'stale or unverifiable evidence must reduce PASS counts rather than preserve the old snapshot')
+    assert.ok(regenerated.summary.mandatoryNonPass > committed.summary.mandatoryNonPass,
+      'stale mandatory evidence must remain non-PASS')
+    assert.equal(gate('I03').status, 'NOT TESTED', 'the old Fabric TAP count no longer matches current documentation')
+    assert.equal(gate('I03').evidence.length, 0, 'stale Fabric output is not attached as passing evidence')
+    assert.equal(gate('I05').status, 'NOT TESTED', 'the release-check log totals no longer match current docs')
+    assert.equal(gate('I05').evidence.length, 0, 'stale release-check output is not attached as passing evidence')
+    assert.equal(gate('A01').status, 'NOT TESTED', 'the exact artifact source commit cannot resolve in this clean copy')
+    assert.equal(gate('A07').status, 'NOT TESTED', 'provenance must resolve to the recorded tree before passing')
+    assert.equal(gate('A10').status, 'NOT TESTED', 'reproducibility claims require the recorded source commit to resolve')
+    assert.equal(gate('A04').status, 'PASS', 'the generator must execute current independent checksum verification')
+    assert.match(gate('A04').evidence[0].result, /: OK/)
+    assert.equal(gate('A11').status, 'PASS', 'the committed bundle checksum check is re-run at report generation')
     assert.equal(regenerated.artifacts.manifest, 'docs/release/artifacts/manifest.json')
     assert.deepEqual(regenerated.artifacts.committedArtifactVerification, { checked: 4, pass: 4, fail: 0 })
-    assert.equal(regenerated.gates.find((gate) => gate.id === 'B04').status, 'PASS',
-      'B04 must accept both push and pull_request CI/Desktop runs')
+    assert.equal(regenerated.branch, null, 'a clean copy without .git must not inherit the historical baseline branch as current')
+    assert.equal(gate('B04').status, 'NOT TESTED',
+      'CI evidence from a different branch or without a resolvable current HEAD must not pass')
+    assert.equal(gate('B04').evidence.length, 0, 'stale branch CI must not be attached as current passing evidence')
+
+    // Existence alone must not promote a failed scan. Mutate only this temporary
+    // copy, regenerate, and require the dependency gate to refuse the log.
+    writeFileSync(join(root, 'docs', 'release', 'evidence', 'final-npm-audit-web.log'), 'found 1 vulnerabilities\n')
+    const failedAudit = spawnSync(process.execPath, ['scripts/release/generate-qualification.mjs'], {
+      cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
+    })
+    assert.equal(failedAudit.status, 0, `generator should report, not hide, a failed log: ${failedAudit.stderr || failedAudit.stdout}`)
+    regenerated = readJson(join(root, 'docs/release/qualification.json'))
+    assert.equal(gate('I08').status, 'NOT TESTED', 'a present audit log reporting vulnerabilities cannot pass')
+    assert.equal(gate('I08').evidence.length, 0, 'a failed audit log must not be attached as passing evidence')
+
     assert.ok(!read('scripts/release/generate-qualification.mjs').includes("existsSync(atRoot('build/release/0.2.0/"),
       'no artifact gate may depend on the ignored build directory')
   } finally {

@@ -21,8 +21,9 @@ services:
       AETHERIS_TRUSTED_WEB_ORIGINS: ''
       AETHERIS_PRINT_RESET_CODES: 'false'
       AETHERIS_TELEMETRY_ENABLED: 'false'
+    read_only: true
     tmpfs:
-      - /var/lib/ragam:rw,noexec,nosuid,nodev,size=64m,mode=1777
+      - /var/lib/ragam:rw,noexec,nosuid,nodev,size=64m,mode=0700,uid=1000,gid=1000
       - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
     expose:
       - '8790'
@@ -50,6 +51,11 @@ services:
         condition: service_healthy
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+      - /config:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=10001,gid=10001
+      - /data:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=10001,gid=10001
     expose:
       - '8080'
     networks:
@@ -90,6 +96,7 @@ services:
 
   zap:
     image: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6
+    platform: ${RAGAM_DAST_PLATFORM:?set by the security runner}
     # Map only the report writer to the invoking host UID/GID so reports remain
     # private without making the host-mounted directory world-writable.
     user: "${RAGAM_DAST_UID:?set by the security runner}:${RAGAM_DAST_GID:?set by the security runner}"

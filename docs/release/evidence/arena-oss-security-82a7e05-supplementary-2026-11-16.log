@@ -1,0 +1,37 @@
+Supplementary security-run evidence — not part of the authoritative 2026-10-17 cutoff
+Recorded from GitHub Actions evidence: 2026-11-16 UTC
+Branch: arena/947d8745-ragam
+Exact source commit: 82a7e051c8a3b900aa36c57526cb6f4b6c051e30
+
+Reproduction command in `.github/workflows/open-source-security.yml`: `npm run release:security:full` (workflow checkout uses `fetch-depth: 0`).
+GitHub Actions run: https://github.com/rajaram-2005/ragam/actions/runs/43811747628
+Run ID: 43811747628; event: push; start time reported by GitHub: 2026-11-16T05:40:15Z; conclusion: FAIL; elapsed 1m29s.
+- `npm run release:security:test` fixture job: PASS.
+- `npm run release:security:full` job: FAIL at “Run the four independent OSS release gates”; step 6 exited 1.
+- “Upload sanitized OSS scanner reports and unified evidence”: PASS.
+- CI run 43811747666: PASS; Klyvaron production evidence gate: SKIPPED.
+- Desktop run 43811747620: PASS across Linux x64/ARM64, Windows x64/ARM64, macOS Apple Silicon, and macOS Intel.
+- `gh run view 43811747628 --json jobs` confirms the scanner step failure and successful artifact-upload step. The check-run annotation is only “Process completed with exit code 1”; it does not identify a scanner, gate, or finding.
+
+Artifact metadata from `gh api repos/rajaram-2005/ragam/actions/runs/43811747628/artifacts`:
+- ID: 14200259827
+- Name: open-source-security-82a7e051c8a3b900aa36c57526cb6f4b6c051e30
+- Size: 146382 bytes
+- Artifact ZIP SHA-256: sha256:7a367571238d57b9e36deac59aa9f3c86ed6c15370d10a54c9b01a3094e8794e
+- Created: 2026-11-16T05:41:38Z; expires: 2026-12-16T05:41:37Z.
+The artifact digest is for the ZIP only, not an individual scanner report.
+
+Access and review attempts:
+- `gh run watch 43811747628 --exit-status --interval 30`: returned exit 1 and confirmed the generic failed gate step; no scanner-specific details.
+- `gh run download 43811747628 --name open-source-security-82a7e051c8a3b900aa36c57526cb6f4b6c051e30 --dir /tmp/ragam-security-43811747628`: failed with EOF from GitHub Actions artifact storage.
+- The accessible run page/check annotation likewise gives only the generic step failure. The sanitized artifact payload and step-summary contents were not available for review in this workspace.
+- Individual report SHA-256 values, evidence fields and scanner findings/dispositions: NOT TESTED. Reviewer: NOT TESTED; no finding was available to review.
+
+Disposition (configured versions are not observed runtime versions):
+- Overall security workflow: FAIL.
+- Semgrep execution/result; Gitleaks full-history coverage, findings, false-positive classification and credential rotation decisions; Trivy filesystem/built-image scans and threshold dispositions; official ZAP registry digest/platform verification and isolated baseline/full-scan findings; individual report hashes and independent hash verification: NOT TESTED.
+- No clean scan, zero finding, confirmed vulnerability, false positive, or absence of credential exposure is inferred. No credentials were rotated on the basis of inaccessible evidence.
+- Configured pins remain Semgrep CE 1.185.0, Gitleaks 8.30.1, Trivy 0.76.2 and ZAP 2.17.0 with the existing pinned digest and linux/amd64 platform. None was verified as an observed runtime version in the unavailable artifact.
+- The renderer correction in `82a7e05` is only a presentation/test fix; it does not make scanner qualification pass or replace evidence review.
+
+The overall release verdict remains NOT RELEASE READY. The authoritative cutoff log and cutoff evidence remain unchanged.

@@ -3,100 +3,119 @@
   "findings": [
     {
       "path": "Dockerfile.web",
-      "line": 16,
+      "line": 22,
       "ruleId": "security.semgrep.rules.generic.wget-unencrypted-url",
       "disposition": "FALSE_POSITIVE",
       "reviewedAt": "2026-10-17",
-      "reviewer": "Arena.ai Agent Mode (technical code-path review)",
-      "sourceToSink": "The image HEALTHCHECK invokes wget --spider on the fixed URL http://127.0.0.1:8080/healthz from inside the Web container; deploy/Web.Caddyfile serves that path with a static HTTP 200 response.",
-      "exploitability": "An off-container network attacker cannot route to the container's loopback address. The Web service exposes port 8080 only to its Compose network, with no host port publication. The health request carries no credentials or application data; abuse would require code execution in the same container/network namespace, which is outside the CWE-319 path reported here.",
-      "rootCause": "The generic Semgrep rule matches any wget URL using the http scheme and does not model the loopback-only destination or the container boundary.",
-      "rationale": "CWE-319 concerns sensitive information sent over an observable untrusted channel. This fixed liveness request stays on container loopback and targets a body-free health response; no sensitive information crosses a network boundary. This is a contextual false positive, not a severity change or a suppressed finding.",
+      "reviewer": "Arena.ai Agent Mode (AI technical code-path review; unauthenticated, not human approval)",
+      "sourceToSink": "The Web image HEALTHCHECK runs wget --spider against the fixed URL http://127.0.0.1:8080/healthz. deploy/Web.Caddyfile matches /healthz and responds with status 200 without application data.",
+      "exploitability": "The request originates in the Web container and targets that same container’s loopback interface. The production Compose profile does not publish Web port 8080; it is only exposed to the Compose network. The isolated DAST profile has no published ports and uses an internal network. The probe sends no credentials or application input, and the health route is a static response; an off-container network observer cannot route to or observe this loopback hop.",
+      "rootCause": "The generic wget rule matches any HTTP URL and does not model the loopback destination or container network namespace.",
+      "rationale": "CWE-319 requires sensitive information to cross an observable untrusted channel. This fixed liveness check remains on container loopback and transmits no sensitive payload. It is a contextual false positive, not a severity change or a suppressed finding.",
       "evidence": [
-        "Dockerfile.web:16 defines the fixed loopback healthcheck.",
-        "deploy/Web.Caddyfile:2-3 responds 200 at /healthz without an application body.",
-        "compose.yaml exposes Web port 8080 to the Compose network but does not publish a host port for Web.",
-        "Semgrep CE 1.185.0 run 4bd031ad: sanitized reports/semgrep.json SHA-256 f9ca9de06640c9f7755c7e98a2aea895f8643043c374fc6ebd3e3f642ad3070e; 353 paths scanned."
+        "Dockerfile.web:21-22 defines the fixed loopback healthcheck.",
+        "deploy/Web.Caddyfile:1-3 defines /healthz as a static status-200 response.",
+        "compose.yaml:42-65 exposes Web internally and configures the same loopback healthcheck without a host port mapping.",
+        "security/dast/compose.yaml:43-74 has no published ports and attaches Web to the isolated internal network."
       ],
       "residualRisk": "none identified",
-      "ownerApproval": { "required": false, "status": "NOT_REQUIRED" }
+      "ownerApproval": {
+        "required": false,
+        "status": "NOT_REQUIRED"
+      },
+      "fingerprint": "sha256:3962b1a2b6843d3890920fbd8b1833c6ae243405bcf60f4115ff073226b54e12"
     },
     {
       "path": "compose.yaml",
-      "line": 52,
+      "line": 61,
       "ruleId": "security.semgrep.rules.generic.wget-unencrypted-url",
       "disposition": "FALSE_POSITIVE",
       "reviewedAt": "2026-10-17",
-      "reviewer": "Arena.ai Agent Mode (technical code-path review)",
-      "sourceToSink": "The Web service healthcheck invokes wget --spider on http://127.0.0.1:8080/healthz inside the Web container; deploy/Web.Caddyfile handles this exact path with a static HTTP 200 response.",
-      "exploitability": "The destination is the Web container's own loopback interface, not the published Caddy edge. Compose exposes Web port 8080 only on the private Compose network and publishes no Web host port. No credentials or application data are sent. A remote observer cannot intercept this request without first compromising the host or the container namespace.",
-      "rootCause": "The generic Semgrep wget rule treats the literal http scheme as an unencrypted remote transport and does not distinguish loopback healthchecks.",
-      "rationale": "The request is a local liveness probe with no sensitive payload and no externally observable cleartext hop. The CWE-319 data-exposure condition is absent; this is a contextual false positive, not a severity change or a suppressed finding.",
+      "reviewer": "Arena.ai Agent Mode (AI technical code-path review; unauthenticated, not human approval)",
+      "sourceToSink": "The production Web service healthcheck invokes wget --spider on its fixed own-loopback URL http://127.0.0.1:8080/healthz. deploy/Web.Caddyfile handles this path with a static status-200 response.",
+      "exploitability": "The probe runs inside the Web container, not through the published edge. Compose exposes port 8080 only to peer services and does not publish a Web host port. The check has no credentials or application payload, and the static health route returns no application data. An off-container observer cannot reach this loopback request.",
+      "rootCause": "The generic wget rule sees an HTTP scheme but does not distinguish a container-local liveness check from cleartext traffic to an untrusted network.",
+      "rationale": "No sensitive information crosses an untrusted network: this is a fixed, body-free loopback health request. The CWE-319 data-exposure condition is absent. This is a contextual false positive, not a severity change or a suppressed finding.",
       "evidence": [
-        "compose.yaml:51-58 defines the Web healthcheck and internal-only expose setting.",
-        "deploy/Web.Caddyfile:2-3 serves /healthz with a body-free 200 response.",
-        "Semgrep CE 1.185.0 run 4bd031ad: sanitized reports/semgrep.json SHA-256 f9ca9de06640c9f7755c7e98a2aea895f8643043c374fc6ebd3e3f642ad3070e; 353 paths scanned."
+        "compose.yaml:42-65 defines the Web service, internal expose setting, read-only runtime controls, and loopback healthcheck; it has no Web ports mapping.",
+        "deploy/Web.Caddyfile:1-3 serves /healthz as a static status-200 response.",
+        "security/dast/compose.yaml:120-122 defines the DAST-only isolated network as internal."
       ],
       "residualRisk": "none identified",
-      "ownerApproval": { "required": false, "status": "NOT_REQUIRED" }
+      "ownerApproval": {
+        "required": false,
+        "status": "NOT_REQUIRED"
+      },
+      "fingerprint": "sha256:b2bc2d46fd23ebfa561a6999ecde4d9da1739d15287b0bd71bfd03fe1d3b0f38"
     },
     {
       "path": "compose.yaml",
-      "line": 78,
+      "line": 87,
       "ruleId": "security.semgrep.rules.generic.wget-unencrypted-url",
       "disposition": "FALSE_POSITIVE",
       "reviewedAt": "2026-10-17",
-      "reviewer": "Arena.ai Agent Mode (technical code-path review)",
-      "sourceToSink": "The Caddy container healthcheck invokes wget --spider on http://127.0.0.1:2019/config/ within the Caddy container to check its local admin endpoint.",
-      "exploitability": "The request is addressed to loopback from the same Caddy container. The repository publishes only 127.0.0.1:80 on the host; it does not publish Caddy's admin port 2019. No credentials or application payload are sent, and an off-container observer cannot intercept the loopback traffic.",
-      "rootCause": "The generic Semgrep wget rule checks only for an http URL and cannot infer that this is an unpublished, container-local health probe.",
-      "rationale": "Although the local admin endpoint is queried over HTTP, the request does not transmit sensitive information over an untrusted network. Port 2019 is not host-published and the destination is loopback; this is a contextual false positive for CWE-319, not a severity change or a suppressed finding.",
+      "reviewer": "Arena.ai Agent Mode (AI technical code-path review; unauthenticated, not human approval)",
+      "sourceToSink": "The Caddy service healthcheck uses wget --spider against the fixed URL http://127.0.0.1:2019/config/ from inside the Caddy container to check its local admin endpoint.",
+      "exploitability": "The destination is 127.0.0.1 in the Caddy container. The production Compose file publishes only 127.0.0.1:80:80 and has no mapping for port 2019. The spider check sends no credentials or application request data and does not download the response body. A remote network observer cannot route to this loopback request.",
+      "rootCause": "The generic wget rule flags every HTTP URL without modeling the loopback destination, the container boundary, or the absence of a host-published admin port.",
+      "rationale": "Although the local admin endpoint is queried over HTTP, the health probe is confined to container loopback and sends no sensitive data over an untrusted channel. This is a contextual false positive for CWE-319, not a severity change or a suppressed finding.",
       "evidence": [
-        "compose.yaml:77-83 defines the local Caddy healthcheck.",
-        "compose.yaml publishes the Caddy edge only on 127.0.0.1:80:80 and has no admin-port mapping.",
-        "Semgrep CE 1.185.0 run 4bd031ad: sanitized reports/semgrep.json SHA-256 f9ca9de06640c9f7755c7e98a2aea895f8643043c374fc6ebd3e3f642ad3070e; 353 paths scanned."
+        "compose.yaml:67-91 configures the Caddy healthcheck and publishes only the edge on host loopback port 80; port 2019 is not published.",
+        "deploy/Caddyfile:1-5 shows the configured edge routes and health response; the healthcheck target remains the container-local 127.0.0.1:2019 endpoint."
       ],
       "residualRisk": "none identified",
-      "ownerApproval": { "required": false, "status": "NOT_REQUIRED" }
+      "ownerApproval": {
+        "required": false,
+        "status": "NOT_REQUIRED"
+      },
+      "fingerprint": "sha256:093d2c3623c7c1331ba5a5dddbcfd35f01a7b3ee5dbac0acbb364e1e74611c70"
     },
     {
       "path": "scripts/release/open-source-security.mjs",
-      "line": 1720,
+      "line": 1822,
       "ruleId": "security.semgrep.rules.generic.wget-unencrypted-url",
       "disposition": "FALSE_POSITIVE",
       "reviewedAt": "2026-10-17",
-      "reviewer": "Arena.ai Agent Mode (technical code-path review)",
-      "sourceToSink": "The DAST runner executes wget --spider through docker compose exec in the disposable Web container, targeting the fixed URL http://127.0.0.1:8080/healthz before starting any scan.",
-      "exploitability": "The HTTP request originates inside the target container and terminates on that same container's loopback interface. It is a fixed readiness check, not a user-controlled target URL; no credentials or application data are sent. The isolated Docker network has no external egress for scan traffic, and an off-container network observer cannot see this loopback hop.",
-      "rootCause": "The generic Semgrep pattern sees wget plus http:// but does not model docker compose exec namespace semantics or the loopback-only destination.",
-      "rationale": "The health request is confined to the disposable container and is executed before the ZAP active scans. It transfers no sensitive information across an untrusted channel, so the rule's CWE-319 condition is not present. This is a contextual false positive, not a severity change or a suppressed finding.",
+      "reviewer": "Arena.ai Agent Mode (AI technical code-path review; unauthenticated, not human approval)",
+      "sourceToSink": "Before starting probes or active scans, the DAST runner invokes docker compose exec web wget --spider with the fixed URL http://127.0.0.1:8080/healthz. The DAST Caddyfile serves that route as a static status-200 response.",
+      "exploitability": "The target is a literal, not user-controlled, and the command executes in the Web container’s network namespace. The disposable stack publishes no host ports and connects services only to an internal Docker network. The check sends no credentials or application data and does not expose a response body to an off-container observer.",
+      "rootCause": "The generic wget rule matches the literal HTTP URL but does not understand docker compose exec namespace semantics or the loopback-only target.",
+      "rationale": "This is a fixed readiness check on container loopback, executed before synthetic authorization probes and ZAP scans. No sensitive data traverses an untrusted network. The CWE-319 condition is absent; this is a contextual false positive, not a severity change or a suppressed finding.",
       "evidence": [
-        "scripts/release/open-source-security.mjs:1720 executes the fixed loopback request via docker compose exec web.",
-        "security/dast/compose.yaml exposes the Web service only on the internal isolated network and publishes no host port.",
-        "security/dast/Caddyfile:4-5 responds 200 at /healthz without an application body.",
-        "Semgrep CE 1.185.0 run 4bd031ad: sanitized reports/semgrep.json SHA-256 f9ca9de06640c9f7755c7e98a2aea895f8643043c374fc6ebd3e3f642ad3070e; 353 paths scanned."
+        "scripts/release/open-source-security.mjs:1822 runs the fixed loopback readiness request with docker compose exec web.",
+        "security/dast/compose.yaml:43-74 attaches Web to the isolated service network and publishes no host port.",
+        "security/dast/compose.yaml:120-122 marks that network internal; the DAST Compose profile contains no external-egress service network.",
+        "security/dast/Caddyfile:1-5 serves /healthz as a static status-200 response."
       ],
       "residualRisk": "none identified",
-      "ownerApproval": { "required": false, "status": "NOT_REQUIRED" }
+      "ownerApproval": {
+        "required": false,
+        "status": "NOT_REQUIRED"
+      },
+      "fingerprint": "sha256:9f4a53779f40c94e47a7bc5a3d05c9b54b22c00244dbd03da553e77f0622d489"
     },
     {
       "path": "security/dast/compose.yaml",
-      "line": 64,
+      "line": 70,
       "ruleId": "security.semgrep.rules.generic.wget-unencrypted-url",
       "disposition": "FALSE_POSITIVE",
       "reviewedAt": "2026-10-17",
-      "reviewer": "Arena.ai Agent Mode (technical code-path review)",
-      "sourceToSink": "The disposable DAST Web container healthcheck invokes wget --spider on its fixed own-loopback URL http://127.0.0.1:8080/healthz; security/dast/Caddyfile returns a static 200 response at this path.",
-      "exploitability": "The DAST stack's isolated Docker network is marked internal, no service publishes a host port, and the health request uses 127.0.0.1 inside the Web container. It carries no credentials or application data and is not observable by an off-container network attacker.",
-      "rootCause": "The generic Semgrep rule treats all wget http URLs alike and does not model the loopback-only healthcheck or the internal, disposable DAST network.",
-      "rationale": "No sensitive data traverses an untrusted channel: the request stays on container loopback and checks only a static liveness response. This is a contextual false positive for CWE-319, not a severity change or a suppressed finding.",
+      "reviewer": "Arena.ai Agent Mode (AI technical code-path review; unauthenticated, not human approval)",
+      "sourceToSink": "The disposable DAST Web service healthcheck uses wget --spider against its fixed own-loopback URL http://127.0.0.1:8080/healthz. security/dast/Caddyfile serves the path with a static status-200 response.",
+      "exploitability": "The request stays in the Web container’s loopback namespace. The DAST Compose file publishes no ports, and its only service network is marked internal. The request carries no credentials or application data and does not download the health response body; an off-container network observer cannot reach it.",
+      "rootCause": "The generic Semgrep rule treats any wget HTTP URL as unencrypted transport and does not model the fixed loopback healthcheck or isolated internal network.",
+      "rationale": "No sensitive information crosses an untrusted channel: this liveness probe targets container loopback and returns only a static status. The CWE-319 condition is absent. This is a contextual false positive, not a severity change or a suppressed finding.",
       "evidence": [
-        "security/dast/compose.yaml:63-70 defines the Web healthcheck; the isolated network has internal: true and the services publish no host ports.",
-        "security/dast/Caddyfile:4-5 serves the body-free /healthz response.",
-        "Semgrep CE 1.185.0 run 4bd031ad: sanitized reports/semgrep.json SHA-256 f9ca9de06640c9f7755c7e98a2aea895f8643043c374fc6ebd3e3f642ad3070e; 353 paths scanned."
+        "security/dast/compose.yaml:43-74 configures Web without host-published ports, attaches it to the isolated network, and defines the loopback healthcheck.",
+        "security/dast/compose.yaml:120-122 defines the DAST network as internal.",
+        "security/dast/Caddyfile:1-5 serves /healthz as a static status-200 response."
       ],
       "residualRisk": "none identified",
-      "ownerApproval": { "required": false, "status": "NOT_REQUIRED" }
+      "ownerApproval": {
+        "required": false,
+        "status": "NOT_REQUIRED"
+      },
+      "fingerprint": "sha256:34c3ee0b8056583a66d23795f375bfe34818080e0c5a017975eb3f115945c49c"
     }
   ]
 }

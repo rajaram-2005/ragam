@@ -303,9 +303,8 @@ def test_concurrent_runs_are_serialised(client):
 
 
 def test_the_default_bind_address_is_loopback():
-    # /status advises "loopback or private network only". A default of 0.0.0.0 would
-    # contradict the service's own advice and expose an unauthenticated training
-    # endpoint to the network by accident, so the default is pinned here.
+    # The service accepts no credentials; its default and server-factory boundary
+    # therefore stay on loopback instead of relying on a warning about wider binds.
     assert DEFAULT_HOST == "127.0.0.1"
     assert DEFAULT_HOST in LOOPBACK_HOSTS
     assert "0.0.0.0" not in LOOPBACK_HOSTS
@@ -321,11 +320,29 @@ def test_main_reads_the_bind_address_from_the_environment(monkeypatch, capsys):
     assert "Aetheris Fabric" in out
 
 
-def test_a_non_loopback_bind_is_reported_as_unauthenticated():
-    # The service cannot stop an operator from binding widely; it can refuse to be
-    # quiet about it. /status carries the recommendation independently of the bind.
+@pytest.mark.parametrize("host", ["0.0.0.0", "10.0.0.1", "example.com"])
+def test_non_loopback_bind_is_rejected_by_the_server_factory(host):
+    with pytest.raises(ValueError, match="refuses non-loopback binds"):
+        create_server(host=host, port=0)
+
+
+def test_loopback_hostname_is_bound_as_numeric_loopback():
+    server = create_server(host="localhost", port=0)
+    try:
+        assert server.server_address[0] == "127.0.0.1"
+    finally:
+        server.server_close()
+
+
+def test_non_loopback_environment_bind_is_rejected_by_the_cli(monkeypatch, capsys):
+    monkeypatch.setenv("AETHERIS_FABRIC_HOST", "10.0.0.1")
+    monkeypatch.setenv("AETHERIS_FABRIC_PORT", "8791")
+    assert main([]) == 2
+    assert "refuses a non-loopback bind" in capsys.readouterr().err
+
+
+def test_status_reports_the_strict_unauthenticated_bind_boundary():
     service = FabricService()
     status = service.status()
     assert status["security"]["acceptsCredentials"] is False
-    assert "no authentication" in status["security"]["bindRecommendation"]
-    assert "loopback" in status["security"]["bindRecommendation"]
+    assert status["security"]["bindRecommendation"] == "loopback only; this service performs no authentication"

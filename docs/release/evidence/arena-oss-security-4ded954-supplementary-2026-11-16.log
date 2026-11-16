@@ -1,0 +1,40 @@
+Supplementary security-run evidence — not part of the authoritative 2026-10-17 cutoff
+Recorded: 2026-11-16 (UTC)
+Branch: arena/947d8745-ragam
+Exact source commit: 4ded954faad70e96738c9b8d0b8f1cd521b05e90
+
+GitHub Actions run: https://github.com/rajaram-2005/ragam/actions/runs/43808973546
+Workflow: Open-source security qualification; event: push; run started 2026-11-16T05:14:55Z; conclusion: FAIL.
+- Security evidence sanitization and gate fixtures: PASS.
+- Semgrep, OWASP ZAP, Gitleaks and Trivy (OSS): FAIL; the step “Run the four independent OSS release gates” exited 1 after 1m22s.
+- Upload sanitized OSS scanner reports and unified evidence: PASS.
+- CI run 43808973597: PASS on the same exact commit across Core, release verification, Compose persistence/restore, Fabric, Web and documentation jobs; Klyvaron production evidence gate was SKIPPED.
+- Desktop run 43808973507: PASS on the same exact commit across Linux x64/ARM64, Windows x64/ARM64, macOS Apple Silicon and macOS Intel jobs.
+
+Uploaded artifact metadata from the GitHub Actions API:
+- ID: 14199392712
+- Name: open-source-security-4ded954faad70e96738c9b8d0b8f1cd521b05e90
+- Size: 146275 bytes
+- Artifact SHA-256: sha256:2cb36795d26438d39fbbc601f5b7e6bd905a45527fa7d43a96f0590f9e52becf
+- Created: 2026-11-16T05:16:15Z; expires: 2026-12-16T05:16:14Z.
+This digest is for the uploaded ZIP artifact, not for any individual scanner report.
+
+Report access/review outcome:
+- `gh run view 43808973546 --log-failed` failed with EOF while fetching the Actions log from `results-receiver.actions.githubusercontent.com`.
+- `gh run download 43808973546 --name open-source-security-4ded954faad70e96738c9b8d0b8f1cd521b05e90 --dir /tmp/ragam-security-43808973546` failed with EOF while fetching the artifact from `productionresultssa0.blob.core.windows.net`.
+- The GitHub Actions page and artifact API expose the ZIP digest and metadata, but the artifact payload and individual report SHA-256 values were not available in this workspace. No scanner finding was reviewed or classified from this run.
+
+Disposition (do not infer a clean scan from the failed workflow or missing reports):
+- Overall security workflow: FAIL.
+- Semgrep findings and individual dispositions: NOT TESTED.
+- Full-history Gitleaks execution/coverage, findings and credential classification: NOT TESTED.
+- Trivy filesystem/built-image execution, findings and release-threshold dispositions: NOT TESTED.
+- Official ZAP index/platform digest verification, ZAP baseline/full scans and synthetic authorization-probe report: NOT TESTED.
+- Individual sanitized report hashes and independent report-hash verification: NOT TESTED.
+- No reported scanner finding is treated as a confirmed vulnerability, false positive, or zero-finding result. No credentials were rotated based on this inaccessible artifact.
+
+The scanner pins remain Semgrep CE 1.185.0, Gitleaks 8.30.1, Trivy 0.76.2, and ZAP 2.17.0 with the existing pinned digest and linux/amd64 platform. Those are configured versions, not verified scanner runtime versions for this failed run. The pinned ZAP digest remains unverified and was not changed.
+
+A follow-up adds a secret-safe GitHub step summary generated only from the runner's sanitized evidence projection (gate statuses, each finding's safe ID/rule/severity/location/review status, report hashes, and ZAP identity). Its regression test checks that fixture secret values are omitted. This presentation change does not make the 4ded954 run reviewable and is not security evidence; a new exact-commit run is needed.
+
+The overall release verdict remains NOT RELEASE READY. The authoritative cutoff log and cutoff evidence remain unchanged.

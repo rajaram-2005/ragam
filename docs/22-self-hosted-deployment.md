@@ -94,8 +94,11 @@ request.
 ## Health and persistence checks
 
 - `GET /api/health` through the Caddy site must return HTTP 200 with `status: "ok"`.
-- Core and web are not directly exposed on host ports. The Compose health checks gate the
-  edge proxy startup; Caddy's `/healthz` reports proxy process health, not data durability.
+- Core and web are not directly exposed on host ports. The web image runs as UID/GID
+  10001 with a read-only root filesystem, dropped capabilities and `no-new-privileges`;
+  only bounded `/tmp`, `/config` and `/data` tmpfs mounts are writable. The Compose
+  health checks gate the edge proxy startup; Caddy's `/healthz` reports proxy process
+  health, not data durability.
 - Open `http://localhost` after starting or restarting the stack. The local workspace
   identity and its conversation/context data must remain available; no sign-in session is used.
 - Keep the named volume `ragam-data`. `docker compose down -v` deletes persistent app and

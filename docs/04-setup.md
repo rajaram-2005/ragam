@@ -14,7 +14,7 @@ Every command below was run on the host described in
 | `services/core` | **Node ≥ 22.5.0** (for `node:sqlite`). Zero npm dependencies | Node v22.22.3 |
 | `services/fabric` | **Python ≥ 3.11** + **NumPy** | Python 3.11.2, NumPy 2.1.3 |
 | `apps/web` | Node 22.x and npm. Vite 8 requires ≥ 20.19 or ≥ 22.12. 2 runtime packages, 23 installed in total | Vite 8.3.4, React 18.3.1 |
-| Tests | Core processor/routes and Web tests require no model files; retained Fabric/worker tests may use Python dependencies and `pytest` | Python 3.11.2, NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0, Pillow 13.0.0, pytest 9.1.1 |
+| Tests | Core processor/routes and Web tests require no model files; retained Fabric/worker tests may use Python dependencies and `pytest` | Python 3.11.2, NumPy 2.4.6, JAX 0.10.2, PyAV 18.1.0, Pillow 13.0.0, pytest 9.2.0 |
 
 No GPU or model weights are required to run Klyvaron's built-in processor or its Core/Web tests — see §7. Retained model-artifact and worker tests cover separate legacy paths; optional Python test prerequisites are described in §4 and kept outside Git. Passing those tests is not evidence that a model release has occurred.
 
@@ -166,7 +166,7 @@ python -m fabric.server          # http://127.0.0.1:8791
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `AETHERIS_FABRIC_HOST` | **`127.0.0.1`** | Loopback by default: this service performs **no authentication**, so a wider bind must be deliberate. Binding elsewhere prints a warning |
+| `AETHERIS_FABRIC_HOST` | **`127.0.0.1`** | This unauthenticated service accepts only loopback addresses; non-loopback binds are refused by both the CLI and server factory |
 | `AETHERIS_FABRIC_PORT` | `8791` | |
 | `AETHERIS_FABRIC_DATA_DIR` | *(in memory)* | Where to persist run records and weights |
 
@@ -298,10 +298,10 @@ PATH="$PWD/.venv/bin:$PATH" node --test services/core/test/*.test.mjs services/c
 The pinned archive includes the model manifests and checksum list. The full CI run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed all 985 Core tests with the pinned Pro/Max artifacts and Python prerequisites. The Baidu Qianfan contract fixtures make no vendor calls. Without the packages and Python libraries, the artifact/worker acceptance tests fail closed rather than substituting fixtures or downgrading model claims. The Core service still declares zero npm dependencies.
 
 ```bash
-PATH="$PWD/.venv/bin:$PATH" npm test  # all three suites (2052 tests)
+PATH="$PWD/.venv/bin:$PATH" npm test  # all three suites (2060 tests)
 npm run test:core                  # 1086
 npm run test:web                   # 143
-npm run test:fabric                # 823 — needs numpy + pytest on the interpreter
+npm run test:fabric                # 831 — needs numpy + pytest on the interpreter
 ```
 
 Beyond the suites, one check is run by hand rather than by CI, because it costs nine suite
@@ -360,7 +360,7 @@ when something else changes would not notice.
 | Job | What it proves |
 |---|---|
 | **Core service** | Current suite: 1086 tests; verifies `services/core` still declares **zero** dependencies and confirms no `services/core/node_modules` exists. Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) is a historical CI result and does not establish a Klyvaron model release; Baidu Qianfan is covered by local contract fixtures. |
-| **Fabric** | 823 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
+| **Fabric** | 831 tests pass; `torch` is **not** importable; the release gate is exercised end to end in both directions; and `scripts/audit_python_deps.py` checks numpy and the test tooling against the GitHub Advisory Database, failing on a covered version **and** on being unable to reach the database |
 | **Web app** | `npm ci`, 143 tests, **two `npm audit` gates** (production clean at every severity; full tree failing on high/critical), production build, then a scan of the built artifact for an absolute loopback backend URL and for credential-shaped strings |
 | **Docker Compose** | Run [41394564087](https://github.com/rajaram-2005/ragam/actions/runs/41394564087) passed: builds both images, starts Core/web/Caddy on loopback, checks local-workspace health and the provider catalogue with account creation disabled, then cold-backs up and restores the named volume and verifies workspace identity plus a SQLite history marker. Synthetic CI only: no live provider inference or persistent-deployment guarantee. |
 | **Docs** | The 52-test documentation-accuracy suite, checked out with full history because it asserts the model card records a real git SHA and was re-verified at a *different* revision; plus a check that the four licence copies are present and untruncated |

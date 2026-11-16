@@ -32,7 +32,7 @@
     "version": "2.17.0",
     "image": "ghcr.io/zaproxy/zaproxy:2.17.0@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6",
     "imageDigestVerified": false,
-    "imageDigestVerification": "Before pulling/running ZAP, the runner compares the pinned digest to the official GHCR tag with Docker Buildx; a mismatch or unavailable check blocks DAST. No verification date is claimed here.",
+    "imageDigestVerification": "Before pulling/running ZAP, the runner compares the pinned OCI index digest with the official GHCR 2.17.0 tag and records the digest-bearing manifest selected for locked linux/amd64; Compose receives only the locked platform. A mismatch, missing platform manifest digest, or unavailable check blocks DAST. No verification date is claimed until an actual registry check completes.",
     "networkPolicy": "Docker internal network; only http://edge:8080 is in scope; no external egress"
   },
   "platform": "linux/amd64",
