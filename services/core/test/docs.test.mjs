@@ -783,12 +783,12 @@ test('the status doc reports the real test totals', () => {
   // README and docs/03 must state the *same* total.
   assert.ok(squash(doc.readme()).includes('2060 tests: core 1086, web 143, fabric 831'),
     'README must state the current inventory as docs/03 does')
-  assert.ok(squash(doc.readme()).includes('latest completed full CI run')
+  assert.ok(squash(doc.readme()).includes('An earlier full CI run')
     && squash(doc.readme()).includes('41394564087')
     && squash(doc.readme()).includes('1,916 tests (Core 985, Web 109, Fabric 822)')
     && squash(doc.readme()).includes('The current tree has 2,060 tests (Core 1,086, Web 143, Fabric 831). The full Core suite passed 1,082/1,086 with four skipped real-artifact acceptance cases because the ignored Pro/Max fixtures are not installed locally; the acceptance test remains intact. Core test files run serially in CI and an in-flight acceptance run is not cancelled by a newer commit. Legacy weights are used only by that compatibility test, never by app startup or desktop packaging. Web passed 143/143 and the production bundle built. On the current Arena branch, Fabric passed 831/831 with NumPy, JAX, PyAV and Pillow installed from the committed lock in an isolated venv.')
-    && squash(doc.readme()).includes('Documentation/release consistency tests passed 67/67, and the security regression passed 16/16.') && squash(doc.readme()).includes('No full CI run, Docker-backed scan, signed-bundle verification, or full release qualification is established for this current worktree; the linked main/PR runs are historical.')
-    && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke'),
+    && squash(doc.readme()).includes('Documentation/release consistency tests passed 67/67, and the security regression passed 16/16.') && squash(doc.readme()).includes('Commit `d4fedb8142c85d9595e6a410dd1585d93c06f1cc` on this Arena branch passed CI run [43806467635] (six jobs; the production evidence gate was intentionally skipped) and Desktop run [43806467592] (all four platform jobs). CI also passed the isolated Compose persistence smoke; this is not a Trivy/ZAP scan. No open-source scanner qualification, required-signature verification, or full release qualification is established for this branch.')
+    && squash(doc.readme()).includes('loopback-only Compose persistence/restore smoke') && squash(doc.status()).includes('Commit `d4fedb8142c85d9595e6a410dd1585d93c06f1cc` on this Arena branch passed CI run [43806467635]'),
   'README must distinguish the last full CI run from the current full local suite')
   assert.ok(status.includes('(78 files'), 'the file count must move with the suite')
 
