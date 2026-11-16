@@ -49,20 +49,36 @@ The following commands completed successfully on the remediation worktree:
 - `node --test services/core/test/release-qualification.test.mjs`: **14/14**.
 - `npm run release:clean-gate`: **1/1**.
 - JavaScript syntax checks for the security runner, utilities, and regression tests: passed.
-- `node scripts/release/security-scan.mjs --out /tmp/ragam-security-scan-final.json`: **10 PASS / 0 FAIL** across 758 tracked files. This local check is ancillary and is not a substitute for pinned OSS scanner qualification.
+- `node scripts/release/security-scan.mjs --out /tmp/ragam-security-scan-final.json`: **10 PASS / 0 FAIL** across 758 tracked files before the code commit. The post-commit rerun at `/tmp/ragam-security-scan-eb64c6d.json` also passed **10/10** across 759 tracked files. These local checks are ancillary and are not substitutes for pinned OSS scanner qualification.
 
 Fabric's locked Python dependencies were installed into `/tmp/ragam-fabric-venv-637` from `services/fabric/requirements.lock`; no repository dependency file was changed.
 
+## Post-commit full qualification addendum
+
+A full run was performed on the clean remediation code commit `eb64c6d792248452d82a536a316dac65c89ac690` (tree `e626c9f3678364d860b3d99117f4ec33a03fc0ee`) on `arena/947d8745-ragam`. Run ID `2ebc1e8e-d2f0-4c14-8924-7b953e495692` used `npm run release:security:full`, the pinned Semgrep 1.185.0 binary, and `RAGAM_SECURITY_NO_DOWNLOAD=1`. The no-download setting deliberately prevented another release-asset transfer attempt for unavailable Gitleaks/Trivy; it is not evidence that either scanner ran.
+
+- Overall result: **BLOCKED / NOT QUALIFIED**.
+- **SAST PASS:** 5 MEDIUM findings; all 5 had source-bound technical dispositions; no HIGH/CRITICAL findings. No suppression was used.
+- **SAST finding review PASS:** technical review only; reviewer identity and human/owner approval remain unauthenticated/not claimed.
+- **Source integrity PASS:** detached clean-commit snapshot; 759 files / 13,373,649 bytes; snapshot SHA-256 `3b98a4f073769652230ed0c708eb4663298dc4056101efe52c5cf1c7520b9157`; stable during scan and cleanup succeeded.
+- **DAST and authentication/authorization BLOCKED:** Docker and Podman unavailable; no stack, probes, image build, registry inspection, or ZAP scan ran.
+- **Secrets and dependency scanning BLOCKED:** Gitleaks 8.30.1 and Trivy 0.76.2 were not installed or executed. There are no scanner findings to disposition from these gates.
+- **REPORT_CHECKSUMS BLOCKED overall:** SAST reports and source-snapshot manifests verified; DAST/authz/Gitleaks/Trivy reports were absent, so the complete required report set could not pass.
+
+For this run, sanitized Semgrep JSON (33,246 bytes) SHA-256 was `f845413e2edb0e499ab145683389c5d907c508dd1c241833d3e1c96f836fef79`; sanitized SARIF (7,236 bytes) SHA-256 was `755fc699af7072d0ab844ccaf4b0a7405bbe6c3bdbff4ef29d38b0aa8644b507`. Both report files and the source-snapshot manifests passed independent `sha256sum -c` verification. Evidence is retained privately under `/tmp/ragam-security-remediation-full-commit-eb64c6d/`; no raw report was uploaded. The sandbox clock still emitted 2026-11-16 timestamps, which remain disputed against the session date above.
+
+This addendum qualifies only the exact code commit named above. It is not a release qualification; the blocked gates and owner actions below still apply.
+
 ## Remaining gates and owner actions
 
-- **SAST:** scanner ran; five MEDIUM matches were dispositioned technically. Release gate remains **FAIL** until a clean exact-commit run passes source integrity. No human reviewer or owner approval is claimed.
+- **SAST:** **PASS** on clean code commit `eb64c6d792248452d82a536a316dac65c89ac690`; the earlier pre-commit SAST-only run failed source integrity because its worktree was dirty. No human reviewer or owner approval is claimed.
 - **Finding review:** technical fingerprint-bound disposition **PASS** in the pre-commit SAST run; human/owner identity is **NOT AUTHENTICATED**.
 - **Secrets:** **BLOCKED / NOT TESTED**. Pinned Gitleaks 8.30.1 did not execute. The baseline release-asset transfer failed with TLS/curl exit 35; a later GitHub CLI transfer ended with EOF. Neither result represents a secrets scan or a finding disposition. Six local refs and 259 reachable commits were inventoried, but were not scanned by Gitleaks.
 - **Dependencies/configuration/containers:** **BLOCKED / NOT TESTED**. Pinned Trivy 0.76.2 did not execute; its local help and supported flags could not be inspected, so no Trivy invocation change is claimed. The baseline release-asset transfer failed with TLS/curl exit 35. No dependency, lockfile, IaC, filesystem-secret, or image scan completed.
 - **Containers and DAST:** **BLOCKED / NOT TESTED** because neither Docker nor Podman is available. No image was built/scanned, no Compose stack was launched, no synthetic auth/authz probe ran, and no ZAP scan was performed. The DAST Compose source has stronger read-only/tmpfs controls and regression checks, but runtime isolation is unverified.
 - **ZAP identity:** the lock still pins `ghcr.io/zaproxy/zaproxy:2.17.0@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6`; live OCI index and `linux/amd64` manifest identity remain **UNVERIFIED**. Parser tests now require the exact image, an OCI/Docker index media type, a unique exact-platform descriptor, and a digest-bearing manifest; tests do not replace a registry inspection.
-- **Checksums:** **PASS** for the sanitized Semgrep and source-snapshot artifacts listed above; not evidence for scanners that did not run.
-- **Source integrity:** **FAIL** for the pre-commit SAST run due to a dirty worktree. A final full run against the clean remediation commit is still required.
+- **Checksums:** SAST and source-snapshot checksum verification **PASS** for the exact run artifacts listed above. The overall `REPORT_CHECKSUMS` gate is **BLOCKED** because DAST/authz/Gitleaks/Trivy reports were not produced.
+- **Source integrity:** **FAIL** for the earlier pre-commit SAST-only run due to a dirty worktree; **PASS** for the full run on code commit `eb64c6d792248452d82a536a316dac65c89ac690`. This record's later evidence-only update is outside that run and does not rewrite its source identity.
 - **Signing:** **OWNER ACTION REQUIRED**. GPG and an authorized trusted project key/signature were unavailable; no key was generated and no signature was created.
 
 Overall verdict remains **NOT RELEASE READY**. No production target, real account, live provider, credential rotation, key creation, history rewrite, or real-data operation was performed. No public scanner artifact upload occurred.
