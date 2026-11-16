@@ -1509,12 +1509,14 @@ function webContainerHardeningErrors(sourceRoot) {
 
 export function assertDastConfig(sourceRoot) {
   const compose = readFileSync(join(sourceRoot, 'security/dast/compose.yaml'), 'utf8')
+  const zap = composeServiceSection(compose, 'zap') ?? ''
   const proxy = readFileSync(join(sourceRoot, 'security/dast/Caddyfile'), 'utf8')
   const api = readFileSync(join(sourceRoot, 'security/dast/openapi.yaml'), 'utf8')
   const errors = webContainerHardeningErrors(sourceRoot)
   if (!/^\s+internal:\s+true\s*$/m.test(compose)) errors.push('isolated Docker network must be internal')
   if (/^\s+ports\s*:/m.test(compose)) errors.push('DAST services must not publish host ports')
   if (!compose.includes(LOCK.zap.image)) errors.push('ZAP image must match the pinned version and digest in scanner-versions.json')
+  if (!/^[ \t]*platform:[ \t]*\$\{RAGAM_DAST_PLATFORM:\?set by the security runner\}[ \t]*$/m.test(zap)) errors.push('ZAP platform must be set only from the scanner lock by the security runner')
   if (!/tmpfs:[\s\S]*?\/var\/lib\/ragam/m.test(compose)) errors.push('test data must use fresh ephemeral tmpfs storage')
   if (!proxy.includes('header_up Host edge:8080')) errors.push('Core must receive the exact isolated local host used for same-origin checks')
   if (!/aliases:\s*\n\s+- edge/.test(compose)) errors.push('The only DAST target alias must resolve to the isolated Web service')
@@ -1692,32 +1694,47 @@ async function runDAST({ context, reportsDir, runDir, project, imageTag, sourceR
       target: 'http://edge:8080',
       targetMode: 'fixed isolated Docker service alias; no target override is accepted',
       image: LOCK.zap.image,
+      platform: LOCK.platform,
       network: 'security/dast/compose.yaml isolated internal network (no host ports and no external egress)',
       testData: 'fresh tmpfs only; synthetic owner/member accounts and no provider credentials or external destinations',
       web: 'ZAP full scan with passive spider/alerting and controlled active scan; 5-minute spider cap',
       api: 'ZAP OpenAPI active scan of security/dast/openapi.yaml; only local edge server; request marker constrained to the validation-only API operation',
       authz: 'synthetic unauthenticated/owner/member requests verify authentication and owner-only authorization boundaries; ZAP itself is unauthenticated',
       destructiveOperations: 'only against fresh ephemeral test state; no real user data',
-      imageDigestVerification: 'runtime Docker Buildx inspection of the official GHCR version tag must match the locked OCI digest before any image pull or scan',
+      imageDigestVerification: 'runtime Docker Buildx inspection must match the official GHCR tag index digest and verify its locked platform descriptor before any image pull or scan',
     },
   })
   const configErrors = []
   try { assertDastConfig(sourceRoot) } catch (error) { configErrors.push(error.message) }
   if (configErrors.length) return finishRecord(record, { status: 'FAILED', reason: `DAST isolation configuration refused: ${configErrors.join('; ')}.`, startedAt })
   const docker = runDockerAvailable()
-  if (!docker.ok) return finishRecord(record, { status: 'BLOCKED', reason: docker.reason, startedAt, scope: { ...record.scope, imageDigestVerification: { status: 'NOT VERIFIED', reason: 'Docker/Compose is unavailable; official GHCR tag-to-digest comparison was not performed.' } } })
+  if (!docker.ok) return finishRecord(record, { status: 'BLOCKED', reason: docker.reason, startedAt, scope: { ...record.scope, imageDigestVerification: { status: 'NOT VERIFIED', expectedPlatform: LOCK.platform, reason: 'Docker/Compose is unavailable; official GHCR tag digest and platform-manifest verification were not performed.' } } })
 
   const digest = verifyZapRegistryDigest(docker.binary)
-  const digestRun = { name: 'zap-registry-digest-verification', executed: true, exitCode: digest.ok ? 0 : 1, tag: digest.tag, expectedDigest: digest.expectedDigest, observedDigest: digest.observedDigest ?? null, method: 'docker buildx imagetools inspect against official GHCR tag' }
+  const digestRun = {
+    name: 'zap-registry-digest-verification',
+    executed: true,
+    exitCode: digest.ok ? 0 : 1,
+    tag: digest.tag,
+    expectedDigest: digest.expectedDigest,
+    observedDigest: digest.observedDigest ?? null,
+    expectedPlatform: digest.expectedPlatform,
+    observedPlatform: digest.observedPlatform ?? null,
+    platformManifestDigest: digest.platformManifestDigest ?? null,
+    observedPlatforms: digest.observedPlatforms ?? [],
+    method: 'docker buildx imagetools inspect against official GHCR tag; index digest and target platform descriptor',
+  }
   if (!digest.ok) {
-    const mismatch = Boolean(digest.expectedDigest && digest.observedDigest && digest.expectedDigest !== digest.observedDigest)
+    const digestMismatch = Boolean(digest.expectedDigest && digest.observedDigest && digest.expectedDigest !== digest.observedDigest)
+    const platformMissing = Boolean(digest.expectedPlatform && digest.observedDigest === digest.expectedDigest && !digest.observedPlatform)
+    const failed = digestMismatch || platformMissing
     return finishRecord(record, {
-      status: mismatch ? 'FAILED' : 'BLOCKED',
+      status: failed ? 'FAILED' : 'BLOCKED',
       startedAt,
       exitCode: 1,
       reason: digest.reason,
       runs: [digestRun],
-      scope: { ...record.scope, imageDigestVerification: { status: mismatch ? 'FAILED' : 'NOT VERIFIED', ...digest } },
+      scope: { ...record.scope, imageDigestVerification: { status: failed ? 'FAILED' : 'NOT VERIFIED', ...digest } },
     })
   }
 
@@ -1726,7 +1743,7 @@ async function runDAST({ context, reportsDir, runDir, project, imageTag, sourceR
   const uid = typeof process.getuid === 'function' ? String(process.getuid()) : '1000'
   const gid = typeof process.getgid === 'function' ? String(process.getgid()) : '1000'
   const rawReportsDir = join(runDir, 'private-zap-reports')
-  const env = { ...childEnvironment(), RAGAM_DAST_REPORT_DIR: rawReportsDir, RAGAM_DAST_IMAGE_TAG: imageTag, RAGAM_DAST_UID: uid, RAGAM_DAST_GID: gid }
+  const env = { ...childEnvironment(), RAGAM_DAST_REPORT_DIR: rawReportsDir, RAGAM_DAST_IMAGE_TAG: imageTag, RAGAM_DAST_PLATFORM: LOCK.platform, RAGAM_DAST_UID: uid, RAGAM_DAST_GID: gid }
   const configResult = run(docker.binary, [...composeArgs, 'config', '-q'], { env, timeout: 30_000, maxBuffer: 4 * 1024 * 1024 })
   if (configResult.exitCode !== 0) {
     return finishRecord(record, { status: 'FAILED', reason: 'docker compose config rejected the isolated DAST profile; raw configuration output was withheld.', startedAt, runs: [digestRun, { name: 'compose config', executed: true, exitCode: configResult.exitCode }] })
@@ -1836,7 +1853,7 @@ async function runDAST({ context, reportsDir, runDir, project, imageTag, sourceR
     runs,
     findings,
     reports,
-    scope: { ...record.scope, image: LOCK.zap.image, imageDigestVerification: { status: 'VERIFIED', tag: digest.tag, digest: digest.observedDigest, verifiedAt: digest.verifiedAt, method: digest.method }, project, imageTag, sourceCommit: context.commit, target: 'http://edge:8080' },
+    scope: { ...record.scope, image: LOCK.zap.image, platform: digest.expectedPlatform, imageDigestVerification: { status: 'VERIFIED', tag: digest.tag, indexDigest: digest.observedDigest, platform: digest.observedPlatform, platformManifestDigest: digest.platformManifestDigest, verifiedAt: digest.verifiedAt, method: digest.method }, project, imageTag, sourceCommit: context.commit, target: 'http://edge:8080' },
   })
 }
 
@@ -1991,6 +2008,7 @@ async function runDependencies({ context, reportsDir, runDir, project, imageTag,
         ...childEnvironment(),
         RAGAM_DAST_REPORT_DIR: reportsDir,
         RAGAM_DAST_IMAGE_TAG: imageTag,
+        RAGAM_DAST_PLATFORM: LOCK.platform,
         RAGAM_DAST_UID: uid,
         RAGAM_DAST_GID: gid,
       }
@@ -2048,28 +2066,72 @@ async function runDependencies({ context, reportsDir, runDir, project, imageTag,
   })
 }
 
+export function parseBuildxImageInspection(output, expectedPlatform) {
+  const text = String(output ?? '')
+  const digest = text.match(/^Digest:\s*(sha256:[a-f0-9]{64})\s*$/im)?.[1]?.toLowerCase() ?? null
+  const manifests = []
+  let current = null
+  for (const line of text.split(/\r?\n/)) {
+    const name = line.match(/^[ \t]+Name:\s+[^@\s]+@(sha256:[a-f0-9]{64})\s*$/i)
+    if (name) {
+      current = { digest: name[1].toLowerCase(), platform: null }
+      manifests.push(current)
+      continue
+    }
+    const platform = line.match(/^[ \t]+Platform:\s*([a-z0-9_.-]+(?:\/[a-z0-9_.-]+){1,2})\s*$/i)
+    if (platform && current) current.platform = platform[1].toLowerCase()
+  }
+  const platforms = manifests.map((manifest) => manifest.platform).filter(Boolean)
+  const wanted = String(expectedPlatform ?? '').trim().toLowerCase().split('/')
+  const matchingManifest = manifests.find(({ platform, digest: manifestDigest }) => {
+    const actual = String(platform ?? '').split('/')
+    return Boolean(manifestDigest) && wanted.length >= 2 && actual[0] === wanted[0] && actual[1] === wanted[1]
+      && (!wanted[2] || actual[2] === wanted[2])
+  }) ?? null
+  return {
+    digest,
+    platforms: [...new Set(platforms)],
+    observedPlatform: matchingManifest?.platform ?? null,
+    platformManifestDigest: matchingManifest?.digest ?? null,
+  }
+}
+
 function verifyZapRegistryDigest(docker) {
   const expected = String(LOCK.zap.image ?? '').match(/@(sha256:[a-f0-9]{64})$/i)?.[1]?.toLowerCase() ?? null
+  const expectedPlatform = String(LOCK.platform ?? '').trim().toLowerCase()
   const tag = `ghcr.io/zaproxy/zaproxy:${LOCK.zap.version}`
-  if (!expected) return { ok: false, tag, expectedDigest: null, observedDigest: null, reason: 'OWASP ZAP lock entry has no valid immutable SHA-256 OCI digest; pull and scan refused.' }
+  if (!expected) return { ok: false, tag, expectedDigest: null, observedDigest: null, expectedPlatform, reason: 'OWASP ZAP lock entry has no valid immutable SHA-256 OCI digest; pull and scan refused.' }
+  if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+(?:\/[a-z0-9_.-]+)?$/.test(expectedPlatform)) {
+    return { ok: false, tag, expectedDigest: expected, observedDigest: null, expectedPlatform, reason: 'OWASP ZAP lock entry has no valid platform; registry image pull and scan refused.' }
+  }
   const checked = run(docker, ['buildx', 'imagetools', 'inspect', tag], { timeout: 120_000, maxBuffer: 4 * 1024 * 1024 })
-  const match = checked.stdout.match(/^Digest:\s*(sha256:[a-f0-9]{64})\s*$/im)
-  const observed = match?.[1]?.toLowerCase() ?? null
-  if (checked.exitCode !== 0 || !observed) {
+  const inspected = parseBuildxImageInspection(checked.stdout, expectedPlatform)
+  if (checked.exitCode !== 0 || !inspected.digest) {
     return {
-      ok: false, tag, expectedDigest: expected, observedDigest: observed,
+      ok: false, tag, expectedDigest: expected, observedDigest: inspected.digest, expectedPlatform, observedPlatforms: inspected.platforms,
       reason: checked.errorCode === 'ENOENT'
-        ? 'Docker Buildx imagetools is required to verify the official GHCR ZAP version tag against its pinned digest; no ZAP image was pulled or scan executed.'
-        : `Could not independently read the official GHCR ${LOCK.zap.version} tag digest with Docker Buildx (exit ${checked.exitCode ?? checked.errorCode ?? 'unknown'}); no ZAP scan was executed.`,
+        ? 'Docker Buildx imagetools is required to verify the official GHCR ZAP tag digest and platform manifest; no ZAP image was pulled or scan executed.'
+        : `Could not independently read the official GHCR ${LOCK.zap.version} tag digest and platform manifest with Docker Buildx (exit ${checked.exitCode ?? checked.errorCode ?? 'unknown'}); no ZAP image was pulled or scan executed.`,
     }
   }
-  if (observed !== expected) {
+  if (inspected.digest !== expected) {
     return {
-      ok: false, tag, expectedDigest: expected, observedDigest: observed,
-      reason: `Official GHCR tag ${tag} resolves to ${observed}, which does not match the pinned ${expected}; no ZAP image was pulled or scan executed. Review and update the pin from the official registry.`,
+      ok: false, tag, expectedDigest: expected, observedDigest: inspected.digest, expectedPlatform, observedPlatforms: inspected.platforms,
+      reason: `Official GHCR tag ${tag} resolves to ${inspected.digest}, which does not match the pinned ${expected}; no ZAP image was pulled or scan executed. Review the discrepancy; do not replace the pin without owner review.`,
     }
   }
-  return { ok: true, tag, expectedDigest: expected, observedDigest: observed, verifiedAt: now(), method: 'docker buildx imagetools inspect against the official GHCR tag' }
+  if (!inspected.observedPlatform || !inspected.platformManifestDigest) {
+    return {
+      ok: false, tag, expectedDigest: expected, observedDigest: inspected.digest, expectedPlatform, observedPlatforms: inspected.platforms,
+      reason: `Official GHCR tag ${tag} does not expose a digest-bearing manifest for pinned platform ${expectedPlatform}; no ZAP image was pulled or scan executed.`,
+    }
+  }
+  return {
+    ok: true, tag, expectedDigest: expected, observedDigest: inspected.digest,
+    expectedPlatform, observedPlatform: inspected.observedPlatform, platformManifestDigest: inspected.platformManifestDigest, observedPlatforms: inspected.platforms,
+    verifiedAt: now(),
+    method: 'docker buildx imagetools inspect against the official GHCR tag; verified index digest and matching platform descriptor',
+  }
 }
 
 const GATES_FOR_SCANNER = Object.freeze({

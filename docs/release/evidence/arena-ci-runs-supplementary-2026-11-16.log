@@ -1,0 +1,27 @@
+Supplementary GitHub Actions evidence — not part of the authoritative 2026-10-17 cutoff
+Recorded: 2026-11-16 (UTC)
+Branch: arena/947d8745-ragam
+Exact source commit: bc6fe42f15aa04428a79babb13e349a0be8ada79
+Parent: d4fedb8142c85d9595e6a410dd1585d93c06f1cc
+
+Source/verification commands:
+- git rev-parse HEAD
+- gh run view 43807333157 --json databaseId,workflowName,headSha,headBranch,event,status,conclusion,createdAt,updatedAt,url,jobs
+- gh run view 43807333164 --json databaseId,workflowName,headSha,headBranch,event,status,conclusion,createdAt,updatedAt,url,jobs
+- gh run watch 43807333157 --exit-status
+- gh run watch 43807333164 --exit-status
+
+CI run 43807333157 — PASS
+URL: https://github.com/rajaram-2005/ragam/actions/runs/43807333157
+Event: push; workflow: CI; conclusion: success; started 2026-11-16T04:59:12Z.
+Passing jobs: Web app (React + Vite); Documentation matches implementation; Core service (Node, zero dependencies); Docker Compose build, health, persistence and restore smoke; Fabric training service (Python + NumPy); Release verification (measured, not remembered).
+Klyvaron production evidence gate (fail closed): SKIPPED. This CI run is not the separate Semgrep/Gitleaks/Trivy/ZAP qualification, is not production evidence, and does not establish release readiness.
+
+Desktop packages run 43807333164 — PASS
+URL: https://github.com/rajaram-2005/ragam/actions/runs/43807333164
+Event: push; workflow: Desktop packages; conclusion: success; started 2026-11-16T04:59:12Z.
+Passing platform jobs: Windows x64 and ARM64; macOS Apple Silicon (arm64); Linux x64 and ARM64; macOS Intel (x64). Each job uploaded unsigned package artifacts. Packaging does not establish signing or signed-bundle verification.
+
+Open-source security qualification on this commit: NOT TESTED. At this run, the open-source security workflow's push filters excluded arena/**; its earlier manual dispatch attempt was denied HTTP 403 (Resource not accessible by integration). No Gitleaks, Trivy, ZAP, or DAST scanner report was produced by these two runs. No scanner-report digest exists; absence is not zero findings. The workflow trigger was subsequently amended on this branch to include Arena push refs so that a new, separately identified full security run can be requested by push.
+
+These observations are supplementary only. The historical cutoff log and cutoff verdict remain unchanged. Current release verdict remains NOT RELEASE READY until mandatory gates have exact evidence and owner actions are complete.

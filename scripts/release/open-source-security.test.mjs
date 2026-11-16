@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { assertDastConfig, excludedWorktreeClass } from './open-source-security.mjs'
+import { assertDastConfig, excludedWorktreeClass, parseBuildxImageInspection } from './open-source-security.mjs'
 import {
   gateFromScanner,
   TRIVY_PIP_REQUIREMENTS_LOCK_PATTERN,
@@ -67,12 +67,37 @@ test('the OSS workflow covers PRs, release pushes, manual dispatch, full qualifi
   assert.match(workflow, /pull_request:/)
   assert.match(workflow, /push:/)
   assert.match(workflow, /workflow_dispatch:/)
-  assert.match(workflow, /branches: \[main, 'release\/\*\*'\]/)
+  assert.match(workflow, /pull_request:\s*\n\s+branches: \[main, 'release\/\*\*'\]/)
+  assert.match(workflow, /push:\s*\n\s+branches: \[main, 'release\/\*\*', 'arena\/\*\*'\]/)
   assert.match(workflow, /runs-on: ubuntu-latest/)
   assert.match(workflow, /npm run release:security:full/)
   assert.match(workflow, /if: always\(\)/)
   assert.match(workflow, /source-inventory\.json/)
   assert.match(workflow, /retention-days: 30/)
+})
+
+test('ZAP registry inspection parser requires the locked digest and platform descriptor', () => {
+  const digest = `sha256:${'a'.repeat(64)}`
+  const amd64Digest = `sha256:${'b'.repeat(64)}`
+  const arm64Digest = `sha256:${'c'.repeat(64)}`
+  const inspection = [
+    'Name: ghcr.io/zaproxy/zaproxy:2.17.0',
+    'MediaType: application/vnd.oci.image.index.v1+json',
+    `Digest: ${digest}`,
+    'Manifests:',
+    `  Name: ghcr.io/zaproxy/zaproxy:2.17.0@${amd64Digest}`,
+    '  MediaType: application/vnd.oci.image.manifest.v1+json',
+    '  Platform: linux/amd64',
+    `  Name: ghcr.io/zaproxy/zaproxy:2.17.0@${arm64Digest}`,
+    '  Platform: linux/arm64',
+  ].join('\n')
+  const parsed = parseBuildxImageInspection(inspection, 'linux/amd64')
+  assert.equal(parsed.digest, digest)
+  assert.deepEqual(parsed.platforms, ['linux/amd64', 'linux/arm64'])
+  assert.equal(parsed.observedPlatform, 'linux/amd64')
+  assert.equal(parsed.platformManifestDigest, amd64Digest)
+  assert.equal(parseBuildxImageInspection(inspection, 'linux/arm/v7').observedPlatform, null)
+  assert.equal(parseBuildxImageInspection('Digest: invalid\n  Platform: linux/amd64', 'linux/amd64').digest, null)
 })
 
 test('production and isolated DAST Web containers enforce non-root, read-only runtime controls', () => {
@@ -100,6 +125,7 @@ test('production and isolated DAST Web containers enforce non-root, read-only ru
       ['compose.yaml', '    cap_drop:\n      - ALL\n    expose:\n      - "8080"', '    cap_drop:\n      - NET_BIND_SERVICE\n    expose:\n      - "8080"', 'compose.yaml Web must drop all Linux capabilities'],
       ['compose.yaml', '      - /data:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=10001,gid=10001', '      - /data:rw', 'compose.yaml Web is missing its restricted ephemeral /data mount'],
       ['security/dast/compose.yaml', '          - edge\n    security_opt:\n      - no-new-privileges:true\n    cap_drop:\n      - ALL\n    healthcheck:', '          - edge\n    security_opt:\n      - no-new-privileges:false\n    cap_drop:\n      - ALL\n    healthcheck:', 'security/dast/compose.yaml Web must enable no-new-privileges'],
+      ['security/dast/compose.yaml', '    platform: ${RAGAM_DAST_PLATFORM:?set by the security runner}\n', '', 'ZAP platform must be set only from the scanner lock by the security runner'],
     ]
 
     for (const [relativePath, before, after, expectedError] of regressions) {
@@ -194,6 +220,7 @@ test('runner scans one recorded external source snapshot and emits independent r
     assert.match(runner, new RegExp(`gates\\.${gate}\\s*=`))
   }
   assert.match(runner, /sha256sum/)
+  assert.equal((runner.match(/RAGAM_DAST_PLATFORM:\s*LOCK\.platform/g) ?? []).length, 2, 'Trivy Compose config and ZAP scans must receive the same locked platform')
   assert.match(runner, /writeEvidence\(evidencePath, evidence\)/)
   assert.doesNotMatch(runner, /EVIDENCE_PATH/)
 })
