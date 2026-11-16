@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { assertDastConfig, excludedWorktreeClass, parseBuildxImageInspection } from './open-source-security.mjs'
+import { assertDastConfig, excludedWorktreeClass, parseBuildxImageInspection, renderSecurityStepSummary } from './open-source-security.mjs'
 import {
   gateFromScanner,
   TRIVY_PIP_REQUIREMENTS_LOCK_PATTERN,
@@ -98,6 +98,40 @@ test('ZAP registry inspection parser requires the locked digest and platform des
   assert.equal(parsed.platformManifestDigest, amd64Digest)
   assert.equal(parseBuildxImageInspection(inspection, 'linux/arm/v7').observedPlatform, null)
   assert.equal(parseBuildxImageInspection('Digest: invalid\n  Platform: linux/amd64', 'linux/amd64').digest, null)
+})
+
+test('GitHub step summary exposes only sanitized findings, locked identity and report hashes', () => {
+  const evidence = {
+    run: { id: 'fixture-run', mode: 'full', status: 'BLOCKED' },
+    source: { branch: 'arena/947d8745-ragam', commit: 'a'.repeat(40) },
+    qualification: { ossSecurity: { status: 'NOT QUALIFIED' } },
+    scanners: {
+      sast: {
+        name: 'Semgrep Community Edition', version: '1.185.0', status: 'COMPLETED',
+        findingSummary: { total: 1 },
+        findings: [{ id: 'b'.repeat(24), ruleId: 'test.rule', severity: 'HIGH', path: 'services/core/app.mjs', start: { line: 17 }, reviewState: 'UNREVIEWED', message: fixtureSecret, source: fixtureSecret }],
+      },
+      dast: {
+        scope: { imageDigestVerification: {
+          status: 'VERIFIED', tag: 'ghcr.io/zaproxy/zaproxy:2.17.0', indexDigest: `sha256:${'c'.repeat(64)}`,
+          platform: 'linux/amd64', platformManifestDigest: `sha256:${'d'.repeat(64)}`,
+        } },
+      },
+    },
+    releaseGates: [{ id: 'SAST', status: 'FAIL' }],
+    reportHashVerification: { verified: true, count: 1, method: 'sha256sum -c' },
+    reports: [{ path: 'reports/semgrep.json', format: 'json', bytes: 100, sha256: 'e'.repeat(64), validated: true, sanitized: true }],
+  }
+  const summary = renderSecurityStepSummary(evidence)
+  assert.match(summary, /arena\/947d8745-ragam/)
+  assert.match(summary, /services\/core\/app\.mjs:17/)
+  assert.match(summary, /NOT TESTED/)
+  assert.match(summary, /Platform manifest digest/)
+  assert.match(summary, /1\.185\.0 \/ 1\.185\.0/)
+  assert.match(summary, /e{64}/)
+  assert.match(summary, /sha256sum -c/)
+  assert.equal(summary.includes(fixtureSecret), false)
+  assert.equal(summary.includes('source:'), false)
 })
 
 test('production and isolated DAST Web containers enforce non-root, read-only runtime controls', () => {

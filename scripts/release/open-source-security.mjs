@@ -3,7 +3,7 @@
 // captured privately, source/secret-bearing fields are removed before evidence
 // is written, and a missing/partial scanner can never produce a PASS.
 import {
-  accessSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync,
+  accessSync, appendFileSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync,
   mkdtempSync, readFileSync, readlinkSync, readdirSync, realpathSync, renameSync, rmSync,
   statSync, symlinkSync, writeFileSync, chmodSync,
 } from 'node:fs'
@@ -2240,6 +2240,126 @@ function evidenceForMode(mode, requested, context, scans, gates, hashVerificatio
   }
 }
 
+function summaryCell(value, maxLength = 240) {
+  return String(value ?? '').slice(0, maxLength)
+    .replace(/[\r\n\t]+/g, ' ')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('|', '&#124;')
+    .replaceAll('`', '&#96;')
+}
+
+function summaryFindingLocation(finding) {
+  let location = String(finding.path ?? finding.file ?? '')
+  if (typeof finding.url === 'string') {
+    try {
+      const url = new URL(finding.url)
+      url.username = ''
+      url.password = ''
+      url.search = ''
+      url.hash = ''
+      location = `${url.origin}${url.pathname}`
+    } catch {
+      location = '[sanitized URL omitted]'
+    }
+  }
+  const line = finding.start?.line ?? finding.line ?? finding.startLine ?? null
+  return line === null || line === undefined ? location : `${location}:${line}`
+}
+
+export function renderSecurityStepSummary(evidence) {
+  const run = evidence?.run ?? {}
+  const scanners = evidence?.scanners ?? {}
+  const gates = Array.isArray(evidence?.releaseGates) ? evidence.releaseGates : []
+  const gateById = new Map(gates.map((gate) => [gate.id, gate]))
+  const scannerGateIds = {
+    sast: 'SAST',
+    dast: 'DAST',
+    secrets: 'SECRET_SCANNING',
+    dependencies: 'DEPENDENCY_SCANNING',
+  }
+  const allowedStatuses = new Set(['PASS', 'FAIL', 'BLOCKED', 'NOT TESTED', 'OWNER ACTION REQUIRED'])
+  const status = (value) => allowedStatuses.has(String(value ?? '')) ? String(value) : 'NOT TESTED'
+  const pinnedVersions = {
+    sast: LOCK.semgrep.version,
+    dast: LOCK.zap.version,
+    secrets: LOCK.gitleaks.version,
+    dependencies: LOCK.trivy.version,
+  }
+  const lines = [
+    '# Open-source security qualification — sanitized summary',
+    '',
+    `- **Run:** ${summaryCell(run.id, 80)}`,
+    `- **Branch:** ${summaryCell(evidence?.source?.branch, 160)}`,
+    `- **Exact commit:** ${summaryCell(evidence?.source?.commit, 64)}`,
+    `- **Mode / result:** ${summaryCell(run.mode, 40)} / ${status(run.status)}`,
+    `- **Overall qualification:** ${status(run.status)}`,
+    '',
+    'This projection contains no scanner source snippets, secret values, request/response bodies, cookies, or credentials. Every finding has status NOT TESTED until a reviewer records a disposition; a reported finding is not a confirmed vulnerability.',
+    '',
+    '| Scanner | Pinned / observed version | Gate status | Findings | Reports |',
+    '| --- | --- | --- | ---: | ---: |',
+  ]
+  for (const key of SCANNER_KEYS) {
+    const scan = scanners[key]
+    if (!scan) continue
+    const gateStatus = gateById.get(scannerGateIds[key])?.status
+    lines.push(`| ${summaryCell(scan.name ?? key)} | ${summaryCell(`${pinnedVersions[key]} / ${scan.version ?? 'unavailable'}`, 60)} | ${status(gateStatus)} | ${Number(scan.findingSummary?.total ?? scan.findings?.length ?? 0)} | ${(scan.reports ?? []).length} |`)
+  }
+
+  if (gates.length) {
+    lines.push('', '## Gate statuses', '', '| Gate | Status |', '| --- | --- |')
+    for (const gate of gates) lines.push(`| ${summaryCell(gate.id ?? gate.name)} | ${status(gate.status)} |`)
+  }
+
+  const verification = evidence?.reportHashVerification
+  if (verification) {
+    const checksumStatus = gateById.get('REPORT_CHECKSUMS')?.status ?? (verification.verified === true ? 'PASS' : 'NOT TESTED')
+    lines.push('', `**Report checksum verification:** ${status(checksumStatus)}; reports checked: ${Number(verification.count ?? 0)}; method: ${summaryCell(verification.method, 120)}.`)
+  }
+
+  const zapVerification = scanners.dast?.scope?.imageDigestVerification
+  if (zapVerification) {
+    const digestStatus = ({ VERIFIED: 'PASS', FAILED: 'FAIL', 'NOT VERIFIED': 'BLOCKED' })[zapVerification.status] ?? status(zapVerification.status)
+    lines.push('', '## ZAP image identity', '')
+    lines.push(`- **Status:** ${digestStatus}`)
+    if (zapVerification.tag) lines.push(`- **Official tag:** ${summaryCell(zapVerification.tag, 160)}`)
+    if (zapVerification.indexDigest ?? zapVerification.digest) lines.push(`- **Index digest:** ${summaryCell(zapVerification.indexDigest ?? zapVerification.digest, 80)}`)
+    if (zapVerification.expectedPlatform ?? zapVerification.platform) lines.push(`- **Platform:** ${summaryCell(zapVerification.expectedPlatform ?? zapVerification.platform, 40)}`)
+    if (zapVerification.platformManifestDigest) lines.push(`- **Platform manifest digest:** ${summaryCell(zapVerification.platformManifestDigest, 80)}`)
+  }
+
+  const reports = Array.isArray(evidence?.reports) ? evidence.reports : []
+  if (reports.length) {
+    lines.push('', '## Sanitized report hashes', '', '| Report | Format | Bytes | SHA-256 | Validated | Sanitized |', '| --- | --- | ---: | --- | --- | --- |')
+    for (const report of reports) {
+      lines.push(`| ${summaryCell(report.path, 180)} | ${summaryCell(report.format, 20)} | ${Number(report.bytes ?? 0)} | ${summaryCell(report.sha256, 80)} | ${report.validated === true} | ${report.sanitized === true} |`)
+    }
+  }
+
+  const findings = SCANNER_KEYS.flatMap((key) => (scanners[key]?.findings ?? []).map((finding) => ({ key, finding })))
+  lines.push('', '## Individual findings', '', '| Scanner | Finding ID | Rule / package | Severity | Location | Review status |', '| --- | --- | --- | --- | --- | --- |')
+  if (!findings.length) {
+    lines.push('| — | — | — | — | No finding records in the sanitized evidence; incomplete or blocked scans do not mean zero findings. | NOT TESTED |')
+  } else {
+    for (const { key, finding } of findings) {
+      const rule = finding.package
+        ? `${finding.ruleId ?? 'unknown'} (${finding.package} ${finding.installedVersion ?? ''}${finding.fixedVersion ? ` → ${finding.fixedVersion}` : ''})`
+        : (finding.ruleId ?? 'unknown')
+      lines.push(`| ${summaryCell(key, 24)} | ${summaryCell(finding.id, 64)} | ${summaryCell(rule, 160)} | ${summaryCell(finding.severity, 24)} | ${summaryCell(summaryFindingLocation(finding), 240)} | ${status(finding.reviewState)} |`)
+    }
+  }
+  return `${lines.join('\n')}\n`
+}
+
+function writeSecurityStepSummary(evidence) {
+  const path = process.env.GITHUB_STEP_SUMMARY
+  if (!path) return
+  try { appendFileSync(path, renderSecurityStepSummary(evidence), { encoding: 'utf8', mode: 0o600 }) }
+  catch { console.log('::warning::The sanitized OSS security step summary could not be written; uploaded reports remain the evidence source.') }
+}
+
 function unavailableRecord(key, error) {
   const startedAt = now()
   const record = createScannerRecord({ name: key })
@@ -2378,6 +2498,7 @@ async function runOpenSourceSecurity(mode) {
     runDir, reportsDir, startedAt, completedAt, project, imageTag, runnerExitCode: requestedPassed ? 0 : 1,
   })
   writeEvidence(evidencePath, evidence)
+  writeSecurityStepSummary(evidence)
   for (const key of requested) {
     const scan = scanners[key]
     const gate = gates[key]
